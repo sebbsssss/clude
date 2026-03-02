@@ -109,7 +109,7 @@ export function createServer(): express.Application {
   // Venice integration stats (privacy dashboard)
   app.get('/api/venice-stats', async (_req: Request, res: Response) => {
     try {
-      const veniceStats = getVeniceStats();
+      const veniceStats = await getVeniceStats();
       const memoryStats = await getMemoryStats();
       res.json({
         venice: veniceStats,

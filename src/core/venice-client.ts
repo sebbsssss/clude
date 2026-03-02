@@ -121,6 +121,7 @@ export function getModelForFunction(fn: CognitiveFunction): string {
 }
 
 // Track Venice usage stats for the privacy dashboard
+// Stats are persisted to Supabase so they survive restarts
 let _veniceStats = {
   totalInferenceCalls: 0,
   totalTokensProcessed: 0,
@@ -128,7 +129,69 @@ let _veniceStats = {
   lastCallAt: null as string | null,
 };
 
-export function getVeniceStats() {
+let _statsLoaded = false;
+
+async function loadPersistedStats() {
+  if (_statsLoaded) return;
+  _statsLoaded = true;
+  try {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
+    if (!supabaseUrl || !supabaseKey) return;
+
+    const res = await fetch(`${supabaseUrl}/rest/v1/venice_stats?id=eq.1&select=*`, {
+      headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` },
+    });
+    if (!res.ok) return;
+    const rows = await res.json();
+    if (rows.length > 0) {
+      const row = rows[0];
+      _veniceStats.totalInferenceCalls = row.total_inference_calls || 0;
+      _veniceStats.totalTokensProcessed = row.total_tokens_processed || 0;
+      _veniceStats.callsByFunction = row.calls_by_function || {};
+      _veniceStats.lastCallAt = row.last_call_at || null;
+      log.info({ calls: _veniceStats.totalInferenceCalls }, 'Loaded persisted Venice stats');
+    }
+  } catch (err) {
+    log.warn({ err }, 'Failed to load persisted Venice stats');
+  }
+}
+
+// Debounce persistence to avoid hammering DB on every call
+let _persistTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function persistStats() {
+  try {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
+    if (!supabaseUrl || !supabaseKey) return;
+
+    const body = {
+      id: 1,
+      total_inference_calls: _veniceStats.totalInferenceCalls,
+      total_tokens_processed: _veniceStats.totalTokensProcessed,
+      calls_by_function: _veniceStats.callsByFunction,
+      last_call_at: _veniceStats.lastCallAt,
+      updated_at: new Date().toISOString(),
+    };
+
+    await fetch(`${supabaseUrl}/rest/v1/venice_stats`, {
+      method: 'POST',
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates',
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    log.warn({ err }, 'Failed to persist Venice stats');
+  }
+}
+
+export async function getVeniceStats() {
+  await loadPersistedStats();
   return { ..._veniceStats };
 }
 
@@ -137,6 +200,10 @@ function trackVeniceUsage(fn: CognitiveFunction | 'general', tokens: number) {
   _veniceStats.totalTokensProcessed += tokens;
   _veniceStats.callsByFunction[fn] = (_veniceStats.callsByFunction[fn] || 0) + 1;
   _veniceStats.lastCallAt = new Date().toISOString();
+
+  // Debounce: persist 5s after last update
+  if (_persistTimer) clearTimeout(_persistTimer);
+  _persistTimer = setTimeout(() => persistStats(), 5000);
 }
 
 let config: VeniceConfig | null = null;
