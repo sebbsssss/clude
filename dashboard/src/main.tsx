@@ -19,10 +19,16 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         appearance: {
           theme: 'light',
           accentColor: '#2244ff',
+          walletList: ['phantom', 'solflare', 'backpack', 'detected_wallets'],
         },
         loginMethods: ['wallet', 'email'],
+        defaultChain: { id: 101, name: 'Solana', network: 'mainnet-beta' } as any,
+        supportedChains: [{ id: 101, name: 'Solana', network: 'mainnet-beta' } as any],
         embeddedWallets: {
           createOnLogin: 'users-without-wallets',
+        },
+        externalWallets: {
+          solana: { connectors: (connectors) => connectors },
         },
       }}
     >
