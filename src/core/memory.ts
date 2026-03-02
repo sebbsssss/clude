@@ -503,10 +503,15 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
       const missingIds = [...vectorScores.keys()].filter(id => !metadataIds.has(id));
 
       if (missingIds.length > 0) {
-        const { data: vectorOnly } = await db
+        let vectorQuery = db
           .from('memories')
           .select('*')
           .in('id', missingIds);
+        // Respect memoryTypes filter even for vector-matched results
+        if (opts.memoryTypes && opts.memoryTypes.length > 0) {
+          vectorQuery = vectorQuery.in('memory_type', opts.memoryTypes);
+        }
+        const { data: vectorOnly } = await vectorQuery;
         if (vectorOnly) candidates = [...candidates, ...decryptMemoryBatch(vectorOnly)];
       }
     }
