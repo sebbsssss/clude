@@ -911,17 +911,18 @@ export function scoreMemory(mem: Memory, opts: RecallOptions): number {
   const typeBoost = KNOWLEDGE_TYPE_BOOST[mem.memory_type] || 0;
   rawScore += typeBoost;
 
-  // Knowledge-seed memories are curated facts — boost above other sources
-  // Vector similarity still determines ranking among seeds
-  if (mem.source === 'knowledge-seed') {
-    const vecBonus = vectorSim > 0 ? vectorSim * 2.0 : 0;
-    rawScore += 2.0 + vecBonus;
+  // Knowledge-seed memories get boosted ONLY when vector-relevant to the query
+  // High vector sim = strong boost; no vector match = no boost (don't pollute unrelated queries)
+  if (mem.source === 'knowledge-seed' && vectorSim > 0.3) {
+    rawScore += 1.5 + vectorSim * 1.5; // ranges from +1.95 (sim=0.3) to +3.0 (sim=1.0)
+  } else if (mem.source === 'knowledge-seed') {
+    rawScore += 0.3; // small boost even without vector match, but won't dominate
   }
 
-  // Consolidation memories are self-referential meta-observations, not factual answers
-  // Strong penalty to prevent them from dominating factual queries
+  // Consolidation memories are meta-observations — moderate penalty
+  // Not as aggressive so they can still surface for relevant queries
   if (mem.source === 'consolidation') {
-    rawScore *= 0.40;
+    rawScore *= 0.55;
   }
 
   return rawScore * mem.decay_factor;
