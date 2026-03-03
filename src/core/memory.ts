@@ -855,6 +855,11 @@ export function scoreMemory(mem: Memory, opts: RecallOptions): number {
   const typeBoost = KNOWLEDGE_TYPE_BOOST[mem.memory_type] || 0;
   rawScore += typeBoost;
 
+  // Knowledge-seed memories get extra boost — these are curated facts, not tweet noise
+  if (mem.source === 'knowledge-seed') {
+    rawScore += 0.25;
+  }
+
   return rawScore * mem.decay_factor;
 }
 
