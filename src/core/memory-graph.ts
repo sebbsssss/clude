@@ -406,7 +406,32 @@ export async function extractAndLinkEntities(
     }
   }
 
-  log.debug({ memoryId, entityCount: extracted.length }, 'Entities extracted and linked');
+  // Create co-occurrence relations between entities found in the same memory
+  const entityIds: Array<{ id: number; name: string; type: string }> = [];
+  for (const { name, type } of extracted) {
+    const entity = await findOrCreateEntity(name, type);
+    if (entity) entityIds.push({ id: entity.id, name, type });
+  }
+
+  // Link co-occurring entities with 'co_mentioned' relation
+  for (let i = 0; i < entityIds.length; i++) {
+    for (let j = i + 1; j < entityIds.length; j++) {
+      try {
+        await createEntityRelation(
+          entityIds[i].id,
+          entityIds[j].id,
+          'co_mentioned',
+          memoryId,
+          0.3 // base co-occurrence strength
+        );
+      } catch (err) {
+        // Non-critical, don't fail the whole extraction
+        log.debug({ err, source: entityIds[i].name, target: entityIds[j].name }, 'Failed to create entity relation');
+      }
+    }
+  }
+
+  log.debug({ memoryId, entityCount: extracted.length, relations: Math.max(0, entityIds.length * (entityIds.length - 1) / 2) }, 'Entities extracted, linked, and related');
 }
 
 // ---- GRAPH QUERIES ---- //
