@@ -553,7 +553,8 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
     }
 
     // Phase 2: Metadata-filtered candidates from Supabase
-    let query = db
+    // Run two queries in parallel: importance-ranked + text-search for diversity
+    let importanceQuery = db
       .from('memories')
       .select('*')
       .gte('decay_factor', minDecay)
@@ -562,25 +563,73 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
       .order('created_at', { ascending: false })
       .limit(limit * 3);
 
-    query = scopeToOwner(query);
+    importanceQuery = scopeToOwner(importanceQuery);
 
     if (opts.memoryTypes && opts.memoryTypes.length > 0) {
-      query = query.in('memory_type', opts.memoryTypes);
+      importanceQuery = importanceQuery.in('memory_type', opts.memoryTypes);
     }
     if (opts.relatedUser) {
-      query = query.eq('related_user', opts.relatedUser);
+      importanceQuery = importanceQuery.eq('related_user', opts.relatedUser);
     }
     if (opts.relatedWallet) {
-      query = query.eq('related_wallet', opts.relatedWallet);
+      importanceQuery = importanceQuery.eq('related_wallet', opts.relatedWallet);
     }
     if (opts.minImportance) {
-      query = query.gte('importance', opts.minImportance);
+      importanceQuery = importanceQuery.gte('importance', opts.minImportance);
     }
     if (opts.tags && opts.tags.length > 0) {
-      query = query.overlaps('tags', opts.tags);
+      importanceQuery = importanceQuery.overlaps('tags', opts.tags);
     }
 
-    const { data, error } = await query;
+    // Text search: find memories whose summary/tags contain query keywords
+    const textSearchPromise = (opts.query && opts.query.length > 3) ? (async () => {
+      try {
+        // Extract meaningful keywords (skip short/common words)
+        const stopWords = new Set(['the','a','an','is','are','was','were','be','been','and','or','but','in','on','at','to','for','of','with','by','from','how','what','who','why','when','where','does','do','did','can','will','about','that','this','it']);
+        const keywords = opts.query!.toLowerCase().split(/\s+/)
+          .filter(w => w.length > 2 && !stopWords.has(w))
+          .slice(0, 4);
+        
+        if (keywords.length === 0) return [];
+        
+        // Search summary with ilike for each keyword
+        let textQuery = db
+          .from('memories')
+          .select('*')
+          .gte('decay_factor', minDecay)
+          .not('source', 'in', '("demo","demo-maas")')
+          .or(keywords.map(k => `summary.ilike.%${k}%`).join(','))
+          .order('importance', { ascending: false })
+          .limit(limit * 2);
+        textQuery = scopeToOwner(textQuery);
+        if (opts.memoryTypes && opts.memoryTypes.length > 0) {
+          textQuery = textQuery.in('memory_type', opts.memoryTypes);
+        }
+        const { data: textData } = await textQuery;
+        return textData || [];
+      } catch {
+        return [];
+      }
+    })() : Promise.resolve([]);
+
+    const [importanceResult, textResults] = await Promise.all([
+      importanceQuery,
+      textSearchPromise,
+    ]);
+
+    const { data, error } = importanceResult as { data: any; error: any };
+    
+    // Merge text search results into data
+    if (Array.isArray(textResults) && textResults.length > 0 && data) {
+      const existingIds = new Set((data as any[]).map((m: any) => m.id));
+      for (const m of textResults) {
+        if (!existingIds.has(m.id)) {
+          (data as any[]).push(m);
+          existingIds.add(m.id);
+        }
+      }
+      log.debug({ textHits: textResults.length }, 'Text search added candidates');
+    }
 
     if (error) {
       log.error({ error: error.message }, 'Memory recall query failed');
