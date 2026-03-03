@@ -855,9 +855,11 @@ export function scoreMemory(mem: Memory, opts: RecallOptions): number {
   const typeBoost = KNOWLEDGE_TYPE_BOOST[mem.memory_type] || 0;
   rawScore += typeBoost;
 
-  // Knowledge-seed memories are curated facts — boost strongly but preserve vector ranking
+  // Knowledge-seed memories are curated facts — boost above other sources
+  // Vector similarity still determines ranking among seeds
   if (mem.source === 'knowledge-seed') {
-    rawScore += 2.0;
+    const vecBonus = vectorSim > 0 ? vectorSim * 2.0 : 0;
+    rawScore += 2.0 + vecBonus;
   }
 
   // Consolidation memories are self-referential meta-observations, not factual answers
