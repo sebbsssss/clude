@@ -88,7 +88,13 @@ CREATE TABLE IF NOT EXISTS memories (
   decay_factor REAL DEFAULT 1.0,          -- type-specific decay (episodic=0.93, semantic=0.98, procedural=0.97, self_model=0.99)
   evidence_ids BIGINT[] DEFAULT '{}',    -- IDs of memories that support this one (Park et al. 2023)
   solana_signature TEXT,                  -- Solana tx signature if committed on-chain
-  embedding vector(1024)                  -- vector embedding for semantic similarity search
+  embedding vector(1024),                 -- vector embedding for semantic similarity search
+  hash_id TEXT,                           -- collision-resistant hash ID (Beads-inspired)
+  compacted BOOLEAN DEFAULT FALSE,        -- whether this memory has been compacted
+  compacted_into TEXT,                    -- hash_id of the memory this was compacted into
+  encrypted BOOLEAN DEFAULT FALSE,        -- whether content is client-side encrypted
+  encryption_pubkey TEXT,                 -- Solana pubkey that encrypted this memory
+  owner_wallet TEXT                       -- Solana pubkey of the memory owner
 );
 
 -- Memory fragments: granular vector decomposition for precision retrieval
@@ -123,6 +129,7 @@ CREATE INDEX IF NOT EXISTS idx_memories_created ON memories(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_memories_decay ON memories(decay_factor);
 CREATE INDEX IF NOT EXISTS idx_memories_summary_trgm ON memories USING GIN(summary gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_memories_evidence ON memories USING GIN(evidence_ids);
+CREATE INDEX IF NOT EXISTS idx_memories_owner ON memories(owner_wallet);
 
 -- Vector similarity indexes (HNSW for fast approximate nearest neighbor)
 CREATE INDEX IF NOT EXISTS idx_memories_embedding ON memories USING hnsw (embedding vector_cosine_ops);

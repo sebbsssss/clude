@@ -262,6 +262,10 @@ export async function initDatabase(): Promise<void> {
         ALTER TABLE memories ADD COLUMN IF NOT EXISTS encrypted BOOLEAN DEFAULT FALSE;
         ALTER TABLE memories ADD COLUMN IF NOT EXISTS encryption_pubkey TEXT;
 
+        -- Migration: owner wallet for memory ownership
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS owner_wallet TEXT;
+        CREATE INDEX IF NOT EXISTS idx_memories_owner ON memories(owner_wallet);
+
         -- Find unresolved contradiction pairs (no 'resolves' link spanning both)
         CREATE OR REPLACE FUNCTION get_unresolved_contradictions(
           max_pairs INT DEFAULT 3

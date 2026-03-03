@@ -30,6 +30,19 @@ import { eventBus } from '../events/event-bus';
 import { createHash, randomBytes } from 'crypto';
 import { extractAndLinkEntities, findSimilarEntities, getMemoriesByEntity, getEntityCooccurrences } from './memory-graph';
 
+// ---- OWNER WALLET ---- //
+let _ownerWallet: string | null = null;
+
+/** @internal Set the owner wallet address for tagging memories. */
+export function _setOwnerWallet(wallet: string): void {
+  _ownerWallet = wallet;
+}
+
+/** Get the configured owner wallet, if any. */
+export function getOwnerWallet(): string | null {
+  return _ownerWallet;
+}
+
 // ============================================================
 // HASH-BASED IDs (Beads-inspired)
 //
@@ -235,6 +248,7 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
         compacted: false,
         encrypted: shouldEncrypt,
         encryption_pubkey: shouldEncrypt ? getEncryptionPubkey() : null,
+        owner_wallet: _ownerWallet || null,
       })
       .select('id, hash_id')
       .single();

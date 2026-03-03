@@ -22,6 +22,9 @@ export interface CortexConfig {
     dimensions?: number;
   };
 
+  /** Owner wallet address (Solana public key). Tags all memories with ownership. */
+  ownerWallet?: string;
+
   /** Solana on-chain commit config. Optional — memories won't be committed on-chain. */
   solana?: {
     rpcUrl?: string;

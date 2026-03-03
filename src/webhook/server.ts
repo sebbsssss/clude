@@ -282,6 +282,37 @@ export function createServer(): express.Application {
 
   // ---- DASHBOARD ENDPOINTS (Privy-authenticated) ---- //
 
+  // Owner verification — checks if the connected wallet matches the configured OWNER_WALLET
+  app.get('/api/owner', requirePrivyAuth, async (req: Request, res: Response) => {
+    try {
+      const { getOwnerWallet } = require('../core/memory');
+      const ownerWallet = getOwnerWallet();
+
+      if (!ownerWallet) {
+        res.json({ isOwner: false, reason: 'no_owner_configured' });
+        return;
+      }
+
+      // Get the wallet address from the Privy user's linked accounts
+      // The frontend sends the connected wallet address as a query param
+      const connectedWallet = req.query.wallet as string;
+      if (!connectedWallet) {
+        res.json({ isOwner: false, reason: 'no_wallet_provided' });
+        return;
+      }
+
+      const isOwner = connectedWallet === ownerWallet;
+      res.json({
+        isOwner,
+        userId: req.privyUser?.userId,
+        ownerWallet: ownerWallet.slice(0, 4) + '...' + ownerWallet.slice(-4),
+      });
+    } catch (err) {
+      log.error({ err }, 'Owner verification error');
+      res.status(500).json({ error: 'Verification failed' });
+    }
+  });
+
   // Export memory pack
   app.post('/api/memory-packs/export', requirePrivyAuth, async (req: Request, res: Response) => {
     try {

@@ -59,6 +59,12 @@ export class Cortex {
       }
     }
 
+    // Set owner wallet if provided
+    if (config.ownerWallet) {
+      const { _setOwnerWallet } = require('../core/memory');
+      _setOwnerWallet(config.ownerWallet);
+    }
+
     // Wire event bus for importance-driven dream triggers
     const { eventBus } = require('../events/event-bus');
     const { accumulateImportance } = require('../features/dream-cycle');

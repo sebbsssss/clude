@@ -70,6 +70,9 @@ export const config = {
   agent: {
     rateLimitPerMin: parseInt(optional('AGENT_RATE_LIMIT', '10'), 10),
   },
+  owner: {
+    wallet: optional('OWNER_WALLET', ''),
+  },
   features: {
     showTxLinksInTweets: optional('SHOW_TX_LINKS_IN_TWEETS', 'true') === 'true',
     siteOnly: optional('SITE_ONLY', 'false') === 'true',

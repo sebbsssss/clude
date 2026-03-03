@@ -9,6 +9,7 @@ interface InitConfig {
   anthropicKey: string;
   embeddingProvider: string;
   embeddingKey: string;
+  ownerWallet: string;
   solanaRpc: string;
   walletKey: string;
 }
@@ -111,6 +112,9 @@ function generateEnvFile(config: InitConfig): string {
   env += `# Anthropic (optional — enables dream cycles + LLM importance scoring)\n`;
   env += `ANTHROPIC_API_KEY=${config.anthropicKey || ''}\n\n`;
 
+  env += `# Owner wallet — your Solana public address (proves memory ownership on dashboard)\n`;
+  env += `OWNER_WALLET=${config.ownerWallet || ''}\n\n`;
+
   env += `# Solana (optional — on-chain memory commits)\n`;
   env += `SOLANA_RPC_URL=${config.solanaRpc || 'https://api.mainnet-beta.solana.com'}\n`;
   env += `BOT_WALLET_PRIVATE_KEY=${config.walletKey || ''}\n\n`;
@@ -143,6 +147,10 @@ function generateCodeSnippet(config: InitConfig): string {
     snippet += `  anthropic: {\n`;
     snippet += `    apiKey: process.env.ANTHROPIC_API_KEY,\n`;
     snippet += `  },\n`;
+  }
+
+  if (config.ownerWallet) {
+    snippet += `  ownerWallet: process.env.OWNER_WALLET,\n`;
   }
 
   if (config.walletKey || config.solanaRpc) {
@@ -191,12 +199,13 @@ export async function runInit(): Promise<void> {
     anthropicKey: '',
     embeddingProvider: '',
     embeddingKey: '',
+    ownerWallet: '',
     solanaRpc: '',
     walletKey: '',
   };
 
   // ─── Step 1: Supabase ───────────────────────────────────
-  printStep(1, 4, 'Supabase');
+  printStep(1, 5, 'Supabase');
   printInfo('Your memories live in Supabase (PostgreSQL + pgvector).');
   printInfo('Free project at https://supabase.com — or skip to configure later.\n');
 
@@ -242,7 +251,7 @@ export async function runInit(): Promise<void> {
   }
 
   // ─── Step 2: Anthropic ──────────────────────────────────
-  printStep(2, 4, 'Anthropic');
+  printStep(2, 5, 'Anthropic');
   printInfo('Enables dream cycles and LLM importance scoring.');
   printInfo('Not needed for basic store/recall.\n');
 
@@ -255,8 +264,28 @@ export async function runInit(): Promise<void> {
     printInfo('Skipped — add ANTHROPIC_API_KEY to .env later for dream cycles');
   }
 
-  // ─── Step 3: Embeddings ─────────────────────────────────
-  printStep(3, 4, 'Solana');
+  // ─── Step 3: Owner Wallet ──────────────────────────────
+  printStep(3, 5, 'Owner Wallet');
+  printInfo('Your Solana wallet address proves you own this agent\'s memories.');
+  printInfo('Connect this same wallet on the CLUDE dashboard to manage your brain.');
+  printInfo('This is your PUBLIC address only — no private key needed here.\n');
+
+  config.ownerWallet = await ask(rl, 'Your Solana wallet address (Enter to skip): ');
+  console.log('');
+
+  if (config.ownerWallet) {
+    // Basic Solana address validation (32-44 base58 chars)
+    if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(config.ownerWallet)) {
+      printSuccess('Owner wallet set — this wallet owns all memories from this instance');
+    } else {
+      printWarn('Address looks invalid — double-check it in .env later');
+    }
+  } else {
+    printInfo('Skipped — add OWNER_WALLET to .env later to claim ownership');
+  }
+
+  // ─── Step 4: Solana ──────────────────────────────────────
+  printStep(4, 5, 'Solana');
   printInfo('Commit memory hashes on-chain for verifiable agent history.');
   printInfo('Requires an RPC endpoint and a wallet with SOL for fees.\n');
 
@@ -276,8 +305,8 @@ export async function runInit(): Promise<void> {
     printInfo('Skipped — add SOLANA_RPC_URL and BOT_WALLET_PRIVATE_KEY to .env later');
   }
 
-  // ─── Step 4: Embeddings ─────────────────────────────────
-  printStep(4, 4, 'Embeddings');
+  // ─── Step 5: Embeddings ─────────────────────────────────
+  printStep(5, 5, 'Embeddings');
   printInfo('Enables vector similarity search. Without it, recall uses');
   printInfo('keyword + tag matching (still works fine).\n');
 
@@ -330,6 +359,7 @@ export async function runInit(): Promise<void> {
   // What's enabled
   const hasSupabase = !!(config.supabaseUrl && config.supabaseKey);
   const hasAnthropic = !!config.anthropicKey;
+  const hasOwner = !!config.ownerWallet;
   const hasSolana = !!config.walletKey;
   const hasEmbeddings = !!(config.embeddingProvider && config.embeddingKey);
 
@@ -342,6 +372,9 @@ export async function runInit(): Promise<void> {
   }
   if (hasAnthropic) {
     printSuccess('Dream cycles + LLM importance scoring');
+  }
+  if (hasOwner) {
+    printSuccess('Memory ownership (' + config.ownerWallet.slice(0, 8) + '...)');
   }
   if (hasSolana) {
     printSuccess('On-chain memory commits (Solana)');

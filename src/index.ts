@@ -69,6 +69,13 @@ if (require.main === module) {
     await initDatabase();
     log.info('Database initialized');
 
+    // Set owner wallet if configured
+    if (config.owner.wallet) {
+      const { _setOwnerWallet } = require('./core/memory');
+      _setOwnerWallet(config.owner.wallet);
+      log.info({ owner: config.owner.wallet.slice(0, 8) + '...' }, 'Owner wallet configured');
+    }
+
     // Register event handlers (wires webhook events to feature logic)
     registerEventHandlers();
     log.info('Event handlers registered');
