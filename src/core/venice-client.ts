@@ -143,7 +143,7 @@ async function loadPersistedStats() {
       headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` },
     });
     if (!res.ok) return;
-    const rows = await res.json();
+    const rows = await res.json() as Array<Record<string, any>>;
     if (rows.length > 0) {
       const row = rows[0];
       _veniceStats.totalInferenceCalls = row.total_inference_calls || 0;
