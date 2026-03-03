@@ -26,7 +26,45 @@ Traditional memory systems scan all memories on every query — **O(n)** complex
 npm install clude-bot
 ```
 
-## Quick Start
+## Quick Start — Hosted (Zero Setup)
+
+```bash
+npx clude-bot register   # Get your API key
+```
+
+```typescript
+import { Cortex } from 'clude-bot';
+
+const brain = new Cortex({
+  hosted: { apiKey: process.env.CORTEX_API_KEY! },
+});
+
+await brain.init();
+
+// Store a memory
+await brain.store({
+  type: 'episodic',
+  content: 'User asked about pricing and seemed frustrated with the current plan.',
+  summary: 'Frustrated user asking about pricing',
+  tags: ['pricing', 'user-concern'],
+  importance: 0.7,
+  source: 'my-agent',
+});
+
+// Recall relevant memories
+const memories = await brain.recall({
+  query: 'what do users think about pricing',
+  limit: 5,
+});
+
+console.log(`Recalled ${memories.length} memories`);
+```
+
+That's it. No database, no infrastructure. Memories are stored on CLUDE infrastructure, isolated by your API key.
+
+## Quick Start — Self-Hosted (Your Supabase)
+
+For full control, use your own Supabase:
 
 ```typescript
 import { Cortex } from 'clude-bot';
@@ -43,7 +81,6 @@ const brain = new Cortex({
 
 await brain.init();
 
-// Store a memory
 await brain.store({
   type: 'episodic',
   content: 'User asked about pricing and seemed frustrated with the current plan.',
@@ -54,13 +91,11 @@ await brain.store({
   relatedUser: 'user-123',
 });
 
-// Recall relevant memories
 const memories = await brain.recall({
   query: 'what do users think about pricing',
   limit: 5,
 });
 
-// Format for your LLM prompt
 const context = brain.formatContext(memories);
 // Pass `context` into your system prompt so the LLM knows what it remembers
 ```
@@ -71,17 +106,33 @@ const context = brain.formatContext(memories);
 
 See the [`examples/`](./examples) folder for runnable scripts:
 
-- **[basic-memory.ts](./examples/basic-memory.ts)** — Store and recall with just Supabase (no API keys needed)
+- **[hosted-mode.ts](./examples/hosted-mode.ts)** — Zero-setup with just an API key (hosted mode)
+- **[basic-memory.ts](./examples/basic-memory.ts)** — Store and recall with Supabase (self-hosted)
 - **[chat-agent.ts](./examples/chat-agent.ts)** — Interactive chat agent with memory and dream cycles
 - **[progressive-disclosure.ts](./examples/progressive-disclosure.ts)** — Token-efficient retrieval with `recallSummaries()` + `hydrate()`
 
 ```bash
+# Hosted mode
+CORTEX_API_KEY=clk_... npx tsx examples/hosted-mode.ts
+
+# Self-hosted
 SUPABASE_URL=... SUPABASE_KEY=... npx tsx examples/basic-memory.ts
 ```
 
 ---
 
-## Setup
+## CLI
+
+```bash
+npx clude-bot init        # Interactive setup wizard (hosted or self-hosted)
+npx clude-bot register    # Get an API key for hosted mode
+npx clude-bot start       # Start the full Clude bot (requires config)
+npx clude-bot --version   # Show version
+```
+
+---
+
+## Setup (Self-Hosted)
 
 ### 1. Create a Supabase project
 
@@ -119,6 +170,19 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 ### Constructor
 
+**Hosted mode** — zero setup:
+
+```typescript
+const brain = new Cortex({
+  hosted: {
+    apiKey: string,      // From `npx clude-bot register`
+    baseUrl?: string,    // Default: 'https://cluude.ai'
+  },
+});
+```
+
+**Self-hosted mode** — full control:
+
 ```typescript
 const brain = new Cortex({
   // Required
@@ -146,6 +210,9 @@ const brain = new Cortex({
     rpcUrl?: string,
     botWalletPrivateKey?: string,
   },
+
+  // Optional — owner wallet for memory isolation
+  ownerWallet?: string,
 });
 ```
 
@@ -343,9 +410,23 @@ Stop dream schedules, clean up event listeners.
 
 ---
 
+## Hosted vs Self-Hosted
+
+| | **Hosted** | **Self-Hosted** |
+|---|---|---|
+| **Setup** | Just an API key | Your own Supabase |
+| **store / recall / stats** | Yes | Yes |
+| **recent / self-model / link** | Yes | Yes |
+| **Dream cycles** | No | Yes (requires Anthropic) |
+| **Entity graph** | No | Yes |
+| **Memory packs** | No | Yes |
+| **Embeddings** | Managed | Configurable (Voyage/OpenAI) |
+| **On-chain commits** | No | Yes (Solana) |
+| **Dashboard** | Yes (API key login) | Yes (Privy wallet login) |
+
 ## Graceful Degradation
 
-The SDK works with minimal config and progressively enhances:
+The self-hosted SDK progressively enhances based on config:
 
 | Feature | Without it |
 |---------|------------|
@@ -353,14 +434,21 @@ The SDK works with minimal config and progressively enhances:
 | `embedding` not set | Vector search disabled, recall uses keyword + tag scoring only. |
 | `solana` not set | On-chain memory commits silently skipped. |
 
-**Minimum viable setup** — just Supabase:
+**Minimum viable setup** — hosted mode:
+```typescript
+const brain = new Cortex({
+  hosted: { apiKey: 'clk_...' },
+});
+```
+
+**Minimum self-hosted** — just Supabase:
 ```typescript
 const brain = new Cortex({
   supabase: { url: '...', serviceKey: '...' },
 });
 ```
 
-This gives you full store/recall/decay with keyword-based retrieval. Add Anthropic for dream cycles, add embeddings for vector search.
+Both give you full store/recall with keyword-based retrieval. Self-hosted adds dream cycles, embeddings, and on-chain commits.
 
 ---
 

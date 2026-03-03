@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.6.0] — 2026-03-02
+
+### Added
+- **Hosted Cortex mode** — Zero-setup memory via API key (`npx clude-bot register`)
+- **Owner wallet isolation** — Multi-tenant memory scoping with `scopeToOwner()` and `AsyncLocalStorage`
+- **Cortex REST API** — 9 endpoints at `/api/cortex/*` (store, recall, stats, recent, self-model, link, hydrate, summaries, register)
+- **Dashboard dual-mode auth** — Privy wallet login (legacy endpoints) + Cortex API key login (`/api/cortex/*` endpoints)
+- **CLI register command** — `npx clude-bot register` for hosted mode onboarding
+- **CLI init wizard** — Hosted vs self-hosted mode selection in `npx clude-bot init`
+- **HTTP transport** — SDK client for hosted mode (`src/sdk/http-transport.ts`)
+- **Hosted mode example** — `examples/hosted-mode.ts`
+- **NPM publish workflow** — Auto-publish on GitHub Release via `.github/workflows/publish.yml`
+
+### Changed
+- `CortexConfig.supabase` is now optional (hosted mode only needs `hosted.apiKey`)
+- Dashboard pages degrade gracefully in hosted mode (entity graph, memory packs show "requires self-hosted")
+- `getOwnerWallet()` checks `AsyncLocalStorage` before module-level fallback for concurrent request safety
+- 4 RPC functions accept `filter_owner` parameter for server-side tenant isolation
+- README restructured with hosted mode as primary Quick Start path
+
 ## [2.5.1] — 2026-03-01
 
 ### Fixed
