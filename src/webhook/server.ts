@@ -679,6 +679,7 @@ export function createServer(): express.Application {
           id: m.id,
           type: m.memory_type,
           memory_type: m.memory_type,
+          _score: (m as any)._score || null,
           summary: m.summary,
           content: m.content,
           tags: m.tags,
