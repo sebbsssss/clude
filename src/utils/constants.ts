@@ -43,7 +43,7 @@ export const KNOWLEDGE_TYPE_BOOST: Record<string, number> = {
 };
 
 // Vector search thresholds
-export const VECTOR_MATCH_THRESHOLD = 0.4;              // Min cosine similarity (was 0.3 — too permissive)
+export const VECTOR_MATCH_THRESHOLD = 0.25;             // Min cosine similarity (lowered for Voyage-4-Large which produces tighter distributions)
 
 // Structured concept ontology for cross-cutting knowledge classification
 // Replaces freeform tagging with a controlled vocabulary for precise retrieval.
