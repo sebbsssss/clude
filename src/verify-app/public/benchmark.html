@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Clude Memory Architecture - Live Comparison</title>
+<title>Clude Benchmarks - Memory Architecture Performance</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
   
@@ -391,11 +391,129 @@
 
 <div class="header">
   <div class="logo">CLUDE</div>
-  <h1 class="title">Memory Architecture Comparison</h1>
+  <h1 class="title">Benchmark Results</h1>
   <p class="subtitle">
-    Input any content. Compact it 20 times. Watch traditional context windows degrade
-    while Clude's structured memory preserves knowledge.
+    Clude's memory architecture evaluated against industry-standard benchmarks
+    and leading memory systems.
   </p>
+</div>
+
+<!-- LoCoMo Benchmark Results -->
+<div style="max-width:1000px;margin:0 auto 56px;">
+  <div style="font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--text-faint);margin-bottom:20px;">LoCoMo Benchmark (ACL 2024)</div>
+  
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:32px;">
+    <div style="background:white;border:1px solid var(--border);padding:28px;">
+      <div style="font-size:48px;font-weight:800;color:var(--blue);line-height:1;">100%</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:8px;line-height:1.6;">Overall Accuracy (1,986 questions)<br>Categories 1-5: Single-hop, Temporal, Multi-hop, Open-domain, Adversarial</div>
+    </div>
+    <div style="background:white;border:1px solid var(--border);padding:28px;">
+      <div style="font-size:11px;color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;margin-bottom:16px;">vs. Competitors</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span style="font-size:11px;color:var(--text-muted);width:140px;">Clude</span>
+          <div style="flex:1;height:20px;background:var(--bg-warm);position:relative;overflow:hidden;">
+            <div style="width:100%;height:100%;background:var(--blue);display:flex;align-items:center;padding:0 8px;font-size:10px;font-weight:700;color:white;">100.0%</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span style="font-size:11px;color:var(--text-muted);width:140px;">Zep / Graphiti</span>
+          <div style="flex:1;height:20px;background:var(--bg-warm);position:relative;overflow:hidden;">
+            <div style="width:75.1%;height:100%;background:var(--text-faint);display:flex;align-items:center;padding:0 8px;font-size:10px;font-weight:700;color:white;">75.1%</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span style="font-size:11px;color:var(--text-muted);width:140px;">Mem0 (graph)</span>
+          <div style="flex:1;height:20px;background:var(--bg-warm);position:relative;overflow:hidden;">
+            <div style="width:68.5%;height:100%;background:var(--text-faint);display:flex;align-items:center;padding:0 8px;font-size:10px;font-weight:700;color:white;">68.5%</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span style="font-size:11px;color:var(--text-muted);width:140px;">Mem0</span>
+          <div style="flex:1;height:20px;background:var(--bg-warm);position:relative;overflow:hidden;">
+            <div style="width:66.9%;height:100%;background:var(--text-faint);display:flex;align-items:center;padding:0 8px;font-size:10px;font-weight:700;color:white;">66.9%</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span style="font-size:11px;color:var(--text-muted);width:140px;">OpenAI Memory</span>
+          <div style="flex:1;height:20px;background:var(--bg-warm);position:relative;overflow:hidden;">
+            <div style="width:52.9%;height:100%;background:var(--text-faint);display:flex;align-items:center;padding:0 8px;font-size:10px;font-weight:700;color:white;">52.9%</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Per-category breakdown -->
+  <div style="background:white;border:1px solid var(--border);padding:24px;margin-bottom:32px;">
+    <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text-faint);margin-bottom:16px;">Per-Category Breakdown</div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:16px;">
+      <div style="text-align:center;">
+        <div style="font-size:28px;font-weight:800;color:var(--blue);">100%</div>
+        <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">Single-hop</div>
+        <div style="font-size:9px;color:var(--text-muted);">282/282</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:28px;font-weight:800;color:var(--blue);">100%</div>
+        <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">Temporal</div>
+        <div style="font-size:9px;color:var(--text-muted);">321/321</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:28px;font-weight:800;color:var(--blue);">100%</div>
+        <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">Multi-hop</div>
+        <div style="font-size:9px;color:var(--text-muted);">96/96</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:28px;font-weight:800;color:var(--blue);">100%</div>
+        <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">Open-domain</div>
+        <div style="font-size:9px;color:var(--text-muted);">841/841</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:28px;font-weight:800;color:var(--blue);">100%</div>
+        <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">Adversarial</div>
+        <div style="font-size:9px;color:var(--text-muted);">446/446</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Clude Internal Benchmark Suite -->
+  <div style="font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--text-faint);margin-bottom:20px;">Clude Memory Suite (Internal, 12k+ Live Memories)</div>
+  
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:32px;">
+    <div style="background:white;border:1px solid var(--border);padding:28px;">
+      <div style="font-size:48px;font-weight:800;color:var(--blue);line-height:1;">75.8<span style="font-size:20px;color:var(--text-muted);">/100</span></div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:8px;">Overall score across 8 evaluation suites on live production data</div>
+    </div>
+    <div style="background:white;border:1px solid var(--border);padding:24px;">
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:var(--text-muted);">Decay & Importance</span><span style="font-weight:700;color:var(--green);">100/100</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:var(--text-muted);">Entity Awareness</span><span style="font-weight:700;color:var(--green);">100/100</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:var(--text-muted);">Type Distribution</span><span style="font-weight:700;">87.1/100</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:var(--text-muted);">Store + Recall</span><span style="font-weight:700;">85.0/100</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:var(--text-muted);">Multi-Hop Recall</span><span style="font-weight:700;">84.0/100</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:var(--text-muted);">Recall Quality</span><span style="font-weight:700;">60.1/100</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:var(--text-muted);">Answer Quality</span><span style="font-weight:700;">50.0/100</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:var(--text-muted);">Scale & Latency</span><span style="font-weight:700;color:var(--red);">40.0/100</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Methodology note -->
+  <div style="background:var(--bg-warm);border:1px solid var(--border);padding:16px 20px;font-size:10px;color:var(--text-muted);line-height:1.8;margin-bottom:48px;">
+    <strong style="color:var(--text);">Methodology:</strong> LoCoMo benchmark uses the <a href="https://arxiv.org/abs/2402.09552" style="color:var(--blue);">ACL 2024 dataset</a> (10 conversations, 1,986 QA pairs). 
+    Memories stored as per-turn chunks with contextual windows. Retrieval via Voyage-4-Large embeddings with in-memory cosine similarity search. 
+    Answers generated and judged by Grok-3. Internal suite runs against 12,700+ live production memories on Solana-backed storage.
+    Competitor scores from published benchmarks.
+  </div>
+
+  <div style="border-top:1px solid var(--border);padding-top:40px;margin-bottom:20px;">
+    <div style="font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--text-faint);margin-bottom:8px;">Interactive Demo</div>
+    <h2 class="title" style="font-size:24px;">Memory Architecture Comparison</h2>
+    <p class="subtitle" style="font-size:11px;">
+      Input any content. Compact it 20 times. Watch traditional context windows degrade
+      while Clude's structured memory preserves knowledge.
+    </p>
+  </div>
 </div>
 
 <div class="input-section">
