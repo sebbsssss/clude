@@ -512,58 +512,82 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
       ? await expandQuery(opts.query)
       : opts.query ? [opts.query] : [];
 
-    // Phase 1: Vector search for semantic candidates (if available)
+    // Phase 1+2: Vector search + metadata query IN PARALLEL
     let vectorScores = opts._vectorScores || new Map<number, number>();
 
-    if (queries.length > 0 && isEmbeddingEnabled() && !opts._vectorScores) {
-      // Embed all query variants (with cache)
-      const queryEmbeddings = await Promise.all(
-        queries.map(async q => {
-          const cached = getCachedEmbedding(q);
-          if (cached) return cached;
-          const emb = await generateQueryEmbedding(q);
-          if (emb) setCachedEmbedding(q, emb);
-          return emb;
-        })
-      );
-      const validEmbeddings = queryEmbeddings.filter((e): e is number[] => e !== null);
+    // Start embedding immediately (non-blocking)
+    const vectorSearchPromise = (queries.length > 0 && isEmbeddingEnabled() && !opts._vectorScores) 
+      ? (async () => {
+        // Embed all query variants (with cache)
+        const queryEmbeddings = await Promise.all(
+          queries.map(async q => {
+            const cached = getCachedEmbedding(q);
+            if (cached) return cached;
+            const emb = await generateQueryEmbedding(q);
+            if (emb) setCachedEmbedding(q, emb);
+            return emb;
+          })
+        );
+        const validEmbeddings = queryEmbeddings.filter((e): e is number[] => e !== null);
 
-      if (validEmbeddings.length > 0) {
+        if (validEmbeddings.length === 0) {
+          log.debug('All query embeddings returned null, using keyword-only retrieval');
+          return;
+        }
+
         try {
-          // Search with all query variants, union results
-          const allSearches = validEmbeddings.flatMap(emb => [
-            db.rpc('match_memories', {
-              query_embedding: JSON.stringify(emb),
-              match_threshold: VECTOR_MATCH_THRESHOLD,
-              match_count: limit * 4,
-              filter_types: opts.memoryTypes || null,
-              filter_user: opts.relatedUser || null,
-              min_decay: minDecay,
-              filter_owner: getOwnerWallet() || null,
-            }).then(r => r.data || []),
-            db.rpc('match_memory_fragments', {
-              query_embedding: JSON.stringify(emb),
-              match_threshold: VECTOR_MATCH_THRESHOLD,
-              match_count: limit * 2,
-              filter_owner: getOwnerWallet() || null,
-            }).then(r => r.data || []),
-          ]);
+          // Memory-level search only (skip fragments for speed when skipExpansion is set)
+          const allSearches = validEmbeddings.flatMap(emb => {
+            const searches: Promise<any[]>[] = [
+              db.rpc('match_memories', {
+                query_embedding: JSON.stringify(emb),
+                match_threshold: VECTOR_MATCH_THRESHOLD,
+                match_count: limit * (opts.skipExpansion ? 8 : 4),
+                filter_types: opts.memoryTypes || null,
+                filter_user: opts.relatedUser || null,
+                min_decay: minDecay,
+                filter_owner: getOwnerWallet() || null,
+              }).then(r => r.data || []),
+            ];
+            // Only search fragments when not in fast mode
+            if (!opts.skipExpansion) {
+              searches.push(
+                db.rpc('match_memory_fragments', {
+                  query_embedding: JSON.stringify(emb),
+                  match_threshold: VECTOR_MATCH_THRESHOLD,
+                  match_count: limit * 2,
+                  filter_owner: getOwnerWallet() || null,
+                }).then(r => r.data || []),
+              );
+            }
+            return searches;
+          });
 
           const results = await Promise.all(allSearches);
           
           // Merge: take highest similarity per memory_id across ALL queries
-          for (let i = 0; i < results.length; i++) {
-            if (i % 2 === 0) {
-              // Memory-level matches
-              for (const m of results[i]) {
+          if (opts.skipExpansion) {
+            // All results are memory-level matches (no fragments)
+            for (const batch of results) {
+              for (const m of batch) {
                 const current = vectorScores.get(m.id) || 0;
                 vectorScores.set(m.id, Math.max(current, m.similarity));
               }
-            } else {
-              // Fragment-level matches
-              for (const f of results[i]) {
-                const current = vectorScores.get(f.memory_id) || 0;
-                vectorScores.set(f.memory_id, Math.max(current, f.max_similarity));
+            }
+          } else {
+            for (let i = 0; i < results.length; i++) {
+              const hasFragments = validEmbeddings.length > 0;
+              const step = hasFragments ? 2 : 1;
+              if (i % step === 0) {
+                for (const m of results[i]) {
+                  const current = vectorScores.get(m.id) || 0;
+                  vectorScores.set(m.id, Math.max(current, m.similarity));
+                }
+              } else {
+                for (const f of results[i]) {
+                  const current = vectorScores.get(f.memory_id) || 0;
+                  vectorScores.set(f.memory_id, Math.max(current, f.max_similarity));
+                }
               }
             }
           }
@@ -571,16 +595,15 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
           log.debug({
             queryVariants: validEmbeddings.length,
             uniqueMemories: vectorScores.size,
-          }, 'Expanded vector search completed');
+            fastMode: !!opts.skipExpansion,
+          }, 'Vector search completed');
         } catch (err) {
           log.warn({ err }, 'Vector search RPC failed, falling back to keyword retrieval');
         }
-      } else {
-        log.debug('All query embeddings returned null, using keyword-only retrieval');
-      }
-    }
+      })() 
+      : Promise.resolve();
 
-    // Phase 2: Metadata-filtered candidates from Supabase
+    // Phase 2: Metadata-filtered candidates from Supabase (runs IN PARALLEL with vector search)
     // Run two queries in parallel: importance-ranked + text-search for diversity
     let importanceQuery = db
       .from('memories')
@@ -643,6 +666,7 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
     const [importanceResult, textResults] = await Promise.all([
       importanceQuery,
       textSearchPromise,
+      vectorSearchPromise, // Ensure vector search completes before merge
     ]);
 
     const { data, error } = importanceResult as { data: any; error: any };
