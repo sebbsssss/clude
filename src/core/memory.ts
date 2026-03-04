@@ -539,7 +539,7 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
           // Memory-level search only (skip fragments for speed when skipExpansion is set)
           const allSearches = validEmbeddings.flatMap(emb => {
             const searches: Promise<any[]>[] = [
-              db.rpc('match_memories', {
+              Promise.resolve(db.rpc('match_memories', {
                 query_embedding: JSON.stringify(emb),
                 match_threshold: VECTOR_MATCH_THRESHOLD,
                 match_count: limit * (opts.skipExpansion ? 8 : 4),
@@ -547,17 +547,17 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
                 filter_user: opts.relatedUser || null,
                 min_decay: minDecay,
                 filter_owner: getOwnerWallet() || null,
-              }).then(r => r.data || []),
+              })).then(r => r.data || []),
             ];
             // Only search fragments when not in fast mode
             if (!opts.skipExpansion) {
               searches.push(
-                db.rpc('match_memory_fragments', {
+                Promise.resolve(db.rpc('match_memory_fragments', {
                   query_embedding: JSON.stringify(emb),
                   match_threshold: VECTOR_MATCH_THRESHOLD,
                   match_count: limit * 2,
                   filter_owner: getOwnerWallet() || null,
-                }).then(r => r.data || []),
+                })).then(r => r.data || []),
               );
             }
             return searches;
