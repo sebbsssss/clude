@@ -663,24 +663,48 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
       }
     })() : Promise.resolve([]);
 
-    const [importanceResult, textResults] = await Promise.all([
+    // Phase 2b: Always fetch knowledge-seed memories (small fixed set, ~20 rows)
+    // These are curated factual memories that must compete in scoring regardless of vector pool
+    let knowledgeSeedQuery = db
+      .from('memories')
+      .select('*')
+      .eq('source', 'knowledge-seed')
+      .gte('decay_factor', minDecay);
+    knowledgeSeedQuery = scopeToOwner(knowledgeSeedQuery);
+    if (opts.memoryTypes && opts.memoryTypes.length > 0) {
+      knowledgeSeedQuery = knowledgeSeedQuery.in('memory_type', opts.memoryTypes);
+    }
+
+    const [importanceResult, textResults, knowledgeSeeds] = await Promise.all([
       importanceQuery,
       textSearchPromise,
+      Promise.resolve(knowledgeSeedQuery).then((r: any) => r.data || []).catch(() => []),
       vectorSearchPromise, // Ensure vector search completes before merge
     ]);
 
     const { data, error } = importanceResult as { data: any; error: any };
     
-    // Merge text search results into data
-    if (Array.isArray(textResults) && textResults.length > 0 && data) {
+    // Merge text search results + knowledge seeds into data
+    if (data) {
       const existingIds = new Set((data as any[]).map((m: any) => m.id));
-      for (const m of textResults) {
-        if (!existingIds.has(m.id)) {
-          (data as any[]).push(m);
-          existingIds.add(m.id);
+      if (Array.isArray(textResults) && textResults.length > 0) {
+        for (const m of textResults) {
+          if (!existingIds.has(m.id)) {
+            (data as any[]).push(m);
+            existingIds.add(m.id);
+          }
         }
+        log.debug({ textHits: textResults.length }, 'Text search added candidates');
       }
-      log.debug({ textHits: textResults.length }, 'Text search added candidates');
+      if (Array.isArray(knowledgeSeeds) && knowledgeSeeds.length > 0) {
+        for (const m of knowledgeSeeds) {
+          if (!existingIds.has(m.id)) {
+            (data as any[]).push(m);
+            existingIds.add(m.id);
+          }
+        }
+        log.debug({ seedHits: knowledgeSeeds.length }, 'Knowledge seeds added to candidates');
+      }
     }
 
     if (error) {
