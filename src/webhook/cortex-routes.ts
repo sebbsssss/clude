@@ -355,5 +355,112 @@ export function cortexRoutes(): Router {
     }
   });
 
+  // ── Memory Pack Export ────────────────────────────────
+  router.post('/packs/export', async (req: Request, res: Response) => {
+    try {
+      const cortexReq = req as CortexRequest;
+      const { name, description, memory_ids, types, query, limit, format } = req.body;
+
+      if (!name) {
+        res.status(400).json({ error: 'name is required' });
+        return;
+      }
+
+      let memories: any[];
+      await withOwnerWallet(cortexReq.ownerWallet!, async () => {
+        if (memory_ids && Array.isArray(memory_ids)) {
+          const { hydrateMemories } = require('../core/memory');
+          memories = await hydrateMemories(memory_ids);
+        } else {
+          const { recallMemories } = require('../core/memory');
+          memories = await recallMemories({
+            query,
+            memoryTypes: types,
+            limit: limit || 50,
+          });
+        }
+      });
+
+      const pack = {
+        id: require('crypto').randomUUID(),
+        name,
+        description: description || '',
+        memories: (memories! || []).map((m: any) => ({
+          content: m.content,
+          summary: m.summary,
+          type: m.memory_type,
+          importance: m.importance,
+          tags: m.tags || [],
+          concepts: m.concepts || [],
+          created_at: m.created_at,
+        })),
+        created_at: new Date().toISOString(),
+        created_by: cortexReq.ownerWallet || '',
+        format_version: 1,
+      };
+
+      if (format === 'markdown') {
+        const lines = [
+          `# Memory Pack: ${pack.name}`,
+          '', `> ${pack.description}`, '',
+          `- **Memories**: ${pack.memories.length}`,
+          `- **Created**: ${pack.created_at}`,
+          '', '---', '',
+        ];
+        for (const mem of pack.memories) {
+          lines.push(`## [${mem.type}] ${mem.summary}`, '', mem.content, '');
+          if (mem.tags.length) lines.push(`Tags: ${mem.tags.join(', ')}`);
+          lines.push(`Importance: ${mem.importance.toFixed(2)}`, '', '---', '');
+        }
+        res.type('text/markdown').send(lines.join('\n'));
+      } else {
+        res.json(pack);
+      }
+    } catch (err) {
+      log.error({ err }, 'Pack export error');
+      res.status(500).json({ error: 'Export failed' });
+    }
+  });
+
+  // ── Memory Pack Import ────────────────────────────────
+  router.post('/packs/import', async (req: Request, res: Response) => {
+    try {
+      const cortexReq = req as CortexRequest;
+      const { pack, importance_multiplier, tag_prefix, types } = req.body;
+
+      if (!pack || !pack.memories || !Array.isArray(pack.memories)) {
+        res.status(400).json({ error: 'Valid memory pack required' });
+        return;
+      }
+
+      let imported = 0;
+      let skipped = 0;
+
+      await withOwnerWallet(cortexReq.ownerWallet!, async () => {
+        const { storeMemory } = require('../core/memory');
+        for (const mem of pack.memories) {
+          if (types && !types.includes(mem.type)) {
+            skipped++;
+            continue;
+          }
+          await storeMemory({
+            content: mem.content,
+            summary: mem.summary,
+            type: mem.type,
+            importance: mem.importance * (importance_multiplier ?? 0.8),
+            tags: [...(mem.tags || []), `pack:${pack.name || 'imported'}`],
+            source: `pack:${pack.id || 'unknown'}`,
+          });
+          imported++;
+        }
+      });
+
+      res.json({ imported, skipped, total: pack.memories.length });
+    } catch (err) {
+      log.error({ err }, 'Pack import error');
+      res.status(500).json({ error: 'Import failed' });
+    }
+  });
+
   return router;
 }

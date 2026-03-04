@@ -1,4 +1,5 @@
 export { Cortex } from './cortex';
+export { CortexV2 } from './cortex-v2';
 export type {
   CortexConfig,
   DreamOptions,
@@ -11,3 +12,15 @@ export type {
   MemoryLinkType,
   MemoryConcept,
 } from './types';
+export type {
+  CortexV2Config,
+  CognitiveFunction,
+  ModelRoute,
+  RouterConfig,
+  MemoryPack,
+  PackedMemory,
+  PrivacyLevel,
+  PrivacyPolicy,
+  MeteringEvent,
+  MeteringHandler,
+} from './cortex-v2';
