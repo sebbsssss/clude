@@ -514,6 +514,7 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
 
     // Phase 1+2: Vector search + metadata query IN PARALLEL
     let vectorScores = opts._vectorScores || new Map<number, number>();
+    let primaryQueryEmbedding: number[] | null = null; // Shared for Phase 2b seed scoring
 
     // Start embedding immediately (non-blocking)
     const vectorSearchPromise = (queries.length > 0 && isEmbeddingEnabled() && !opts._vectorScores) 
@@ -529,6 +530,7 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
           })
         );
         const validEmbeddings = queryEmbeddings.filter((e): e is number[] => e !== null);
+        if (validEmbeddings.length > 0) primaryQueryEmbedding = validEmbeddings[0];
 
         if (validEmbeddings.length === 0) {
           log.debug('All query embeddings returned null, using keyword-only retrieval');
@@ -697,13 +699,30 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
         log.debug({ textHits: textResults.length }, 'Text search added candidates');
       }
       if (Array.isArray(knowledgeSeeds) && knowledgeSeeds.length > 0) {
+        let seedsAdded = 0;
         for (const m of knowledgeSeeds) {
           if (!existingIds.has(m.id)) {
             (data as any[]).push(m);
             existingIds.add(m.id);
+            seedsAdded++;
+          }
+          // Compute vector similarity for seeds that lack it (fetched via metadata, not vector search)
+          if (primaryQueryEmbedding && m.embedding && !vectorScores.has(m.id)) {
+            const emb = m.embedding as number[];
+            const qEmb = primaryQueryEmbedding as number[];
+            if (emb.length === qEmb.length) {
+              let dot = 0, magA = 0, magB = 0;
+              for (let i = 0; i < emb.length; i++) {
+                dot += qEmb[i] * emb[i];
+                magA += qEmb[i] * qEmb[i];
+                magB += emb[i] * emb[i];
+              }
+              const sim = (magA > 0 && magB > 0) ? dot / (Math.sqrt(magA) * Math.sqrt(magB)) : 0;
+              if (sim > 0) vectorScores.set(m.id, sim);
+            }
           }
         }
-        log.debug({ seedHits: knowledgeSeeds.length }, 'Knowledge seeds added to candidates');
+        if (seedsAdded > 0) log.debug({ seedsAdded, seedsTotal: knowledgeSeeds.length }, 'Knowledge seeds added to candidates');
       }
     }
 
@@ -1041,7 +1060,7 @@ export function scoreMemory(mem: Memory, opts: RecallOptions): number {
   if (mem.source === 'knowledge-seed' && vectorSim > 0.25) {
     rawScore += 2.0 + vectorSim * 2.0; // ranges from +2.5 (sim=0.25) to +4.0 (sim=1.0)
   } else if (mem.source === 'knowledge-seed') {
-    rawScore += 0.5; // moderate boost even without vector match
+    rawScore += 0.5; // moderate boost for seeds without vector match
   }
 
   // Consolidation memories are dream-cycle meta-observations — strong penalty
