@@ -678,7 +678,7 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
     const [importanceResult, textResults, knowledgeSeeds] = await Promise.all([
       importanceQuery,
       textSearchPromise,
-      Promise.resolve(knowledgeSeedQuery).then((r: any) => r.data || []).catch(() => []),
+      (async () => { try { const r = await knowledgeSeedQuery; return (r as any).data || []; } catch { return []; } })(),
       vectorSearchPromise, // Ensure vector search completes before merge
     ]);
 
