@@ -10,22 +10,22 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   :root {
-    --bg: #0a0a0c;
-    --surface: #111114;
-    --cream: #f0ebe0;
-    --gold: #c8b89a;
-    --gold-dim: #8a7e6a;
+    --bg: #f5f5f0;
+    --surface: #ffffff;
+    --cream: #111;
+    --gold: #555;
+    --gold-dim: #888;
     --blue: #2244ff;
-    --blue-glow: rgba(34, 68, 255, 0.35);
-    --muted: #555550;
-    --dim: #333330;
-    --faint: #1e1e1c;
+    --blue-glow: rgba(34, 68, 255, 0.2);
+    --muted: #888;
+    --dim: #bbb;
+    --faint: #e5e4de;
     --mono: 'JetBrains Mono', monospace;
   }
 
   body {
     font-family: var(--mono);
-    background: #050506;
+    background: #eeeee8;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -37,7 +37,7 @@
     width: 1200px;
     height: 675px;
     background: var(--bg);
-    border: 1px solid #1a1a1f;
+    border: 1px solid #d5d4ce;
     border-radius: 4px;
     position: relative;
     overflow: hidden;
@@ -65,8 +65,8 @@
       0deg,
       transparent,
       transparent 2px,
-      rgba(0,0,0,0.03) 2px,
-      rgba(0,0,0,0.03) 4px
+      rgba(0,0,0,0.015) 2px,
+      rgba(0,0,0,0.015) 4px
     );
     pointer-events: none;
     z-index: 1;
@@ -211,9 +211,9 @@
     flex-shrink: 0;
   }
 
-  .tier-badge.t1 { background: #16163a; color: #6677ff; }
-  .tier-badge.t2 { background: #0d1a4a; color: var(--blue); }
-  .tier-badge.t3 { background: #141412; color: var(--dim); }
+  .tier-badge.t1 { background: var(--blue); color: #fff; }
+  .tier-badge.t2 { background: #eef0ff; color: var(--blue); }
+  .tier-badge.t3 { background: #eeeee8; color: #999; }
 
   .tier-items {
     flex: 1;
@@ -238,7 +238,7 @@
     padding: 4px 10px;
     border-radius: 2px;
     color: var(--muted);
-    background: rgba(255,255,255,0.03);
+    background: rgba(0,0,0,0.02);
     border: 1px solid var(--faint);
     white-space: nowrap;
   }
@@ -260,11 +260,11 @@
   }
 
   .tier-chip.is-dim {
-    color: var(--dim);
-    border-color: rgba(255,255,255,0.04);
+    color: #aaa;
+    border-color: #e0dfda;
   }
 
-  .tier-chip.is-dim .score { color: var(--dim); }
+  .tier-chip.is-dim .score { color: #bbb; }
 
   .tier-range {
     font-size: 7px;
@@ -360,7 +360,7 @@
   .corner::before, .corner::after {
     content: '';
     position: absolute;
-    background: var(--dim);
+    background: #ccc;
   }
   .corner-tl { top: 8px; left: 8px; }
   .corner-tl::before { top: 0; left: 0; width: 8px; height: 1px; }
