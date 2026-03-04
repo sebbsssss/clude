@@ -667,13 +667,44 @@ export function createServer(): express.Application {
         return;
       }
 
-      const { query, limit, memoryTypes } = req.body;
-      const memories = await recallMemories({
-        query: query ? String(query) : undefined,
-        limit: Math.min(Number(limit) || 10, 20),
-        memoryTypes: Array.isArray(memoryTypes) ? memoryTypes : undefined,
-        skipExpansion: true, // Skip LLM query expansion for speed (~500-800ms savings)
-      });
+      const { query, limit: rawLimit, memoryTypes } = req.body;
+      const effectiveLimit = Math.min(Number(rawLimit) || 10, 20);
+      const queryStr = query ? String(query) : undefined;
+      
+      let memories: any[];
+      if (Array.isArray(memoryTypes)) {
+        // Explicit type filter: single recall
+        memories = await recallMemories({
+          query: queryStr,
+          limit: effectiveLimit,
+          memoryTypes,
+          skipExpansion: true,
+        });
+      } else {
+        // Dual-path: knowledge-typed + general recall in parallel for better coverage
+        const [knowledgeMemories, generalMemories] = await Promise.all([
+          recallMemories({
+            query: queryStr,
+            limit: Math.ceil(effectiveLimit / 2),
+            memoryTypes: ['semantic', 'procedural', 'self_model'] as any,
+            skipExpansion: true,
+          }),
+          recallMemories({
+            query: queryStr,
+            limit: effectiveLimit,
+            skipExpansion: true,
+          }),
+        ]);
+        // Merge: knowledge first, then fill with general (deduplicated)
+        const seen = new Set<number>();
+        memories = [];
+        for (const m of knowledgeMemories) {
+          if (!seen.has(m.id)) { memories.push(m); seen.add(m.id); }
+        }
+        for (const m of generalMemories) {
+          if (!seen.has(m.id) && memories.length < effectiveLimit) { memories.push(m); seen.add(m.id); }
+        }
+      }
 
       res.json({
         memories: memories.map(m => ({
