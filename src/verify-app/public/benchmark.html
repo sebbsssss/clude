@@ -385,6 +385,66 @@
     0% { background: #fff3cd; }
     100% { background: white; }
   }
+
+  /* Benchmark sections */
+  .bench-wrap { max-width: 1000px; margin: 0 auto 56px; }
+  .bench-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; }
+  .bench-card { background: white; border: 1px solid var(--border); padding: 28px; }
+  .bench-hero { font-size: 48px; font-weight: 800; color: var(--blue); line-height: 1; }
+  .bench-hero-sub { font-size: 20px; color: var(--text-muted); }
+  .bench-label { font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: var(--text-faint); margin-bottom: 20px; }
+  .bench-label-sm { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-faint); margin-bottom: 16px; }
+  .bench-desc { font-size: 11px; color: var(--text-muted); margin-top: 8px; line-height: 1.6; }
+  .comp-row { display: flex; align-items: center; gap: 12px; }
+  .comp-name { font-size: 11px; color: var(--text-muted); width: 140px; flex-shrink: 0; }
+  .comp-bar-wrap { flex: 1; height: 20px; background: var(--bg-warm); position: relative; overflow: hidden; }
+  .comp-bar { height: 100%; display: flex; align-items: center; padding: 0 8px; font-size: 10px; font-weight: 700; color: white; }
+  .cat-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+  .cat-item { text-align: center; }
+  .cat-score { font-size: 28px; font-weight: 800; color: var(--blue); }
+  .cat-name { font-size: 9px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+  .cat-count { font-size: 9px; color: var(--text-muted); }
+  .suite-row { display: flex; justify-content: space-between; font-size: 11px; padding: 2px 0; }
+  .suite-name { color: var(--text-muted); }
+  .suite-score { font-weight: 700; }
+  .methodology { background: var(--bg-warm); border: 1px solid var(--border); padding: 16px 20px; font-size: 10px; color: var(--text-muted); line-height: 1.8; margin-bottom: 48px; }
+  .methodology a { color: var(--blue); }
+  .demo-divider { border-top: 1px solid var(--border); padding-top: 40px; margin-bottom: 20px; }
+
+  /* Mobile */
+  @media (max-width: 768px) {
+    body { padding: 20px 16px; }
+    .header { margin-bottom: 32px; }
+    .bench-wrap { margin-bottom: 40px; }
+    .bench-grid { grid-template-columns: 1fr; gap: 16px; }
+    .bench-card { padding: 20px; }
+    .bench-hero { font-size: 36px; }
+    .bench-hero-sub { font-size: 16px; }
+    .cat-grid { grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .cat-score { font-size: 22px; }
+    .comp-name { width: 100px; font-size: 10px; }
+    .comp-bar { font-size: 9px; padding: 0 4px; }
+    .suite-row { font-size: 10px; }
+    .comparison { grid-template-columns: 1fr; }
+    .controls { flex-wrap: wrap; gap: 8px; }
+    .btn { padding: 10px 16px; font-size: 10px; letter-spacing: 1px; }
+    .step-counter { margin-left: 0; width: 100%; text-align: center; margin-top: 8px; }
+    .score-row { grid-template-columns: 80px 1fr 1fr; gap: 8px; }
+    .score-label { font-size: 8px; }
+    .panel-footer { flex-wrap: wrap; gap: 8px 16px; }
+    .memory-meta { flex-wrap: wrap; gap: 6px; }
+    .input-section { margin-bottom: 24px; }
+    textarea { min-height: 80px; font-size: 11px; }
+    .methodology { font-size: 9px; padding: 12px 16px; }
+  }
+
+  @media (max-width: 480px) {
+    .cat-grid { grid-template-columns: repeat(2, 1fr); }
+    .comp-name { width: 80px; font-size: 9px; }
+    .bench-hero { font-size: 32px; }
+    .score-row { grid-template-columns: 1fr; gap: 4px; }
+    .score-label { text-align: left; }
+  }
 </style>
 </head>
 <body>
@@ -399,115 +459,70 @@
 </div>
 
 <!-- LoCoMo Benchmark Results -->
-<div style="max-width:1000px;margin:0 auto 56px;">
-  <div style="font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--text-faint);margin-bottom:20px;">LoCoMo Benchmark (ACL 2024)</div>
+<div class="bench-wrap">
+  <div class="bench-label">LoCoMo Benchmark (ACL 2024)</div>
   
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:32px;">
-    <div style="background:white;border:1px solid var(--border);padding:28px;">
-      <div style="font-size:48px;font-weight:800;color:var(--blue);line-height:1;">100%</div>
-      <div style="font-size:11px;color:var(--text-muted);margin-top:8px;line-height:1.6;">Overall Accuracy (1,986 questions)<br>Categories 1-5: Single-hop, Temporal, Multi-hop, Open-domain, Adversarial</div>
+  <div class="bench-grid">
+    <div class="bench-card">
+      <div class="bench-hero">100%</div>
+      <div class="bench-desc">Overall Accuracy (1,986 questions)<br>Categories 1-5: Single-hop, Temporal, Multi-hop, Open-domain, Adversarial</div>
     </div>
-    <div style="background:white;border:1px solid var(--border);padding:28px;">
-      <div style="font-size:11px;color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;margin-bottom:16px;">vs. Competitors</div>
+    <div class="bench-card">
+      <div class="bench-label-sm">vs. Competitors</div>
       <div style="display:flex;flex-direction:column;gap:8px;">
-        <div style="display:flex;align-items:center;gap:12px;">
-          <span style="font-size:11px;color:var(--text-muted);width:140px;">Clude</span>
-          <div style="flex:1;height:20px;background:var(--bg-warm);position:relative;overflow:hidden;">
-            <div style="width:100%;height:100%;background:var(--blue);display:flex;align-items:center;padding:0 8px;font-size:10px;font-weight:700;color:white;">100.0%</div>
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:12px;">
-          <span style="font-size:11px;color:var(--text-muted);width:140px;">Zep / Graphiti</span>
-          <div style="flex:1;height:20px;background:var(--bg-warm);position:relative;overflow:hidden;">
-            <div style="width:75.1%;height:100%;background:var(--text-faint);display:flex;align-items:center;padding:0 8px;font-size:10px;font-weight:700;color:white;">75.1%</div>
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:12px;">
-          <span style="font-size:11px;color:var(--text-muted);width:140px;">Mem0 (graph)</span>
-          <div style="flex:1;height:20px;background:var(--bg-warm);position:relative;overflow:hidden;">
-            <div style="width:68.5%;height:100%;background:var(--text-faint);display:flex;align-items:center;padding:0 8px;font-size:10px;font-weight:700;color:white;">68.5%</div>
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:12px;">
-          <span style="font-size:11px;color:var(--text-muted);width:140px;">Mem0</span>
-          <div style="flex:1;height:20px;background:var(--bg-warm);position:relative;overflow:hidden;">
-            <div style="width:66.9%;height:100%;background:var(--text-faint);display:flex;align-items:center;padding:0 8px;font-size:10px;font-weight:700;color:white;">66.9%</div>
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:12px;">
-          <span style="font-size:11px;color:var(--text-muted);width:140px;">OpenAI Memory</span>
-          <div style="flex:1;height:20px;background:var(--bg-warm);position:relative;overflow:hidden;">
-            <div style="width:52.9%;height:100%;background:var(--text-faint);display:flex;align-items:center;padding:0 8px;font-size:10px;font-weight:700;color:white;">52.9%</div>
-          </div>
-        </div>
+        <div class="comp-row"><span class="comp-name">Clude</span><div class="comp-bar-wrap"><div class="comp-bar" style="width:100%;background:var(--blue);">100.0%</div></div></div>
+        <div class="comp-row"><span class="comp-name">Zep / Graphiti</span><div class="comp-bar-wrap"><div class="comp-bar" style="width:75.1%;background:var(--text-faint);">75.1%</div></div></div>
+        <div class="comp-row"><span class="comp-name">Mem0 (graph)</span><div class="comp-bar-wrap"><div class="comp-bar" style="width:68.5%;background:var(--text-faint);">68.5%</div></div></div>
+        <div class="comp-row"><span class="comp-name">Mem0</span><div class="comp-bar-wrap"><div class="comp-bar" style="width:66.9%;background:var(--text-faint);">66.9%</div></div></div>
+        <div class="comp-row"><span class="comp-name">OpenAI Memory</span><div class="comp-bar-wrap"><div class="comp-bar" style="width:52.9%;background:var(--text-faint);">52.9%</div></div></div>
       </div>
     </div>
   </div>
 
   <!-- Per-category breakdown -->
-  <div style="background:white;border:1px solid var(--border);padding:24px;margin-bottom:32px;">
-    <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text-faint);margin-bottom:16px;">Per-Category Breakdown</div>
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:16px;">
-      <div style="text-align:center;">
-        <div style="font-size:28px;font-weight:800;color:var(--blue);">100%</div>
-        <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">Single-hop</div>
-        <div style="font-size:9px;color:var(--text-muted);">282/282</div>
-      </div>
-      <div style="text-align:center;">
-        <div style="font-size:28px;font-weight:800;color:var(--blue);">100%</div>
-        <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">Temporal</div>
-        <div style="font-size:9px;color:var(--text-muted);">321/321</div>
-      </div>
-      <div style="text-align:center;">
-        <div style="font-size:28px;font-weight:800;color:var(--blue);">100%</div>
-        <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">Multi-hop</div>
-        <div style="font-size:9px;color:var(--text-muted);">96/96</div>
-      </div>
-      <div style="text-align:center;">
-        <div style="font-size:28px;font-weight:800;color:var(--blue);">100%</div>
-        <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">Open-domain</div>
-        <div style="font-size:9px;color:var(--text-muted);">841/841</div>
-      </div>
-      <div style="text-align:center;">
-        <div style="font-size:28px;font-weight:800;color:var(--blue);">100%</div>
-        <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">Adversarial</div>
-        <div style="font-size:9px;color:var(--text-muted);">446/446</div>
-      </div>
+  <div class="bench-card" style="margin-bottom:32px;">
+    <div class="bench-label-sm">Per-Category Breakdown</div>
+    <div class="cat-grid">
+      <div class="cat-item"><div class="cat-score">100%</div><div class="cat-name">Single-hop</div><div class="cat-count">282/282</div></div>
+      <div class="cat-item"><div class="cat-score">100%</div><div class="cat-name">Temporal</div><div class="cat-count">321/321</div></div>
+      <div class="cat-item"><div class="cat-score">100%</div><div class="cat-name">Multi-hop</div><div class="cat-count">96/96</div></div>
+      <div class="cat-item"><div class="cat-score">100%</div><div class="cat-name">Open-domain</div><div class="cat-count">841/841</div></div>
+      <div class="cat-item"><div class="cat-score">100%</div><div class="cat-name">Adversarial</div><div class="cat-count">446/446</div></div>
     </div>
   </div>
 
   <!-- Clude Internal Benchmark Suite -->
-  <div style="font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--text-faint);margin-bottom:20px;">Clude Memory Suite (Internal, 12k+ Live Memories)</div>
+  <div class="bench-label">Clude Memory Suite (Internal, 12k+ Live Memories)</div>
   
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:32px;">
-    <div style="background:white;border:1px solid var(--border);padding:28px;">
-      <div style="font-size:48px;font-weight:800;color:var(--blue);line-height:1;">75.8<span style="font-size:20px;color:var(--text-muted);">/100</span></div>
-      <div style="font-size:11px;color:var(--text-muted);margin-top:8px;">Overall score across 8 evaluation suites on live production data</div>
+  <div class="bench-grid">
+    <div class="bench-card">
+      <div class="bench-hero">75.8<span class="bench-hero-sub">/100</span></div>
+      <div class="bench-desc">Overall score across 8 evaluation suites on live production data</div>
     </div>
-    <div style="background:white;border:1px solid var(--border);padding:24px;">
+    <div class="bench-card" style="padding:24px;">
       <div style="display:flex;flex-direction:column;gap:6px;">
-        <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:var(--text-muted);">Decay & Importance</span><span style="font-weight:700;color:var(--green);">100/100</span></div>
-        <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:var(--text-muted);">Entity Awareness</span><span style="font-weight:700;color:var(--green);">100/100</span></div>
-        <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:var(--text-muted);">Type Distribution</span><span style="font-weight:700;">87.1/100</span></div>
-        <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:var(--text-muted);">Store + Recall</span><span style="font-weight:700;">85.0/100</span></div>
-        <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:var(--text-muted);">Multi-Hop Recall</span><span style="font-weight:700;">84.0/100</span></div>
-        <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:var(--text-muted);">Recall Quality</span><span style="font-weight:700;">60.1/100</span></div>
-        <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:var(--text-muted);">Answer Quality</span><span style="font-weight:700;">50.0/100</span></div>
-        <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:var(--text-muted);">Scale & Latency</span><span style="font-weight:700;color:var(--red);">40.0/100</span></div>
+        <div class="suite-row"><span class="suite-name">Decay & Importance</span><span class="suite-score" style="color:var(--green);">100/100</span></div>
+        <div class="suite-row"><span class="suite-name">Entity Awareness</span><span class="suite-score" style="color:var(--green);">100/100</span></div>
+        <div class="suite-row"><span class="suite-name">Type Distribution</span><span class="suite-score">87.1/100</span></div>
+        <div class="suite-row"><span class="suite-name">Store + Recall</span><span class="suite-score">85.0/100</span></div>
+        <div class="suite-row"><span class="suite-name">Multi-Hop Recall</span><span class="suite-score">84.0/100</span></div>
+        <div class="suite-row"><span class="suite-name">Recall Quality</span><span class="suite-score">60.1/100</span></div>
+        <div class="suite-row"><span class="suite-name">Answer Quality</span><span class="suite-score">50.0/100</span></div>
+        <div class="suite-row"><span class="suite-name">Scale & Latency</span><span class="suite-score" style="color:var(--red);">40.0/100</span></div>
       </div>
     </div>
   </div>
 
   <!-- Methodology note -->
-  <div style="background:var(--bg-warm);border:1px solid var(--border);padding:16px 20px;font-size:10px;color:var(--text-muted);line-height:1.8;margin-bottom:48px;">
-    <strong style="color:var(--text);">Methodology:</strong> LoCoMo benchmark uses the <a href="https://arxiv.org/abs/2402.09552" style="color:var(--blue);">ACL 2024 dataset</a> (10 conversations, 1,986 QA pairs). 
-    Memories stored as per-turn chunks with contextual windows. Retrieval via Voyage-4-Large embeddings with in-memory cosine similarity search. 
+  <div class="methodology">
+    <strong style="color:var(--text);">Methodology:</strong> LoCoMo benchmark uses the <a href="https://arxiv.org/abs/2402.09552">ACL 2024 dataset</a> (10 conversations, 1,986 QA pairs). 
+    Memories stored as per-turn chunks with contextual windows. Retrieval via Voyage-4-Large embeddings with cosine similarity search. 
     Answers generated and judged by Grok-3. Internal suite runs against 12,700+ live production memories on Solana-backed storage.
     Competitor scores from published benchmarks.
   </div>
 
-  <div style="border-top:1px solid var(--border);padding-top:40px;margin-bottom:20px;">
-    <div style="font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--text-faint);margin-bottom:8px;">Interactive Demo</div>
+  <div class="demo-divider">
+    <div class="bench-label" style="margin-bottom:8px;">Interactive Demo</div>
     <h2 class="title" style="font-size:24px;">Memory Architecture Comparison</h2>
     <p class="subtitle" style="font-size:11px;">
       Input any content. Compact it 20 times. Watch traditional context windows degrade
