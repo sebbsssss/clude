@@ -28,6 +28,26 @@ import { generateEmbedding, generateQueryEmbedding, generateEmbeddings, isEmbedd
 import { generateVeniceResponse, isVeniceEnabled } from './venice-client';
 import { isEncryptionEnabled, getEncryptionPubkey, encryptContent, decryptMemoryBatch } from './encryption';
 import { eventBus } from '../events/event-bus';
+
+// ---- EMBEDDING CACHE ---- //
+const EMBED_CACHE_MAX = 200;
+const embeddingCache = new Map<string, { embedding: number[]; ts: number }>();
+
+function getCachedEmbedding(query: string): number[] | null {
+  const entry = embeddingCache.get(query);
+  if (entry && Date.now() - entry.ts < 5 * 60 * 1000) return entry.embedding; // 5 min TTL
+  return null;
+}
+
+function setCachedEmbedding(query: string, embedding: number[]): void {
+  if (embeddingCache.size >= EMBED_CACHE_MAX) {
+    // Evict oldest
+    let oldest = Infinity, oldKey = '';
+    for (const [k, v] of embeddingCache) { if (v.ts < oldest) { oldest = v.ts; oldKey = k; } }
+    if (oldKey) embeddingCache.delete(oldKey);
+  }
+  embeddingCache.set(query, { embedding, ts: Date.now() });
+}
 import { createHash, randomBytes } from 'crypto';
 import { extractAndLinkEntities, findSimilarEntities, getMemoriesByEntity, getEntityCooccurrences } from './memory-graph';
 import { getContextOwnerWallet } from './owner-context';
@@ -188,6 +208,8 @@ export interface RecallOptions {
   trackAccess?: boolean;
   /** Pre-computed vector similarity scores from hybrid search (internal use). */
   _vectorScores?: Map<number, number>;
+  /** Skip LLM-based query expansion for faster recall (saves ~500-800ms). */
+  skipExpansion?: boolean;
 }
 
 // ---- CONCEPT ONTOLOGY ---- //
@@ -486,7 +508,7 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
 
   try {
     // Phase 0: Query expansion — generate alternative phrasings for broader recall
-    const queries = opts.query && !opts._vectorScores
+    const queries = opts.query && !opts._vectorScores && !opts.skipExpansion
       ? await expandQuery(opts.query)
       : opts.query ? [opts.query] : [];
 
@@ -494,9 +516,15 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
     let vectorScores = opts._vectorScores || new Map<number, number>();
 
     if (queries.length > 0 && isEmbeddingEnabled() && !opts._vectorScores) {
-      // Embed all query variants in parallel
+      // Embed all query variants (with cache)
       const queryEmbeddings = await Promise.all(
-        queries.map(q => generateQueryEmbedding(q))
+        queries.map(async q => {
+          const cached = getCachedEmbedding(q);
+          if (cached) return cached;
+          const emb = await generateQueryEmbedding(q);
+          if (emb) setCachedEmbedding(q, emb);
+          return emb;
+        })
       );
       const validEmbeddings = queryEmbeddings.filter((e): e is number[] => e !== null);
 

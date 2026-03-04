@@ -672,6 +672,7 @@ export function createServer(): express.Application {
         query: query ? String(query) : undefined,
         limit: Math.min(Number(limit) || 10, 20),
         memoryTypes: Array.isArray(memoryTypes) ? memoryTypes : undefined,
+        skipExpansion: true, // Skip LLM query expansion for speed (~500-800ms savings)
       });
 
       res.json({
