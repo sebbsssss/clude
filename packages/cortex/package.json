@@ -1,0 +1,53 @@
+{
+  "name": "@clude/cortex",
+  "version": "0.1.0",
+  "description": "CLUDE Cortex — Portable, Private, Permissionless, Poly-model, Persistent memory integration layer",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./solana": {
+      "import": "./dist/solana.js",
+      "types": "./dist/solana.d.ts"
+    },
+    "./adapters/openai": {
+      "import": "./dist/adapters/openai.js",
+      "types": "./dist/adapters/openai.d.ts"
+    },
+    "./adapters/langchain": {
+      "import": "./dist/adapters/langchain.js",
+      "types": "./dist/adapters/langchain.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "tsx test/e2e.ts"
+  },
+  "keywords": [
+    "ai",
+    "memory",
+    "agents",
+    "portable",
+    "solana",
+    "wallet",
+    "privacy"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@solana/web3.js": ">=1.90.0"
+  },
+  "peerDependenciesMeta": {
+    "@solana/web3.js": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.3",
+    "tsx": "^4.0.0",
+    "typescript": "^5.5.0"
+  }
+}

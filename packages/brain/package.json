@@ -1,0 +1,52 @@
+{
+  "name": "@clude/brain",
+  "version": "0.1.0",
+  "description": "CLUDE Brain — Cognitive memory engine for AI agents",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./providers/local": {
+      "import": "./dist/providers/local.js",
+      "types": "./dist/providers/local.d.ts"
+    },
+    "./providers/supabase": {
+      "import": "./dist/providers/supabase.js",
+      "types": "./dist/providers/supabase.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "tsx test/basic.test.ts"
+  },
+  "keywords": [
+    "ai",
+    "memory",
+    "agents",
+    "cognitive",
+    "vector",
+    "llm"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sebbsssss/clude"
+  },
+  "peerDependencies": {
+    "@supabase/supabase-js": ">=2.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@supabase/supabase-js": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.13",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

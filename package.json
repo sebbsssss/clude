@@ -1,0 +1,14 @@
+{
+  "name": "clude",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CLUDE — Portable memory layer for AI agents",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  }
+}

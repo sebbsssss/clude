@@ -1,0 +1,22 @@
+{
+  "name": "@clude/cloud",
+  "version": "0.1.0",
+  "description": "Supabase storage + Voyage embeddings provider for @clude/brain",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.98.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.9.3"
+  }
+}
