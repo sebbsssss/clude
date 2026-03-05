@@ -1,0 +1,11 @@
+src/
+.env
+.env.example
+.gitignore
+.claude/
+tsconfig.json
+Dockerfile
+node_modules/
+*.db
+*.db-shm
+*.db-wal

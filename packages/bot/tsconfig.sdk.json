@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/sdk/**/*",
+    "src/core/memory.ts",
+    "src/core/memory-graph.ts",
+    "src/core/database.ts",
+    "src/core/embeddings.ts",
+    "src/core/claude-client.ts",
+    "src/core/venice-client.ts",
+    "src/core/inference.ts",
+    "src/core/solana-client.ts",
+    "src/core/logger.ts",
+    "src/utils/**/*",
+    "src/types/**/*",
+    "src/config.ts",
+    "src/events/event-bus.ts",
+    "src/features/dream-cycle.ts"
+  ]
+}

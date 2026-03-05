@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CLUDE — Memory Flow</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #030308;
+      overflow: hidden;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    canvas { display: block; }
+    
+    .overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+    
+    .title {
+      position: absolute;
+      top: 45%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+    
+    .title h1 {
+      font-size: 42px;
+      font-weight: 300;
+      color: #fff;
+      margin-bottom: 12px;
+    }
+    
+    .title h1 span { color: #e8622c; }
+    
+    .title p {
+      font-size: 11px;
+      color: #444;
+      letter-spacing: 3px;
+    }
+    
+    .legend {
+      position: absolute;
+      top: 30px;
+      left: 30px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 9px;
+      letter-spacing: 1px;
+      color: #555;
+    }
+    
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+    
+    .chain-label {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      letter-spacing: 4px;
+      color: #e8622c;
+    }
+    
+    .layers {
+      position: absolute;
+      right: 30px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 100px;
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: #333;
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<div class="overlay">
+  <div class="title">
+    <h1>Memories → <span>Chain</span></h1>
+    <p>THOUGHTS CRYSTALLIZE ON-CHAIN</p>
+  </div>
+  
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#e8622c"></div>EPISODIC</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#4a8aff"></div>SEMANTIC</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#4a8a5a"></div>PROCEDURAL</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#b04ae0"></div>SELF-MODEL</div>
+  </div>
+  
+  <div class="layers">
+    <span>L3 — WORKING</span>
+    <span style="color:#555">L2 — LOCAL</span>
+    <span>L1 — CHAIN</span>
+  </div>
+  
+  <div class="chain-label">▼ SOLANA L1 ▼</div>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+let W, H;
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+const COLORS = ['#e8622c', '#4a8aff', '#4a8a5a', '#b04ae0'];
+const PARTICLE_COUNT = 800;
+
+class Particle {
+  constructor() {
+    this.reset();
+  }
+  
+  reset() {
+    this.x = Math.random() * W;
+    this.y = -20 - Math.random() * 100;
+    this.vx = (Math.random() - 0.5) * 0.8;
+    this.vy = 1 + Math.random() * 2;
+    this.radius = 1.5 + Math.random() * 3;
+    this.color = COLORS[Math.floor(Math.random() * COLORS.length)];
+    this.alpha = 0.3 + Math.random() * 0.5;
+    this.noise = Math.random() * 1000;
+  }
+  
+  update(time) {
+    // Curl-like noise movement
+    const noiseX = Math.sin(this.noise + time * 0.002 + this.y * 0.01) * 2;
+    const noiseY = Math.cos(this.noise + time * 0.001) * 0.3;
+    
+    this.vx += noiseX * 0.02;
+    this.vy += noiseY * 0.01;
+    
+    // Converge toward center as y increases
+    const centerPull = (this.y / H) * 0.03;
+    const dx = W/2 - this.x;
+    this.vx += dx * centerPull * 0.01;
+    
+    // Accelerate toward bottom
+    this.vy += 0.02;
+    
+    // Damping
+    this.vx *= 0.98;
+    this.vy *= 0.99;
+    
+    this.x += this.vx;
+    this.y += this.vy;
+    
+    // Fade as approaching chain
+    const chainY = H - 60;
+    if (this.y > chainY - 100) {
+      this.alpha *= 0.97;
+      this.radius *= 0.995;
+    }
+    
+    // Reset when below chain or faded
+    if (this.y > chainY || this.alpha < 0.05) {
+      this.reset();
+    }
+  }
+  
+  draw() {
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.fillStyle = this.color;
+    ctx.globalAlpha = this.alpha;
+    ctx.fill();
+    
+    // Glow
+    const gradient = ctx.createRadialGradient(
+      this.x, this.y, 0,
+      this.x, this.y, this.radius * 3
+    );
+    gradient.addColorStop(0, this.color);
+    gradient.addColorStop(1, 'transparent');
+    ctx.fillStyle = gradient;
+    ctx.globalAlpha = this.alpha * 0.3;
+    ctx.fill();
+    
+    ctx.globalAlpha = 1;
+  }
+}
+
+const particles = Array.from({ length: PARTICLE_COUNT }, () => new Particle());
+
+// Stagger initial positions
+particles.forEach((p, i) => {
+  p.y = (i / PARTICLE_COUNT) * H * 0.8;
+});
+
+let time = 0;
+
+function drawChainLine() {
+  const chainY = H - 60;
+  
+  // Glowing line
+  const gradient = ctx.createLinearGradient(0, chainY - 10, 0, chainY + 10);
+  gradient.addColorStop(0, 'transparent');
+  gradient.addColorStop(0.5, '#e8622c');
+  gradient.addColorStop(1, 'transparent');
+  
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, chainY - 10, W, 20);
+  
+  // Data stream effect
+  ctx.strokeStyle = '#e8622c';
+  ctx.lineWidth = 2;
+  ctx.globalAlpha = 0.6;
+  ctx.beginPath();
+  ctx.moveTo(0, chainY);
+  for (let x = 0; x < W; x += 5) {
+    const wave = Math.sin(x * 0.05 - time * 0.05) * 2;
+    ctx.lineTo(x, chainY + wave);
+  }
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  
+  // Bright core
+  ctx.strokeStyle = '#ff8855';
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(0, chainY);
+  ctx.lineTo(W, chainY);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+function drawConnections() {
+  ctx.strokeStyle = 'rgba(100, 100, 120, 0.05)';
+  ctx.lineWidth = 0.5;
+  
+  for (let i = 0; i < particles.length; i += 3) {
+    for (let j = i + 1; j < Math.min(i + 10, particles.length); j++) {
+      const p1 = particles[i];
+      const p2 = particles[j];
+      const dx = p1.x - p2.x;
+      const dy = p1.y - p2.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist < 60) {
+        ctx.globalAlpha = (60 - dist) / 60 * 0.1;
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+      }
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+function animate() {
+  // Fade trail
+  ctx.fillStyle = 'rgba(3, 3, 8, 0.15)';
+  ctx.fillRect(0, 0, W, H);
+  
+  time++;
+  
+  drawConnections();
+  
+  particles.forEach(p => {
+    p.update(time);
+    p.draw();
+  });
+  
+  drawChainLine();
+  
+  requestAnimationFrame(animate);
+}
+
+animate();
+</script>
+</body>
+</html>

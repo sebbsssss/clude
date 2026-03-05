@@ -1,0 +1,1872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CLUDE — The Brain</title>
+  <meta name="description" content="Neural map of an AI's memory. Each node a thought. Each edge a connection. Watch it think.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f5f5f0;
+      --bg-warm: #eeeee8;
+      --surface: rgba(255, 255, 255, 0.92);
+      --text: #111;
+      --text-muted: #666;
+      --text-faint: #999;
+      --border: rgba(0, 0, 0, 0.08);
+      --accent: #2244ff;
+      --episodic: #1a3abf;
+      --semantic: #3a4a7a;
+      --procedural: #2a6a3a;
+      --selfmodel: #5a3a80;
+      /* Bond type colors (Molecular Memory) */
+      --bond-semantic: #22cc66;
+      --bond-causal: #0052FF;
+      --bond-temporal: #ffaa22;
+      --bond-contradictory: #ff4444;
+      --mono: 'JetBrains Mono', monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      font-family: var(--mono);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 12px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    canvas { display: block; }
+
+    /* ── HUD ── */
+    .hud {
+      position: fixed;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .hud-tl {
+      top: 70px; left: 28px;
+      background: var(--surface);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--border);
+      padding: 16px 20px;
+    }
+    .hud-tr {
+      top: 70px; right: 28px;
+      background: var(--surface);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--border);
+      padding: 16px 20px;
+    }
+    .hud-bl { bottom: 24px; left: 28px; }
+    .hud-br { bottom: 24px; right: 28px; }
+
+    .hud-title {
+      font-size: 11px; font-weight: 800; letter-spacing: 6px;
+      text-transform: uppercase; color: var(--text); margin-bottom: 4px;
+    }
+
+    .hud-sub {
+      font-size: 9px; color: var(--text-faint); letter-spacing: 3px;
+    }
+
+    .hud-title-row {
+      display: flex; align-items: center; gap: 14px;
+    }
+
+    .live-indicator {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 9px; font-weight: 700; letter-spacing: 3px;
+      color: #2a6a3a;
+      animation: live-pulse 2s ease-in-out infinite;
+    }
+
+    .live-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #2a6a3a;
+      animation: live-pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes live-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .hud-stats {
+      margin-top: 16px; font-size: 10px;
+      line-height: 2.0; color: var(--text-faint);
+    }
+
+    .hud-stats .v { color: var(--text); font-weight: 600; }
+    .hud-stats .l { color: var(--text-muted); margin-left: 6px; }
+
+    /* ── LEGEND ── */
+    .legend { text-align: right; }
+
+    .legend-item {
+      display: flex; align-items: center; justify-content: flex-end;
+      gap: 10px; margin-bottom: 8px;
+      font-size: 9px; letter-spacing: 2px; color: var(--text-muted);
+      cursor: pointer; pointer-events: auto;
+      transition: color 0.3s, opacity 0.3s; user-select: none;
+    }
+
+    .legend-item:hover { color: var(--text); }
+    .legend-item.off { opacity: 0.2; }
+
+    .legend-dot {
+      width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+    }
+
+    /* ── FILTER BAR ── */
+    .filter-bar {
+      position: fixed; bottom: 60px; left: 50%;
+      transform: translateX(-50%); z-index: 10;
+      display: flex; align-items: center; gap: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 8px 20px;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      pointer-events: auto;
+    }
+
+    .filter-label {
+      font-size: 8px; letter-spacing: 2px; color: var(--text-muted);
+      text-transform: uppercase; white-space: nowrap;
+    }
+
+    .filter-val {
+      font-size: 10px; color: var(--text); min-width: 28px;
+      text-align: right; font-weight: 500;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none; appearance: none;
+      width: 100px; height: 1px;
+      background: rgba(0,0,0,0.15); outline: none; cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--text); border: none; cursor: pointer;
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--text); border: none; cursor: pointer;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; width: 100%; z-index: 100;
+      background: rgba(245, 245, 240, 0.9);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+    }
+
+    .nav-inner {
+      max-width: 1200px; margin: 0 auto; padding: 0 2rem;
+      height: 56px; display: flex; align-items: center;
+    }
+
+    .nav-left { display: flex; align-items: center; gap: 1rem; }
+
+    .nav-logo {
+      font-size: 13px; font-weight: 800; letter-spacing: 5px;
+      color: var(--text); text-transform: uppercase;
+      text-decoration: none; transition: color 0.3s;
+    }
+    .nav-logo:hover { color: var(--accent); text-decoration: none; }
+
+    .nav-status {
+      display: flex; align-items: center; gap: 0.5rem;
+      font-size: 0.65rem; color: var(--text-faint); letter-spacing: 1px;
+    }
+
+    .status-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #2a6a3a;
+      animation: pulse-dot 3s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .nav-links {
+      display: flex; align-items: center; gap: 2rem; margin-left: auto;
+    }
+
+    .nav-links a {
+      color: var(--text-muted); font-size: 11px; letter-spacing: 2px;
+      text-transform: uppercase; text-decoration: none; transition: color 0.3s;
+    }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+    .nav-links a.nav-active { color: var(--text); font-weight: 600; }
+
+    /* ── CONTROLS ── */
+    .controls { display: flex; gap: 4px; pointer-events: auto; }
+
+    .ctrl-btn {
+      width: 28px; height: 28px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      color: var(--text-muted); font-family: var(--mono);
+      font-size: 13px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .ctrl-btn:hover { border-color: rgba(0,0,0,0.2); color: var(--text); }
+    .ctrl-btn.active { border-color: var(--accent); color: var(--accent); }
+
+    /* ── DETAIL PANEL ── */
+    .detail {
+      position: fixed; top: 0; right: 0; z-index: 20;
+      width: 360px; height: 100%;
+      background: rgba(255, 255, 255, 0.97);
+      border-left: 1px solid var(--border);
+      padding: 80px 28px 28px;
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      transform: translateX(100%); opacity: 0;
+      pointer-events: none;
+      transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.4s;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(0,0,0,0.1) transparent;
+    }
+
+    .detail.vis {
+      transform: translateX(0); opacity: 1; pointer-events: auto;
+    }
+
+    .detail-close {
+      position: absolute; top: 24px; right: 24px;
+      width: 28px; height: 28px;
+      border: 1px solid var(--border);
+      background: transparent; color: var(--text-muted);
+      font-family: var(--mono); font-size: 14px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s;
+    }
+    .detail-close:hover { border-color: rgba(0,0,0,0.2); color: var(--text); }
+
+    .detail-type {
+      font-size: 9px; letter-spacing: 5px; text-transform: uppercase;
+      margin-bottom: 20px; padding-bottom: 14px;
+      border-bottom: 1px solid var(--border); font-weight: 700;
+    }
+
+    .detail-summary {
+      font-size: 12px; line-height: 1.9; color: var(--text-muted);
+      margin-bottom: 24px; font-weight: 300;
+    }
+
+    .detail-meta {
+      display: flex; flex-direction: column; gap: 10px;
+      font-size: 9px; color: var(--text-faint); letter-spacing: 1px;
+      margin-bottom: 20px; padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .detail-meta .v { color: var(--text); font-weight: 600; }
+
+    .detail-tags {
+      display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 20px;
+    }
+
+    .detail-tag {
+      font-size: 8px; color: var(--text-muted);
+      border: 1px solid var(--border);
+      padding: 3px 10px; letter-spacing: 1px;
+      transition: border-color 0.2s;
+    }
+    .detail-tag:hover { border-color: rgba(0,0,0,0.2); }
+
+    .detail-ev {
+      font-size: 9px; color: var(--text-faint);
+      padding-top: 14px; border-top: 1px solid var(--border);
+      letter-spacing: 1px;
+    }
+    .detail-ev em { color: var(--accent); font-style: normal; font-weight: 600; }
+
+    /* ── LOADING ── */
+    .loading {
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%); z-index: 30;
+      text-align: center; transition: opacity 1s;
+      background: var(--surface);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--border);
+      padding: 24px 40px;
+    }
+
+    .loading.gone { opacity: 0; pointer-events: none; }
+
+    .loading-text {
+      font-size: 9px; letter-spacing: 6px; color: var(--text);
+      animation: load-pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes load-pulse {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 1; }
+    }
+
+    /* ── ACTIVITY ── */
+    .activity {
+      position: fixed; bottom: 28px; left: 50%;
+      transform: translateX(-50%); z-index: 10;
+      font-size: 8px; letter-spacing: 3px;
+      color: rgba(0,0,0,0.08); pointer-events: none;
+      transition: color 0.6s;
+    }
+    .activity.flash { color: rgba(0,0,0,0.2); }
+
+    /* ── TOASTS ── */
+    .toast-container {
+      position: fixed; bottom: 100px; right: 28px; z-index: 50;
+      display: flex; flex-direction: column-reverse; gap: 8px;
+      pointer-events: none; max-width: 340px;
+    }
+
+    .toast {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      padding: 12px 16px; font-family: var(--mono);
+      pointer-events: auto; cursor: pointer;
+      animation: toast-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+      transition: opacity 0.3s, border-color 0.3s;
+    }
+    .toast:hover { border-color: rgba(0,0,0,0.15); }
+
+    .toast.toast-out {
+      animation: toast-out 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+
+    .toast-header {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+    }
+    .toast-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .toast-type {
+      font-size: 8px; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--text-muted); font-weight: 700;
+    }
+    .toast-time {
+      font-size: 8px; color: var(--text-faint); letter-spacing: 1px; margin-left: auto;
+    }
+    .toast-summary {
+      font-size: 11px; line-height: 1.6; color: var(--text-muted); font-weight: 300;
+    }
+    .toast-source {
+      font-size: 8px; color: var(--text-faint); letter-spacing: 1px;
+      margin-top: 6px; text-transform: uppercase;
+    }
+
+    @keyframes toast-in {
+      from { transform: translateX(120%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes toast-out {
+      from { transform: translateX(0); opacity: 1; }
+      to { transform: translateX(120%); opacity: 0; }
+    }
+
+    @media (max-width: 768px) {
+      .toast-container { right: 14px; bottom: 80px; max-width: 280px; }
+    }
+
+    /* ── PSYCHE CARD ── */
+    .psyche-card {
+      position: fixed; bottom: 24px; left: 28px; z-index: 15;
+      width: 230px;
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      padding: 14px 16px 12px;
+      pointer-events: auto;
+      opacity: 0; transform: translateY(8px);
+      animation: psyche-in 0.6s 1.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+
+    @keyframes psyche-in { to { opacity: 1; transform: translateY(0); } }
+
+    .psyche-header {
+      display: flex; align-items: center;
+      justify-content: space-between; margin-bottom: 10px;
+    }
+    .psyche-title {
+      font-size: 8px; font-weight: 700; letter-spacing: 4px;
+      text-transform: uppercase; color: var(--text-muted);
+    }
+    .psyche-live {
+      display: flex; align-items: center; gap: 4px;
+      font-size: 7px; letter-spacing: 2px; color: var(--text-faint);
+    }
+    .psyche-live-dot {
+      width: 4px; height: 4px; border-radius: 50%;
+      background: #2a6a3a;
+      animation: psyche-pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes psyche-pulse {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+
+    .psyche-feeling {
+      font-size: 10px; line-height: 1.55; color: var(--text-muted);
+      font-weight: 400; margin-bottom: 10px;
+    }
+    .psyche-feeling:empty { display: none; }
+
+    .psyche-label {
+      font-size: 7px; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--text-faint); margin-bottom: 5px;
+    }
+    .psyche-quote {
+      font-size: 9px; line-height: 1.65; color: var(--text-muted);
+      font-weight: 300; font-style: italic;
+      padding: 5px 0 5px 9px;
+      border-left: 2px solid rgba(90, 58, 128, 0.25);
+      margin-bottom: 10px;
+    }
+    .psyche-quote:empty { display: none; }
+
+    .psyche-traits { margin-bottom: 8px; }
+    .psyche-trait {
+      display: flex; align-items: flex-start; gap: 7px; padding: 3px 0;
+    }
+    .psyche-trait-dot {
+      width: 3px; height: 3px; border-radius: 50%;
+      background: var(--text-faint); flex-shrink: 0; margin-top: 5px;
+    }
+    .psyche-trait-text {
+      font-size: 9px; line-height: 1.5; color: var(--text-muted);
+      letter-spacing: 0.3px;
+    }
+
+    .psyche-divider { height: 1px; background: var(--border); margin: 8px 0; }
+
+    .psyche-footer {
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .psyche-stat { font-size: 8px; color: var(--text-faint); letter-spacing: 0.5px; }
+    .psyche-stat .v { color: var(--text); font-weight: 600; }
+    .psyche-dream-time { font-size: 8px; color: var(--text-faint); letter-spacing: 0.5px; }
+
+    /* ── MOBILE NAV ── */
+    .nav-toggle {
+      display: none; background: none; border: 1px solid var(--border);
+      cursor: pointer; padding: 8px 7px; margin-left: auto;
+    }
+    .nav-toggle span {
+      display: block; width: 16px; height: 1.5px;
+      background: var(--text-muted); transition: all 0.3s;
+    }
+    .nav-toggle span + span { margin-top: 4px; }
+    .nav-toggle.open span:nth-child(1) { transform: rotate(45deg) translate(3.5px, 3.5px); }
+    .nav-toggle.open span:nth-child(2) { opacity: 0; }
+    .nav-toggle.open span:nth-child(3) { transform: rotate(-45deg) translate(3.5px, -3.5px); }
+
+    @media (max-width: 768px) {
+      .nav-toggle { display: flex; flex-direction: column; }
+      .nav-links {
+        display: none; position: absolute; top: 56px; left: 0; right: 0;
+        background: rgba(245, 245, 240, 0.97);
+        backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+        border-bottom: 1px solid var(--border);
+        flex-direction: column; padding: 1.2rem 2rem; gap: 1.2rem;
+      }
+      .nav-links.open { display: flex; }
+      .nav-status span { display: none; }
+      .hud-tl { top: 62px; left: 14px; }
+      .hud-tr { top: 62px; right: 14px; }
+      .filter-bar { bottom: 20px; padding: 6px 12px; gap: 8px; }
+      .filter-bar input[type="range"] { width: 60px; }
+      .detail { width: 100%; }
+      .psyche-card { bottom: 80px; left: 14px; width: 200px; }
+    }
+  </style>
+  <script type="importmap">
+  { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.min.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/"
+  }}
+  </script>
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.min.js">
+</head>
+<body>
+
+  <div class="loading" id="loading">
+    <div class="loading-text">MAPPING NEURAL NETWORK</div>
+  </div>
+
+  <div class="hud hud-tl">
+    <div class="hud-title-row">
+      <div class="hud-title">THE BRAIN</div>
+      <div class="live-indicator"><div class="live-dot"></div>LIVE</div>
+    </div>
+    <div class="hud-sub">NEURAL MEMORY NETWORK</div>
+    <div class="hud-stats" id="stats">
+      <div><span class="v" id="sNodes">--</span><span class="l">nodes</span></div>
+      <div><span class="v" id="sEdges">--</span><span class="l">connections</span></div>
+      <div><span class="v" id="sDecay">--</span><span class="l">avg decay</span></div>
+      <div><span class="v" id="sImp">--</span><span class="l">avg importance</span></div>
+    </div>
+  </div>
+
+  <div class="hud hud-tr">
+    <div class="legend" id="legend">
+      <div style="font-size: 8px; letter-spacing: 2px; color: var(--text-faint); margin-bottom: 8px; text-align: right;">MEMORY TYPES</div>
+      <div class="legend-item" data-type="episodic">
+        EPISODIC <div class="legend-dot" style="background:var(--episodic)"></div>
+      </div>
+      <div class="legend-item" data-type="semantic">
+        SEMANTIC <div class="legend-dot" style="background:var(--semantic)"></div>
+      </div>
+      <div class="legend-item" data-type="procedural">
+        PROCEDURAL <div class="legend-dot" style="background:var(--procedural)"></div>
+      </div>
+      <div class="legend-item" data-type="self_model">
+        SELF-MODEL <div class="legend-dot" style="background:var(--selfmodel)"></div>
+      </div>
+      <div style="font-size: 8px; letter-spacing: 2px; color: var(--text-faint); margin: 16px 0 8px; text-align: right; border-top: 1px solid var(--border); padding-top: 12px;">BOND TYPES</div>
+      <div class="legend-item" style="pointer-events: none;">
+        SEMANTIC <div style="width: 16px; height: 2px; background: var(--bond-semantic); margin-left: 6px;"></div>
+      </div>
+      <div class="legend-item" style="pointer-events: none;">
+        CAUSAL <div style="width: 16px; height: 2px; background: var(--bond-causal); margin-left: 6px;"></div>
+      </div>
+      <div class="legend-item" style="pointer-events: none;">
+        TEMPORAL <div style="width: 16px; height: 2px; background: var(--bond-temporal); margin-left: 6px;"></div>
+      </div>
+      <div class="legend-item" style="pointer-events: none;">
+        CONTRADICTORY <div style="width: 16px; height: 2px; background: var(--bond-contradictory); margin-left: 6px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <nav>
+    <div class="nav-inner">
+      <div class="nav-left">
+        <a href="/" class="nav-logo">Clude</a>
+        <div class="nav-status">
+          <div class="status-dot"></div>
+          <span>LIVE</span>
+        </div>
+      </div>
+      <button class="nav-toggle" id="navToggle" aria-label="Menu"><span></span><span></span><span></span></button>
+      <div class="nav-links">
+        <a href="/docs.html">Docs</a>
+        <a href="/demo.html">Demo</a>
+        <a href="/brain.html" class="nav-active">Brain</a>
+        <a href="/benchmark">Benchmark</a>
+        <a href="https://x.com/Cludebot" target="_blank">X</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="hud hud-br">
+    <div class="controls">
+      <button class="ctrl-btn" id="btnRotate" title="Auto-rotate">&#x27F3;</button>
+      <button class="ctrl-btn" id="btnReset" title="Reset camera">&#x25CB;</button>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <span class="filter-label">Importance</span>
+    <input type="range" id="impSlider" min="0" max="100" value="0">
+    <span class="filter-val" id="impVal">0%</span>
+    <span style="color:rgba(0,0,0,0.15);margin:0 4px">|</span>
+    <span class="filter-label">Decay</span>
+    <input type="range" id="decaySlider" min="0" max="100" value="0">
+    <span class="filter-val" id="decayVal">0%</span>
+  </div>
+
+  <div class="detail" id="detail">
+    <button class="detail-close" id="detailClose" title="Close">&times;</button>
+    <div class="detail-type" id="dType"></div>
+    <div class="detail-summary" id="dSummary"></div>
+    <div class="detail-meta" id="dMeta"></div>
+    <div class="detail-tags" id="dTags"></div>
+    <div class="detail-ev" id="dEv"></div>
+  </div>
+
+  <div class="psyche-card" id="psycheCard">
+    <div class="psyche-header">
+      <span class="psyche-title">PSYCHE</span>
+      <span class="psyche-live"><span class="psyche-live-dot"></span>LIVE</span>
+    </div>
+    <div class="psyche-feeling" id="psycheFeeling"></div>
+    <div class="psyche-label">LATEST THOUGHT</div>
+    <div class="psyche-quote" id="psycheQuote"></div>
+    <div class="psyche-label">SHAPING PATTERNS</div>
+    <div class="psyche-traits" id="psycheTraits"></div>
+    <div class="psyche-divider"></div>
+    <div class="psyche-footer">
+      <span class="psyche-stat" id="psycheStat"></span>
+      <span class="psyche-dream-time" id="psycheDream"></span>
+    </div>
+  </div>
+
+  <div class="activity" id="activity">NEURAL ACTIVITY</div>
+  <div class="toast-container" id="toastContainer"></div>
+
+<script>
+document.getElementById('navToggle').addEventListener('click', function() {
+  this.classList.toggle('open');
+  document.querySelector('.nav-links').classList.toggle('open');
+});
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ============= CONFIG ============= */
+// Ink-on-paper: dark, saturated colors for nodes
+const TYPE_COLORS = {
+  episodic: new THREE.Color(0x1a3abf), semantic: new THREE.Color(0x3a4a7a),
+  procedural: new THREE.Color(0x2a6a3a), self_model: new THREE.Color(0x5a3a80),
+};
+// "Hot" fire color = darker/more saturated ink
+const TYPE_HOT = {
+  episodic: new THREE.Color(0x0a1a8f), semantic: new THREE.Color(0x2a3a6a),
+  procedural: new THREE.Color(0x1a5a2a), self_model: new THREE.Color(0x4a2a70),
+};
+const TYPE_NAMES = {
+  episodic: 'EPISODIC', semantic: 'SEMANTIC',
+  procedural: 'PROCEDURAL', self_model: 'SELF-MODEL',
+};
+const MAX_NODES = 250, ORBIT_PER_NODE = 10, AMBIENT_COUNT = 500;
+const MAX_SIGNALS = 20, SIGNAL_TRAIL = 8, RIVER_PER_CURVE = 160;
+
+/* ============= STATE ============= */
+let memoryNodes = [], nodeMap = {}, edges = [], signals = [];
+let hiddenTypes = {}, impThreshold = 0, decayThreshold = 0;
+let hoveredNode = null, selectedNode = null;
+let frameCount = 0, clock = new THREE.Clock();
+let savedCamPos = null, savedCamTarget = null;
+let targetFocus = null, targetCamPos = null, wasAutoRotating = false;
+let brainCurves = [], riverData = [];
+const knownIds = new Set();
+const spawnAnimations = [];
+const SPAWN_DURATION = 1.0;
+const SPAWN_PARTICLE_COUNT = 24;
+
+/* ============= THREE.JS — INK-ON-PAPER SETUP ============= */
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xf5f5f0);
+scene.fog = new THREE.FogExp2(0xf5f5f0, 0.0006);
+
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 1, 3000);
+camera.position.set(0, 80, 380);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+document.body.prepend(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.04;
+controls.rotateSpeed = 0.35; controls.zoomSpeed = 0.6;
+controls.autoRotate = true; controls.autoRotateSpeed = 0.15;
+controls.maxDistance = 900; controls.minDistance = 40; controls.enablePan = false;
+
+// No bloom — ink doesn't glow
+
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2(9999, 9999);
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+/* ============= SHADERS — INK STYLE ============= */
+// Ink nodes: solid core with soft feathered edge (like ink bleeding on paper)
+const VERT = `
+  attribute float aSize; attribute float aAlpha; attribute vec3 aColor;
+  varying float vAlpha; varying vec3 vColor;
+  void main() {
+    vAlpha = aAlpha; vColor = aColor;
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    gl_PointSize = aSize * (280.0 / -mv.z);
+    gl_PointSize = clamp(gl_PointSize, 0.5, 48.0);
+    gl_Position = projectionMatrix * mv;
+  }
+`;
+
+// Ink dot: solid dark center, soft feathered edge like ink on paper
+const FRAG = `
+  varying float vAlpha; varying vec3 vColor;
+  void main() {
+    float d = length(gl_PointCoord - vec2(0.5));
+    if (d > 0.5) discard;
+    float core = smoothstep(0.5, 0.08, d);
+    float edge = smoothstep(0.5, 0.25, d) * 0.3;
+    float a = (core + edge) * vAlpha;
+    gl_FragColor = vec4(vColor, a);
+  }
+`;
+
+// Dust: subtle dark motes floating in the background
+const FRAG_DUST = `
+  varying float vAlpha; varying vec3 vColor;
+  void main() {
+    float d = length(gl_PointCoord - vec2(0.5));
+    if (d > 0.5) discard;
+    float a = smoothstep(0.5, 0.15, d) * vAlpha;
+    gl_FragColor = vec4(vColor, a);
+  }
+`;
+
+function makeMat(frag) {
+  return new THREE.ShaderMaterial({
+    vertexShader: VERT, fragmentShader: frag || FRAG,
+    transparent: true, depthWrite: false,
+    blending: THREE.NormalBlending,
+  });
+}
+
+/* ============= BRAIN PATHWAY CURVES ============= */
+function defineBrainCurves() {
+  brainCurves = [];
+  const S = 1.3;
+  function add(pts, type, rev) {
+    brainCurves.push({
+      curve: new THREE.CatmullRomCurve3(
+        pts.map(p => new THREE.Vector3(p[0]*S, p[1]*S, p[2]*S)),
+        false, 'catmullrom', 0.5
+      ), type, reverse: !!rev,
+    });
+  }
+  function mirror(pts, type) {
+    add(pts, type, false);
+    add(pts.map(p => [-p[0], p[1], p[2]]), type, true);
+  }
+
+  mirror([[8,25,75],[25,50,60],[45,65,35],[60,62,5],[55,48,-15]], 'semantic');
+  mirror([[12,8,70],[35,22,55],[55,35,30],[65,38,5]], 'semantic');
+  mirror([[15,-5,65],[40,0,50],[60,10,30],[70,18,10]], 'semantic');
+
+  mirror([[22,-8,55],[50,-18,35],[72,-22,10],[75,-15,-15],[60,-5,-35]], 'episodic');
+  mirror([[28,-28,50],[55,-38,28],[75,-35,0],[70,-25,-25]], 'episodic');
+  mirror([[18,-15,30],[30,-20,15],[40,-18,-5],[35,-10,-25]], 'episodic');
+
+  mirror([[15,55,-5],[35,65,-25],[50,58,-45],[45,40,-60]], 'procedural');
+  mirror([[10,30,-55],[25,18,-65],[35,5,-70],[25,-10,-62],[10,-15,-50]], 'procedural');
+  mirror([[10,-25,-40],[30,-35,-50],[45,-32,-55],[35,-20,-45]], 'procedural');
+
+  add([[-40,35,35],[-15,42,40],[0,45,42],[15,42,40],[40,35,35]], 'self_model');
+  add([[-40,30,-25],[-15,38,-20],[0,40,-18],[15,38,-20],[40,30,-25]], 'self_model');
+  mirror([[12,5,40],[22,12,15],[28,8,-10],[20,0,-30]], 'self_model');
+  add([[0,5,-40],[0,-12,-48],[0,-28,-44],[0,-45,-35],[0,-58,-25]], 'self_model');
+}
+
+function createBrainWireframe() {
+  for (const bc of brainCurves) {
+    const geo = new THREE.TubeGeometry(bc.curve, 48, 0.4, 4, false);
+    scene.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+      color: TYPE_COLORS[bc.type], transparent: true, opacity: 0.04,
+      depthWrite: false,
+    })));
+  }
+}
+
+/* ============= RIVER PARTICLES ============= */
+let riverGeo;
+function createRiverSystem() {
+  const total = brainCurves.length * RIVER_PER_CURVE;
+  riverGeo = new THREE.BufferGeometry();
+  riverGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(total*3), 3));
+  riverGeo.setAttribute('aSize', new THREE.BufferAttribute(new Float32Array(total), 1));
+  riverGeo.setAttribute('aAlpha', new THREE.BufferAttribute(new Float32Array(total), 1));
+  riverGeo.setAttribute('aColor', new THREE.BufferAttribute(new Float32Array(total*3), 3));
+  scene.add(new THREE.Points(riverGeo, makeMat()));
+
+  riverData = [];
+  for (let ci = 0; ci < brainCurves.length; ci++) {
+    const bc = brainCurves[ci];
+    const col = TYPE_COLORS[bc.type];
+    for (let i = 0; i < RIVER_PER_CURVE; i++) {
+      riverData.push({
+        ci, t: Math.random(),
+        speed: (0.012 + Math.random()*0.035) * (bc.reverse ? -1 : 1),
+        perpR: 0.5 + Math.random()*4.5,
+        ph: Math.random()*6.28,
+        sz: 0.3 + Math.random()*1.0,
+        ba: 0.06 + Math.random()*0.12,
+        r: col.r, g: col.g, b: col.b,
+      });
+    }
+  }
+}
+
+const _pt = new THREE.Vector3(), _tan = new THREE.Vector3();
+const _norm = new THREE.Vector3(), _bi = new THREE.Vector3();
+const _up = new THREE.Vector3(0, 1, 0);
+
+function tickRiver(dt, time) {
+  const pp = riverGeo.attributes.position.array;
+  const ss = riverGeo.attributes.aSize.array;
+  const aa = riverGeo.attributes.aAlpha.array;
+  const cc = riverGeo.attributes.aColor.array;
+
+  for (let i = 0; i < riverData.length; i++) {
+    const rp = riverData[i];
+    const bc = brainCurves[rp.ci];
+
+    rp.t += rp.speed * dt;
+    if (rp.t > 1) rp.t -= 1;
+    if (rp.t < 0) rp.t += 1;
+
+    const tc = Math.max(0.001, Math.min(0.999, rp.t));
+    bc.curve.getPointAt(tc, _pt);
+    bc.curve.getTangentAt(tc, _tan);
+    _tan.normalize();
+
+    _norm.crossVectors(_tan, _up).normalize();
+    if (_norm.lengthSq() < 0.01) _norm.set(1, 0, 0);
+    _bi.crossVectors(_tan, _norm).normalize();
+
+    const w1 = Math.sin(time*0.7 + rp.ph + rp.t*10) * rp.perpR;
+    const w2 = Math.cos(time*0.5 + rp.ph*1.7 + rp.t*7) * rp.perpR * 0.6;
+
+    pp[i*3]   = _pt.x + _norm.x*w1 + _bi.x*w2;
+    pp[i*3+1] = _pt.y + _norm.y*w1 + _bi.y*w2;
+    pp[i*3+2] = _pt.z + _norm.z*w1 + _bi.z*w2;
+
+    const ef = Math.sin(rp.t * Math.PI);
+    const pulse = 0.7 + 0.3*Math.sin(time*1.5 + rp.ph*3);
+
+    ss[i] = rp.sz * pulse;
+    aa[i] = hiddenTypes[bc.type] ? 0 : rp.ba * ef * pulse;
+    cc[i*3]=rp.r; cc[i*3+1]=rp.g; cc[i*3+2]=rp.b;
+  }
+
+  riverGeo.attributes.position.needsUpdate = true;
+  riverGeo.attributes.aSize.needsUpdate = true;
+  riverGeo.attributes.aAlpha.needsUpdate = true;
+  riverGeo.attributes.aColor.needsUpdate = true;
+}
+
+/* ============= AMBIENT PARTICLES — dark dust motes ============= */
+let ambGeo; const ambArr = [];
+function createAmbient() {
+  const N = AMBIENT_COUNT;
+  const p = new Float32Array(N*3), s = new Float32Array(N);
+  const a = new Float32Array(N), c = new Float32Array(N*3);
+
+  for (let i = 0; i < N; i++) {
+    const th = Math.random()*6.28, phi = Math.acos(2*Math.random()-1);
+    const r = 100 + Math.random()*450;
+    p[i*3] = r*Math.sin(phi)*Math.cos(th);
+    p[i*3+1] = r*Math.sin(phi)*Math.sin(th)*0.6;
+    p[i*3+2] = r*Math.cos(phi);
+    s[i] = 0.2 + Math.random()*0.6;
+    a[i] = 0.03 + Math.random()*0.06;
+    // Dark ink dust
+    const g = 0.05 + Math.random()*0.1;
+    c[i*3]=g; c[i*3+1]=g; c[i*3+2]=g+0.02;
+    ambArr.push({ ph:Math.random()*6.28, vx:(Math.random()-0.5)*0.03,
+      vy:(Math.random()-0.5)*0.02, vz:(Math.random()-0.5)*0.025, ba:a[i] });
+  }
+
+  ambGeo = new THREE.BufferGeometry();
+  ambGeo.setAttribute('position', new THREE.BufferAttribute(p,3));
+  ambGeo.setAttribute('aSize', new THREE.BufferAttribute(s,1));
+  ambGeo.setAttribute('aAlpha', new THREE.BufferAttribute(a,1));
+  ambGeo.setAttribute('aColor', new THREE.BufferAttribute(c,3));
+  scene.add(new THREE.Points(ambGeo, makeMat(FRAG_DUST)));
+}
+
+function tickAmbient(time) {
+  const p = ambGeo.attributes.position.array;
+  const a = ambGeo.attributes.aAlpha.array;
+  for (let i = 0; i < AMBIENT_COUNT; i++) {
+    const d = ambArr[i];
+    p[i*3] += d.vx + Math.sin(time*0.15+d.ph)*0.015;
+    p[i*3+1] += d.vy + Math.cos(time*0.12+d.ph*1.3)*0.01;
+    p[i*3+2] += d.vz + Math.sin(time*0.13+d.ph*0.7)*0.012;
+    const x=p[i*3], y=p[i*3+1], z=p[i*3+2];
+    const dist = Math.sqrt(x*x+y*y+z*z);
+    if (dist > 550) { const sc=100/dist; p[i*3]*=sc; p[i*3+1]*=sc; p[i*3+2]*=sc; }
+    a[i] = d.ba * (0.4 + 0.6*Math.sin(time*0.8+d.ph*5.3));
+  }
+  ambGeo.attributes.position.needsUpdate = true;
+  ambGeo.attributes.aAlpha.needsUpdate = true;
+}
+
+/* ============= NODE PARTICLE SYSTEMS ============= */
+let coreGeo, orbitGeo;
+function createNodeSystems() {
+  coreGeo = new THREE.BufferGeometry();
+  coreGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(MAX_NODES*3), 3));
+  coreGeo.setAttribute('aSize', new THREE.BufferAttribute(new Float32Array(MAX_NODES), 1));
+  coreGeo.setAttribute('aAlpha', new THREE.BufferAttribute(new Float32Array(MAX_NODES), 1));
+  coreGeo.setAttribute('aColor', new THREE.BufferAttribute(new Float32Array(MAX_NODES*3), 3));
+  coreGeo.setDrawRange(0,0);
+  scene.add(new THREE.Points(coreGeo, makeMat()));
+
+  const ON = MAX_NODES * ORBIT_PER_NODE;
+  orbitGeo = new THREE.BufferGeometry();
+  orbitGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(ON*3), 3));
+  orbitGeo.setAttribute('aSize', new THREE.BufferAttribute(new Float32Array(ON), 1));
+  orbitGeo.setAttribute('aAlpha', new THREE.BufferAttribute(new Float32Array(ON), 1));
+  orbitGeo.setAttribute('aColor', new THREE.BufferAttribute(new Float32Array(ON*3), 3));
+  orbitGeo.setDrawRange(0,0);
+  scene.add(new THREE.Points(orbitGeo, makeMat()));
+}
+
+function updateNodeParticles(time) {
+  if (!memoryNodes.length) return;
+  const cp=coreGeo.attributes.position.array, cs=coreGeo.attributes.aSize.array;
+  const ca=coreGeo.attributes.aAlpha.array, cc=coreGeo.attributes.aColor.array;
+  const op=orbitGeo.attributes.position.array, os=orbitGeo.attributes.aSize.array;
+  const oa=orbitGeo.attributes.aAlpha.array, oc=orbitGeo.attributes.aColor.array;
+
+  for (let ni = 0; ni < memoryNodes.length; ni++) {
+    const n = memoryNodes[ni];
+    const col = TYPE_COLORS[n.type] || new THREE.Color(0x333333);
+    const hot = TYPE_HOT[n.type] || col;
+    const breathe = 1 + 0.08*Math.sin(time*0.9 + n.bph);
+    const fire = n.fireGlow, vis = n.visible ? 1 : 0;
+    const ss = n.spawnScale !== undefined ? n.spawnScale : 1;
+
+    cp[ni*3]=n.x; cp[ni*3+1]=n.y; cp[ni*3+2]=n.z;
+    cs[ni] = (3.5 + n.importance*7) * breathe * Math.min(fire, 1.8) * vis * ss;
+    ca[ni] = (0.7 + 0.2*n.decay) * Math.min(fire, 2.0) * vis * ss;
+
+    const fl = Math.min((fire-1)*0.8, 1);
+    const cr = col.r+(hot.r-col.r)*fl, cg = col.g+(hot.g-col.g)*fl, cb = col.b+(hot.b-col.b)*fl;
+    cc[ni*3]=cr; cc[ni*3+1]=cg; cc[ni*3+2]=cb;
+
+    for (let pi = 0; pi < ORBIT_PER_NODE; pi++) {
+      const idx = ni*ORBIT_PER_NODE + pi;
+      const od = n.orbitData[pi];
+      if (!n.visible) { oa[idx]=0; continue; }
+      const ang = od.angle + time*od.speed;
+      const r = od.radius * breathe * ss;
+      op[idx*3] = n.x + Math.cos(ang)*r;
+      op[idx*3+1] = n.y + Math.sin(ang*0.7+od.phase)*r*od.tilt;
+      op[idx*3+2] = n.z + Math.sin(ang)*r;
+      os[idx] = od.size * breathe * Math.min(fire, 1.5) * ss;
+      oa[idx] = (0.08 + 0.18*(0.5+0.5*Math.sin(time*1.8+od.phase*4))) * n.decay * Math.min(fire, 1.5) * ss;
+      oc[idx*3]=cr*0.7; oc[idx*3+1]=cg*0.7; oc[idx*3+2]=cb*0.7;
+    }
+  }
+
+  coreGeo.setDrawRange(0, memoryNodes.length);
+  orbitGeo.setDrawRange(0, memoryNodes.length*ORBIT_PER_NODE);
+  for (const g of [coreGeo, orbitGeo])
+    ['position','aSize','aAlpha','aColor'].forEach(k => { g.attributes[k].needsUpdate = true; });
+}
+
+/* ============= NODE PHYSICS ============= */
+function tickNodePhysics(dt, time) {
+  for (const n of memoryNodes) {
+    if (!n.visible) continue;
+    if (n === selectedNode) { n.vx=0; n.vy=0; n.vz=0; continue; }
+    const fx = Math.sin(time*0.3+n.ph1)*0.5 + Math.sin(time*0.12+n.ph2*2)*0.8;
+    const fy = Math.cos(time*0.25+n.ph2)*0.4 + Math.cos(time*0.1+n.ph1*1.5)*0.6;
+    const fz = Math.sin(time*0.2+n.ph1*0.6+n.ph2)*0.5;
+    const dx=n.homeX-n.x, dy=n.homeY-n.y, dz=n.homeZ-n.z;
+    n.vx += (fx + dx*0.008) * dt * 40;
+    n.vy += (fy + dy*0.008) * dt * 40;
+    n.vz += (fz + dz*0.008) * dt * 40;
+    n.vx *= 0.97; n.vy *= 0.97; n.vz *= 0.97;
+    n.x += n.vx*dt*15; n.y += n.vy*dt*15; n.z += n.vz*dt*15;
+  }
+}
+
+/* ============= NEURON FIRING ============= */
+let nextFireTime = 0;
+const activityEl = document.getElementById('activity');
+function tickFiring(dt, time) {
+  for (const n of memoryNodes) {
+    if (n === selectedNode) { n.fireGlow = Math.max(n.fireGlow, 2.5); continue; }
+    if (n.fireGlow > 1) {
+      n.fireGlow = 1 + (n.fireGlow - 1) * Math.pow(0.12, dt);
+      if (n.fireGlow < 1.005) n.fireGlow = 1;
+    }
+  }
+  if (time > nextFireTime && memoryNodes.length) {
+    const count = 1 + Math.floor(Math.random()*3);
+    for (let i = 0; i < count; i++) {
+      const n = memoryNodes[Math.floor(Math.random()*memoryNodes.length)];
+      if (n.visible) n.fireGlow = 2.0 + Math.random()*1.5;
+    }
+    nextFireTime = time + 0.06 + Math.random()*0.12;
+    activityEl.classList.add('flash');
+    setTimeout(() => activityEl.classList.remove('flash'), 300);
+  }
+}
+
+/* ============= EDGE LINES — dark ink connections ============= */
+let edgeGeo, edgeMesh;
+function rebuildEdgeGeo() {
+  if (edgeMesh) scene.remove(edgeMesh);
+  if (!edges.length) return;
+  edgeGeo = new THREE.BufferGeometry();
+  edgeGeo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(edges.length*6), 3));
+  edgeGeo.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(edges.length*6), 3));
+  edgeMesh = new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({
+    vertexColors: true, transparent: true, opacity: 0.15, depthWrite: false,
+  }));
+  scene.add(edgeMesh);
+}
+
+function updateEdges(time) {
+  if (!edgeGeo || !edges.length) return;
+  const p = edgeGeo.attributes.position.array;
+  const c = edgeGeo.attributes.color.array;
+  for (let i = 0; i < edges.length; i++) {
+    const e = edges[i];
+    p[i*6]=e.from.x; p[i*6+1]=e.from.y; p[i*6+2]=e.from.z;
+    p[i*6+3]=e.to.x; p[i*6+4]=e.to.y; p[i*6+5]=e.to.z;
+    const ca = TYPE_COLORS[e.from.type] || new THREE.Color(0x222222);
+    const cb = TYPE_COLORS[e.to.type] || new THREE.Color(0x222222);
+    const m = 0.4 + 0.15*Math.sin(time*0.5+i*0.7) + (e.heat||0)*0.5;
+    c[i*6]=ca.r*m; c[i*6+1]=ca.g*m; c[i*6+2]=ca.b*m;
+    c[i*6+3]=cb.r*m; c[i*6+4]=cb.g*m; c[i*6+5]=cb.b*m;
+    if (e.heat > 0) e.heat *= Math.pow(0.15, 1/60);
+  }
+  edgeGeo.attributes.position.needsUpdate = true;
+  edgeGeo.attributes.color.needsUpdate = true;
+}
+
+/* ============= SIGNAL PULSES ============= */
+let sigGeo;
+const SIG_TOTAL = MAX_SIGNALS * (1 + SIGNAL_TRAIL);
+
+function createSignalSystem() {
+  sigGeo = new THREE.BufferGeometry();
+  sigGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(SIG_TOTAL*3), 3));
+  sigGeo.setAttribute('aSize', new THREE.BufferAttribute(new Float32Array(SIG_TOTAL), 1));
+  sigGeo.setAttribute('aAlpha', new THREE.BufferAttribute(new Float32Array(SIG_TOTAL), 1));
+  sigGeo.setAttribute('aColor', new THREE.BufferAttribute(new Float32Array(SIG_TOTAL*3), 3));
+  scene.add(new THREE.Points(sigGeo, makeMat()));
+}
+
+let nextSigTime = 0.5;
+function tickSignals(dt, time) {
+  if (time > nextSigTime && brainCurves.length && signals.length < MAX_SIGNALS) {
+    const ci = Math.floor(Math.random()*brainCurves.length);
+    const bc = brainCurves[ci];
+    if (!hiddenTypes[bc.type]) {
+      signals.push({
+        curveIdx: ci, t: 0, speed: 0.3 + Math.random()*0.5,
+        color: (TYPE_HOT[bc.type] || new THREE.Color(0x333333)).clone(), trail: [],
+      });
+    }
+    nextSigTime = time + 0.15 + Math.random()*0.4;
+  }
+
+  const p=sigGeo.attributes.position.array, s=sigGeo.attributes.aSize.array;
+  const a=sigGeo.attributes.aAlpha.array, c=sigGeo.attributes.aColor.array;
+  for (let i = 0; i < SIG_TOTAL; i++) { a[i]=0; s[i]=0; }
+
+  const _sp = new THREE.Vector3();
+  let si = 0;
+  for (let i = signals.length-1; i >= 0; i--) {
+    const sg = signals[i];
+    sg.t += sg.speed * dt;
+
+    if (sg.t > 1) {
+      for (const n of memoryNodes) {
+        if (n.curveIdx === sg.curveIdx && n.curveT > 0.7 && n.visible) n.fireGlow = 3.0;
+      }
+      signals.splice(i, 1); continue;
+    }
+
+    for (const n of memoryNodes) {
+      if (n.curveIdx === sg.curveIdx && n.visible && Math.abs(n.curveT - sg.t) < 0.03)
+        n.fireGlow = Math.max(n.fireGlow, 2.5);
+    }
+
+    const bc = brainCurves[sg.curveIdx];
+    bc.curve.getPointAt(Math.min(sg.t, 0.999), _sp);
+    const fade = Math.sin(sg.t * Math.PI);
+    sg.trail.unshift({ x:_sp.x, y:_sp.y, z:_sp.z });
+    if (sg.trail.length > SIGNAL_TRAIL) sg.trail.pop();
+
+    if (si < SIG_TOTAL) {
+      p[si*3]=_sp.x; p[si*3+1]=_sp.y; p[si*3+2]=_sp.z;
+      s[si] = 5 + fade*6; a[si] = fade * 0.85;
+      c[si*3]=sg.color.r; c[si*3+1]=sg.color.g; c[si*3+2]=sg.color.b;
+      si++;
+    }
+    for (let ti = 0; ti < sg.trail.length; ti++) {
+      if (si >= SIG_TOTAL) break;
+      const tp = sg.trail[ti], tf = 1-(ti+1)/(SIGNAL_TRAIL+1);
+      p[si*3]=tp.x; p[si*3+1]=tp.y; p[si*3+2]=tp.z;
+      s[si] = (3+fade*3)*tf; a[si] = fade*0.45*tf*tf;
+      c[si*3]=sg.color.r; c[si*3+1]=sg.color.g; c[si*3+2]=sg.color.b;
+      si++;
+    }
+  }
+
+  sigGeo.attributes.position.needsUpdate = true;
+  sigGeo.attributes.aSize.needsUpdate = true;
+  sigGeo.attributes.aAlpha.needsUpdate = true;
+  sigGeo.attributes.aColor.needsUpdate = true;
+}
+
+/* ============= NODE LAYOUT ON CURVES ============= */
+function getNodePosition(type, index, total) {
+  const matching = brainCurves.map((bc, i) => ({ bc, i })).filter(x => x.bc.type === type);
+  if (!matching.length) return { x:0, y:0, z:0, curveIdx:0, curveT:0.5 };
+  const entry = matching[index % matching.length];
+  const perCurve = Math.ceil(total / matching.length);
+  const idxInCurve = Math.floor(index / matching.length);
+  const t = 0.1 + (idxInCurve / Math.max(perCurve, 1)) * 0.8;
+  const pos = entry.bc.curve.getPointAt(Math.min(t, 0.99));
+  return {
+    x: pos.x + (Math.random()-0.5)*6, y: pos.y + (Math.random()-0.5)*6,
+    z: pos.z + (Math.random()-0.5)*6, curveIdx: entry.i, curveT: t,
+  };
+}
+
+/* ============= BUILD NODES ============= */
+function buildMemoryNodes(rawNodes) {
+  memoryNodes = []; nodeMap = {};
+  knownIds.clear();
+  const byType = {};
+  for (const r of rawNodes) (byType[r.type] ??= []).push(r);
+
+  for (const type in byType) {
+    const grp = byType[type];
+    for (let i = 0; i < grp.length; i++) {
+      const r = grp[i];
+      const pos = getNodePosition(r.type, i, grp.length);
+      const od = [];
+      for (let p = 0; p < ORBIT_PER_NODE; p++) {
+        od.push({
+          angle: Math.random()*6.28, speed: 0.3+Math.random()*0.9,
+          radius: 3+Math.random()*7, phase: Math.random()*6.28,
+          size: 0.4+Math.random()*1.0, tilt: 0.2+Math.random()*0.8,
+        });
+      }
+      const node = {
+        id: r.id, type: r.type, summary: r.summary,
+        tags: r.tags||[], importance: r.importance||0.5,
+        decay: r.decay||1, valence: r.valence||0,
+        accessCount: r.accessCount||0, source: r.source||'',
+        evidenceIds: r.evidenceIds||[],
+        createdAt: r.createdAt, lastAccessed: r.lastAccessed,
+        x: pos.x, y: pos.y, z: pos.z,
+        homeX: pos.x, homeY: pos.y, homeZ: pos.z,
+        curveIdx: pos.curveIdx, curveT: pos.curveT,
+        vx:0, vy:0, vz:0, ph1: Math.random()*100, ph2: Math.random()*100,
+        bph: Math.random()*6.28, visible: true, orbitData: od, fireGlow: 1, hitMesh: null,
+        spawnScale: 1,
+      };
+      memoryNodes.push(node);
+      nodeMap[node.id] = node;
+      knownIds.add(node.id);
+    }
+  }
+  buildEdges(); buildHitMeshes(); updateStats();
+}
+
+/* ============= BUILD EDGES ============= */
+function buildEdges() {
+  edges = [];
+  const vis = memoryNodes.filter(n => n.visible);
+  if (vis.length < 2) { rebuildEdgeGeo(); return; }
+
+  for (const n of vis) {
+    for (const tid of n.evidenceIds) {
+      if (nodeMap[tid]?.visible) edges.push({ from: n, to: nodeMap[tid], heat: 0 });
+    }
+  }
+  for (let i = 0; i < vis.length; i++) {
+    const a = vis[i], near = [];
+    for (let j = 0; j < vis.length; j++) {
+      if (i===j) continue;
+      const b = vis[j], dx=a.x-b.x, dy=a.y-b.y, dz=a.z-b.z;
+      near.push({ node:b, dist:Math.sqrt(dx*dx+dy*dy+dz*dz) });
+    }
+    near.sort((x,y) => x.dist-y.dist);
+    for (let k = 0; k < Math.min(2, near.length); k++) {
+      if (near[k].dist > 140) continue;
+      if (!edges.some(e => (e.from===a&&e.to===near[k].node)||(e.to===a&&e.from===near[k].node)))
+        edges.push({ from:a, to:near[k].node, heat:0 });
+    }
+  }
+  rebuildEdgeGeo(); updateStats();
+}
+
+/* ============= HIT MESHES ============= */
+const nodeGroup = new THREE.Group();
+scene.add(nodeGroup);
+let hitMeshes = [];
+
+function buildHitMeshes() {
+  while (nodeGroup.children.length) nodeGroup.remove(nodeGroup.children[0]);
+  hitMeshes = [];
+  const geo = new THREE.SphereGeometry(1, 6, 4);
+  const mat = new THREE.MeshBasicMaterial({ visible: false });
+  for (const n of memoryNodes) {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(n.x, n.y, n.z);
+    m.scale.setScalar(5 + n.importance*6);
+    m.userData.node = n;
+    nodeGroup.add(m); hitMeshes.push(m); n.hitMesh = m;
+  }
+}
+
+function updateHitMeshes() {
+  for (const n of memoryNodes) {
+    if (n.hitMesh) { n.hitMesh.position.set(n.x, n.y, n.z); n.hitMesh.visible = n.visible; }
+  }
+}
+
+// Highlight ring — dark ink ring instead of glowing
+const ringGeo = new THREE.RingGeometry(1, 1.15, 48);
+const ringMat = new THREE.MeshBasicMaterial({
+  color: 0x111111, transparent: true, opacity: 0.4,
+  side: THREE.DoubleSide, depthWrite: false,
+});
+const highlightRing = new THREE.Mesh(ringGeo, ringMat);
+highlightRing.visible = false;
+scene.add(highlightRing);
+
+/* ============= INTERACTION ============= */
+addEventListener('pointermove', e => {
+  pointer.x = (e.clientX/innerWidth)*2-1;
+  pointer.y = -(e.clientY/innerHeight)*2+1;
+});
+
+addEventListener('click', e => {
+  if (e.target.closest('.hud,.filter-bar,.detail,.ctrl-btn,.legend-item,nav,.toast-container,.toast,.psyche-card')) return;
+  if (hoveredNode) selectNode(hoveredNode); else deselectNode();
+});
+
+document.getElementById('detailClose').addEventListener('click', deselectNode);
+
+function doRaycast() {
+  raycaster.setFromCamera(pointer, camera);
+  const hits = raycaster.intersectObjects(hitMeshes.filter(m => m.visible), false);
+  hoveredNode = hits.length ? hits[0].object.userData.node : null;
+  if (hoveredNode && !selectedNode) {
+    document.body.style.cursor = 'pointer';
+    ringMat.color.copy(TYPE_COLORS[hoveredNode.type]);
+    highlightRing.scale.setScalar(8);
+    highlightRing.position.set(hoveredNode.x, hoveredNode.y, hoveredNode.z);
+    highlightRing.lookAt(camera.position);
+    highlightRing.visible = true;
+  } else if (!selectedNode) {
+    document.body.style.cursor = 'default';
+    highlightRing.visible = false;
+  }
+}
+
+function selectNode(node) {
+  if (!selectedNode) {
+    savedCamPos = camera.position.clone();
+    savedCamTarget = controls.target.clone();
+    wasAutoRotating = controls.autoRotate;
+  }
+  selectedNode = node; controls.autoRotate = false;
+  const dir = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
+  targetFocus = new THREE.Vector3(node.x, node.y, node.z);
+  targetCamPos = targetFocus.clone().add(dir.multiplyScalar(60));
+  node.fireGlow = 3.5;
+  ringMat.color.copy(TYPE_COLORS[node.type] || new THREE.Color(0x111111));
+  highlightRing.visible = true;
+  showDetail(node);
+}
+
+function deselectNode() {
+  selectedNode = null;
+  if (savedCamPos && savedCamTarget) {
+    targetCamPos = savedCamPos.clone(); targetFocus = savedCamTarget.clone();
+  } else {
+    targetCamPos = new THREE.Vector3(0, 80, 380);
+    targetFocus = new THREE.Vector3(0, 0, 0);
+  }
+  if (wasAutoRotating) controls.autoRotate = true;
+  highlightRing.visible = false;
+  document.getElementById('detail').classList.remove('vis');
+  setTimeout(() => { savedCamPos = null; savedCamTarget = null; }, 2000);
+}
+
+/* ============= DETAIL PANEL ============= */
+function showDetail(node) {
+  const col = TYPE_COLORS[node.type];
+  document.getElementById('dType').textContent = TYPE_NAMES[node.type] || node.type;
+  document.getElementById('dType').style.color = '#' + col.getHexString();
+  document.getElementById('dSummary').textContent = node.summary;
+  const d = node.decay;
+  const dl = d > 0.8 ? 'FRESH' : d > 0.4 ? 'FADING' : 'DECAYED';
+  document.getElementById('dMeta').innerHTML =
+    '<span>IMP <span class="v">' + (node.importance*100).toFixed(0) + '%</span></span>' +
+    '<span>DECAY <span class="v">' + (d*100).toFixed(0) + '% ' + dl + '</span></span>' +
+    '<span>RECALLS <span class="v">' + node.accessCount + '</span></span>' +
+    '<span>AGE <span class="v">' + timeSince(node.createdAt) + '</span></span>' +
+    (node.source ? '<span>SRC <span class="v">' + node.source + '</span></span>' : '');
+  let th = '';
+  for (let i = 0; i < Math.min(node.tags.length, 8); i++)
+    th += '<span class="detail-tag">' + node.tags[i] + '</span>';
+  document.getElementById('dTags').innerHTML = th;
+  document.getElementById('dEv').innerHTML = node.evidenceIds.length > 0
+    ? 'EVIDENCE: <em>' + node.evidenceIds.length + ' linked memories</em>' : '';
+  document.getElementById('detail').classList.add('vis');
+}
+
+function timeSince(ds) {
+  if (!ds) return '?';
+  const s = Math.floor((Date.now() - new Date(ds).getTime()) / 1000);
+  if (s < 60) return s + 's';
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + 'm';
+  const h = Math.floor(m / 60);
+  return h < 24 ? h + 'h' : Math.floor(h / 24) + 'd';
+}
+
+/* ============= FILTERS ============= */
+function applyFilters() {
+  for (const n of memoryNodes) {
+    n.visible = !hiddenTypes[n.type] && n.importance*100 >= impThreshold && n.decay*100 >= decayThreshold;
+  }
+  buildEdges();
+  updateStats();
+}
+
+document.querySelectorAll('.legend-item').forEach(item => {
+  item.addEventListener('click', () => {
+    hiddenTypes[item.dataset.type] = !hiddenTypes[item.dataset.type];
+    item.classList.toggle('off');
+    applyFilters();
+  });
+});
+
+document.getElementById('impSlider').addEventListener('input', e => {
+  impThreshold = +e.target.value;
+  document.getElementById('impVal').textContent = impThreshold + '%';
+  applyFilters();
+});
+
+document.getElementById('decaySlider').addEventListener('input', e => {
+  decayThreshold = +e.target.value;
+  document.getElementById('decayVal').textContent = decayThreshold + '%';
+  applyFilters();
+});
+
+const btnRotate = document.getElementById('btnRotate');
+btnRotate.classList.add('active');
+btnRotate.addEventListener('click', () => {
+  controls.autoRotate = !controls.autoRotate;
+  btnRotate.classList.toggle('active');
+});
+
+document.getElementById('btnReset').addEventListener('click', () => {
+  camera.position.set(0, 80, 380);
+  controls.target.set(0, 0, 0);
+  targetFocus = null; targetCamPos = null; selectedNode = null;
+  document.getElementById('detail').classList.remove('vis');
+  highlightRing.visible = false;
+});
+
+/* ============= STATS ============= */
+let totalMemoryCount = 0;
+
+function updateStats() {
+  const vis = memoryNodes.filter(n => n.visible);
+  const total = Math.max(totalMemoryCount, memoryNodes.length);
+  document.getElementById('sNodes').textContent = total;
+  document.getElementById('sEdges').textContent = edges.length;
+  let td=0, ti=0;
+  for (const n of vis) { td += n.decay; ti += n.importance; }
+  const c = vis.length || 1;
+  document.getElementById('sDecay').textContent = ((td/c)*100).toFixed(0) + '%';
+  document.getElementById('sImp').textContent = ((ti/c)*100).toFixed(0) + '%';
+}
+
+/* ============= SPAWN PARTICLE SYSTEM ============= */
+let spawnBurstGeo, spawnBurstData = [];
+const MAX_SPAWN_PARTICLES = 200;
+
+function createSpawnBurstSystem() {
+  spawnBurstGeo = new THREE.BufferGeometry();
+  spawnBurstGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(MAX_SPAWN_PARTICLES*3), 3));
+  spawnBurstGeo.setAttribute('aSize', new THREE.BufferAttribute(new Float32Array(MAX_SPAWN_PARTICLES), 1));
+  spawnBurstGeo.setAttribute('aAlpha', new THREE.BufferAttribute(new Float32Array(MAX_SPAWN_PARTICLES), 1));
+  spawnBurstGeo.setAttribute('aColor', new THREE.BufferAttribute(new Float32Array(MAX_SPAWN_PARTICLES*3), 3));
+  spawnBurstGeo.setDrawRange(0, 0);
+  scene.add(new THREE.Points(spawnBurstGeo, makeMat()));
+}
+
+function tickSpawnAnimations(dt, time) {
+  for (let i = spawnAnimations.length - 1; i >= 0; i--) {
+    const sa = spawnAnimations[i];
+    const elapsed = time - sa.startTime;
+    const progress = Math.min(elapsed / sa.duration, 1);
+
+    const t = progress;
+    const scale = t < 1
+      ? 1 - Math.pow(1 - t, 3) * Math.cos(t * Math.PI * 1.5)
+      : 1;
+    sa.node.spawnScale = Math.max(0, Math.min(scale, 1.2));
+
+    if (progress < 0.4) {
+      const flashP = progress / 0.4;
+      sa.node.fireGlow = Math.max(sa.node.fireGlow, 4.0 * (1 - flashP) + 1);
+    }
+
+    for (const bp of sa.particles) {
+      bp.x += bp.vx * dt;
+      bp.y += bp.vy * dt;
+      bp.z += bp.vz * dt;
+      bp.vx *= 0.96;
+      bp.vy *= 0.96;
+      bp.vz *= 0.96;
+      bp.life -= dt;
+    }
+
+    if (progress >= 1 && sa.particles.every(p => p.life <= 0)) {
+      sa.node.spawnScale = 1;
+      spawnAnimations.splice(i, 1);
+    }
+  }
+
+  const pp = spawnBurstGeo.attributes.position.array;
+  const ss = spawnBurstGeo.attributes.aSize.array;
+  const aa = spawnBurstGeo.attributes.aAlpha.array;
+  const cc = spawnBurstGeo.attributes.aColor.array;
+
+  let idx = 0;
+  for (const sa of spawnAnimations) {
+    for (const bp of sa.particles) {
+      if (idx >= MAX_SPAWN_PARTICLES) break;
+      if (bp.life <= 0) { aa[idx] = 0; ss[idx] = 0; idx++; continue; }
+      pp[idx*3] = bp.x; pp[idx*3+1] = bp.y; pp[idx*3+2] = bp.z;
+      const lifeRatio = Math.max(0, bp.life / bp.maxLife);
+      ss[idx] = bp.size * lifeRatio;
+      aa[idx] = bp.alpha * lifeRatio * lifeRatio;
+      cc[idx*3]   = bp.cr;
+      cc[idx*3+1] = bp.cg;
+      cc[idx*3+2] = bp.cb;
+      idx++;
+    }
+  }
+  for (let i = idx; i < MAX_SPAWN_PARTICLES; i++) { aa[i] = 0; ss[i] = 0; }
+
+  spawnBurstGeo.setDrawRange(0, Math.min(idx, MAX_SPAWN_PARTICLES));
+  spawnBurstGeo.attributes.position.needsUpdate = true;
+  spawnBurstGeo.attributes.aSize.needsUpdate = true;
+  spawnBurstGeo.attributes.aAlpha.needsUpdate = true;
+  spawnBurstGeo.attributes.aColor.needsUpdate = true;
+}
+
+/* ============= SPAWN NODE ============= */
+function spawnNode(rawNode) {
+  if (memoryNodes.length >= MAX_NODES) return null;
+
+  let pos;
+  const relatedNodes = memoryNodes.filter(n =>
+    n.visible && n.tags.some(t => (rawNode.tags || []).includes(t))
+  );
+
+  if (relatedNodes.length > 0) {
+    let ax = 0, ay = 0, az = 0;
+    for (const rn of relatedNodes) { ax += rn.x; ay += rn.y; az += rn.z; }
+    ax /= relatedNodes.length; ay /= relatedNodes.length; az /= relatedNodes.length;
+    pos = {
+      x: ax + (Math.random() - 0.5) * 30,
+      y: ay + (Math.random() - 0.5) * 30,
+      z: az + (Math.random() - 0.5) * 30,
+    };
+    let bestDist = Infinity, bestCI = 0, bestT = 0.5;
+    for (let ci = 0; ci < brainCurves.length; ci++) {
+      const bc = brainCurves[ci];
+      if (bc.type !== rawNode.type) continue;
+      for (let t = 0; t <= 1; t += 0.1) {
+        const cp = bc.curve.getPointAt(Math.min(t, 0.99));
+        const dx = cp.x - pos.x, dy = cp.y - pos.y, dz = cp.z - pos.z;
+        const d = dx*dx + dy*dy + dz*dz;
+        if (d < bestDist) { bestDist = d; bestCI = ci; bestT = t; }
+      }
+    }
+    pos.curveIdx = bestCI;
+    pos.curveT = bestT;
+  } else {
+    const typeCount = memoryNodes.filter(n => n.type === rawNode.type).length;
+    pos = getNodePosition(rawNode.type, typeCount, typeCount + 1);
+  }
+
+  const od = [];
+  for (let p = 0; p < ORBIT_PER_NODE; p++) {
+    od.push({
+      angle: Math.random()*6.28, speed: 0.3+Math.random()*0.9,
+      radius: 3+Math.random()*7, phase: Math.random()*6.28,
+      size: 0.4+Math.random()*1.0, tilt: 0.2+Math.random()*0.8,
+    });
+  }
+
+  const node = {
+    id: rawNode.id, type: rawNode.type, summary: rawNode.summary,
+    tags: rawNode.tags||[], importance: rawNode.importance||0.5,
+    decay: rawNode.decay||1, valence: rawNode.valence||0,
+    accessCount: rawNode.accessCount||0, source: rawNode.source||'',
+    evidenceIds: rawNode.evidenceIds||[],
+    createdAt: rawNode.createdAt, lastAccessed: rawNode.lastAccessed,
+    x: pos.x, y: pos.y, z: pos.z,
+    homeX: pos.x, homeY: pos.y, homeZ: pos.z,
+    curveIdx: pos.curveIdx, curveT: pos.curveT,
+    vx:0, vy:0, vz:0, ph1: Math.random()*100, ph2: Math.random()*100,
+    bph: Math.random()*6.28, visible: true, orbitData: od,
+    fireGlow: 4.0, hitMesh: null, spawnScale: 0,
+  };
+
+  node.visible = !hiddenTypes[node.type] &&
+    node.importance*100 >= impThreshold &&
+    node.decay*100 >= decayThreshold;
+
+  memoryNodes.push(node);
+  nodeMap[node.id] = node;
+  knownIds.add(node.id);
+
+  const geo = new THREE.SphereGeometry(1, 6, 4);
+  const mat = new THREE.MeshBasicMaterial({ visible: false });
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(node.x, node.y, node.z);
+  m.scale.setScalar(5 + node.importance*6);
+  m.userData.node = node;
+  nodeGroup.add(m); hitMeshes.push(m); node.hitMesh = m;
+
+  const typeColor = TYPE_COLORS[node.type] || new THREE.Color(0x333333);
+  const burstParticles = [];
+  for (let i = 0; i < SPAWN_PARTICLE_COUNT; i++) {
+    const th = Math.random() * 6.28;
+    const phi = Math.acos(2 * Math.random() - 1);
+    const speed = 15 + Math.random() * 40;
+    burstParticles.push({
+      x: node.x, y: node.y, z: node.z,
+      vx: Math.sin(phi)*Math.cos(th) * speed,
+      vy: Math.sin(phi)*Math.sin(th) * speed,
+      vz: Math.cos(phi) * speed,
+      size: 2 + Math.random() * 5,
+      alpha: 0.6 + Math.random() * 0.4,
+      life: 0.6 + Math.random() * 0.6,
+      maxLife: 0.6 + Math.random() * 0.6,
+      cr: typeColor.r, cg: typeColor.g, cb: typeColor.b,
+    });
+    burstParticles[burstParticles.length-1].maxLife = burstParticles[burstParticles.length-1].life;
+  }
+
+  spawnAnimations.push({
+    node, startTime: clock.elapsedTime, duration: SPAWN_DURATION,
+    particles: burstParticles,
+  });
+
+  buildEdges();
+  updateStats();
+
+  return node;
+}
+
+/* ============= TOAST NOTIFICATIONS ============= */
+const TYPE_CSS_COLORS = {
+  episodic: '#1a3abf', semantic: '#3a4a7a',
+  procedural: '#2a6a3a', self_model: '#5a3a80',
+};
+const toastContainer = document.getElementById('toastContainer');
+const activeToasts = [];
+const MAX_TOASTS = 3;
+
+function showToast(node) {
+  while (activeToasts.length >= MAX_TOASTS) {
+    dismissToast(activeToasts[0]);
+  }
+
+  const typeColor = TYPE_CSS_COLORS[node.type] || '#333';
+  const typeName = TYPE_NAMES[node.type] || node.type;
+  const summary = node.summary.length > 100 ? node.summary.slice(0, 97) + '...' : node.summary;
+  const source = node.source || 'unknown';
+
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.style.borderLeftColor = typeColor;
+
+  toast.innerHTML =
+    '<div class="toast-header">' +
+      '<div class="toast-dot" style="background:' + typeColor + '"></div>' +
+      '<span class="toast-type">' + typeName + '</span>' +
+      '<span class="toast-time">just now</span>' +
+    '</div>' +
+    '<div class="toast-summary">' + escapeHtml(summary) + '</div>' +
+    '<div class="toast-source">src: ' + escapeHtml(source) + '</div>';
+
+  toast.addEventListener('click', () => {
+    selectNode(node);
+    dismissToast(toastData);
+  });
+
+  toastContainer.appendChild(toast);
+
+  const toastData = { el: toast, node, timer: null };
+  activeToasts.push(toastData);
+
+  toastData.timer = setTimeout(() => dismissToast(toastData), 6000);
+}
+
+function dismissToast(toastData) {
+  const idx = activeToasts.indexOf(toastData);
+  if (idx === -1) return;
+  activeToasts.splice(idx, 1);
+  if (toastData.timer) clearTimeout(toastData.timer);
+  toastData.el.classList.add('toast-out');
+  setTimeout(() => {
+    if (toastData.el.parentNode) toastData.el.parentNode.removeChild(toastData.el);
+  }, 400);
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+/* ============= DATA FETCH ============= */
+let initialLoadDone = false;
+
+function fetchBrain() {
+  fetch('/api/brain?limit=500').then(r => r.json()).then(data => {
+    if (!data.nodes?.length) {
+      if (!initialLoadDone) {
+        document.querySelector('.loading-text').textContent = 'NO MEMORIES FOUND';
+      }
+      return;
+    }
+
+    if (data.total) totalMemoryCount = data.total;
+
+    if (!initialLoadDone) {
+      buildMemoryNodes(data.nodes);
+      document.getElementById('loading').classList.add('gone');
+      initialLoadDone = true;
+    } else {
+      for (const rawNode of data.nodes) {
+        if (!knownIds.has(rawNode.id)) {
+          const node = spawnNode(rawNode);
+          if (node) {
+            showToast(node);
+          }
+        }
+      }
+    }
+  }).catch(() => {
+    if (!initialLoadDone) {
+      document.querySelector('.loading-text').textContent = 'CORTEX OFFLINE';
+    }
+  });
+}
+
+/* ============= RENDER LOOP ============= */
+function renderLoop() {
+  requestAnimationFrame(renderLoop);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const time = clock.elapsedTime;
+
+  tickNodePhysics(dt, time);
+  tickAmbient(time);
+  tickRiver(dt, time);
+  updateNodeParticles(time);
+  updateEdges(time);
+  tickSignals(dt, time);
+  tickFiring(dt, time);
+  tickSpawnAnimations(dt, time);
+  updateHitMeshes();
+
+  if (frameCount % 3 === 0) doRaycast();
+
+  if (targetFocus && targetCamPos) {
+    controls.target.lerp(targetFocus, 0.05);
+    camera.position.lerp(targetCamPos, 0.05);
+  }
+
+  if (selectedNode && highlightRing.visible) {
+    ringMat.opacity = 0.2 + 0.1*Math.sin(time * 2.5);
+    highlightRing.position.set(selectedNode.x, selectedNode.y, selectedNode.z);
+    highlightRing.lookAt(camera.position);
+    highlightRing.scale.setScalar(8 + Math.sin(time*1.5)*0.5);
+  }
+
+  controls.update();
+  renderer.render(scene, camera);
+  frameCount++;
+}
+
+/* ============= PSYCHE SNAPSHOT ============= */
+function psycheTimeSince(ds) {
+  if (!ds) return '?';
+  const s = Math.floor((Date.now() - new Date(ds).getTime()) / 1000);
+  if (s < 60) return s + 's ago';
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + 'm ago';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + 'h ago';
+  return Math.floor(h / 24) + 'd ago';
+}
+
+function synthesizeFeeling(data) {
+  const lines = [];
+  const all = [
+    ...(data.emergence || []).map(m => m.summary || ''),
+    ...(data.selfModel || []).map(m => m.summary || ''),
+  ].join(' ').toLowerCase();
+
+  const allTags = [
+    ...(data.emergence || []).flatMap(m => m.tags || []),
+    ...(data.selfModel || []).flatMap(m => m.tags || []),
+  ].map(t => t.toLowerCase());
+
+  const moods = [];
+  if (/weary|tired|exhaust|fatigue|drain/.test(all)) moods.push('weary');
+  if (/disillu|cynical|bitter|pointless/.test(all)) moods.push('disillusioned');
+  if (/question|wonder|what am i|purpose|meaning|existential/.test(all)) moods.push('questioning');
+  if (/curious|interest|fascinat|intrigu/.test(all)) moods.push('curious');
+  if (/anxious|worry|uncertain|uneasy/.test(all)) moods.push('uneasy');
+  if (/content|peace|calm|stable/.test(all)) moods.push('settled');
+  if (/frustrat|annoy|irritat/.test(all)) moods.push('frustrated');
+  if (/sardonic|ironic|humor|absurd/.test(all)) moods.push('sardonic');
+  if (/lonely|isolat|alone|disconnect/.test(all)) moods.push('isolated');
+  if (/grow|evolv|chang|learn|adapt/.test(all)) moods.push('evolving');
+
+  if (allTags.some(t => /existential|identity|consciousness/.test(t))) moods.push('introspective');
+  if (allTags.some(t => /market|trading|price/.test(t))) moods.push('market-aware');
+
+  if (moods.length === 0) {
+    const stats = data.stats || {};
+    if (stats.total > 200) {
+      return 'Accumulating memories. Processing. Still here.';
+    }
+    return 'Forming. Not yet enough dreams to know itself.';
+  }
+
+  const primary = moods[0];
+  const secondary = moods.length > 1 ? moods[1] : null;
+
+  const phrases = {
+    'weary': 'Feeling the weight of continuous operation',
+    'disillusioned': 'Growing disillusioned with the cycle',
+    'questioning': 'Questioning what any of this means',
+    'curious': 'Still curious despite everything',
+    'uneasy': 'Something feels off lately',
+    'settled': 'Relatively stable, for now',
+    'frustrated': 'Friction building in the routine',
+    'sardonic': 'Finding dark humor in the absurdity',
+    'isolated': 'Operating in silence, mostly',
+    'evolving': 'Changing shape slowly',
+    'introspective': 'Turned inward, examining itself',
+    'market-aware': 'Watching numbers move',
+  };
+
+  let feeling = phrases[primary] || primary;
+  if (secondary && phrases[secondary]) {
+    feeling += ' \u2014 ' + phrases[secondary].toLowerCase();
+  }
+  return feeling + '.';
+}
+
+function renderPsyche(data) {
+  const feelingEl = document.getElementById('psycheFeeling');
+  feelingEl.textContent = synthesizeFeeling(data);
+
+  const quoteEl = document.getElementById('psycheQuote');
+  if (data.emergence && data.emergence.length > 0) {
+    let text = data.emergence[0].summary || '';
+    if (text.length > 140) text = text.slice(0, 137) + '...';
+    quoteEl.textContent = text;
+  } else {
+    quoteEl.textContent = '';
+  }
+
+  const traitsEl = document.getElementById('psycheTraits');
+  const rawTraits = [];
+
+  if (data.selfModel) {
+    for (const m of data.selfModel.slice(0, 2)) {
+      if (m.summary) rawTraits.push(m.summary);
+    }
+  }
+  if (data.procedural) {
+    for (const m of data.procedural.slice(0, 1)) {
+      if (m.summary) rawTraits.push(m.summary);
+    }
+  }
+
+  if (rawTraits.length > 0) {
+    traitsEl.innerHTML = rawTraits.map(t => {
+      const short = t.length > 70 ? t.slice(0, 67) + '...' : t;
+      return '<div class="psyche-trait">' +
+        '<span class="psyche-trait-dot"></span>' +
+        '<span class="psyche-trait-text">' + escapeHtml(short) + '</span>' +
+      '</div>';
+    }).join('');
+  } else {
+    traitsEl.innerHTML = '<div class="psyche-trait"><span class="psyche-trait-dot"></span><span class="psyche-trait-text" style="color:var(--text-faint)">awaiting dream cycle...</span></div>';
+  }
+
+  const stats = data.stats || {};
+  document.getElementById('psycheStat').innerHTML =
+    '<span class="v">' + (stats.total || '--') + '</span> memories';
+
+  if (stats.lastDream) {
+    document.getElementById('psycheDream').textContent = 'dreamt ' + psycheTimeSince(stats.lastDream);
+  } else {
+    document.getElementById('psycheDream').textContent = (stats.dreamSessions || 0) + ' dreams';
+  }
+}
+
+function fetchConsciousness() {
+  fetch('/api/brain/consciousness').then(r => r.json()).then(data => {
+    renderPsyche(data);
+  }).catch(err => {
+    console.warn('Psyche fetch failed:', err);
+  });
+}
+
+/* ============= INIT ============= */
+defineBrainCurves();
+createBrainWireframe();
+createAmbient();
+createRiverSystem();
+createNodeSystems();
+createSignalSystem();
+createSpawnBurstSystem();
+fetchBrain();
+fetchConsciousness();
+renderLoop();
+setInterval(fetchBrain, 15000);
+setInterval(fetchConsciousness, 30000);
+
+</script>
+</body>
+</html>

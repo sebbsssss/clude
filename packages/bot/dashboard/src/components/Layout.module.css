@@ -1,0 +1,134 @@
+.layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 220px;
+  background: var(--bg-warm);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 24px 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 10;
+}
+
+.logo {
+  padding: 0 20px;
+  margin-bottom: 32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logo a {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 5px;
+  color: var(--text);
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+.badge {
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--blue);
+  background: var(--blue-light);
+  padding: 2px 8px;
+  border-radius: 2px;
+}
+
+.nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 8px;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.navItem:hover {
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.04);
+  text-decoration: none;
+}
+
+.navItemActive {
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.06);
+  font-weight: 600;
+}
+
+.navIcon {
+  font-size: 14px;
+  width: 20px;
+  text-align: center;
+  opacity: 0.6;
+}
+
+.navItemActive .navIcon {
+  opacity: 1;
+}
+
+.sidebarFooter {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+}
+
+.wallet {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.walletDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+}
+
+.logoutBtn {
+  background: none;
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 6px 12px;
+  width: 100%;
+  transition: all 0.15s;
+}
+
+.logoutBtn:hover {
+  color: var(--text);
+  border-color: var(--text);
+}
+
+.main {
+  flex: 1;
+  margin-left: 220px;
+  padding: 40px;
+  min-height: 100vh;
+}

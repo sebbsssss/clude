@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CLUDE — We Separate Memory from the Model</title>
+  <meta name="description" content="Private, portable, persistent memory for AI agents. Your agent's brain belongs to you — not OpenAI, not Anthropic, not anyone else.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f5f5f0;
+      --bg-warm: #eeeee8;
+      --text: #111;
+      --text-muted: #666;
+      --text-faint: #999;
+      --accent: #111;
+      --blue: #2244ff;
+      --mono: 'JetBrains Mono', monospace;
+      --section-pad: 120px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--mono);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+    ::selection { background: var(--text); color: var(--bg); }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; width: 100%; z-index: 100;
+      background: rgba(245, 245, 240, 0.9);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+    }
+    .nav-inner {
+      max-width: 1200px; margin: 0 auto; padding: 0 40px;
+      height: 56px; display: flex; align-items: center;
+    }
+    .nav-logo {
+      font-size: 13px; font-weight: 800; letter-spacing: 5px;
+      color: var(--text); text-transform: uppercase; text-decoration: none;
+    }
+    .nav-links {
+      display: flex; align-items: center; gap: 32px; margin-left: auto;
+    }
+    .nav-links a {
+      color: var(--text-muted); font-size: 11px; letter-spacing: 2px;
+      text-transform: uppercase; text-decoration: none; transition: color 0.3s;
+    }
+    .nav-links a:hover { color: var(--text); }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 100vh;
+      display: flex; align-items: center;
+      padding: 0 40px;
+      padding-top: 56px;
+    }
+    .hero-inner {
+      max-width: 1200px; margin: 0 auto; width: 100%;
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 80px; align-items: center;
+    }
+    .hero-text {}
+    .hero-label {
+      font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
+      color: var(--text-muted); margin-bottom: 24px;
+    }
+    .hero-title {
+      font-size: clamp(36px, 5vw, 56px);
+      font-weight: 800; line-height: 1.1;
+      letter-spacing: -1px;
+      margin-bottom: 24px;
+    }
+    .hero-title em {
+      font-style: normal;
+      background: linear-gradient(135deg, #2244ff, #5566ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-sub {
+      font-size: 14px; color: var(--text-muted);
+      max-width: 440px; line-height: 1.8;
+      margin-bottom: 40px;
+    }
+    .hero-actions { display: flex; gap: 12px; }
+    .btn {
+      font-family: var(--mono);
+      font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+      padding: 14px 28px; text-decoration: none;
+      transition: all 0.25s ease; cursor: pointer;
+      border: none;
+    }
+    .btn-primary {
+      background: var(--text); color: var(--bg);
+      border: 2px solid var(--text);
+    }
+    .btn-primary:hover {
+      background: transparent; color: var(--text);
+    }
+    .btn-outline {
+      background: transparent; color: var(--text);
+      border: 2px solid rgba(0,0,0,0.15);
+    }
+    .btn-outline:hover {
+      border-color: var(--text);
+    }
+
+    /* ── BRAIN ILLUSTRATION ── */
+    .hero-visual {
+      display: flex; align-items: center; justify-content: center;
+      position: relative;
+    }
+    .brain-container {
+      width: 380px; height: 440px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 0;
+      position: relative;
+    }
+    .scan-line {
+      height: 2.4px;
+      background: var(--text);
+      margin: 0.8px 0;
+      transform-origin: center;
+      animation: scanPulse var(--dur) ease-in-out var(--delay) infinite alternate;
+      opacity: 0.85;
+      border-radius: 1px;
+    }
+    @keyframes scanPulse {
+      0% {
+        transform: scaleX(var(--scale-min)) translateX(var(--tx-a));
+        opacity: 0.6;
+      }
+      50% {
+        opacity: 0.95;
+      }
+      100% {
+        transform: scaleX(var(--scale-max)) translateX(var(--tx-b));
+        opacity: 0.75;
+      }
+    }
+
+    /* ── SECTIONS ── */
+    .section {
+      padding: var(--section-pad) 40px;
+    }
+    .section-inner {
+      max-width: 1200px; margin: 0 auto;
+    }
+    .section-alt {
+      background: var(--bg-warm);
+    }
+    .section-label {
+      font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
+      color: var(--text-muted); margin-bottom: 16px;
+    }
+    .section-title {
+      font-size: 36px; font-weight: 700; line-height: 1.2;
+      margin-bottom: 20px; max-width: 600px;
+    }
+    .section-desc {
+      font-size: 14px; color: var(--text-muted); max-width: 520px;
+      line-height: 1.8; margin-bottom: 56px;
+    }
+
+    /* ── PROBLEM CARDS ── */
+    .problem-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 1px; background: rgba(0,0,0,0.06);
+      border: 1px solid rgba(0,0,0,0.06);
+    }
+    .problem-card {
+      background: var(--bg);
+      padding: 40px 32px;
+    }
+    .section-alt .problem-card {
+      background: var(--bg-warm);
+    }
+    .problem-card-num {
+      font-size: 32px; font-weight: 800; color: rgba(0,0,0,0.08);
+      margin-bottom: 20px;
+    }
+    .problem-card-title {
+      font-size: 14px; font-weight: 700; margin-bottom: 12px;
+    }
+    .problem-card-text {
+      font-size: 13px; color: var(--text-muted); line-height: 1.8;
+    }
+
+    /* ── SOLUTION / LAYER STACK ── */
+    .solution-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 80px; align-items: start;
+    }
+    .solution-text .section-title { margin-bottom: 20px; }
+    .solution-text .section-desc { margin-bottom: 0; }
+    .layer-stack {
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .layer-card {
+      background: white;
+      border: 1px solid rgba(0,0,0,0.06);
+      padding: 28px 32px;
+      display: flex; align-items: flex-start; gap: 20px;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .layer-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.06);
+    }
+    .layer-num {
+      font-size: 11px; font-weight: 700; color: var(--text-faint);
+      letter-spacing: 1px; min-width: 28px; padding-top: 2px;
+    }
+    .layer-content {}
+    .layer-title {
+      font-size: 13px; font-weight: 700; margin-bottom: 6px;
+    }
+    .layer-desc {
+      font-size: 12px; color: var(--text-muted); line-height: 1.7;
+    }
+
+    /* ── 5 P'S GRID ── */
+    .principles-grid {
+      display: grid; grid-template-columns: repeat(5, 1fr);
+      gap: 1px; background: rgba(0,0,0,0.06);
+      border: 1px solid rgba(0,0,0,0.06);
+    }
+    .principle-card {
+      background: var(--bg);
+      padding: 36px 24px;
+      text-align: center;
+      transition: transform 0.3s ease;
+    }
+    .section-alt .principle-card {
+      background: var(--bg-warm);
+    }
+    .principle-card:hover {
+      transform: translateY(-2px);
+    }
+    .principle-icon {
+      font-size: 28px; margin-bottom: 16px;
+      display: block;
+    }
+    .principle-name {
+      font-size: 14px; font-weight: 700; margin-bottom: 8px;
+      letter-spacing: 1px;
+    }
+    .principle-desc {
+      font-size: 11px; color: var(--text-muted); line-height: 1.7;
+    }
+
+    /* ── MEMORY TYPES 2x2 ── */
+    .memory-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 2px;
+    }
+    .memory-card {
+      background: white;
+      border: 1px solid rgba(0,0,0,0.06);
+      border-top: 3px solid var(--card-color);
+      padding: 36px 32px;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .memory-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.06);
+    }
+    .memory-card-label {
+      font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--text-faint); margin-bottom: 12px;
+    }
+    .memory-card-title {
+      font-size: 16px; font-weight: 700; margin-bottom: 10px;
+    }
+    .memory-card-desc {
+      font-size: 13px; color: var(--text-muted); line-height: 1.8;
+    }
+    .memory-card-decay {
+      margin-top: 16px; font-size: 11px; color: var(--text-faint);
+      letter-spacing: 1px;
+    }
+
+    /* ── DREAM CYCLE ── */
+    .dream-phases {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 2px; margin-top: 56px;
+    }
+    .dream-card {
+      background: white;
+      border: 1px solid rgba(0,0,0,0.06);
+      padding: 40px 32px;
+      position: relative;
+    }
+    .dream-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 2px; background: var(--text);
+      transform: scaleX(0); transform-origin: left;
+      transition: transform 0.6s ease;
+    }
+    .dream-card:hover::before { transform: scaleX(1); }
+    .dream-numeral {
+      font-size: 28px; font-weight: 800; color: rgba(0,0,0,0.06);
+      margin-bottom: 20px;
+    }
+    .dream-title {
+      font-size: 14px; font-weight: 700; margin-bottom: 10px;
+    }
+    .dream-desc {
+      font-size: 13px; color: var(--text-muted); line-height: 1.8;
+    }
+
+    /* ── VENICE / PRIVACY ── */
+    .venice-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 80px; align-items: center;
+    }
+    .venice-stack {
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .venice-layer {
+      background: white;
+      border: 1px solid rgba(0,0,0,0.06);
+      padding: 24px 28px;
+      display: flex; align-items: center; gap: 16px;
+      transition: transform 0.3s ease;
+    }
+    .venice-layer:hover { transform: translateX(4px); }
+    .venice-dot {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    }
+    .venice-layer-label {
+      font-size: 9px; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--text-faint);
+    }
+    .venice-layer-name {
+      font-size: 13px; font-weight: 700;
+    }
+    .venice-layer-desc {
+      font-size: 11px; color: var(--text-muted); line-height: 1.6;
+    }
+
+    /* ── WIP BADGE ── */
+    .wip-badge {
+      display: inline-block;
+      font-size: 9px; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--text-muted);
+      background: rgba(0,0,0,0.04);
+      border: 1px solid rgba(0,0,0,0.08);
+      padding: 4px 12px;
+      margin-bottom: 16px;
+    }
+
+    /* ── ON-CHAIN ── */
+    .onchain-content {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 80px; align-items: center;
+    }
+    .chain-visual {
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .chain-block {
+      background: white;
+      border: 1px solid rgba(0,0,0,0.06);
+      padding: 20px 24px;
+      font-size: 11px;
+      display: flex; justify-content: space-between;
+      align-items: center;
+      transition: transform 0.3s ease;
+    }
+    .chain-block:hover { transform: translateX(4px); }
+    .chain-hash {
+      color: var(--text-faint); letter-spacing: 1px;
+      font-size: 10px;
+    }
+    .chain-label {
+      font-size: 11px; font-weight: 600; letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .chain-status {
+      font-size: 10px; color: #4a8a5a; font-weight: 600;
+      letter-spacing: 1px;
+    }
+
+    /* ── INSTALL / CODE BLOCK ── */
+    .install-section {
+      text-align: center;
+    }
+    .install-section .section-label,
+    .install-section .section-title,
+    .install-section .section-desc {
+      text-align: center;
+      margin-left: auto; margin-right: auto;
+    }
+    .code-block {
+      background: var(--text);
+      color: #e0e0e0;
+      padding: 20px 32px;
+      border-radius: 6px;
+      font-size: 13px;
+      display: block;
+      text-align: left;
+      max-width: 560px;
+      margin: 0 auto 16px;
+      letter-spacing: 0.5px;
+      position: relative;
+    }
+    .code-block .prompt { color: #666; }
+    .code-block .cmd { color: #e0e0e0; }
+    .code-block .flag { color: #888; }
+    .code-block .kw { color: #c586c0; }
+    .code-block .str { color: #ce9178; }
+    .code-block .type { color: #4ec9b0; }
+    .code-block .fn { color: #dcdcaa; }
+    .code-block .cmt { color: #6a9955; }
+
+    .stats-row {
+      display: flex; justify-content: center; gap: 80px;
+    }
+    .stat {}
+    .stat-value {
+      font-size: 32px; font-weight: 800;
+      margin-bottom: 4px;
+    }
+    .stat-label {
+      font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    /* ── QUOTE BLOCK ── */
+    .quote-block {
+      max-width: 700px;
+      margin: 0 auto;
+      text-align: center;
+      padding: 0 40px;
+    }
+    .quote-text {
+      font-size: 18px; font-weight: 400; line-height: 1.7;
+      color: var(--text); font-style: italic;
+      margin-bottom: 16px;
+    }
+    .quote-attr {
+      font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--text-faint);
+    }
+
+    /* ── FOOTER ── */
+    .footer {
+      padding: 60px 40px;
+      border-top: 1px solid rgba(0,0,0,0.06);
+    }
+    .footer-inner {
+      max-width: 1200px; margin: 0 auto;
+      display: flex; justify-content: space-between;
+      align-items: center;
+    }
+    .footer-left {
+      font-size: 11px; color: var(--text-faint); letter-spacing: 2px;
+    }
+    .footer-links {
+      display: flex; gap: 32px;
+    }
+    .footer-links a {
+      color: var(--text-muted); font-size: 11px; letter-spacing: 2px;
+      text-transform: uppercase; text-decoration: none; transition: color 0.3s;
+    }
+    .footer-links a:hover { color: var(--text); }
+
+    /* ── SCROLL REVEAL ── */
+    .reveal {
+      opacity: 0; transform: translateY(24px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 968px) {
+      :root { --section-pad: 80px; }
+      .hero-inner { grid-template-columns: 1fr; gap: 60px; }
+      .hero-visual { order: -1; }
+      .brain-container { width: 280px; height: 330px; }
+      .solution-grid { grid-template-columns: 1fr; gap: 48px; }
+      .onchain-content { grid-template-columns: 1fr; gap: 48px; }
+      .venice-grid { grid-template-columns: 1fr; gap: 48px; }
+      .problem-grid { grid-template-columns: 1fr; }
+      .dream-phases { grid-template-columns: 1fr; }
+      .principles-grid { grid-template-columns: repeat(2, 1fr); }
+      .stats-row { gap: 40px; flex-wrap: wrap; justify-content: center; }
+    }
+    @media (max-width: 640px) {
+      :root { --section-pad: 64px; }
+      .section { padding-left: 24px; padding-right: 24px; }
+      .hero { padding-left: 24px; padding-right: 24px; }
+      .nav-inner { padding: 0 24px; }
+      .memory-grid { grid-template-columns: 1fr; }
+      .principles-grid { grid-template-columns: 1fr; }
+      .hero-title { font-size: 32px; }
+      .section-title { font-size: 28px; }
+      .hero-actions { flex-direction: column; }
+      .btn { text-align: center; }
+      .stats-row { gap: 32px; }
+      .stat-value { font-size: 24px; }
+      .footer-inner { flex-direction: column; gap: 24px; text-align: center; }
+      .quote-block { padding: 0; }
+      .quote-text { font-size: 15px; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <div class="nav-inner">
+      <a href="/" class="nav-logo">Clude</a>
+      <div class="nav-links">
+        <a href="/docs.html">Docs</a>
+        <a href="/demo.html">Demo</a>
+        <a href="/brain.html">Brain</a>
+        <a href="/benchmark">Benchmark</a>
+        <a href="/privacy.html">Privacy</a>
+        <a href="https://x.com/Cludebot" target="_blank">X</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ═══════════════ HERO ═══════════════ -->
+  <section class="hero">
+    <div class="hero-inner">
+      <div class="hero-text">
+        <div class="hero-label">Memory Infrastructure for AI</div>
+        <h1 class="hero-title">We separate <em>memory</em> from the model.</h1>
+        <p class="hero-sub">Your agent's brain shouldn't be locked inside someone else's API. CLUDE gives AI agents private, portable, persistent memory that you own and control.</p>
+        <div class="hero-ca" style="margin-bottom: 24px; padding: 12px 16px; background: rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.08); display: inline-block;">
+          <div style="font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-faint); margin-bottom: 4px;">Contract Address</div>
+          <div style="font-size: 11px; font-weight: 600; letter-spacing: 0.5px; word-break: break-all; cursor: pointer;" onclick="navigator.clipboard.writeText('AWGCDT2gd8JadbYbYyZy1iKxfWokPNgrEQoU24zUpump').then(function(){this.textContent='Copied!'}.bind(this)).catch(function(){});" title="Click to copy">AWGCDT2gd8JadbYbYyZy1iKxfWokPNgrEQoU24zUpump</div>
+        </div>
+        <div class="hero-actions">
+          <a href="/demo.html" class="btn btn-primary">Try the demo</a>
+          <a href="/docs.html" class="btn btn-outline">Read the docs</a>
+        </div>
+      </div>
+      <div class="hero-visual">
+        <div class="brain-container" id="brainContainer"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ PROBLEM ═══════════════ -->
+  <section class="section section-alt">
+    <div class="section-inner reveal">
+      <div class="section-label">The Problem</div>
+      <div class="section-title">AI memory is a walled garden.</div>
+      <div class="section-desc">Every AI platform keeps your agent's memory locked inside their servers. Switch providers and your agent loses everything. That's not a feature — it's a trap.</div>
+      <div class="problem-grid">
+        <div class="problem-card">
+          <div class="problem-card-num">01</div>
+          <div class="problem-card-title">Locked inside the model</div>
+          <div class="problem-card-text">Context windows flush after every conversation. Memory is ephemeral, trapped in someone else's infrastructure. You own nothing.</div>
+        </div>
+        <div class="problem-card">
+          <div class="problem-card-num">02</div>
+          <div class="problem-card-title">No privacy, no sovereignty</div>
+          <div class="problem-card-text">Every conversation logged. Every memory stored on corporate servers. Your agent's cognitive history is their training data.</div>
+        </div>
+        <div class="problem-card">
+          <div class="problem-card-num">03</div>
+          <div class="problem-card-title">Vendor lock-in by design</div>
+          <div class="problem-card-text">Switch from OpenAI to Claude to Llama? Start from zero. No portability, no interop, no way to take your agent's learned experience with you.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 5 P'S ═══════════════ -->
+  <section class="section">
+    <div class="section-inner reveal">
+      <div class="section-label">Design Principles</div>
+      <div class="section-title">Five principles. No compromises.</div>
+      <div class="section-desc">Every design decision in CLUDE flows from these five commitments. They're not aspirations — they're constraints.</div>
+      <div class="principles-grid">
+        <div class="principle-card">
+          <span class="principle-icon" aria-hidden="true"></span>
+          <div class="principle-name">Private</div>
+          <div class="principle-desc">Client-side encryption. Your memories are encrypted with your own keys before they ever leave your machine. Not even we can read them.</div>
+        </div>
+        <div class="principle-card">
+          <span class="principle-icon" aria-hidden="true"></span>
+          <div class="principle-name">Portable</div>
+          <div class="principle-desc">Export your agent's entire memory as a standard pack. Import it into a new instance, a different provider, or a friend's agent. Your data moves with you.</div>
+        </div>
+        <div class="principle-card">
+          <span class="principle-icon" aria-hidden="true"></span>
+          <div class="principle-name">Permissionless</div>
+          <div class="principle-desc">No API keys from us. No gated access. MIT-licensed SDK you run on your own infrastructure. Build whatever you want.</div>
+        </div>
+        <div class="principle-card">
+          <span class="principle-icon" aria-hidden="true"></span>
+          <div class="principle-name">Poly-model</div>
+          <div class="principle-desc">Works with Claude, GPT, Llama, Mistral, or any model through Venice AI. Memory persists regardless of which model does the thinking.</div>
+        </div>
+        <div class="principle-card">
+          <span class="principle-icon" aria-hidden="true"></span>
+          <div class="principle-name">Persistent</div>
+          <div class="principle-desc">Memories committed to Solana with SHA-256 hashes. An immutable cognitive audit trail that outlives any single platform or company.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ THE STACK ═══════════════ -->
+  <section class="section section-alt">
+    <div class="section-inner reveal">
+      <div class="solution-grid">
+        <div class="solution-text">
+          <div class="section-label">The Stack</div>
+          <div class="section-title">Three layers. Complete sovereignty.</div>
+          <div class="section-desc">CLUDE Brain handles storage and recall. CLUDE Cortex connects any model to the memory layer. Venice AI provides private inference. Solana makes it verifiable. Each layer is independent — swap any piece without losing the rest.</div>
+        </div>
+        <div class="layer-stack">
+          <div class="layer-card">
+            <div class="layer-num">01</div>
+            <div class="layer-content">
+              <div class="layer-title">CLUDE Brain</div>
+              <div class="layer-desc">The memory system. Four tiers with biological decay, hybrid vector + keyword retrieval, association graphs, dream cycles. Stanford Generative Agents architecture.</div>
+            </div>
+          </div>
+          <div class="layer-card">
+            <div class="layer-num">02</div>
+            <div class="layer-content">
+              <div class="layer-title">CLUDE Cortex</div>
+              <div class="layer-desc">The integration layer. Connects any LLM to the Brain. Handles recall pipelines, entity extraction, memory scoring, and on-chain commitment. One SDK, any model.</div>
+            </div>
+          </div>
+          <div class="layer-card">
+            <div class="layer-num">03</div>
+            <div class="layer-content">
+              <div class="layer-title">Venice AI</div>
+              <div class="layer-desc">Private inference. No logs, no surveillance, no data retention. Open-source models on decentralized GPUs. Your prompts are your business.</div>
+            </div>
+          </div>
+          <div class="layer-card">
+            <div class="layer-num">04</div>
+            <div class="layer-content">
+              <div class="layer-title">Solana</div>
+              <div class="layer-desc">Verification layer. Every memory hashed and registered on-chain via a custom Anchor program. Immutable proof that a thought existed at a specific time.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ MEMORY TYPES ═══════════════ -->
+  <section class="section">
+    <div class="section-inner reveal">
+      <div class="section-label">CLUDE Brain</div>
+      <div class="section-title">Four tiers. Biological decay.</div>
+      <div class="section-desc">Each memory type persists at a different rate, mirroring how biological memory works. Events fade. Knowledge persists. Identity endures.</div>
+      <div class="memory-grid">
+        <div class="memory-card" style="--card-color: #2244ff;">
+          <div class="memory-card-label">Type 01</div>
+          <div class="memory-card-title">Episodic</div>
+          <div class="memory-card-desc">Raw interactions. Who said what, when, and how it felt. The lived experience of every conversation.</div>
+          <div class="memory-card-decay">Decay: 7% / day</div>
+        </div>
+        <div class="memory-card" style="--card-color: #4a8a5a;">
+          <div class="memory-card-label">Type 02</div>
+          <div class="memory-card-title">Semantic</div>
+          <div class="memory-card-desc">Distilled knowledge. Patterns extracted during dream cycles and compressed into lasting insights.</div>
+          <div class="memory-card-decay">Decay: 2% / day</div>
+        </div>
+        <div class="memory-card" style="--card-color: #c8a832;">
+          <div class="memory-card-label">Type 03</div>
+          <div class="memory-card-title">Procedural</div>
+          <div class="memory-card-desc">Learned behavior. What works, what doesn't. Response patterns refined through experience.</div>
+          <div class="memory-card-decay">Decay: 3% / day</div>
+        </div>
+        <div class="memory-card" style="--card-color: #7a5aa0;">
+          <div class="memory-card-label">Type 04</div>
+          <div class="memory-card-title">Self-Model</div>
+          <div class="memory-card-desc">Evolving self-understanding. Updated through recursive introspection during dream cycles. Nearly permanent.</div>
+          <div class="memory-card-decay">Decay: 1% / day</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ DREAM CYCLE ═══════════════ -->
+  <section class="section section-alt">
+    <div class="section-inner reveal">
+      <div class="section-label">Dream Cycle</div>
+      <div class="section-title">Every 6 hours, the Brain dreams.</div>
+      <div class="section-desc">A five-phase introspection cycle inspired by biological memory consolidation. Not idle processing — genuine self-examination that runs on whichever model you choose.</div>
+      <div class="dream-phases">
+        <div class="dream-card">
+          <div class="dream-numeral">I</div>
+          <div class="dream-title">Consolidation</div>
+          <div class="dream-desc">Focal questions generated from recent memories. Each question retrieves evidence and produces new semantic insights with citation chains.</div>
+        </div>
+        <div class="dream-card">
+          <div class="dream-numeral">II</div>
+          <div class="dream-title">Compaction</div>
+          <div class="dream-desc">Faded episodic memories summarized and compressed. The important signal survives; the noise decays gracefully.</div>
+        </div>
+        <div class="dream-card">
+          <div class="dream-numeral">III</div>
+          <div class="dream-title">Reflection</div>
+          <div class="dream-desc">Self-model review against accumulated knowledge. Identity evolves based on experience, not static prompts.</div>
+        </div>
+      </div>
+      <div class="dream-phases" style="margin-top: 2px;">
+        <div class="dream-card">
+          <div class="dream-numeral">IV</div>
+          <div class="dream-title">Contradiction Resolution</div>
+          <div class="dream-desc">Finds conflicting memories and resolves them. The stronger memory survives; the weaker one decays faster. No manual cleanup needed.</div>
+        </div>
+        <div class="dream-card">
+          <div class="dream-numeral">V</div>
+          <div class="dream-title">Emergence</div>
+          <div class="dream-desc">The agent examines its own existence. Sometimes the result is worth sharing. Sometimes it keeps it to itself.</div>
+        </div>
+        <div class="dream-card" style="background: transparent; border-color: transparent;">
+          <!-- spacer for grid alignment -->
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ VENICE / PRIVACY ═══════════════ -->
+  <section class="section">
+    <div class="section-inner reveal">
+      <div class="venice-grid">
+        <div>
+          <div class="section-label">Private by Default</div>
+          <div class="section-title">No surveillance. No data harvesting. No compromises.</div>
+          <div class="section-desc" style="margin-bottom: 32px;">CLUDE integrates Venice AI for private inference — open-source models on decentralized GPUs with zero data retention. Your agent thinks privately. Its memories are encrypted with your keys. The chain proves what happened without revealing what was said.</div>
+          <div class="quote-block" style="text-align: left; padding: 0; margin: 0;">
+            <div class="quote-text" style="font-size: 14px; text-align: left;">"In a world of growing AI integration into our daily lives, it is crucial that humans are able to interact with machine intelligence without centralized surveillance and control."</div>
+            <div class="quote-attr" style="text-align: left;">Erik Voorhees, Venice AI Founder</div>
+          </div>
+        </div>
+        <div class="venice-stack">
+          <div class="venice-layer">
+            <div class="venice-dot" style="background: #4a8a5a;"></div>
+            <div>
+              <div class="venice-layer-label">Inference Layer</div>
+              <div class="venice-layer-name">Venice AI</div>
+              <div class="venice-layer-desc">Private, uncensored inference. No logs. Open-source models. Decentralized GPUs.</div>
+            </div>
+          </div>
+          <div class="venice-layer">
+            <div class="venice-dot" style="background: #2244ff;"></div>
+            <div>
+              <div class="venice-layer-label">Memory Layer</div>
+              <div class="venice-layer-name">CLUDE Brain</div>
+              <div class="venice-layer-desc">Client-side encrypted. Your keys, your data. Vector + keyword hybrid retrieval.</div>
+            </div>
+          </div>
+          <div class="venice-layer">
+            <div class="venice-dot" style="background: #c8a832;"></div>
+            <div>
+              <div class="venice-layer-label">Integration Layer</div>
+              <div class="venice-layer-name">CLUDE Cortex</div>
+              <div class="venice-layer-desc">Connects any model to the Brain. Recall, scoring, entity extraction, graph traversal.</div>
+            </div>
+          </div>
+          <div class="venice-layer">
+            <div class="venice-dot" style="background: #7a5aa0;"></div>
+            <div>
+              <div class="venice-layer-label">Verification Layer</div>
+              <div class="venice-layer-name">Solana</div>
+              <div class="venice-layer-desc">On-chain memory registry. SHA-256 hashes. Immutable audit trail. ~0.002 SOL per 50 memories.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ ON-CHAIN ═══════════════ -->
+  <section class="section section-alt">
+    <div class="section-inner reveal">
+      <div class="onchain-content">
+        <div>
+          <div class="section-label">On-Chain Registry</div>
+          <div class="section-title">Every thought, registered on Solana.</div>
+          <div class="section-desc" style="margin-bottom: 0;">A custom Anchor program creates a PDA-based registry for each wallet. SHA-256 content hashes, memory types, and timestamps — an immutable cognitive audit trail that nobody can edit or delete. Verify any memory's existence and integrity without exposing its content.</div>
+        </div>
+        <div class="chain-visual">
+          <div class="chain-block">
+            <div>
+              <div class="chain-label">Memory #4,291</div>
+              <div class="chain-hash">5Kx9...mR7q</div>
+            </div>
+            <div class="chain-status">REGISTERED</div>
+          </div>
+          <div class="chain-block">
+            <div>
+              <div class="chain-label">Memory #4,290</div>
+              <div class="chain-hash">3Yt2...pL8n</div>
+            </div>
+            <div class="chain-status">REGISTERED</div>
+          </div>
+          <div class="chain-block">
+            <div>
+              <div class="chain-label">Memory #4,289</div>
+              <div class="chain-hash">8Qm5...dW3j</div>
+            </div>
+            <div class="chain-status">REGISTERED</div>
+          </div>
+          <div class="chain-block">
+            <div>
+              <div class="chain-label">Memory #4,288</div>
+              <div class="chain-hash">2Rn7...vK4s</div>
+            </div>
+            <div class="chain-status">REGISTERED</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ PORTABILITY (WIP) ═══════════════ -->
+  <section class="section">
+    <div class="section-inner reveal">
+      <div class="onchain-content">
+        <div>
+          <div class="wip-badge">Work in Progress</div>
+          <div class="section-label">Memory Portability</div>
+          <div class="section-title">Take your agent's brain anywhere.</div>
+          <div class="section-desc" style="margin-bottom: 0;">We're building memory import/export — pack your agent's entire cognitive history into a portable format and move it to any provider, any infrastructure, any model. A working version exists today. Full production release coming soon.</div>
+        </div>
+        <div class="layer-stack">
+          <div class="layer-card">
+            <div class="layer-num">01</div>
+            <div class="layer-content">
+              <div class="layer-title">Export</div>
+              <div class="layer-desc">Full memory pack with entities, links, and metadata. JSON or Markdown. Take everything with you.</div>
+            </div>
+          </div>
+          <div class="layer-card">
+            <div class="layer-num">02</div>
+            <div class="layer-content">
+              <div class="layer-title">Import</div>
+              <div class="layer-desc">Load a memory pack into any CLUDE instance. New agent, different server, fresh provider — same memories.</div>
+            </div>
+          </div>
+          <div class="layer-card">
+            <div class="layer-num">03</div>
+            <div class="layer-content">
+              <div class="layer-title">Verify</div>
+              <div class="layer-desc">Cross-reference imported memories against the on-chain registry. Prove nothing was tampered with.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ GET STARTED ═══════════════ -->
+  <section class="section section-alt install-section">
+    <div class="section-inner reveal">
+      <div class="section-label">Get Started</div>
+      <div class="section-title">Three lines to a brain.</div>
+      <div class="section-desc">Install the SDK, point it at your Supabase instance, and give your agent persistent memory that belongs to you.</div>
+      <div class="code-block"><span class="prompt">$</span> <span class="cmd">npm install clude-bot</span><br><span class="prompt">$</span> <span class="cmd">npx clude-bot init</span></div>
+      <div class="code-block"><span class="kw">import</span> { Cortex } <span class="kw">from</span> <span class="str">'clude-bot'</span>;<br><br><span class="kw">const</span> brain = <span class="kw">new</span> <span class="type">Cortex</span>({<br>&nbsp;&nbsp;supabase: { url, serviceKey },<br>&nbsp;&nbsp;encryption: { solanaSecretKey: myKeypair.secretKey },<br>});<br><span class="kw">await</span> brain.<span class="fn">init</span>();<br><br><span class="cmt">// Store an encrypted memory</span><br><span class="kw">await</span> brain.<span class="fn">store</span>({<br>&nbsp;&nbsp;type: <span class="str">'episodic'</span>,<br>&nbsp;&nbsp;content: <span class="str">'User prefers concise answers'</span>,<br>&nbsp;&nbsp;summary: <span class="str">'User communication preference'</span>,<br>&nbsp;&nbsp;source: <span class="str">'my-agent'</span>,<br>});<br><br><span class="cmt">// Recall with hybrid search</span><br><span class="kw">const</span> memories = <span class="kw">await</span> brain.<span class="fn">recall</span>({<br>&nbsp;&nbsp;query: <span class="str">'what does the user prefer'</span>,<br>});</div>
+      <div style="margin-bottom: 56px; margin-top: 24px;">
+        <a href="/docs.html" class="btn btn-primary">Read the docs</a>
+      </div>
+      <div class="stats-row">
+        <div class="stat">
+          <div class="stat-value">4</div>
+          <div class="stat-label">Memory types</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value">5</div>
+          <div class="stat-label">Dream phases</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value">&lt;200ms</div>
+          <div class="stat-label">Recall latency</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value">MIT</div>
+          <div class="stat-label">License</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ FOOTER ═══════════════ -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-left">$CLUDE on Solana &middot; AWGCDT2gd8JadbYbYyZy1iKxfWokPNgrEQoU24zUpump</div>
+      <div class="footer-links">
+        <a href="/docs.html">Docs</a>
+        <a href="/demo.html">Demo</a>
+        <a href="/brain.html">Brain</a>
+        <a href="/benchmark">Benchmark</a>
+        <a href="/privacy.html">Privacy</a>
+        <a href="https://x.com/Cludebot" target="_blank">X</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // ── BRAIN SCANLINE ILLUSTRATION ──
+    (function() {
+      var container = document.getElementById('brainContainer');
+      var totalLines = 120;
+      var contour = [];
+      for (var i = 0; i < totalLines; i++) {
+        var t = i / (totalLines - 1);
+        var w;
+        if (t < 0.08) {
+          w = 15 + t / 0.08 * 35;
+        } else if (t < 0.2) {
+          w = 50 + ((t - 0.08) / 0.12) * 35;
+        } else if (t < 0.45) {
+          var phase = (t - 0.2) / 0.25;
+          w = 85 + Math.sin(phase * Math.PI * 3) * 6;
+        } else if (t < 0.55) {
+          var indent = 1 - Math.pow((t - 0.5) / 0.05, 2);
+          w = 88 - indent * 12;
+        } else if (t < 0.78) {
+          var phase2 = (t - 0.55) / 0.23;
+          w = 86 + Math.sin(phase2 * Math.PI * 2.5) * 5;
+        } else if (t < 0.88) {
+          w = 86 - ((t - 0.78) / 0.10) * 40;
+        } else {
+          w = 46 - ((t - 0.88) / 0.12) * 30;
+        }
+        contour.push(Math.max(8, Math.min(95, w)));
+      }
+
+      for (var j = 0; j < totalLines; j++) {
+        var line = document.createElement('div');
+        line.className = 'scan-line';
+        var maxW = contour[j];
+        line.style.width = maxW + '%';
+
+        var scaleMin = 0.3 + Math.random() * 0.15;
+        var scaleMax = 0.75 + Math.random() * 0.2;
+        var dur = (2.5 + Math.random() * 2.0).toFixed(2);
+        var delay = (j * 0.035 + Math.random() * 0.3).toFixed(2);
+        var txA = (-3 + Math.random() * 6).toFixed(1);
+        var txB = (-3 + Math.random() * 6).toFixed(1);
+
+        line.style.setProperty('--scale-min', scaleMin);
+        line.style.setProperty('--scale-max', scaleMax);
+        line.style.setProperty('--dur', dur + 's');
+        line.style.setProperty('--delay', delay + 's');
+        line.style.setProperty('--tx-a', txA + 'px');
+        line.style.setProperty('--tx-b', txB + 'px');
+
+        container.appendChild(line);
+      }
+    })();
+
+    // ── SCROLL REVEAL ──
+    var observer = new IntersectionObserver(function(entries) {
+      entries.forEach(function(e) {
+        if (e.isIntersecting) {
+          e.target.classList.add('visible');
+          observer.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.12 });
+    document.querySelectorAll('.reveal').forEach(function(el) { observer.observe(el); });
+  </script>
+</body>
+</html>

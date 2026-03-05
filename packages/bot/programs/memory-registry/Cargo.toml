@@ -1,0 +1,19 @@
+[package]
+name = "memory-registry"
+version = "0.1.0"
+description = "On-chain memory registry for CLUDE Cortex"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "memory_registry"
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = []
+
+[dependencies]
+anchor-lang = "0.30.1"

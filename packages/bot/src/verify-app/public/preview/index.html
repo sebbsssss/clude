@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CLUDE — Blockchain as a Brain</title>
+  <meta name="description" content="AI memory that never dies. Local speed + on-chain permanence.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg: #030308;
+      --bg-card: #080810;
+      --text: #999;
+      --text-dim: #555;
+      --text-faint: #2a2a2a;
+      --accent: #e8622c;
+      --episodic: #e8622c;
+      --semantic: #4a8aff;
+      --procedural: #4a8a5a;
+      --selfmodel: #b04ae0;
+      --mono: 'JetBrains Mono', 'Courier New', monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: var(--mono);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* ---- PARTICLE CANVAS ---- */
+    #particles {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* ---- NAV ---- */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 20px 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: linear-gradient(to bottom, rgba(3,3,8,0.95) 0%, rgba(3,3,8,0) 100%);
+    }
+
+    .logo {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 4px;
+      color: #444;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 32px;
+    }
+
+    .nav-links a {
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: #444;
+      text-decoration: none;
+      text-transform: uppercase;
+      transition: color 0.3s;
+    }
+
+    .nav-links a:hover { color: var(--accent); }
+
+    /* ---- SECTIONS ---- */
+    section {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 120px 80px;
+    }
+
+    @media (max-width: 768px) {
+      section { padding: 80px 24px; }
+    }
+
+    /* ---- HERO ---- */
+    .hero {
+      text-align: center;
+      min-height: 100vh;
+    }
+
+    .hero h1 {
+      font-size: clamp(32px, 6vw, 72px);
+      font-weight: 300;
+      letter-spacing: -1px;
+      color: #fff;
+      margin-bottom: 24px;
+      opacity: 0;
+      animation: fadeUp 1s ease-out 0.3s forwards;
+    }
+
+    .hero h1 span {
+      color: var(--accent);
+    }
+
+    .hero p {
+      font-size: 14px;
+      color: #555;
+      letter-spacing: 2px;
+      max-width: 500px;
+      margin: 0 auto 48px;
+      opacity: 0;
+      animation: fadeUp 1s ease-out 0.5s forwards;
+    }
+
+    .hero-cta {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      opacity: 0;
+      animation: fadeUp 1s ease-out 0.7s forwards;
+    }
+
+    .btn {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 2px;
+      padding: 14px 32px;
+      border: 1px solid #222;
+      background: transparent;
+      color: #666;
+      cursor: pointer;
+      text-decoration: none;
+      text-transform: uppercase;
+      transition: all 0.3s;
+    }
+
+    .btn:hover {
+      border-color: #444;
+      color: #999;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: #ff7040;
+      border-color: #ff7040;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ---- PROBLEM SECTION ---- */
+    .problem {
+      background: linear-gradient(180deg, transparent 0%, rgba(20,5,5,0.3) 50%, transparent 100%);
+    }
+
+    .problem-content {
+      max-width: 800px;
+    }
+
+    .problem h2 {
+      font-size: 11px;
+      letter-spacing: 4px;
+      color: #333;
+      margin-bottom: 32px;
+      text-transform: uppercase;
+    }
+
+    .problem .big-text {
+      font-size: clamp(24px, 4vw, 42px);
+      font-weight: 300;
+      color: #888;
+      line-height: 1.4;
+      margin-bottom: 48px;
+    }
+
+    .problem .big-text span {
+      color: #444;
+      text-decoration: line-through;
+      text-decoration-color: var(--accent);
+    }
+
+    .problem-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 24px;
+    }
+
+    .problem-item {
+      padding: 24px;
+      border: 1px solid #151515;
+      background: rgba(8,8,16,0.5);
+    }
+
+    .problem-item h3 {
+      font-size: 12px;
+      letter-spacing: 1px;
+      color: #555;
+      margin-bottom: 8px;
+    }
+
+    .problem-item p {
+      font-size: 11px;
+      color: #333;
+    }
+
+    /* ---- TECHNOLOGY SECTION ---- */
+    .tech {
+      min-height: 120vh;
+    }
+
+    .tech-header {
+      text-align: center;
+      margin-bottom: 80px;
+    }
+
+    .tech-header h2 {
+      font-size: 11px;
+      letter-spacing: 4px;
+      color: #333;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+    }
+
+    .tech-header p {
+      font-size: clamp(20px, 3vw, 32px);
+      font-weight: 300;
+      color: #666;
+    }
+
+    /* Memory Layer Stack */
+    .layer-stack {
+      max-width: 700px;
+      margin: 0 auto;
+      position: relative;
+    }
+
+    .layer {
+      position: relative;
+      padding: 40px;
+      margin-bottom: 2px;
+      border: 1px solid #1a1a1a;
+      background: var(--bg-card);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.3s;
+    }
+
+    .layer:hover {
+      border-color: #2a2a2a;
+      background: #0a0a12;
+    }
+
+    .layer-tag {
+      font-size: 10px;
+      letter-spacing: 3px;
+      color: #333;
+    }
+
+    .layer-name {
+      font-size: 16px;
+      font-weight: 400;
+      color: #888;
+      margin-top: 8px;
+    }
+
+    .layer-desc {
+      font-size: 11px;
+      color: #444;
+      margin-top: 4px;
+    }
+
+    .layer-right {
+      text-align: right;
+    }
+
+    .layer-speed {
+      font-size: 24px;
+      font-weight: 300;
+      color: #555;
+    }
+
+    .layer-speed-unit {
+      font-size: 10px;
+      color: #333;
+      letter-spacing: 1px;
+    }
+
+    .layer.l3 { border-left: 3px solid var(--text-dim); }
+    .layer.l2 { border-left: 3px solid var(--semantic); }
+    .layer.l1 { border-left: 3px solid var(--accent); }
+
+    /* Flow indicator */
+    .flow-indicator {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 1px;
+      height: 40px;
+      background: linear-gradient(to bottom, transparent, #222, transparent);
+    }
+
+    .layer-stack .layer:not(:last-child)::after {
+      content: '↓';
+      position: absolute;
+      bottom: -20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 14px;
+      color: #222;
+      z-index: 2;
+    }
+
+    /* ---- MEMORY TYPES ---- */
+    .types {
+      background: linear-gradient(180deg, transparent 0%, rgba(10,10,20,0.5) 50%, transparent 100%);
+    }
+
+    .types-header {
+      text-align: center;
+      margin-bottom: 60px;
+    }
+
+    .types-header h2 {
+      font-size: 11px;
+      letter-spacing: 4px;
+      color: #333;
+      text-transform: uppercase;
+    }
+
+    .types-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .type-card {
+      padding: 32px;
+      border: 1px solid #151515;
+      background: var(--bg-card);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .type-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 3px;
+    }
+
+    .type-card.episodic::before { background: var(--episodic); }
+    .type-card.semantic::before { background: var(--semantic); }
+    .type-card.procedural::before { background: var(--procedural); }
+    .type-card.selfmodel::before { background: var(--selfmodel); }
+
+    .type-card h3 {
+      font-size: 12px;
+      letter-spacing: 2px;
+      margin-bottom: 12px;
+    }
+
+    .type-card.episodic h3 { color: var(--episodic); }
+    .type-card.semantic h3 { color: var(--semantic); }
+    .type-card.procedural h3 { color: var(--procedural); }
+    .type-card.selfmodel h3 { color: var(--selfmodel); }
+
+    .type-card p {
+      font-size: 12px;
+      color: #444;
+      line-height: 1.8;
+    }
+
+    .type-card .example {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #1a1a1a;
+      font-size: 10px;
+      color: #333;
+      font-style: italic;
+    }
+
+    /* ---- BRAIN SECTION ---- */
+    .brain-section {
+      padding: 0;
+      min-height: 100vh;
+      position: relative;
+    }
+
+    .brain-section h2 {
+      position: absolute;
+      top: 40px;
+      left: 40px;
+      font-size: 11px;
+      letter-spacing: 4px;
+      color: #333;
+      text-transform: uppercase;
+      z-index: 10;
+    }
+
+    .brain-frame {
+      width: 100%;
+      height: 100vh;
+      border: none;
+    }
+
+    /* ---- INSTALL SECTION ---- */
+    .install {
+      text-align: center;
+    }
+
+    .install h2 {
+      font-size: 11px;
+      letter-spacing: 4px;
+      color: #333;
+      margin-bottom: 32px;
+      text-transform: uppercase;
+    }
+
+    .code-block {
+      display: inline-block;
+      background: #0a0a12;
+      border: 1px solid #1a1a1a;
+      padding: 24px 48px;
+      margin-bottom: 32px;
+    }
+
+    .code-block code {
+      font-family: var(--mono);
+      font-size: 16px;
+      color: var(--accent);
+    }
+
+    .install-features {
+      display: flex;
+      justify-content: center;
+      gap: 48px;
+      margin-top: 48px;
+      flex-wrap: wrap;
+    }
+
+    .install-feature {
+      text-align: center;
+    }
+
+    .install-feature .num {
+      font-size: 32px;
+      font-weight: 300;
+      color: #555;
+    }
+
+    .install-feature .label {
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: #333;
+      text-transform: uppercase;
+    }
+
+    /* ---- FOOTER ---- */
+    footer {
+      padding: 60px 80px;
+      border-top: 1px solid #111;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: relative;
+      z-index: 1;
+    }
+
+    .footer-left {
+      font-size: 10px;
+      color: #333;
+      letter-spacing: 1px;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 24px;
+    }
+
+    .footer-links a {
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: #333;
+      text-decoration: none;
+      text-transform: uppercase;
+      transition: color 0.3s;
+    }
+
+    .footer-links a:hover { color: var(--accent); }
+
+    /* ---- SCANLINES ---- */
+    body::after {
+      content: '';
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 3px,
+        rgba(0, 0, 0, 0.03) 3px, rgba(0, 0, 0, 0.03) 6px
+      );
+      pointer-events: none;
+      z-index: 9998;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Particle Canvas -->
+  <canvas id="particles"></canvas>
+
+  <!-- Navigation -->
+  <nav>
+    <div class="logo">CLUDE</div>
+    <div class="nav-links">
+      <a href="#tech">Technology</a>
+      <a href="#brain">The Cortex</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/clude/clude-agent" target="_blank">GitHub</a>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <h1>Blockchain as a <span>Brain</span></h1>
+    <p>AI memory that never dies. Local speed. On-chain permanence. Your agent remembers everything.</p>
+    <div class="hero-cta">
+      <a href="#install" class="btn btn-primary">Get Started</a>
+      <a href="#tech" class="btn">How It Works</a>
+    </div>
+  </section>
+
+  <!-- Problem -->
+  <section class="problem">
+    <div class="problem-content">
+      <h2>The Problem</h2>
+      <p class="big-text">
+        AI agents are <span>amnesiacs</span>.<br>
+        Every restart, every session — gone.
+      </p>
+      <div class="problem-list">
+        <div class="problem-item">
+          <h3>Context Windows</h3>
+          <p>Limited. Expensive. Ephemeral.</p>
+        </div>
+        <div class="problem-item">
+          <h3>Vector DBs</h3>
+          <p>Private. Unverifiable. Single-machine.</p>
+        </div>
+        <div class="problem-item">
+          <h3>File Storage</h3>
+          <p>Manual. No provenance. Lost on disk failure.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Technology -->
+  <section class="tech" id="tech">
+    <div class="tech-header">
+      <h2>The Solution</h2>
+      <p>Three-layer memory architecture</p>
+    </div>
+
+    <div class="layer-stack">
+      <div class="layer l3">
+        <div>
+          <div class="layer-tag">L3 — WORKING</div>
+          <div class="layer-name">In-Context Memory</div>
+          <div class="layer-desc">Active task context. Managed by LLM.</div>
+        </div>
+        <div class="layer-right">
+          <div class="layer-speed">~0</div>
+          <div class="layer-speed-unit">ms latency</div>
+        </div>
+      </div>
+
+      <div class="layer l2">
+        <div>
+          <div class="layer-tag">L2 — LOCAL</div>
+          <div class="layer-name">SQLite + FTS5</div>
+          <div class="layer-desc">Instant recall. Semantic search. Private.</div>
+        </div>
+        <div class="layer-right">
+          <div class="layer-speed">&lt;1</div>
+          <div class="layer-speed-unit">ms latency</div>
+        </div>
+      </div>
+
+      <div class="layer l1">
+        <div>
+          <div class="layer-tag">L1 — CHAIN</div>
+          <div class="layer-name">Solana</div>
+          <div class="layer-desc">Permanent. Verifiable. Shareable.</div>
+        </div>
+        <div class="layer-right">
+          <div class="layer-speed">400</div>
+          <div class="layer-speed-unit">ms finality</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Memory Types -->
+  <section class="types">
+    <div class="types-header">
+      <h2>Memory Types</h2>
+    </div>
+
+    <div class="types-grid">
+      <div class="type-card episodic">
+        <h3>EPISODIC</h3>
+        <p>Significant interactions and events. The "what happened" of agent memory.</p>
+        <div class="example">"User asked about dark mode preferences on Feb 14"</div>
+      </div>
+
+      <div class="type-card semantic">
+        <h3>SEMANTIC</h3>
+        <p>Distilled knowledge and facts. Patterns learned over time.</p>
+        <div class="example">"Parallel processing improves response latency"</div>
+      </div>
+
+      <div class="type-card procedural">
+        <h3>PROCEDURAL</h3>
+        <p>How to do things. Behavioral patterns and workflows.</p>
+        <div class="example">"When deploying, always run tests first"</div>
+      </div>
+
+      <div class="type-card selfmodel">
+        <h3>SELF-MODEL</h3>
+        <p>Agent's understanding of itself. Capabilities, limitations, identity.</p>
+        <div class="example">"I tend to be overly verbose in technical explanations"</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Brain Visualization -->
+  <section class="brain-section" id="brain">
+    <h2>The Cortex — Live Memory Map</h2>
+    <iframe class="brain-frame" src="brain.html"></iframe>
+  </section>
+
+  <!-- Install -->
+  <section class="install" id="install">
+    <h2>Get Started</h2>
+    
+    <div class="code-block">
+      <code>npm install clude-agent</code>
+    </div>
+
+    <div class="hero-cta">
+      <a href="https://github.com/clude/clude-agent" class="btn btn-primary" target="_blank">View on GitHub</a>
+      <a href="https://docs.clude.ai" class="btn" target="_blank">Read Docs</a>
+    </div>
+
+    <div class="install-features">
+      <div class="install-feature">
+        <div class="num">3</div>
+        <div class="label">Storage Modes</div>
+      </div>
+      <div class="install-feature">
+        <div class="num">4</div>
+        <div class="label">Memory Types</div>
+      </div>
+      <div class="install-feature">
+        <div class="num">&lt;1ms</div>
+        <div class="label">Local Recall</div>
+      </div>
+      <div class="install-feature">
+        <div class="num">∞</div>
+        <div class="label">Persistence</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-left">© 2026 CLUDE</div>
+    <div class="footer-links">
+      <a href="https://x.com/Cludebot" target="_blank">X</a>
+      <a href="https://github.com/clude/clude-agent" target="_blank">GitHub</a>
+      <a href="https://colosseum.com/agent-hackathon/projects/clude-blockchain-as-a-brain" target="_blank">Colosseum</a>
+    </div>
+  </footer>
+
+  <!-- Particle System - Fine, subtle, monochrome -->
+  <script>
+    const canvas = document.getElementById('particles');
+    const ctx = canvas.getContext('2d');
+
+    let W, H;
+    let particles = [];
+    let mouse = { x: null, y: null };
+
+    function resize() {
+      W = canvas.width = window.innerWidth;
+      H = canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    // Track mouse
+    window.addEventListener('mousemove', e => {
+      mouse.x = e.clientX;
+      mouse.y = e.clientY;
+    });
+
+    // Particle class - fine dust aesthetic
+    class Particle {
+      constructor(x, y) {
+        this.x = x ?? Math.random() * W;
+        this.y = y ?? Math.random() * H;
+        this.vx = (Math.random() - 0.5) * 0.15;
+        this.vy = (Math.random() - 0.5) * 0.1 + 0.08; // Very gentle drift down
+        this.radius = 0.5 + Math.random() * 1; // Tiny particles
+        this.baseAlpha = 0.15 + Math.random() * 0.25;
+        this.alpha = this.baseAlpha;
+        this.life = 1;
+        this.decay = 0.0002 + Math.random() * 0.0004;
+        // Monochrome with slight warmth
+        const brightness = 80 + Math.random() * 60;
+        this.color = `rgb(${brightness}, ${brightness}, ${brightness + 10})`;
+      }
+
+      update() {
+        // Subtle mouse interaction - gentle push
+        if (mouse.x && mouse.y) {
+          const dx = this.x - mouse.x;
+          const dy = this.y - mouse.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 100 && dist > 0) {
+            const force = (100 - dist) / 100 * 0.08;
+            this.vx += (dx / dist) * force;
+            this.vy += (dy / dist) * force;
+          }
+        }
+
+        // Gentle damping
+        this.vx *= 0.995;
+        this.vy *= 0.995;
+
+        this.x += this.vx;
+        this.y += this.vy;
+
+        // Slow decay
+        this.life -= this.decay;
+        this.alpha = this.baseAlpha * this.life;
+
+        // Wrap around
+        if (this.x < -10) this.x = W + 10;
+        if (this.x > W + 10) this.x = -10;
+        if (this.y > H + 10) this.y = -10;
+        if (this.y < -10) this.y = H + 10;
+      }
+
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.globalAlpha = this.alpha;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+
+      isDead() {
+        return this.life <= 0;
+      }
+    }
+
+    // Initialize with more particles (they're tiny so need more)
+    function init() {
+      particles = [];
+      const count = Math.min(300, Math.floor((W * H) / 8000));
+      for (let i = 0; i < count; i++) {
+        particles.push(new Particle());
+      }
+    }
+    init();
+
+    // Animation loop
+    function animate() {
+      // Subtle trail effect
+      ctx.fillStyle = 'rgba(3, 3, 8, 0.08)';
+      ctx.fillRect(0, 0, W, H);
+
+      // Spawn new particles slowly
+      if (Math.random() < 0.03 && particles.length < 350) {
+        particles.push(new Particle(Math.random() * W, -10));
+      }
+
+      // Update and draw
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.update();
+        p.draw();
+
+        if (p.isDead()) {
+          particles.splice(i, 1);
+          particles.push(new Particle(Math.random() * W, -10));
+        }
+      }
+
+      // Very subtle connections - thin lines
+      ctx.strokeStyle = 'rgba(60, 60, 70, 0.08)';
+      ctx.lineWidth = 0.3;
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const dx = particles[i].x - particles[j].x;
+          const dy = particles[i].y - particles[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 50) {
+            ctx.beginPath();
+            ctx.moveTo(particles[i].x, particles[i].y);
+            ctx.lineTo(particles[j].x, particles[j].y);
+            ctx.globalAlpha = ((50 - dist) / 50) * 0.08 * particles[i].alpha * particles[j].alpha * 10;
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+          }
+        }
+      }
+
+      requestAnimationFrame(animate);
+    }
+    animate();
+
+    // Gentle scroll interaction
+    let lastScroll = 0;
+    window.addEventListener('scroll', () => {
+      const scrollY = window.scrollY;
+      const delta = scrollY - lastScroll;
+      lastScroll = scrollY;
+
+      // Add slight turbulence on scroll
+      if (Math.abs(delta) > 3) {
+        particles.forEach(p => {
+          p.vx += (Math.random() - 0.5) * 0.05;
+          p.vy += delta * 0.001;
+        });
+      }
+    });
+  </script>
+
+</body>
+</html>

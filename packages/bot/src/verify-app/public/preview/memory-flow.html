@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CLUDE — Memory Flow</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #030308;
+      overflow: hidden;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    canvas { display: block; }
+    
+    .overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+    
+    .title {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      color: #fff;
+    }
+    
+    .title h1 {
+      font-size: 48px;
+      font-weight: 300;
+      letter-spacing: -1px;
+      margin-bottom: 16px;
+      opacity: 0.9;
+    }
+    
+    .title h1 span { color: #e8622c; }
+    
+    .title p {
+      font-size: 12px;
+      color: #555;
+      letter-spacing: 2px;
+    }
+    
+    .layer-labels {
+      position: absolute;
+      right: 40px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 80px;
+    }
+    
+    .layer-label {
+      font-size: 10px;
+      letter-spacing: 3px;
+      color: #333;
+      text-align: right;
+    }
+    
+    .layer-label.active { color: #666; }
+    
+    .chain-label {
+      position: absolute;
+      bottom: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      letter-spacing: 4px;
+      color: #e8622c;
+      opacity: 0.7;
+    }
+    
+    .legend {
+      position: absolute;
+      top: 40px;
+      left: 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 9px;
+      letter-spacing: 1px;
+      color: #444;
+    }
+    
+    .legend-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.162.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.162.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+
+<div class="overlay">
+  <div class="title">
+    <h1>Memories → <span>Chain</span></h1>
+    <p>WATCH THOUGHTS CRYSTALLIZE ON-CHAIN</p>
+  </div>
+  
+  <div class="legend">
+    <div class="legend-item">
+      <div class="legend-dot" style="background: #e8622c;"></div>
+      EPISODIC
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background: #4a8aff;"></div>
+      SEMANTIC
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background: #4a8a5a;"></div>
+      PROCEDURAL
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background: #b04ae0;"></div>
+      SELF-MODEL
+    </div>
+  </div>
+  
+  <div class="layer-labels">
+    <div class="layer-label">L3 — WORKING</div>
+    <div class="layer-label active">L2 — LOCAL</div>
+    <div class="layer-label">L1 — CHAIN</div>
+  </div>
+  
+  <div class="chain-label">▼ SOLANA L1 ▼</div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+// Config
+const PARTICLE_COUNT = 15000;
+const MEMORY_COLORS = [
+  new THREE.Color(0xe8622c), // episodic - orange
+  new THREE.Color(0x4a8aff), // semantic - blue
+  new THREE.Color(0x4a8a5a), // procedural - green
+  new THREE.Color(0xb04ae0), // self-model - purple
+];
+
+// Scene setup
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x030308);
+scene.fog = new THREE.FogExp2(0x030308, 0.0008);
+
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 2000);
+camera.position.set(0, 0, 400);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+document.body.appendChild(renderer.domElement);
+
+// Bloom
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloomPass = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  1.5, 0.5, 0.1
+);
+composer.addPass(bloomPass);
+
+// Particle system
+const geometry = new THREE.BufferGeometry();
+const positions = new Float32Array(PARTICLE_COUNT * 3);
+const colors = new Float32Array(PARTICLE_COUNT * 3);
+const velocities = new Float32Array(PARTICLE_COUNT * 3);
+const lifetimes = new Float32Array(PARTICLE_COUNT);
+const sizes = new Float32Array(PARTICLE_COUNT);
+const types = new Float32Array(PARTICLE_COUNT); // Memory type
+
+// Initialize particles
+for (let i = 0; i < PARTICLE_COUNT; i++) {
+  resetParticle(i);
+}
+
+function resetParticle(i) {
+  const i3 = i * 3;
+  
+  // Start from top area, spread out
+  positions[i3] = (Math.random() - 0.5) * 600;
+  positions[i3 + 1] = 300 + Math.random() * 200;
+  positions[i3 + 2] = (Math.random() - 0.5) * 300;
+  
+  // Downward velocity with some curl
+  velocities[i3] = (Math.random() - 0.5) * 0.5;
+  velocities[i3 + 1] = -0.5 - Math.random() * 1.5;
+  velocities[i3 + 2] = (Math.random() - 0.5) * 0.3;
+  
+  // Random memory type
+  const type = Math.floor(Math.random() * 4);
+  types[i] = type;
+  const color = MEMORY_COLORS[type];
+  colors[i3] = color.r;
+  colors[i3 + 1] = color.g;
+  colors[i3 + 2] = color.b;
+  
+  lifetimes[i] = 0.5 + Math.random() * 0.5;
+  sizes[i] = 1 + Math.random() * 3;
+}
+
+geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+// Custom shader material for particles
+const material = new THREE.ShaderMaterial({
+  uniforms: {
+    time: { value: 0 },
+    pixelRatio: { value: renderer.getPixelRatio() },
+  },
+  vertexShader: `
+    attribute float size;
+    attribute vec3 color;
+    varying vec3 vColor;
+    varying float vAlpha;
+    uniform float time;
+    
+    // Simplex noise function
+    vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+    vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+    vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
+    vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+    
+    float snoise(vec3 v) {
+      const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+      const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+      vec3 i  = floor(v + dot(v, C.yyy));
+      vec3 x0 = v - i + dot(i, C.xxx);
+      vec3 g = step(x0.yzx, x0.xyz);
+      vec3 l = 1.0 - g;
+      vec3 i1 = min(g.xyz, l.zxy);
+      vec3 i2 = max(g.xyz, l.zxy);
+      vec3 x1 = x0 - i1 + C.xxx;
+      vec3 x2 = x0 - i2 + C.yyy;
+      vec3 x3 = x0 - D.yyy;
+      i = mod289(i);
+      vec4 p = permute(permute(permute(
+        i.z + vec4(0.0, i1.z, i2.z, 1.0))
+        + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+        + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+      float n_ = 0.142857142857;
+      vec3 ns = n_ * D.wyz - D.xzx;
+      vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+      vec4 x_ = floor(j * ns.z);
+      vec4 y_ = floor(j - 7.0 * x_);
+      vec4 x = x_ *ns.x + ns.yyyy;
+      vec4 y = y_ *ns.x + ns.yyyy;
+      vec4 h = 1.0 - abs(x) - abs(y);
+      vec4 b0 = vec4(x.xy, y.xy);
+      vec4 b1 = vec4(x.zw, y.zw);
+      vec4 s0 = floor(b0)*2.0 + 1.0;
+      vec4 s1 = floor(b1)*2.0 + 1.0;
+      vec4 sh = -step(h, vec4(0.0));
+      vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;
+      vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
+      vec3 p0 = vec3(a0.xy, h.x);
+      vec3 p1 = vec3(a0.zw, h.y);
+      vec3 p2 = vec3(a1.xy, h.z);
+      vec3 p3 = vec3(a1.zw, h.w);
+      vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
+      p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+      vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+      m = m * m;
+      return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
+    }
+    
+    void main() {
+      vColor = color;
+      
+      vec3 pos = position;
+      
+      // Curl noise displacement
+      float noiseScale = 0.008;
+      float noiseTime = time * 0.3;
+      vec3 noisePos = pos * noiseScale + noiseTime;
+      
+      float nx = snoise(noisePos);
+      float ny = snoise(noisePos + vec3(100.0));
+      float nz = snoise(noisePos + vec3(200.0));
+      
+      pos.x += nx * 20.0;
+      pos.z += nz * 15.0;
+      
+      // Converge toward center as y decreases (funnel effect)
+      float convergeFactor = smoothstep(200.0, -250.0, pos.y);
+      pos.x *= 1.0 - convergeFactor * 0.85;
+      pos.z *= 1.0 - convergeFactor * 0.85;
+      
+      // Alpha based on position (fade near chain)
+      float distFromBottom = pos.y + 250.0;
+      vAlpha = smoothstep(-50.0, 100.0, distFromBottom);
+      vAlpha *= smoothstep(500.0, 300.0, pos.y); // Fade at top too
+      
+      // Glow intensifies near chain
+      float chainGlow = 1.0 + (1.0 - smoothstep(-250.0, -150.0, pos.y)) * 2.0;
+      
+      vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+      gl_Position = projectionMatrix * mvPosition;
+      gl_PointSize = size * chainGlow * (500.0 / -mvPosition.z); // Bigger particles
+    }
+  `,
+  fragmentShader: `
+    varying vec3 vColor;
+    varying float vAlpha;
+    
+    void main() {
+      vec2 center = gl_PointCoord - 0.5;
+      float dist = length(center);
+      
+      // Soft circle with glow - brighter
+      float alpha = smoothstep(0.5, 0.0, dist) * vAlpha * 1.5;
+      
+      // Core glow - brighter
+      float core = smoothstep(0.25, 0.0, dist) * 0.8;
+      
+      gl_FragColor = vec4(vColor * 1.2 + core, alpha);
+    }
+  `,
+  transparent: true,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+});
+
+const particles = new THREE.Points(geometry, material);
+scene.add(particles);
+
+// Chain layer visualization (glowing line at bottom)
+const chainGeometry = new THREE.PlaneGeometry(800, 4);
+const chainMaterial = new THREE.ShaderMaterial({
+  uniforms: {
+    time: { value: 0 },
+    color: { value: new THREE.Color(0xe8622c) },
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform float time;
+    uniform vec3 color;
+    varying vec2 vUv;
+    
+    void main() {
+      float pulse = 0.5 + 0.5 * sin(time * 2.0 + vUv.x * 10.0);
+      float glow = smoothstep(0.5, 0.0, abs(vUv.y - 0.5));
+      float alpha = glow * (0.3 + pulse * 0.2);
+      
+      // Data stream effect
+      float stream = sin(vUv.x * 50.0 - time * 5.0) * 0.5 + 0.5;
+      stream = pow(stream, 4.0) * 0.3;
+      
+      gl_FragColor = vec4(color, alpha + stream);
+    }
+  `,
+  transparent: true,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+});
+
+const chainLine = new THREE.Mesh(chainGeometry, chainMaterial);
+chainLine.position.y = -260;
+scene.add(chainLine);
+
+// Animation
+let time = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+  
+  time += 0.016;
+  material.uniforms.time.value = time;
+  chainMaterial.uniforms.time.value = time;
+  
+  // Update particles
+  const pos = geometry.attributes.position.array;
+  const vel = velocities;
+  
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    const i3 = i * 3;
+    
+    // Apply velocity
+    pos[i3] += vel[i3];
+    pos[i3 + 1] += vel[i3 + 1];
+    pos[i3 + 2] += vel[i3 + 2];
+    
+    // Add some turbulence
+    vel[i3] += (Math.random() - 0.5) * 0.02;
+    vel[i3 + 2] += (Math.random() - 0.5) * 0.02;
+    
+    // Accelerate toward center as they fall
+    const convergeFactor = Math.max(0, (200 - pos[i3 + 1]) / 400);
+    vel[i3] -= pos[i3] * 0.001 * convergeFactor;
+    vel[i3 + 2] -= pos[i3 + 2] * 0.001 * convergeFactor;
+    
+    // Reset if below chain
+    if (pos[i3 + 1] < -280) {
+      resetParticle(i);
+    }
+    
+    // Damping
+    vel[i3] *= 0.99;
+    vel[i3 + 2] *= 0.99;
+  }
+  
+  geometry.attributes.position.needsUpdate = true;
+  
+  // Gentle camera movement
+  camera.position.x = Math.sin(time * 0.1) * 30;
+  camera.position.y = Math.sin(time * 0.08) * 20;
+  camera.lookAt(0, -50, 0);
+  
+  composer.render();
+}
+
+animate();
+
+// Resize
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight);
+});
+
+</script>
+</body>
+</html>

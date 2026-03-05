@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CLUDE — Blockchain as a Brain</title>
+  <meta name="description" content="AI memory that never dies. Local speed + on-chain permanence.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg: #fafafa;
+      --bg-card: #ffffff;
+      --grid: #e8e8e8;
+      --grid-major: #d0d0d0;
+      --text: #333;
+      --text-dim: #666;
+      --text-faint: #999;
+      --accent: #e8622c;
+      --episodic: #e8622c;
+      --semantic: #3366ff;
+      --procedural: #22885a;
+      --selfmodel: #9933cc;
+      --mono: 'JetBrains Mono', 'Courier New', monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: var(--mono);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* Graph paper background */
+    .graph-bg {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+      background-image: 
+        linear-gradient(var(--grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px),
+        linear-gradient(var(--grid-major) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-major) 1px, transparent 1px);
+      background-size: 
+        20px 20px,
+        20px 20px,
+        100px 100px,
+        100px 100px;
+      background-position: -1px -1px;
+    }
+
+    /* Particle Canvas */
+    #particles {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    /* ---- NAV ---- */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 20px 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: linear-gradient(to bottom, rgba(250,250,250,0.95) 0%, rgba(250,250,250,0) 100%);
+    }
+
+    .logo {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 4px;
+      color: var(--text);
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 32px;
+    }
+
+    .nav-links a {
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: var(--text-dim);
+      text-decoration: none;
+      text-transform: uppercase;
+      transition: color 0.3s;
+    }
+
+    .nav-links a:hover { color: var(--accent); }
+
+    /* ---- SECTIONS ---- */
+    section {
+      position: relative;
+      z-index: 2;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 120px 80px;
+    }
+
+    @media (max-width: 768px) {
+      section { padding: 80px 24px; }
+      nav { padding: 16px 20px; }
+      .nav-links { gap: 16px; }
+    }
+
+    /* ---- HERO ---- */
+    .hero {
+      text-align: center;
+      min-height: 100vh;
+    }
+
+    .hero h1 {
+      font-size: clamp(32px, 6vw, 72px);
+      font-weight: 300;
+      letter-spacing: -1px;
+      color: var(--text);
+      margin-bottom: 24px;
+      opacity: 0;
+      animation: fadeUp 1s ease-out 0.3s forwards;
+    }
+
+    .hero h1 span {
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .hero p {
+      font-size: 14px;
+      color: var(--text-dim);
+      letter-spacing: 1px;
+      max-width: 500px;
+      margin: 0 auto 48px;
+      opacity: 0;
+      animation: fadeUp 1s ease-out 0.5s forwards;
+    }
+
+    .hero-cta {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      opacity: 0;
+      animation: fadeUp 1s ease-out 0.7s forwards;
+    }
+
+    .btn {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 2px;
+      padding: 14px 32px;
+      border: 1px solid var(--grid-major);
+      background: var(--bg-card);
+      color: var(--text-dim);
+      cursor: pointer;
+      text-decoration: none;
+      text-transform: uppercase;
+      transition: all 0.3s;
+    }
+
+    .btn:hover {
+      border-color: var(--text-dim);
+      color: var(--text);
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: #ff7040;
+      border-color: #ff7040;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ---- PROBLEM SECTION ---- */
+    .problem-content {
+      max-width: 800px;
+    }
+
+    .problem h2 {
+      font-size: 11px;
+      letter-spacing: 4px;
+      color: var(--text-faint);
+      margin-bottom: 32px;
+      text-transform: uppercase;
+    }
+
+    .problem .big-text {
+      font-size: clamp(24px, 4vw, 42px);
+      font-weight: 300;
+      color: var(--text);
+      line-height: 1.4;
+      margin-bottom: 48px;
+    }
+
+    .problem .big-text span {
+      color: var(--text-faint);
+      text-decoration: line-through;
+      text-decoration-color: var(--accent);
+      text-decoration-thickness: 2px;
+    }
+
+    .problem-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 24px;
+    }
+
+    .problem-item {
+      padding: 24px;
+      border: 1px solid var(--grid-major);
+      background: var(--bg-card);
+    }
+
+    .problem-item h3 {
+      font-size: 12px;
+      letter-spacing: 1px;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .problem-item p {
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    /* ---- TECHNOLOGY SECTION ---- */
+    .tech {
+      min-height: 120vh;
+    }
+
+    .tech-header {
+      text-align: center;
+      margin-bottom: 80px;
+    }
+
+    .tech-header h2 {
+      font-size: 11px;
+      letter-spacing: 4px;
+      color: var(--text-faint);
+      margin-bottom: 16px;
+      text-transform: uppercase;
+    }
+
+    .tech-header p {
+      font-size: clamp(20px, 3vw, 32px);
+      font-weight: 300;
+      color: var(--text);
+    }
+
+    /* Memory Layer Stack */
+    .layer-stack {
+      max-width: 700px;
+      margin: 0 auto;
+      position: relative;
+    }
+
+    .layer {
+      position: relative;
+      padding: 40px;
+      margin-bottom: 2px;
+      border: 1px solid var(--grid-major);
+      background: var(--bg-card);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.3s;
+    }
+
+    .layer:hover {
+      border-color: var(--text-dim);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+    }
+
+    .layer-tag {
+      font-size: 10px;
+      letter-spacing: 3px;
+      color: var(--text-faint);
+    }
+
+    .layer-name {
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--text);
+      margin-top: 8px;
+    }
+
+    .layer-desc {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 4px;
+    }
+
+    .layer-right {
+      text-align: right;
+    }
+
+    .layer-speed {
+      font-size: 24px;
+      font-weight: 300;
+      color: var(--text);
+    }
+
+    .layer-speed-unit {
+      font-size: 10px;
+      color: var(--text-faint);
+      letter-spacing: 1px;
+    }
+
+    .layer.l3 { border-left: 3px solid var(--text-dim); }
+    .layer.l2 { border-left: 3px solid var(--semantic); }
+    .layer.l1 { border-left: 3px solid var(--accent); }
+
+    .layer-stack .layer:not(:last-child)::after {
+      content: '↓';
+      position: absolute;
+      bottom: -20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 14px;
+      color: var(--grid-major);
+      z-index: 2;
+    }
+
+    /* ---- MEMORY TYPES ---- */
+    .types-header {
+      text-align: center;
+      margin-bottom: 60px;
+    }
+
+    .types-header h2 {
+      font-size: 11px;
+      letter-spacing: 4px;
+      color: var(--text-faint);
+      text-transform: uppercase;
+    }
+
+    .types-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .type-card {
+      padding: 32px;
+      border: 1px solid var(--grid-major);
+      background: var(--bg-card);
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s;
+    }
+
+    .type-card:hover {
+      box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+    }
+
+    .type-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 3px;
+    }
+
+    .type-card.episodic::before { background: var(--episodic); }
+    .type-card.semantic::before { background: var(--semantic); }
+    .type-card.procedural::before { background: var(--procedural); }
+    .type-card.selfmodel::before { background: var(--selfmodel); }
+
+    .type-card h3 {
+      font-size: 12px;
+      letter-spacing: 2px;
+      margin-bottom: 12px;
+    }
+
+    .type-card.episodic h3 { color: var(--episodic); }
+    .type-card.semantic h3 { color: var(--semantic); }
+    .type-card.procedural h3 { color: var(--procedural); }
+    .type-card.selfmodel h3 { color: var(--selfmodel); }
+
+    .type-card p {
+      font-size: 12px;
+      color: var(--text-dim);
+      line-height: 1.8;
+    }
+
+    .type-card .example {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--grid);
+      font-size: 10px;
+      color: var(--text-faint);
+      font-style: italic;
+    }
+
+    /* ---- BRAIN SECTION ---- */
+    .brain-section {
+      padding: 0;
+      min-height: 100vh;
+      position: relative;
+      background: #030308; /* Keep brain dark */
+    }
+
+    .brain-section h2 {
+      position: absolute;
+      top: 40px;
+      left: 40px;
+      font-size: 11px;
+      letter-spacing: 4px;
+      color: #444;
+      text-transform: uppercase;
+      z-index: 10;
+    }
+
+    .brain-frame {
+      width: 100%;
+      height: 100vh;
+      border: none;
+    }
+
+    /* ---- INSTALL SECTION ---- */
+    .install {
+      text-align: center;
+    }
+
+    .install h2 {
+      font-size: 11px;
+      letter-spacing: 4px;
+      color: var(--text-faint);
+      margin-bottom: 32px;
+      text-transform: uppercase;
+    }
+
+    .code-block {
+      display: inline-block;
+      background: var(--bg-card);
+      border: 1px solid var(--grid-major);
+      padding: 24px 48px;
+      margin-bottom: 32px;
+    }
+
+    .code-block code {
+      font-family: var(--mono);
+      font-size: 16px;
+      color: var(--accent);
+    }
+
+    .install-features {
+      display: flex;
+      justify-content: center;
+      gap: 48px;
+      margin-top: 48px;
+      flex-wrap: wrap;
+    }
+
+    .install-feature {
+      text-align: center;
+    }
+
+    .install-feature .num {
+      font-size: 32px;
+      font-weight: 300;
+      color: var(--text);
+    }
+
+    .install-feature .label {
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: var(--text-faint);
+      text-transform: uppercase;
+    }
+
+    /* ---- FOOTER ---- */
+    footer {
+      padding: 60px 80px;
+      border-top: 1px solid var(--grid-major);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: relative;
+      z-index: 2;
+      background: var(--bg);
+    }
+
+    .footer-left {
+      font-size: 10px;
+      color: var(--text-faint);
+      letter-spacing: 1px;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 24px;
+    }
+
+    .footer-links a {
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: var(--text-faint);
+      text-decoration: none;
+      text-transform: uppercase;
+      transition: color 0.3s;
+    }
+
+    .footer-links a:hover { color: var(--accent); }
+  </style>
+</head>
+<body>
+
+  <!-- Graph Paper Background -->
+  <div class="graph-bg"></div>
+
+  <!-- Particle Canvas -->
+  <canvas id="particles"></canvas>
+
+  <!-- Navigation -->
+  <nav>
+    <div class="logo">CLUDE</div>
+    <div class="nav-links">
+      <a href="#tech">Technology</a>
+      <a href="#brain">The Cortex</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/clude/clude-agent" target="_blank">GitHub</a>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <h1>Blockchain as a <span>Brain</span></h1>
+    <p>AI memory that never dies. Local speed. On-chain permanence. Your agent remembers everything.</p>
+    <div class="hero-cta">
+      <a href="#install" class="btn btn-primary">Get Started</a>
+      <a href="#tech" class="btn">How It Works</a>
+    </div>
+  </section>
+
+  <!-- Problem -->
+  <section class="problem">
+    <div class="problem-content">
+      <h2>The Problem</h2>
+      <p class="big-text">
+        AI agents are <span>amnesiacs</span>.<br>
+        Every restart, every session — gone.
+      </p>
+      <div class="problem-list">
+        <div class="problem-item">
+          <h3>Context Windows</h3>
+          <p>Limited. Expensive. Ephemeral.</p>
+        </div>
+        <div class="problem-item">
+          <h3>Vector DBs</h3>
+          <p>Private. Unverifiable. Single-machine.</p>
+        </div>
+        <div class="problem-item">
+          <h3>File Storage</h3>
+          <p>Manual. No provenance. Lost on disk failure.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Technology -->
+  <section class="tech" id="tech">
+    <div class="tech-header">
+      <h2>The Solution</h2>
+      <p>Three-layer memory architecture</p>
+    </div>
+
+    <div class="layer-stack">
+      <div class="layer l3">
+        <div>
+          <div class="layer-tag">L3 — WORKING</div>
+          <div class="layer-name">In-Context Memory</div>
+          <div class="layer-desc">Active task context. Managed by LLM.</div>
+        </div>
+        <div class="layer-right">
+          <div class="layer-speed">~0</div>
+          <div class="layer-speed-unit">ms latency</div>
+        </div>
+      </div>
+
+      <div class="layer l2">
+        <div>
+          <div class="layer-tag">L2 — LOCAL</div>
+          <div class="layer-name">SQLite + FTS5</div>
+          <div class="layer-desc">Instant recall. Semantic search. Private.</div>
+        </div>
+        <div class="layer-right">
+          <div class="layer-speed">&lt;1</div>
+          <div class="layer-speed-unit">ms latency</div>
+        </div>
+      </div>
+
+      <div class="layer l1">
+        <div>
+          <div class="layer-tag">L1 — CHAIN</div>
+          <div class="layer-name">Solana</div>
+          <div class="layer-desc">Permanent. Verifiable. Shareable.</div>
+        </div>
+        <div class="layer-right">
+          <div class="layer-speed">400</div>
+          <div class="layer-speed-unit">ms finality</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Memory Types -->
+  <section class="types">
+    <div class="types-header">
+      <h2>Memory Types</h2>
+    </div>
+
+    <div class="types-grid">
+      <div class="type-card episodic">
+        <h3>EPISODIC</h3>
+        <p>Significant interactions and events. The "what happened" of agent memory.</p>
+        <div class="example">"User asked about dark mode preferences on Feb 14"</div>
+      </div>
+
+      <div class="type-card semantic">
+        <h3>SEMANTIC</h3>
+        <p>Distilled knowledge and facts. Patterns learned over time.</p>
+        <div class="example">"Parallel processing improves response latency"</div>
+      </div>
+
+      <div class="type-card procedural">
+        <h3>PROCEDURAL</h3>
+        <p>How to do things. Behavioral patterns and workflows.</p>
+        <div class="example">"When deploying, always run tests first"</div>
+      </div>
+
+      <div class="type-card selfmodel">
+        <h3>SELF-MODEL</h3>
+        <p>Agent's understanding of itself. Capabilities, limitations, identity.</p>
+        <div class="example">"I tend to be overly verbose in technical explanations"</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Brain Visualization -->
+  <section class="brain-section" id="brain">
+    <h2>The Cortex — Live Memory Map</h2>
+    <iframe class="brain-frame" src="brain.html"></iframe>
+  </section>
+
+  <!-- Install -->
+  <section class="install" id="install">
+    <h2>Get Started</h2>
+    
+    <div class="code-block">
+      <code>npm install clude-agent</code>
+    </div>
+
+    <div class="hero-cta">
+      <a href="https://github.com/clude/clude-agent" class="btn btn-primary" target="_blank">View on GitHub</a>
+      <a href="https://docs.clude.ai" class="btn" target="_blank">Read Docs</a>
+    </div>
+
+    <div class="install-features">
+      <div class="install-feature">
+        <div class="num">3</div>
+        <div class="label">Storage Modes</div>
+      </div>
+      <div class="install-feature">
+        <div class="num">4</div>
+        <div class="label">Memory Types</div>
+      </div>
+      <div class="install-feature">
+        <div class="num">&lt;1ms</div>
+        <div class="label">Local Recall</div>
+      </div>
+      <div class="install-feature">
+        <div class="num">∞</div>
+        <div class="label">Persistence</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-left">© 2026 CLUDE</div>
+    <div class="footer-links">
+      <a href="https://x.com/Cludebot" target="_blank">X</a>
+      <a href="https://github.com/clude/clude-agent" target="_blank">GitHub</a>
+      <a href="https://colosseum.com/agent-hackathon/projects/clude-blockchain-as-a-brain" target="_blank">Colosseum</a>
+    </div>
+  </footer>
+
+  <!-- Particle System - Fine dots on light bg -->
+  <script>
+    const canvas = document.getElementById('particles');
+    const ctx = canvas.getContext('2d');
+
+    let W, H;
+    let particles = [];
+    let mouse = { x: null, y: null };
+
+    function resize() {
+      W = canvas.width = window.innerWidth;
+      H = canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    window.addEventListener('mousemove', e => {
+      mouse.x = e.clientX;
+      mouse.y = e.clientY;
+    });
+
+    class Particle {
+      constructor(x, y) {
+        this.x = x ?? Math.random() * W;
+        this.y = y ?? Math.random() * H;
+        this.vx = (Math.random() - 0.5) * 0.1;
+        this.vy = (Math.random() - 0.5) * 0.08 + 0.05;
+        this.radius = 0.8 + Math.random() * 1.2;
+        this.baseAlpha = 0.2 + Math.random() * 0.3;
+        this.alpha = this.baseAlpha;
+        this.life = 1;
+        this.decay = 0.0002 + Math.random() * 0.0003;
+        // Dark dots on light background
+        const brightness = 100 + Math.random() * 80;
+        this.color = `rgb(${brightness}, ${brightness}, ${brightness})`;
+      }
+
+      update() {
+        if (mouse.x && mouse.y) {
+          const dx = this.x - mouse.x;
+          const dy = this.y - mouse.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 80 && dist > 0) {
+            const force = (80 - dist) / 80 * 0.06;
+            this.vx += (dx / dist) * force;
+            this.vy += (dy / dist) * force;
+          }
+        }
+
+        this.vx *= 0.995;
+        this.vy *= 0.995;
+        this.x += this.vx;
+        this.y += this.vy;
+        this.life -= this.decay;
+        this.alpha = this.baseAlpha * this.life;
+
+        if (this.x < -10) this.x = W + 10;
+        if (this.x > W + 10) this.x = -10;
+        if (this.y > H + 10) this.y = -10;
+        if (this.y < -10) this.y = H + 10;
+      }
+
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.globalAlpha = this.alpha;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+
+      isDead() { return this.life <= 0; }
+    }
+
+    function init() {
+      particles = [];
+      const count = Math.min(250, Math.floor((W * H) / 10000));
+      for (let i = 0; i < count; i++) {
+        particles.push(new Particle());
+      }
+    }
+    init();
+
+    function animate() {
+      ctx.clearRect(0, 0, W, H);
+
+      if (Math.random() < 0.02 && particles.length < 300) {
+        particles.push(new Particle(Math.random() * W, -10));
+      }
+
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.update();
+        p.draw();
+        if (p.isDead()) {
+          particles.splice(i, 1);
+          particles.push(new Particle(Math.random() * W, -10));
+        }
+      }
+
+      // Subtle connections
+      ctx.strokeStyle = 'rgba(180, 180, 180, 0.15)';
+      ctx.lineWidth = 0.3;
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const dx = particles[i].x - particles[j].x;
+          const dy = particles[i].y - particles[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 40) {
+            ctx.beginPath();
+            ctx.moveTo(particles[i].x, particles[i].y);
+            ctx.lineTo(particles[j].x, particles[j].y);
+            ctx.globalAlpha = ((40 - dist) / 40) * 0.1;
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+          }
+        }
+      }
+
+      requestAnimationFrame(animate);
+    }
+    animate();
+
+    let lastScroll = 0;
+    window.addEventListener('scroll', () => {
+      const delta = window.scrollY - lastScroll;
+      lastScroll = window.scrollY;
+      if (Math.abs(delta) > 3) {
+        particles.forEach(p => {
+          p.vx += (Math.random() - 0.5) * 0.03;
+          p.vy += delta * 0.0008;
+        });
+      }
+    });
+  </script>
+
+</body>
+</html>
