@@ -89,7 +89,7 @@ export async function handleWalletRoast(
     context: walletAnalysis,
     tierModifier: getTierModifier(tier),
     forTwitter: true,  // Enforce char limit
-    instruction: loadInstruction('roast', 'Analyze this wallet based on its on-chain behavior. Under 270 characters.'),
+    instruction: loadInstruction('roast', 'Analyze this wallet based on its on-chain behavior.'),
     memory: {
       relatedUser: authorId,
       query: `wallet analysis ${address}`,

@@ -58,6 +58,7 @@ export const config = {
     pricePollMs: parseInt(optional('PRICE_POLL_INTERVAL_MS', '60000'), 10),
     shiftReportCron: optional('SHIFT_REPORT_CRON', '0 */12 * * *'),
     moodTweetMs: parseInt(optional('MOOD_TWEET_INTERVAL_MS', '7200000'), 10),
+    sentimentMonitorMs: parseInt(optional('SENTIMENT_MONITOR_INTERVAL_MS', '14400000'), 10),
   },
   allium: {
     apiKey: optional('ALLIUM_API_KEY', ''),
@@ -77,10 +78,15 @@ export const config = {
     apiKey: optional('CORTEX_API_KEY', ''),
     hostUrl: optional('CORTEX_HOST_URL', 'https://cluude.ai'),
   },
+  telegram: {
+    botToken: optional('TELEGRAM_BOT_TOKEN', ''),
+    channelId: optional('TELEGRAM_CHANNEL_ID', ''),
+  },
   features: {
     showTxLinksInTweets: optional('SHOW_TX_LINKS_IN_TWEETS', 'true') === 'true',
     siteOnly: optional('SITE_ONLY', 'false') === 'true',
     campaignEnabled: optional('CAMPAIGN_ENABLED', 'false') === 'true',
+    telegramEnabled: optional('TELEGRAM_ENABLED', 'false') === 'true',
   },
   campaign: {
     startDate: optional('CAMPAIGN_START', ''),

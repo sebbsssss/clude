@@ -311,6 +311,44 @@ export function cortexRoutes(): Router {
     }
   });
 
+  // GET /brain — brain visualization data (same format as /api/brain, wallet-scoped)
+  router.get('/brain', async (req: Request, res: Response) => {
+    try {
+      const cortexReq = req as CortexRequest;
+      const limit = Math.min(parseInt(req.query.limit as string) || 300, 500);
+
+      const [memories, stats] = await withOwnerWallet(cortexReq.ownerWallet!, async () => {
+        return Promise.all([
+          getRecentMemories(8760, undefined, limit),
+          getMemoryStats(),
+        ]);
+      });
+
+      res.json({
+        nodes: memories.map(m => ({
+          id: m.id,
+          type: m.memory_type,
+          summary: m.summary,
+          content: m.content,
+          tags: m.tags || [],
+          importance: m.importance,
+          decay: m.decay_factor,
+          valence: m.emotional_valence,
+          accessCount: m.access_count,
+          source: m.source,
+          evidenceIds: m.evidence_ids || [],
+          createdAt: m.created_at,
+          lastAccessed: m.last_accessed,
+        })),
+        total: stats.total,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) {
+      log.error({ err }, 'Cortex brain endpoint error');
+      res.status(500).json({ error: 'Failed to fetch brain data' });
+    }
+  });
+
   // GET /self-model — self-model memories
   router.get('/self-model', async (req: Request, res: Response) => {
     try {

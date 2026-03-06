@@ -1,0 +1,1273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CLUDE — Memory Explorer</title>
+  <meta name="description" content="Visualize, search, and explore your agent's mind. Load memories from cloud or local files.">
+  <meta name="privy-app-id" content="">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f5f5f0;
+      --bg-warm: #eeeee8;
+      --surface: rgba(255, 255, 255, 0.92);
+      --text: #111;
+      --text-muted: #666;
+      --text-faint: #999;
+      --border: rgba(0, 0, 0, 0.08);
+      --accent: #2244ff;
+      --accent-light: #5566ff;
+      --episodic: #1a3abf;
+      --semantic: #3a4a7a;
+      --procedural: #2a6a3a;
+      --selfmodel: #5a3a80;
+      --mono: 'JetBrains Mono', monospace;
+      --error: #9a3030;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      font-family: var(--mono);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 12px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; width: 100%; z-index: 100;
+      background: rgba(245, 245, 240, 0.9);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+    }
+
+    .nav-inner {
+      max-width: 1200px; margin: 0 auto; padding: 0 2rem;
+      height: 56px; display: flex; align-items: center;
+    }
+
+    .nav-left { display: flex; align-items: center; gap: 1rem; }
+
+    .nav-logo {
+      font-size: 13px; font-weight: 800; letter-spacing: 5px;
+      color: var(--text); text-transform: uppercase;
+      text-decoration: none; transition: color 0.3s;
+    }
+    .nav-logo:hover { color: var(--accent); text-decoration: none; }
+
+    .nav-status {
+      display: flex; align-items: center; gap: 0.5rem;
+      font-size: 0.65rem; color: var(--text-faint); letter-spacing: 1px;
+    }
+
+    .status-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #2a6a3a;
+      animation: pulse-dot 3s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .nav-links {
+      display: flex; align-items: center; gap: 2rem; margin-left: auto;
+    }
+
+    .nav-links a {
+      color: var(--text-muted); font-size: 11px; letter-spacing: 2px;
+      text-transform: uppercase; text-decoration: none; transition: color 0.3s;
+    }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+    .nav-links a.nav-active { color: var(--text); font-weight: 600; }
+
+    .nav-toggle {
+      display: none; background: none; border: none; cursor: pointer;
+      padding: 6px; flex-direction: column; gap: 4px;
+    }
+    .nav-toggle span {
+      display: block; width: 18px; height: 1.5px;
+      background: var(--text); transition: all 0.3s;
+    }
+    .nav-toggle.open span:nth-child(1) { transform: rotate(45deg) translate(3.5px, 3.5px); }
+    .nav-toggle.open span:nth-child(2) { opacity: 0; }
+    .nav-toggle.open span:nth-child(3) { transform: rotate(-45deg) translate(3.5px, -3.5px); }
+
+    /* ── HERO ── */
+    .hero {
+      padding: 96px 40px 0;
+      text-align: center;
+    }
+
+    .hero-label {
+      font-size: 9px; letter-spacing: 5px; text-transform: uppercase;
+      color: var(--text-faint); margin-bottom: 16px;
+    }
+
+    .hero-title {
+      font-size: clamp(28px, 4vw, 44px);
+      font-weight: 800; line-height: 1.1;
+      letter-spacing: -1px; margin-bottom: 12px;
+    }
+
+    .hero-title em {
+      font-style: normal;
+      background: linear-gradient(135deg, #2244ff, #5566ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-sub {
+      font-size: 12px; color: var(--text-muted);
+      max-width: 440px; margin: 0 auto; line-height: 1.8;
+    }
+
+    /* ── SOURCE SELECTOR ── */
+    .source-section {
+      max-width: 680px; margin: 40px auto 0; padding: 0 20px;
+    }
+
+    .source-tabs {
+      display: flex; gap: 0; border-bottom: 1px solid var(--border);
+      margin-bottom: 0;
+    }
+
+    .source-tab {
+      flex: 1; padding: 14px 0; text-align: center;
+      font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--text-faint); cursor: pointer;
+      border: none; background: none; font-family: var(--mono);
+      transition: all 0.3s; position: relative;
+    }
+
+    .source-tab::after {
+      content: ''; position: absolute; bottom: -1px; left: 0; right: 0;
+      height: 2px; background: transparent; transition: background 0.3s;
+    }
+
+    .source-tab:hover { color: var(--text-muted); }
+    .source-tab.active { color: var(--text); font-weight: 600; }
+    .source-tab.active::after { background: var(--accent); }
+
+    .tab-content { display: none; padding: 28px 0 0; }
+    .tab-content.active { display: block; }
+
+    /* ── API KEY TAB ── */
+    .api-key-form {
+      display: flex; gap: 8px; align-items: stretch;
+    }
+
+    .api-key-input {
+      flex: 1; padding: 12px 16px;
+      font-family: var(--mono); font-size: 11px;
+      background: white; border: 1px solid var(--border);
+      color: var(--text); outline: none;
+      transition: border-color 0.3s;
+    }
+    .api-key-input:focus { border-color: var(--accent); }
+    .api-key-input::placeholder { color: var(--text-faint); }
+
+    .btn {
+      font-family: var(--mono);
+      font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+      padding: 12px 24px; cursor: pointer;
+      transition: all 0.25s ease;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: var(--text); color: var(--bg);
+      border: 1px solid var(--text);
+    }
+    .btn-primary:hover {
+      background: transparent; color: var(--text);
+    }
+
+    .btn-outline {
+      background: transparent; color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+    .btn-outline:hover {
+      border-color: var(--text); color: var(--text);
+    }
+
+    .btn-danger {
+      background: transparent; color: var(--error);
+      border: 1px solid rgba(154, 48, 48, 0.2);
+    }
+    .btn-danger:hover {
+      border-color: var(--error);
+    }
+
+    .connected-state {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 16px;
+      background: rgba(42, 106, 58, 0.06);
+      border: 1px solid rgba(42, 106, 58, 0.15);
+    }
+
+    .connected-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #2a6a3a; flex-shrink: 0;
+      animation: pulse-dot 3s ease-in-out infinite;
+    }
+
+    .connected-label {
+      font-size: 10px; letter-spacing: 1px; color: #2a6a3a;
+      flex: 1;
+    }
+
+    .error-msg {
+      font-size: 10px; color: var(--error);
+      margin-top: 8px; letter-spacing: 0.5px;
+    }
+
+    /* ── WALLET TAB ── */
+    .wallet-info {
+      font-size: 11px; color: var(--text-muted); line-height: 1.8;
+      margin-top: 12px;
+    }
+
+    #privy-root {
+      min-height: 44px;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .privy-fallback {
+      font-size: 10px; color: var(--text-faint);
+      letter-spacing: 1px; text-align: center;
+      padding: 16px;
+    }
+
+    /* ── FILE DROP ZONE ── */
+    .drop-zone {
+      border: 1.5px dashed rgba(0,0,0,0.12);
+      padding: 40px 20px; text-align: center;
+      cursor: pointer; transition: all 0.3s;
+      position: relative;
+    }
+
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: var(--accent);
+      background: rgba(34, 68, 255, 0.02);
+    }
+
+    .drop-zone-icon {
+      font-size: 24px; color: var(--text-faint);
+      margin-bottom: 12px; display: block;
+    }
+
+    .drop-zone-text {
+      font-size: 11px; color: var(--text-muted);
+      letter-spacing: 1px; margin-bottom: 4px;
+    }
+
+    .drop-zone-hint {
+      font-size: 9px; color: var(--text-faint);
+      letter-spacing: 1px;
+    }
+
+    .drop-zone input[type="file"] {
+      position: absolute; inset: 0;
+      opacity: 0; cursor: pointer;
+    }
+
+    .file-loaded {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 16px;
+      background: rgba(34, 68, 255, 0.04);
+      border: 1px solid rgba(34, 68, 255, 0.12);
+    }
+
+    .file-loaded-name {
+      font-size: 11px; color: var(--accent);
+      flex: 1; letter-spacing: 0.5px;
+    }
+
+    /* ── STATS BAR ── */
+    .stats-bar {
+      max-width: 680px; margin: 32px auto 0; padding: 0 20px;
+      display: none;
+    }
+
+    .stats-bar.visible { display: block; }
+
+    .stats-inner {
+      display: flex; align-items: center; gap: 20px;
+      padding: 12px 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+
+    .stat {
+      font-size: 10px; color: var(--text-faint); letter-spacing: 1px;
+    }
+
+    .stat .v {
+      color: var(--text); font-weight: 600;
+    }
+
+    .stat-sep {
+      width: 3px; height: 3px; border-radius: 50%;
+      background: var(--border); flex-shrink: 0;
+    }
+
+    /* ── BRAIN IFRAME ── */
+    .brain-section {
+      max-width: 1200px; margin: 32px auto 0; padding: 0 20px;
+      display: none;
+    }
+
+    .brain-section.visible { display: block; }
+
+    .brain-frame-wrap {
+      border: 1px solid var(--border);
+      background: var(--bg);
+      position: relative; overflow: hidden;
+    }
+
+    .brain-frame-wrap iframe {
+      width: 100%; height: 60vh; border: none; display: block;
+    }
+
+    .brain-label {
+      position: absolute; top: 16px; left: 20px;
+      font-size: 9px; letter-spacing: 4px; text-transform: uppercase;
+      color: var(--text-faint); z-index: 2; pointer-events: none;
+    }
+
+    /* ── SEARCH ── */
+    .search-section {
+      max-width: 680px; margin: 28px auto 0; padding: 0 20px;
+      display: none;
+    }
+
+    .search-section.visible { display: block; }
+
+    .search-bar {
+      display: flex; align-items: stretch; gap: 0;
+      border: 1px solid var(--border);
+      background: white;
+      transition: border-color 0.3s;
+    }
+
+    .search-bar:focus-within { border-color: var(--accent); }
+
+    .search-icon {
+      display: flex; align-items: center; justify-content: center;
+      padding: 0 14px; color: var(--text-faint);
+      font-size: 14px; flex-shrink: 0;
+    }
+
+    .search-input {
+      flex: 1; padding: 12px 0;
+      font-family: var(--mono); font-size: 11px;
+      background: transparent; border: none;
+      color: var(--text); outline: none;
+    }
+    .search-input::placeholder { color: var(--text-faint); }
+
+    .search-mode {
+      display: flex; align-items: center; gap: 0;
+      border-left: 1px solid var(--border); flex-shrink: 0;
+    }
+
+    .search-mode-btn {
+      padding: 8px 14px;
+      font-family: var(--mono); font-size: 9px;
+      letter-spacing: 1px; text-transform: uppercase;
+      background: none; border: none; cursor: pointer;
+      color: var(--text-faint); transition: all 0.2s;
+    }
+    .search-mode-btn:hover { color: var(--text-muted); }
+    .search-mode-btn.active {
+      color: var(--accent); font-weight: 600;
+    }
+    .search-mode-btn:disabled {
+      opacity: 0.3; cursor: default;
+    }
+
+    .search-count {
+      font-size: 9px; color: var(--text-faint);
+      letter-spacing: 1px; margin-top: 8px;
+      text-align: right;
+    }
+
+    /* ── MEMORY CARDS ── */
+    .cards-section {
+      max-width: 1200px; margin: 24px auto 60px; padding: 0 20px;
+      display: none;
+    }
+
+    .cards-section.visible { display: block; }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 12px;
+    }
+
+    .memory-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--text-faint);
+      padding: 16px 18px;
+      cursor: pointer;
+      transition: all 0.25s;
+      position: relative;
+    }
+
+    .memory-card:hover {
+      border-color: rgba(0,0,0,0.12);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+    }
+
+    .memory-card[data-type="episodic"] { border-left-color: var(--episodic); }
+    .memory-card[data-type="semantic"] { border-left-color: var(--semantic); }
+    .memory-card[data-type="procedural"] { border-left-color: var(--procedural); }
+    .memory-card[data-type="self_model"] { border-left-color: var(--selfmodel); }
+
+    .card-header {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .card-type {
+      font-size: 8px; letter-spacing: 2px; text-transform: uppercase;
+      font-weight: 700; padding: 2px 8px;
+      border: 1px solid currentColor; white-space: nowrap;
+    }
+
+    .card-type[data-type="episodic"] { color: var(--episodic); }
+    .card-type[data-type="semantic"] { color: var(--semantic); }
+    .card-type[data-type="procedural"] { color: var(--procedural); }
+    .card-type[data-type="self_model"] { color: var(--selfmodel); }
+
+    .card-id {
+      font-size: 9px; color: var(--text-faint); margin-left: auto;
+    }
+
+    .card-summary {
+      font-size: 11px; line-height: 1.7; color: var(--text-muted);
+      font-weight: 300; margin-bottom: 12px;
+      display: -webkit-box; -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical; overflow: hidden;
+    }
+
+    .card-meta {
+      display: flex; align-items: center; gap: 14px;
+      font-size: 9px; color: var(--text-faint);
+      letter-spacing: 0.5px;
+    }
+
+    .card-meta .v { color: var(--text-muted); font-weight: 500; }
+
+    .card-imp-bar {
+      width: 40px; height: 3px; background: rgba(0,0,0,0.06);
+      position: relative; flex-shrink: 0;
+    }
+
+    .card-imp-fill {
+      position: absolute; top: 0; left: 0; height: 100%;
+      background: var(--text-muted);
+    }
+
+    .card-tags {
+      display: flex; gap: 4px; flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .card-tag {
+      font-size: 8px; color: var(--text-faint);
+      border: 1px solid var(--border);
+      padding: 2px 8px; letter-spacing: 1px;
+    }
+
+    .card-score {
+      position: absolute; top: 12px; right: 14px;
+      font-size: 9px; color: var(--accent);
+      font-weight: 600; letter-spacing: 1px;
+    }
+
+    /* ── EMPTY STATE ── */
+    .empty-state {
+      text-align: center; padding: 80px 20px;
+      max-width: 480px; margin: 0 auto;
+    }
+
+    .empty-icon {
+      font-size: 40px; color: var(--text-faint);
+      margin-bottom: 20px; opacity: 0.3;
+    }
+
+    .empty-title {
+      font-size: 13px; font-weight: 600; letter-spacing: 3px;
+      text-transform: uppercase; margin-bottom: 10px;
+    }
+
+    .empty-sub {
+      font-size: 11px; color: var(--text-muted); line-height: 1.8;
+    }
+
+    .empty-arrow {
+      font-size: 18px; color: var(--text-faint);
+      margin-top: 20px; opacity: 0.4;
+      animation: float-up 2s ease-in-out infinite;
+    }
+
+    @keyframes float-up {
+      0%, 100% { transform: translateY(0); opacity: 0.4; }
+      50% { transform: translateY(-6px); opacity: 0.7; }
+    }
+
+    /* ── LOADING OVERLAY ── */
+    .loading-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(245, 245, 240, 0.95);
+      display: none; align-items: center; justify-content: center;
+      flex-direction: column; gap: 16px;
+    }
+    .loading-overlay.visible { display: flex; }
+
+    .loading-spinner {
+      width: 24px; height: 24px;
+      border: 1.5px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+      font-size: 10px; letter-spacing: 3px;
+      text-transform: uppercase; color: var(--text-faint);
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 768px) {
+      .nav-toggle { display: flex; flex-direction: column; }
+      .nav-links {
+        display: none; position: absolute; top: 56px; left: 0; right: 0;
+        background: rgba(245, 245, 240, 0.97);
+        backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+        border-bottom: 1px solid var(--border);
+        flex-direction: column; padding: 1.2rem 2rem; gap: 1.2rem;
+      }
+      .nav-links.open { display: flex; }
+      .hero { padding: 80px 20px 0; }
+      .hero-title { font-size: 28px; }
+      .source-section { margin-top: 28px; }
+      .api-key-form { flex-direction: column; }
+      .brain-frame-wrap iframe { height: 40vh; }
+      .cards-grid { grid-template-columns: 1fr; }
+      .stats-inner { gap: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <div class="nav-inner">
+      <div class="nav-left">
+        <a href="/" class="nav-logo">Clude</a>
+        <div class="nav-status">
+          <div class="status-dot"></div>
+          <span>LIVE</span>
+        </div>
+      </div>
+      <button class="nav-toggle" id="navToggle" aria-label="Menu"><span></span><span></span><span></span></button>
+      <div class="nav-links">
+        <a href="/docs.html">Docs</a>
+        <a href="/demo.html">Demo</a>
+        <a href="/brain.html">Brain</a>
+        <a href="/explore" class="nav-active">Explorer</a>
+        <a href="/benchmark">Benchmark</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-label">Memory Infrastructure</div>
+    <h1 class="hero-title"><em>Memory</em> Explorer</h1>
+    <p class="hero-sub">Visualize, search, and explore your agent's mind.</p>
+  </section>
+
+  <!-- SOURCE SELECTOR -->
+  <section class="source-section">
+    <div class="source-tabs">
+      <button class="source-tab active" data-tab="apikey" onclick="setTab('apikey')">API Key</button>
+      <button class="source-tab" data-tab="wallet" onclick="setTab('wallet')">Wallet</button>
+      <button class="source-tab" data-tab="file" onclick="setTab('file')">Local File</button>
+    </div>
+
+    <!-- API KEY -->
+    <div class="tab-content active" id="tab-apikey">
+      <div id="apiKeyForm">
+        <div class="api-key-form">
+          <input type="password" class="api-key-input" id="apiKeyInput" placeholder="Enter your Cortex API key..." autocomplete="off">
+          <button class="btn btn-primary" id="apiKeyConnect" onclick="connectWithApiKey()">Connect</button>
+        </div>
+      </div>
+      <div id="apiKeyConnected" style="display:none">
+        <div class="connected-state">
+          <div class="connected-dot"></div>
+          <span class="connected-label">Connected</span>
+          <button class="btn btn-danger" onclick="disconnectApiKey()" style="padding:8px 16px">Disconnect</button>
+        </div>
+      </div>
+      <div class="error-msg" id="apiKeyError" style="display:none"></div>
+    </div>
+
+    <!-- WALLET -->
+    <div class="tab-content" id="tab-wallet">
+      <div id="privy-root">
+        <div class="privy-fallback" id="privyFallback">Loading wallet connector...</div>
+      </div>
+      <p class="wallet-info">Connect your Solana wallet via Privy to retrieve your cloud memories.</p>
+    </div>
+
+    <!-- LOCAL FILE -->
+    <div class="tab-content" id="tab-file">
+      <div class="drop-zone" id="dropZone">
+        <span class="drop-zone-icon">&#x2B07;</span>
+        <div class="drop-zone-text">Drop .json or .md file here</div>
+        <div class="drop-zone-hint">Accepts MemoryPack JSON or exported Markdown</div>
+        <input type="file" accept=".json,.md,.txt" id="fileInput">
+      </div>
+      <div class="file-loaded" id="fileLoaded" style="display:none">
+        <span class="file-loaded-name" id="fileName"></span>
+        <button class="btn btn-outline" onclick="clearFile()" style="padding:6px 14px;font-size:9px">Clear</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- STATS BAR -->
+  <div class="stats-bar" id="statsBar">
+    <div class="stats-inner" id="statsInner"></div>
+  </div>
+
+  <!-- BRAIN VISUALIZATION -->
+  <section class="brain-section" id="brainSection">
+    <div class="brain-frame-wrap">
+      <span class="brain-label">Neural Map</span>
+      <iframe id="brainFrame" src="brain.html?embedded=1" loading="lazy"></iframe>
+    </div>
+  </section>
+
+  <!-- SEARCH -->
+  <section class="search-section" id="searchSection">
+    <div class="search-bar">
+      <span class="search-icon">&#x2315;</span>
+      <input type="text" class="search-input" id="searchInput" placeholder="Search your memories...">
+      <div class="search-mode">
+        <button class="search-mode-btn active" id="btnKeyword" onclick="setSearchMode('keyword')">Keyword</button>
+        <button class="search-mode-btn" id="btnSemantic" onclick="setSearchMode('semantic')" disabled title="Requires API key connection">Semantic</button>
+      </div>
+    </div>
+    <div class="search-count" id="searchCount"></div>
+  </section>
+
+  <!-- MEMORY CARDS -->
+  <section class="cards-section" id="cardsSection">
+    <div class="cards-grid" id="cardsGrid"></div>
+  </section>
+
+  <!-- EMPTY STATE -->
+  <section class="empty-state" id="emptyState">
+    <div class="empty-icon">&#x25C9;</div>
+    <div class="empty-title">Load your memories</div>
+    <p class="empty-sub">Connect with an API key, link your wallet, or upload a local memory file to begin exploring.</p>
+    <div class="empty-arrow">&#x2191;</div>
+  </section>
+
+  <!-- LOADING OVERLAY -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text" id="loadingMsg">Mapping Neural Network...</div>
+  </div>
+
+  <!-- NAV TOGGLE SCRIPT -->
+  <script>
+  document.getElementById('navToggle').addEventListener('click', function() {
+    this.classList.toggle('open');
+    document.querySelector('.nav-links').classList.toggle('open');
+  });
+  </script>
+
+  <!-- MAIN LOGIC -->
+  <script>
+  /* ============= STATE ============= */
+  let brainNodes = [];
+  let allNodes = [];
+  let apiKey = null;
+  let apiEndpoint = '';
+  let brainReady = false;
+  let pendingData = null;
+  let searchMode = 'keyword';
+  let searchTimer = null;
+
+  /* ============= TAB SWITCHING ============= */
+  function setTab(name) {
+    document.querySelectorAll('.source-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+  }
+
+  /* ============= API KEY AUTH ============= */
+  async function connectWithApiKey() {
+    const input = document.getElementById('apiKeyInput');
+    const key = input.value.trim();
+    if (!key) return;
+
+    showLoading('Connecting...');
+    hideError('apiKeyError');
+
+    try {
+      const res = await fetch('/api/cortex/brain?limit=500', {
+        headers: { 'Authorization': 'Bearer ' + key }
+      });
+
+      if (!res.ok) {
+        const msg = res.status === 401 ? 'Invalid API key' : 'Connection failed (' + res.status + ')';
+        throw new Error(msg);
+      }
+
+      const data = await res.json();
+      apiKey = key;
+      localStorage.setItem('explorer_api_key', key);
+
+      document.getElementById('apiKeyForm').style.display = 'none';
+      document.getElementById('apiKeyConnected').style.display = 'block';
+
+      // Enable semantic search
+      document.getElementById('btnSemantic').disabled = false;
+      document.getElementById('btnSemantic').title = '';
+
+      hideLoading();
+      loadBrainData(data);
+    } catch (err) {
+      hideLoading();
+      showError('apiKeyError', err.message);
+    }
+  }
+
+  function disconnectApiKey() {
+    apiKey = null;
+    localStorage.removeItem('explorer_api_key');
+    document.getElementById('apiKeyForm').style.display = 'block';
+    document.getElementById('apiKeyConnected').style.display = 'none';
+    document.getElementById('apiKeyInput').value = '';
+    document.getElementById('btnSemantic').disabled = true;
+    document.getElementById('btnSemantic').title = 'Requires API key connection';
+    if (searchMode === 'semantic') setSearchMode('keyword');
+    clearData();
+  }
+
+  /* ============= FILE HANDLING ============= */
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+
+  dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('dragover'); });
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) handleFile(e.target.files[0]);
+  });
+
+  function handleFile(file) {
+    showLoading('Parsing ' + file.name + '...');
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target.result;
+        if (file.name.endsWith('.json')) {
+          const pack = JSON.parse(text);
+          loadFromMemoryPack(pack);
+        } else {
+          loadFromMarkdown(text);
+        }
+        document.getElementById('dropZone').style.display = 'none';
+        document.getElementById('fileLoaded').style.display = 'flex';
+        document.getElementById('fileName').textContent = file.name;
+        hideLoading();
+      } catch (err) {
+        hideLoading();
+        alert('Failed to parse file: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function clearFile() {
+    document.getElementById('dropZone').style.display = 'block';
+    document.getElementById('fileLoaded').style.display = 'none';
+    fileInput.value = '';
+    clearData();
+  }
+
+  /* ============= DATA PARSING ============= */
+  function loadFromMemoryPack(pack) {
+    const mems = pack.memories || pack.nodes || [];
+    const nodes = mems.map((m, i) => ({
+      id: m.id || m._local_id || (i + 1),
+      type: m.type || m.memory_type || 'episodic',
+      summary: m.summary || (m.content || '').slice(0, 200),
+      content: m.content || m.summary || '',
+      tags: m.tags || [],
+      importance: m.importance ?? 0.5,
+      decay: m.decay_factor ?? m.decay ?? 1,
+      valence: m.emotional_valence ?? m.valence ?? 0,
+      accessCount: m.access_count ?? m.accessCount ?? 0,
+      source: m.source ?? m.source_wallet ?? '',
+      evidenceIds: m.evidence_ids || m.evidenceIds || [],
+      createdAt: m.created_at || m.createdAt || new Date().toISOString(),
+      lastAccessed: m.last_accessed || m.lastAccessed || m.created_at || new Date().toISOString(),
+    }));
+    loadBrainData({ nodes, total: nodes.length });
+  }
+
+  function loadFromMarkdown(text) {
+    const nodes = [];
+    let currentType = 'episodic';
+    let id = 1;
+    const typeMap = {
+      'episodic': 'episodic', 'semantic': 'semantic',
+      'procedural': 'procedural', 'self model': 'self_model', 'self_model': 'self_model',
+    };
+
+    for (const line of text.split('\n')) {
+      const trimmed = line.trim();
+
+      // Section headers
+      const sectionMatch = trimmed.match(/^##\s+(\w[\w\s]*?)(?:\s+memories?)?(?:\s*\(\d+\))?$/i);
+      if (sectionMatch) {
+        const key = sectionMatch[1].toLowerCase().trim();
+        if (typeMap[key]) currentType = typeMap[key];
+        continue;
+      }
+
+      // Entries with importance: "- [0.85] Summary — Content"
+      const entryMatch = trimmed.match(/^[-*]\s+\[(\d*\.?\d+)]\s+(.+)$/);
+      if (entryMatch) {
+        const importance = parseFloat(entryMatch[1]);
+        const rest = entryMatch[2];
+        const parts = rest.split(/\s+[—\-]{1,2}\s+/);
+        nodes.push({
+          id: id++, type: currentType,
+          summary: parts[0].slice(0, 300),
+          content: parts.length > 1 ? parts.slice(1).join(' ') : parts[0],
+          tags: [], importance: Math.max(0, Math.min(1, importance)),
+          decay: 1, valence: 0, accessCount: 0, source: 'import',
+          evidenceIds: [], createdAt: new Date().toISOString(), lastAccessed: new Date().toISOString(),
+        });
+        continue;
+      }
+
+      // Cortex format: "- **[uuid]** (imp=0.8) Summary"
+      const cortexMatch = trimmed.match(/^[-*]\s+\*\*\[.*?]\*\*\s*\(imp=?([\d.]+)\)\s*(.+)$/);
+      if (cortexMatch) {
+        nodes.push({
+          id: id++, type: currentType,
+          summary: cortexMatch[2].slice(0, 300), content: cortexMatch[2],
+          tags: [], importance: parseFloat(cortexMatch[1]),
+          decay: 1, valence: 0, accessCount: 0, source: 'import',
+          evidenceIds: [], createdAt: new Date().toISOString(), lastAccessed: new Date().toISOString(),
+        });
+        continue;
+      }
+
+      // Plain list items
+      const plainMatch = trimmed.match(/^[-*]\s+(.{10,})$/);
+      if (plainMatch && !trimmed.match(/^[-*]\s+\[/)) {
+        nodes.push({
+          id: id++, type: currentType,
+          summary: plainMatch[1].slice(0, 200), content: plainMatch[1],
+          tags: [], importance: 0.5,
+          decay: 1, valence: 0, accessCount: 0, source: 'import',
+          evidenceIds: [], createdAt: new Date().toISOString(), lastAccessed: new Date().toISOString(),
+        });
+      }
+    }
+
+    if (nodes.length === 0) throw new Error('No memories found in markdown');
+    loadBrainData({ nodes, total: nodes.length });
+  }
+
+  /* ============= BRAIN INTEGRATION ============= */
+  function loadBrainData(data) {
+    brainNodes = data.nodes || [];
+    allNodes = [...brainNodes];
+
+    if (brainReady) {
+      sendToBrain(data);
+    } else {
+      pendingData = data;
+    }
+
+    renderStats(brainNodes);
+    renderMemoryCards(brainNodes);
+    showDataUI();
+  }
+
+  function sendToBrain(data) {
+    const iframe = document.getElementById('brainFrame');
+    iframe.contentWindow.postMessage({ type: 'LOAD_BRAIN_DATA', payload: data }, '*');
+  }
+
+  function highlightInBrain(ids) {
+    const iframe = document.getElementById('brainFrame');
+    iframe.contentWindow.postMessage({ type: 'HIGHLIGHT_NODES', ids }, '*');
+  }
+
+  function resetBrainHighlights() {
+    const iframe = document.getElementById('brainFrame');
+    iframe.contentWindow.postMessage({ type: 'RESET_HIGHLIGHTS' }, '*');
+  }
+
+  function focusInBrain(id) {
+    const iframe = document.getElementById('brainFrame');
+    iframe.contentWindow.postMessage({ type: 'FOCUS_NODE', id }, '*');
+  }
+
+  window.addEventListener('message', (e) => {
+    if (e.data?.type === 'BRAIN_READY') {
+      brainReady = true;
+      if (pendingData) {
+        sendToBrain(pendingData);
+        pendingData = null;
+      }
+    }
+  });
+
+  /* ============= SEARCH ============= */
+  document.getElementById('searchInput').addEventListener('input', (e) => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => searchMemories(e.target.value), 300);
+  });
+
+  function setSearchMode(mode) {
+    searchMode = mode;
+    document.getElementById('btnKeyword').classList.toggle('active', mode === 'keyword');
+    document.getElementById('btnSemantic').classList.toggle('active', mode === 'semantic');
+    const query = document.getElementById('searchInput').value;
+    if (query.trim()) searchMemories(query);
+  }
+
+  async function searchMemories(query) {
+    if (!query.trim()) {
+      renderMemoryCards(allNodes);
+      resetBrainHighlights();
+      document.getElementById('searchCount').textContent = '';
+      return;
+    }
+
+    if (searchMode === 'semantic' && apiKey) {
+      try {
+        const res = await fetch('/api/cortex/recall', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + apiKey,
+          },
+          body: JSON.stringify({ query, limit: 30 }),
+        });
+        const data = await res.json();
+        const results = (data.memories || []).map(m => ({
+          ...m,
+          id: m.id,
+          type: m.memory_type || m.type,
+          summary: m.summary,
+          content: m.content || '',
+          tags: m.tags || [],
+          importance: m.importance,
+          decay: m.decay_factor || m.decay || 1,
+          _score: m._score || m.score,
+        }));
+        renderMemoryCards(results, true);
+        highlightInBrain(results.map(r => r.id));
+        document.getElementById('searchCount').textContent = results.length + ' result' + (results.length !== 1 ? 's' : '') + ' (semantic)';
+      } catch {
+        // Fall back to keyword
+        keywordSearch(query);
+      }
+    } else {
+      keywordSearch(query);
+    }
+  }
+
+  function keywordSearch(query) {
+    const q = query.toLowerCase();
+    const results = allNodes.filter(n =>
+      (n.summary || '').toLowerCase().includes(q) ||
+      (n.content || '').toLowerCase().includes(q) ||
+      (n.tags || []).some(t => t.toLowerCase().includes(q))
+    );
+    renderMemoryCards(results);
+    highlightInBrain(results.map(n => n.id));
+    document.getElementById('searchCount').textContent = results.length + ' result' + (results.length !== 1 ? 's' : '');
+  }
+
+  /* ============= RENDERING ============= */
+  function renderStats(nodes) {
+    const byType = { episodic: 0, semantic: 0, procedural: 0, self_model: 0 };
+    let totalImp = 0, totalDecay = 0;
+    for (const n of nodes) {
+      byType[n.type] = (byType[n.type] || 0) + 1;
+      totalImp += n.importance || 0;
+      totalDecay += n.decay ?? 1;
+    }
+    const avgImp = nodes.length > 0 ? (totalImp / nodes.length).toFixed(2) : '0';
+    const avgDecay = nodes.length > 0 ? ((totalDecay / nodes.length) * 100).toFixed(0) : '0';
+
+    const typeStr = Object.entries(byType).filter(([,v]) => v > 0).map(([t,v]) => {
+      const short = { episodic: 'E', semantic: 'S', procedural: 'P', self_model: 'SM' }[t] || t;
+      return short + ':' + v;
+    }).join('  ');
+
+    document.getElementById('statsInner').innerHTML =
+      '<span class="stat"><span class="v">' + nodes.length + '</span> memories</span>' +
+      '<span class="stat-sep"></span>' +
+      '<span class="stat">' + typeStr + '</span>' +
+      '<span class="stat-sep"></span>' +
+      '<span class="stat">avg imp <span class="v">' + avgImp + '</span></span>' +
+      '<span class="stat-sep"></span>' +
+      '<span class="stat">decay <span class="v">' + avgDecay + '%</span></span>';
+  }
+
+  function renderMemoryCards(nodes, showScores) {
+    const grid = document.getElementById('cardsGrid');
+    if (nodes.length === 0) {
+      grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-faint);font-size:11px;letter-spacing:2px">No memories found</div>';
+      return;
+    }
+
+    grid.innerHTML = nodes.map(n => {
+      const typeName = (n.type || 'episodic').replace('_', ' ');
+      const age = timeAgo(n.createdAt);
+      const tags = (n.tags || []).slice(0, 4).map(t => '<span class="card-tag">' + esc(t) + '</span>').join('');
+      const scoreHtml = showScores && n._score ? '<span class="card-score">' + (n._score).toFixed(2) + '</span>' : '';
+
+      return '<div class="memory-card" data-type="' + esc(n.type) + '" onclick="focusInBrain(' + n.id + ')">' +
+        scoreHtml +
+        '<div class="card-header">' +
+          '<span class="card-type" data-type="' + esc(n.type) + '">' + esc(typeName) + '</span>' +
+          '<span class="card-id">#' + n.id + '</span>' +
+        '</div>' +
+        '<div class="card-summary">' + esc(n.summary || '') + '</div>' +
+        '<div class="card-meta">' +
+          '<span>imp <span class="v">' + (n.importance || 0).toFixed(2) + '</span></span>' +
+          '<div class="card-imp-bar"><div class="card-imp-fill" style="width:' + ((n.importance || 0) * 100) + '%"></div></div>' +
+          '<span>decay <span class="v">' + ((n.decay ?? 1) * 100).toFixed(0) + '%</span></span>' +
+          '<span>' + age + '</span>' +
+        '</div>' +
+        (tags ? '<div class="card-tags">' + tags + '</div>' : '') +
+      '</div>';
+    }).join('');
+  }
+
+  /* ============= UI HELPERS ============= */
+  function showDataUI() {
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('statsBar').classList.add('visible');
+    document.getElementById('brainSection').classList.add('visible');
+    document.getElementById('searchSection').classList.add('visible');
+    document.getElementById('cardsSection').classList.add('visible');
+  }
+
+  function clearData() {
+    brainNodes = [];
+    allNodes = [];
+    document.getElementById('emptyState').style.display = 'block';
+    document.getElementById('statsBar').classList.remove('visible');
+    document.getElementById('brainSection').classList.remove('visible');
+    document.getElementById('searchSection').classList.remove('visible');
+    document.getElementById('cardsSection').classList.remove('visible');
+    document.getElementById('searchInput').value = '';
+    document.getElementById('searchCount').textContent = '';
+    resetBrainHighlights();
+  }
+
+  function showLoading(msg) {
+    document.getElementById('loadingMsg').textContent = msg || 'Loading...';
+    document.getElementById('loadingOverlay').classList.add('visible');
+  }
+  function hideLoading() {
+    document.getElementById('loadingOverlay').classList.remove('visible');
+  }
+
+  function showError(id, msg) {
+    const el = document.getElementById(id);
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+  function hideError(id) {
+    document.getElementById(id).style.display = 'none';
+  }
+
+  function esc(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function timeAgo(dateStr) {
+    if (!dateStr) return '';
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'now';
+    if (mins < 60) return mins + 'm';
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return hours + 'h';
+    const days = Math.floor(hours / 24);
+    if (days < 30) return days + 'd';
+    return Math.floor(days / 30) + 'mo';
+  }
+
+  /* ============= AUTO-RECONNECT ============= */
+  (function() {
+    const saved = localStorage.getItem('explorer_api_key');
+    if (saved) {
+      document.getElementById('apiKeyInput').value = saved;
+      connectWithApiKey();
+    }
+  })();
+
+  /* ============= PRIVY WALLET EVENT ============= */
+  window.addEventListener('privy-wallet', async (e) => {
+    const { address, token } = e.detail;
+    showLoading('Fetching memories for ' + address.slice(0, 4) + '...' + address.slice(-4) + '...');
+
+    try {
+      const res = await fetch('/api/user/brain?wallet=' + encodeURIComponent(address) + '&limit=500', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+
+      if (!res.ok) throw new Error('Failed to fetch: ' + res.status);
+      const data = await res.json();
+
+      if (!data.nodes || data.nodes.length === 0) {
+        hideLoading();
+        alert('No memories found for this wallet.');
+        return;
+      }
+
+      hideLoading();
+      loadBrainData(data);
+    } catch (err) {
+      hideLoading();
+      alert('Failed to retrieve memories: ' + err.message);
+    }
+  });
+  </script>
+
+  <!-- PRIVY REACT ISLAND -->
+  <script type="importmap">
+  { "imports": {
+    "react": "https://esm.sh/react@19",
+    "react-dom/client": "https://esm.sh/react-dom@19/client",
+    "react/jsx-runtime": "https://esm.sh/react@19/jsx-runtime"
+  }}
+  </script>
+  <script type="module">
+  // Attempt to load Privy SDK and create a React island for wallet connect
+  (async () => {
+    const fallback = document.getElementById('privyFallback');
+    try {
+      const [React, ReactDOM, PrivyModule] = await Promise.all([
+        import('react'),
+        import('react-dom/client'),
+        import('https://esm.sh/@privy-io/react-auth@2?external=react,react-dom'),
+      ]);
+
+      const { PrivyProvider, usePrivy, useWallets } = PrivyModule;
+      const { createElement: h, useState, useEffect } = React;
+
+      const appId = document.querySelector('meta[name="privy-app-id"]')?.content || '';
+
+      if (!appId) {
+        fallback.textContent = 'Privy not configured. Use API Key instead.';
+        return;
+      }
+
+      function WalletButton() {
+        const { ready, authenticated, login, logout, getAccessToken } = usePrivy();
+        const { wallets } = useWallets();
+        const [status, setStatus] = useState('idle');
+
+        useEffect(() => {
+          if (!authenticated || !wallets?.length) return;
+          const solana = wallets.find(w => w.walletClientType === 'solana' || w.chainType === 'solana');
+          const addr = solana?.address || wallets[0]?.address;
+          if (!addr) return;
+
+          setStatus('connected');
+          getAccessToken().then(token => {
+            window.dispatchEvent(new CustomEvent('privy-wallet', { detail: { address: addr, token } }));
+          });
+        }, [authenticated, wallets]);
+
+        if (!ready) return h('div', { style: { fontSize: '10px', color: '#999', letterSpacing: '1px' } }, 'Initializing...');
+
+        if (authenticated && status === 'connected') {
+          const addr = wallets?.[0]?.address || '';
+          return h('div', { style: { display: 'flex', alignItems: 'center', gap: '12px', width: '100%' } },
+            h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flex: 1, padding: '12px 16px', background: 'rgba(42,106,58,0.06)', border: '1px solid rgba(42,106,58,0.15)' } },
+              h('div', { style: { width: 6, height: 6, borderRadius: '50%', background: '#2a6a3a', animation: 'pulse-dot 3s ease-in-out infinite' } }),
+              h('span', { style: { fontSize: '10px', letterSpacing: '1px', color: '#2a6a3a' } }, addr.slice(0, 4) + '...' + addr.slice(-4)),
+            ),
+            h('button', {
+              onClick: logout,
+              style: { fontFamily: 'var(--mono)', fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', padding: '8px 16px', background: 'transparent', color: '#9a3030', border: '1px solid rgba(154,48,48,0.2)', cursor: 'pointer' }
+            }, 'Disconnect')
+          );
+        }
+
+        return h('button', {
+          onClick: login,
+          style: { fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '2px', textTransform: 'uppercase', padding: '12px 24px', background: '#111', color: '#f5f5f0', border: '1px solid #111', cursor: 'pointer', width: '100%', transition: 'all 0.25s' }
+        }, 'Connect Wallet');
+      }
+
+      function App() {
+        return h(PrivyProvider, {
+          appId,
+          config: {
+            appearance: { theme: 'light' },
+            loginMethods: ['wallet'],
+            embeddedWallets: { createOnLogin: 'off' },
+          },
+        }, h(WalletButton));
+      }
+
+      fallback.style.display = 'none';
+      const container = document.createElement('div');
+      document.getElementById('privy-root').appendChild(container);
+      ReactDOM.createRoot(container).render(h(App));
+
+    } catch (err) {
+      console.error('Privy load failed:', err);
+      fallback.textContent = 'Wallet connector unavailable. Use API Key instead.';
+    }
+  })();
+  </script>
+
+</body>
+</html>

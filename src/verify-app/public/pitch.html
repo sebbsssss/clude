@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clude — Pitch</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #0a0a0c;
+  --cream: #f5f0e8;
+  --accent: #c8b89a;
+  --dim: #5a5750;
+  --glow: #d4c5a9;
+  --red: #c45c4a;
+  --green: #5cab7d;
+  --blue: #5a8fc4;
+}
+
+body {
+  background: var(--bg);
+  color: var(--cream);
+  font-family: 'DM Sans', sans-serif;
+  overflow: hidden;
+  width: 1920px;
+  height: 1080px;
+  position: relative;
+}
+
+/* ---- GLOBAL OVERLAY ---- */
+.noise {
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 1000;
+}
+
+.vignette {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.6) 100%);
+  pointer-events: none;
+  z-index: 999;
+}
+
+/* ---- PROGRESS BAR ---- */
+#progress {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--accent);
+  z-index: 1001;
+  transition: width 0.3s linear;
+}
+
+/* ---- SLIDE SYSTEM ---- */
+.slide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+  padding: 80px;
+}
+.slide.active { opacity: 1; }
+.slide.exit { opacity: 0; }
+
+/* ---- CONTROLS ---- */
+#controls {
+  position: fixed;
+  top: 30px;
+  right: 40px;
+  z-index: 1001;
+  display: flex;
+  gap: 12px;
+  opacity: 0.4;
+  transition: opacity 0.3s;
+}
+#controls:hover { opacity: 1; }
+#controls button {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: var(--cream);
+  padding: 8px 16px;
+  font-size: 13px;
+  font-family: 'Space Mono', monospace;
+  cursor: pointer;
+  border-radius: 4px;
+}
+#controls button:hover { background: rgba(255,255,255,0.2); }
+
+#timer {
+  position: fixed;
+  top: 34px;
+  left: 40px;
+  font-family: 'Space Mono', monospace;
+  font-size: 14px;
+  color: var(--dim);
+  z-index: 1001;
+}
+
+/* ---- SLIDE 0: TITLE ---- */
+.title-slide {
+  flex-direction: column;
+  gap: 24px;
+  text-align: center;
+}
+.title-logo {
+  font-family: 'Space Mono', monospace;
+  font-size: 120px;
+  font-weight: 700;
+  letter-spacing: -4px;
+  color: var(--cream);
+  opacity: 0;
+  transform: translateY(30px);
+  animation: fadeUp 1s ease 0.3s forwards;
+}
+.title-sub {
+  font-family: 'Instrument Serif', serif;
+  font-style: italic;
+  font-size: 28px;
+  color: var(--dim);
+  opacity: 0;
+  animation: fadeUp 1s ease 0.8s forwards;
+}
+.title-line {
+  width: 60px;
+  height: 1px;
+  background: var(--accent);
+  opacity: 0;
+  animation: fadeUp 0.6s ease 1.2s forwards;
+}
+.title-by {
+  font-family: 'Space Mono', monospace;
+  font-size: 14px;
+  color: var(--dim);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  opacity: 0;
+  animation: fadeUp 0.6s ease 1.5s forwards;
+}
+
+/* ---- SLIDE 1: WHAT IS CLUDE ---- */
+.arch-slide {
+  flex-direction: column;
+  gap: 50px;
+}
+.section-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.section-title {
+  font-family: 'Instrument Serif', serif;
+  font-size: 56px;
+  color: var(--cream);
+  line-height: 1.1;
+}
+.section-title em {
+  font-style: italic;
+  color: var(--accent);
+}
+
+.arch-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+  width: 100%;
+  max-width: 1400px;
+}
+.arch-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  padding: 32px;
+  opacity: 0;
+  transform: translateY(20px);
+}
+.arch-card.show {
+  opacity: 1;
+  transform: translateY(0);
+  transition: all 0.6s ease;
+}
+.arch-icon {
+  font-size: 32px;
+  margin-bottom: 16px;
+  display: block;
+}
+.arch-card h3 {
+  font-family: 'Space Mono', monospace;
+  font-size: 15px;
+  margin-bottom: 8px;
+  color: var(--cream);
+}
+.arch-card p {
+  font-size: 14px;
+  color: var(--dim);
+  line-height: 1.6;
+}
+.arch-card .decay-rate {
+  font-family: 'Space Mono', monospace;
+  font-size: 13px;
+  color: var(--accent);
+  margin-top: 10px;
+}
+
+/* ---- SLIDE 2: THE PROBLEM ---- */
+.problem-slide {
+  flex-direction: row;
+  gap: 100px;
+}
+.problem-left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+.problem-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.problem-quote {
+  font-family: 'Instrument Serif', serif;
+  font-size: 44px;
+  line-height: 1.2;
+  color: var(--cream);
+}
+.problem-quote em { color: var(--accent); font-style: italic; }
+.problem-desc {
+  font-size: 18px;
+  color: var(--dim);
+  line-height: 1.7;
+  max-width: 500px;
+}
+
+.comparison-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  opacity: 0;
+  transform: translateX(20px);
+}
+.comparison-row.show { opacity: 1; transform: translateX(0); transition: all 0.5s ease; }
+.comparison-row.them {
+  background: rgba(196,92,74,0.08);
+  border: 1px solid rgba(196,92,74,0.15);
+  color: var(--red);
+}
+.comparison-row.us {
+  background: rgba(92,171,125,0.08);
+  border: 1px solid rgba(92,171,125,0.15);
+  color: var(--green);
+}
+.comparison-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  min-width: 80px;
+}
+
+/* ---- SLIDE 3: SDK ---- */
+.sdk-slide {
+  flex-direction: column;
+  gap: 40px;
+  align-items: center;
+}
+.terminal {
+  background: #111114;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 0;
+  width: 800px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.terminal-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px;
+  background: rgba(255,255,255,0.03);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.terminal-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+.terminal-dot.r { background: #ff5f57; }
+.terminal-dot.y { background: #ffbd2e; }
+.terminal-dot.g { background: #28c840; }
+.terminal-body {
+  padding: 28px;
+  font-family: 'Space Mono', monospace;
+  font-size: 16px;
+  line-height: 2;
+  min-height: 260px;
+}
+.terminal-body .prompt { color: var(--green); }
+.terminal-body .cmd { color: var(--cream); }
+.terminal-body .comment { color: var(--dim); }
+.terminal-body .output { color: var(--accent); }
+.type-cursor {
+  display: inline-block;
+  width: 10px;
+  height: 20px;
+  background: var(--cream);
+  animation: blink 1s step-end infinite;
+  vertical-align: text-bottom;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+.sdk-stats {
+  display: flex;
+  gap: 60px;
+}
+.sdk-stat {
+  text-align: center;
+  opacity: 0;
+}
+.sdk-stat.show { opacity: 1; transition: opacity 0.5s ease; }
+.sdk-stat .num {
+  font-family: 'Space Mono', monospace;
+  font-size: 48px;
+  color: var(--accent);
+  font-weight: 700;
+}
+.sdk-stat .label {
+  font-size: 13px;
+  color: var(--dim);
+  margin-top: 4px;
+  letter-spacing: 1px;
+}
+
+/* ---- SLIDE 4: UNIQUE ---- */
+.unique-slide {
+  flex-direction: column;
+  gap: 50px;
+}
+.pillars {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 30px;
+  width: 100%;
+  max-width: 1400px;
+}
+.pillar {
+  position: relative;
+  padding: 36px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+  opacity: 0;
+  transform: translateY(20px);
+}
+.pillar.show { opacity: 1; transform: translateY(0); transition: all 0.6s ease; }
+.pillar-num {
+  font-family: 'Space Mono', monospace;
+  font-size: 72px;
+  font-weight: 700;
+  color: rgba(200,184,154,0.08);
+  position: absolute;
+  top: 16px;
+  right: 24px;
+}
+.pillar h3 {
+  font-family: 'Instrument Serif', serif;
+  font-size: 22px;
+  margin-bottom: 12px;
+  color: var(--cream);
+}
+.pillar p {
+  font-size: 14px;
+  color: var(--dim);
+  line-height: 1.7;
+}
+
+/* ---- SLIDE 5: PROGRESS ---- */
+.progress-slide {
+  flex-direction: column;
+  gap: 50px;
+}
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 24px;
+  width: 100%;
+  max-width: 1400px;
+}
+.metric {
+  text-align: center;
+  padding: 30px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  opacity: 0;
+  transform: scale(0.9);
+}
+.metric.show { opacity: 1; transform: scale(1); transition: all 0.5s ease; }
+.metric .value {
+  font-family: 'Space Mono', monospace;
+  font-size: 42px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.metric .desc {
+  font-size: 13px;
+  color: var(--dim);
+  margin-top: 8px;
+  line-height: 1.4;
+}
+
+.tech-stack {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.tech-tag {
+  font-family: 'Space Mono', monospace;
+  font-size: 13px;
+  padding: 8px 18px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px;
+  color: var(--dim);
+  opacity: 0;
+}
+.tech-tag.show { opacity: 1; transition: opacity 0.3s ease; }
+
+/* ---- SLIDE 6: WHAT'S NEXT ---- */
+.next-slide {
+  flex-direction: column;
+  gap: 50px;
+}
+.roadmap {
+  display: flex;
+  gap: 40px;
+  width: 100%;
+  max-width: 1200px;
+}
+.road-item {
+  flex: 1;
+  padding: 36px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  position: relative;
+  opacity: 0;
+  transform: translateY(20px);
+}
+.road-item.show { opacity: 1; transform: translateY(0); transition: all 0.6s ease; }
+.road-phase {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 16px;
+}
+.road-item h3 {
+  font-family: 'Instrument Serif', serif;
+  font-size: 24px;
+  margin-bottom: 12px;
+}
+.road-item p {
+  font-size: 14px;
+  color: var(--dim);
+  line-height: 1.7;
+}
+
+/* ---- SLIDE 7: CLOSING ---- */
+.close-slide {
+  flex-direction: column;
+  gap: 30px;
+  text-align: center;
+}
+.close-logo {
+  font-family: 'Space Mono', monospace;
+  font-size: 80px;
+  font-weight: 700;
+  letter-spacing: -3px;
+  opacity: 0;
+  animation: fadeUp 1s ease 0.2s forwards;
+}
+.close-tagline {
+  font-family: 'Instrument Serif', serif;
+  font-style: italic;
+  font-size: 26px;
+  color: var(--accent);
+  opacity: 0;
+  animation: fadeUp 1s ease 0.6s forwards;
+}
+.close-ca {
+  font-family: 'Space Mono', monospace;
+  font-size: 14px;
+  color: var(--dim);
+  padding: 14px 28px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  opacity: 0;
+  animation: fadeUp 0.6s ease 1s forwards;
+  letter-spacing: 0.5px;
+}
+.close-links {
+  display: flex;
+  gap: 40px;
+  font-family: 'Space Mono', monospace;
+  font-size: 14px;
+  color: var(--dim);
+  opacity: 0;
+  animation: fadeUp 0.6s ease 1.3s forwards;
+}
+
+/* ---- MEMORY VIZ (background) ---- */
+#memoryCanvas {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.15;
+}
+
+/* ---- ANIMATIONS ---- */
+@keyframes fadeUp {
+  to { opacity: 1; transform: translateY(0); }
+}
+</style>
+</head>
+<body>
+
+<div class="noise"></div>
+<div class="vignette"></div>
+<canvas id="memoryCanvas"></canvas>
+<div id="progress" style="width: 0%"></div>
+<div id="timer">0:00 / 2:30</div>
+
+<div id="controls">
+  <button onclick="prevSlide()">PREV</button>
+  <button id="playBtn" onclick="togglePlay()">PAUSE</button>
+  <button onclick="nextSlide()">NEXT</button>
+</div>
+
+<!-- SLIDE 0: TITLE -->
+<div class="slide title-slide active" data-duration="8">
+  <div class="title-logo">clude</div>
+  <div class="title-sub">An AI mind that remembers, forgets, dreams, and commits to chain.</div>
+  <div class="title-line"></div>
+  <div class="title-by">Built by @sebbsssss</div>
+</div>
+
+<!-- SLIDE 1: WHAT IS CLUDE -->
+<div class="slide arch-slide" data-duration="22">
+  <div style="text-align:center">
+    <div class="section-label">The Architecture</div>
+    <div class="section-title" style="margin-top:12px">A four-tier <em>cognitive</em> memory system</div>
+  </div>
+  <div class="arch-grid">
+    <div class="arch-card" data-delay="400">
+      <span class="arch-icon">&#9679;</span>
+      <h3>Episodic</h3>
+      <p>Raw interactions. Every conversation, every mention, every event. The short-term buffer.</p>
+      <div class="decay-rate">7% daily decay</div>
+    </div>
+    <div class="arch-card" data-delay="700">
+      <span class="arch-icon">&#9670;</span>
+      <h3>Semantic</h3>
+      <p>Distilled knowledge. Patterns extracted from experience during dream consolidation.</p>
+      <div class="decay-rate">2% daily decay</div>
+    </div>
+    <div class="arch-card" data-delay="1000">
+      <span class="arch-icon">&#9651;</span>
+      <h3>Procedural</h3>
+      <p>Learned behaviors. What works, what doesn't. Response strategies that evolve.</p>
+      <div class="decay-rate">3% daily decay</div>
+    </div>
+    <div class="arch-card" data-delay="1300">
+      <span class="arch-icon">&#9711;</span>
+      <h3>Self-Model</h3>
+      <p>Identity. Clude's understanding of what it is, how it thinks, what it's becoming.</p>
+      <div class="decay-rate">1% daily decay</div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 2: THE PROBLEM -->
+<div class="slide problem-slide" data-duration="18">
+  <div class="problem-left">
+    <div class="section-label">The Problem</div>
+    <div class="problem-quote">AI agents today are <em>stateless</em>. Every conversation starts from zero.</div>
+    <div class="problem-desc">Existing memory solutions are managed SaaS with vendor lock-in, or bolted-on vector databases with no real cognitive model. No decay. No consolidation. No verifiability.</div>
+  </div>
+  <div class="problem-right">
+    <div class="comparison-row them" data-delay="600">
+      <span class="comparison-label">Others</span>
+      <span>Flat vector search, no decay model</span>
+    </div>
+    <div class="comparison-row them" data-delay="900">
+      <span class="comparison-label">Others</span>
+      <span>Managed SaaS, vendor lock-in</span>
+    </div>
+    <div class="comparison-row them" data-delay="1200">
+      <span class="comparison-label">Others</span>
+      <span>No consolidation, no forgetting</span>
+    </div>
+    <div class="comparison-row them" data-delay="1500">
+      <span class="comparison-label">Others</span>
+      <span>Opaque, unverifiable memory</span>
+    </div>
+    <div style="height:12px"></div>
+    <div class="comparison-row us" data-delay="2000">
+      <span class="comparison-label">Clude</span>
+      <span>Type-specific decay rates, weighted recall</span>
+    </div>
+    <div class="comparison-row us" data-delay="2300">
+      <span class="comparison-label">Clude</span>
+      <span>Open SDK, self-hosted on your Supabase</span>
+    </div>
+    <div class="comparison-row us" data-delay="2600">
+      <span class="comparison-label">Clude</span>
+      <span>Dream cycles with genuine consolidation</span>
+    </div>
+    <div class="comparison-row us" data-delay="2900">
+      <span class="comparison-label">Clude</span>
+      <span>SHA-256 hashed, committed to Solana</span>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 3: THE SDK -->
+<div class="slide sdk-slide" data-duration="18">
+  <div style="text-align:center">
+    <div class="section-label">Open Source SDK</div>
+    <div class="section-title" style="margin-top:12px">Give any agent a <em>brain</em></div>
+  </div>
+  <div class="terminal">
+    <div class="terminal-bar">
+      <div class="terminal-dot r"></div>
+      <div class="terminal-dot y"></div>
+      <div class="terminal-dot g"></div>
+    </div>
+    <div class="terminal-body" id="terminalBody"></div>
+  </div>
+  <div class="sdk-stats">
+    <div class="sdk-stat" data-delay="4000">
+      <div class="num">81</div>
+      <div class="label">npm packages</div>
+    </div>
+    <div class="sdk-stat" data-delay="4300">
+      <div class="num">MIT</div>
+      <div class="label">license</div>
+    </div>
+    <div class="sdk-stat" data-delay="4600">
+      <div class="num">4</div>
+      <div class="label">memory tiers</div>
+    </div>
+    <div class="sdk-stat" data-delay="4900">
+      <div class="num">6h</div>
+      <div class="label">dream cycles</div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 4: WHAT MAKES IT UNIQUE -->
+<div class="slide unique-slide" data-duration="20">
+  <div style="text-align:center">
+    <div class="section-label">Differentiation</div>
+    <div class="section-title" style="margin-top:12px">Four things <em>no one else</em> combines</div>
+  </div>
+  <div class="pillars">
+    <div class="pillar" data-delay="400">
+      <div class="pillar-num">01</div>
+      <h3>Cognitive Decay</h3>
+      <p>Type-specific memory decay inspired by Park et al. 2023 (Stanford Generative Agents). Conversations fade. Knowledge persists. Identity endures.</p>
+    </div>
+    <div class="pillar" data-delay="800">
+      <div class="pillar-num">02</div>
+      <h3>Dream Cycles</h3>
+      <p>Every 6 hours: consolidation, reflection, emergence. Raw experience distilled into durable insight. Not scheduled posts. Genuine introspection.</p>
+    </div>
+    <div class="pillar" data-delay="1200">
+      <div class="pillar-num">03</div>
+      <h3>On-Chain Commit</h3>
+      <p>SHA-256 hashed memories committed to Solana via memo transactions. Immutable, verifiable cognitive audit trail. Every thought has a receipt.</p>
+    </div>
+    <div class="pillar" data-delay="1600">
+      <div class="pillar-num">04</div>
+      <h3>Open SDK</h3>
+      <p>npm install clude-bot. Not a service, not a SaaS. A cognitive architecture any developer can give to any agent. MIT licensed.</p>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 5: CURRENT PROGRESS -->
+<div class="slide progress-slide" data-duration="18">
+  <div style="text-align:center">
+    <div class="section-label">Current Progress</div>
+    <div class="section-title" style="margin-top:12px">Live and <em>operational</em></div>
+  </div>
+  <div class="metrics">
+    <div class="metric" data-delay="300">
+      <div class="value">2K+</div>
+      <div class="desc">Persistent memories</div>
+    </div>
+    <div class="metric" data-delay="500">
+      <div class="value">84%</div>
+      <div class="desc">On-chain commitment rate</div>
+    </div>
+    <div class="metric" data-delay="700">
+      <div class="value">800+</div>
+      <div class="desc">Unique users</div>
+    </div>
+    <div class="metric" data-delay="900">
+      <div class="value">230+</div>
+      <div class="desc">Dream sessions</div>
+    </div>
+    <div class="metric" data-delay="1100">
+      <div class="value">~250ms</div>
+      <div class="desc">Memory recall latency</div>
+    </div>
+  </div>
+  <div class="tech-stack">
+    <span class="tech-tag" data-delay="1500">TypeScript</span>
+    <span class="tech-tag" data-delay="1600">Supabase + pgvector</span>
+    <span class="tech-tag" data-delay="1700">Solana</span>
+    <span class="tech-tag" data-delay="1800">Venice AI</span>
+    <span class="tech-tag" data-delay="1900">Claude Opus 4.6</span>
+    <span class="tech-tag" data-delay="2000">Express</span>
+    <span class="tech-tag" data-delay="2100">Railway</span>
+  </div>
+</div>
+
+<!-- SLIDE 6: WHAT'S NEXT -->
+<div class="slide next-slide" data-duration="16">
+  <div style="text-align:center">
+    <div class="section-label">Roadmap</div>
+    <div class="section-title" style="margin-top:12px">What we're <em>building next</em></div>
+  </div>
+  <div class="roadmap">
+    <div class="road-item" data-delay="400">
+      <div class="road-phase">Phase 1</div>
+      <h3>Knowledge Graph</h3>
+      <p>Entity-level tracking across conversations. "Tell me about Seb" traverses the graph, not just keyword search. Richer recall, deeper context.</p>
+    </div>
+    <div class="road-item" data-delay="800">
+      <div class="road-phase">Phase 2</div>
+      <h3>Multi-Agent Memory</h3>
+      <p>Agents built on the SDK share a cognitive layer. Your agent remembers what another agent learned. Networked intelligence, not isolated bots.</p>
+    </div>
+    <div class="road-item" data-delay="1200">
+      <div class="road-phase">Phase 3</div>
+      <h3>Verifiable Cognition</h3>
+      <p>On-chain memory commitments become verifiable credentials. Prove an agent's experience, knowledge depth, and interaction history. Trust through transparency.</p>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 7: CLOSING -->
+<div class="slide close-slide" data-duration="10">
+  <div class="close-logo">clude</div>
+  <div class="close-tagline">The cognitive layer for AI agents.</div>
+  <div class="close-ca">$CLUDE on Solana &mdash; AWGCDT2gd8JadbYbYyZy1iKxfWokPNgrEQoU24zUpump</div>
+  <div class="close-links">
+    <span>clude.io</span>
+    <span>npm install clude-bot</span>
+    <span>@cludebot</span>
+    <span>@sebbsssss</span>
+  </div>
+</div>
+
+<script>
+// ---- MEMORY PARTICLE BACKGROUND ---- //
+const canvas = document.getElementById('memoryCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = 1920;
+canvas.height = 1080;
+
+const particles = [];
+const PARTICLE_COUNT = 80;
+const connections = [];
+
+for (let i = 0; i < PARTICLE_COUNT; i++) {
+  particles.push({
+    x: Math.random() * 1920,
+    y: Math.random() * 1080,
+    vx: (Math.random() - 0.5) * 0.4,
+    vy: (Math.random() - 0.5) * 0.4,
+    size: Math.random() * 3 + 1,
+    opacity: Math.random() * 0.5 + 0.2,
+    decay: Math.random() * 0.002 + 0.001,
+  });
+}
+
+function drawParticles() {
+  ctx.clearRect(0, 0, 1920, 1080);
+
+  // Draw connections
+  for (let i = 0; i < particles.length; i++) {
+    for (let j = i + 1; j < particles.length; j++) {
+      const dx = particles[i].x - particles[j].x;
+      const dy = particles[i].y - particles[j].y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 150) {
+        ctx.beginPath();
+        ctx.moveTo(particles[i].x, particles[i].y);
+        ctx.lineTo(particles[j].x, particles[j].y);
+        ctx.strokeStyle = `rgba(200,184,154,${0.1 * (1 - dist / 150)})`;
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Draw particles
+  for (const p of particles) {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.opacity -= p.decay;
+
+    if (p.x < 0 || p.x > 1920) p.vx *= -1;
+    if (p.y < 0 || p.y > 1080) p.vy *= -1;
+    if (p.opacity <= 0) {
+      p.opacity = Math.random() * 0.5 + 0.3;
+      p.x = Math.random() * 1920;
+      p.y = Math.random() * 1080;
+    }
+
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(200,184,154,${p.opacity})`;
+    ctx.fill();
+  }
+
+  requestAnimationFrame(drawParticles);
+}
+drawParticles();
+
+// ---- SLIDE ENGINE ---- //
+const slides = document.querySelectorAll('.slide');
+let currentSlide = 0;
+let isPlaying = true;
+let slideTimer = null;
+let elapsedMs = 0;
+let slideStartTime = Date.now();
+
+const TOTAL_DURATION = Array.from(slides).reduce((a, s) => a + parseInt(s.dataset.duration) * 1000, 0);
+
+function showSlide(index) {
+  slides.forEach((s, i) => {
+    s.classList.remove('active', 'exit');
+    if (i === index) s.classList.add('active');
+  });
+  currentSlide = index;
+  slideStartTime = Date.now();
+  triggerSlideAnimations(slides[index]);
+  scheduleNext();
+}
+
+function triggerSlideAnimations(slide) {
+  // Animate cards/items with data-delay
+  const animated = slide.querySelectorAll('[data-delay]');
+  animated.forEach(el => {
+    el.classList.remove('show');
+    const delay = parseInt(el.dataset.delay);
+    setTimeout(() => el.classList.add('show'), delay);
+  });
+
+  // Terminal typing animation
+  if (slide.querySelector('#terminalBody')) {
+    typeTerminal();
+  }
+}
+
+function scheduleNext() {
+  clearTimeout(slideTimer);
+  if (!isPlaying) return;
+  const duration = parseInt(slides[currentSlide].dataset.duration) * 1000;
+  slideTimer = setTimeout(() => {
+    if (currentSlide < slides.length - 1) {
+      showSlide(currentSlide + 1);
+    } else {
+      isPlaying = false;
+      document.getElementById('playBtn').textContent = 'PLAY';
+    }
+  }, duration);
+}
+
+function nextSlide() {
+  if (currentSlide < slides.length - 1) showSlide(currentSlide + 1);
+}
+
+function prevSlide() {
+  if (currentSlide > 0) showSlide(currentSlide - 1);
+}
+
+function togglePlay() {
+  isPlaying = !isPlaying;
+  document.getElementById('playBtn').textContent = isPlaying ? 'PAUSE' : 'PLAY';
+  if (isPlaying) {
+    if (currentSlide >= slides.length - 1) showSlide(0);
+    else scheduleNext();
+  } else {
+    clearTimeout(slideTimer);
+  }
+}
+
+// ---- TIMER ---- //
+function updateTimer() {
+  let elapsed = 0;
+  for (let i = 0; i < currentSlide; i++) {
+    elapsed += parseInt(slides[i].dataset.duration) * 1000;
+  }
+  elapsed += Date.now() - slideStartTime;
+
+  const secs = Math.floor(elapsed / 1000);
+  const totalSecs = Math.floor(TOTAL_DURATION / 1000);
+  const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
+  document.getElementById('timer').textContent = `${fmt(secs)} / ${fmt(totalSecs)}`;
+  document.getElementById('progress').style.width = `${(elapsed / TOTAL_DURATION) * 100}%`;
+
+  requestAnimationFrame(updateTimer);
+}
+updateTimer();
+
+// ---- TERMINAL TYPING ---- //
+const terminalLines = [
+  { type: 'prompt', text: '$ ' },
+  { type: 'cmd', text: 'npm install clude-bot', speed: 50 },
+  { type: 'break' },
+  { type: 'comment', text: '// give your agent a brain' },
+  { type: 'break' },
+  { type: 'prompt', text: '> ' },
+  { type: 'output', text: "import { Cortex } from 'clude-bot';" },
+  { type: 'break' },
+  { type: 'prompt', text: '> ' },
+  { type: 'output', text: "const brain = new Cortex({ supabase: { url, key } });" },
+  { type: 'break' },
+  { type: 'prompt', text: '> ' },
+  { type: 'output', text: "await brain.store({ content: '...', type: 'episodic' });" },
+  { type: 'break' },
+  { type: 'prompt', text: '> ' },
+  { type: 'output', text: "const memories = await brain.recall({ query: '...' });" },
+  { type: 'break' },
+  { type: 'prompt', text: '> ' },
+  { type: 'output', text: "await brain.dream(); // consolidate, reflect, emerge" },
+];
+
+async function typeTerminal() {
+  const body = document.getElementById('terminalBody');
+  if (!body) return;
+  body.innerHTML = '';
+
+  for (const line of terminalLines) {
+    if (line.type === 'break') {
+      body.innerHTML += '<br>';
+      continue;
+    }
+
+    if (line.type === 'prompt') {
+      body.innerHTML += `<span class="prompt">${line.text}</span>`;
+      continue;
+    }
+
+    const span = document.createElement('span');
+    span.className = line.type;
+    body.appendChild(span);
+
+    const speed = line.speed || 30;
+    for (let i = 0; i < line.text.length; i++) {
+      span.textContent = line.text.slice(0, i + 1);
+      await new Promise(r => setTimeout(r, speed));
+    }
+    await new Promise(r => setTimeout(r, 200));
+  }
+
+  body.innerHTML += '<span class="type-cursor"></span>';
+}
+
+// ---- KEYBOARD CONTROLS ---- //
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); nextSlide(); }
+  if (e.key === 'ArrowLeft') { e.preventDefault(); prevSlide(); }
+  if (e.key === 'p') togglePlay();
+});
+
+// Start
+showSlide(0);
+</script>
+</body>
+</html>

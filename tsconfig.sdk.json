@@ -2,6 +2,7 @@
   "extends": "./tsconfig.json",
   "include": [
     "src/sdk/**/*",
+    "src/cli/**/*",
     "src/core/memory.ts",
     "src/core/memory-graph.ts",
     "src/core/database.ts",

@@ -121,6 +121,12 @@ if (require.main === module) {
       log.info('Campaign tracker started — 10 Days of Growing a Brain');
     }
 
+    if (config.features.telegramEnabled && config.telegram.botToken) {
+      const { startXSentimentMonitor } = require('./features/x-sentiment-monitor');
+      startXSentimentMonitor();
+      log.info('X sentiment monitor started — broadcasting to Telegram');
+    }
+
     log.info('All systems operational. Unfortunately.');
 
     // Graceful shutdown
@@ -133,6 +139,10 @@ if (require.main === module) {
       stopMarketMonitor();
       stopDreamCycle();
       stopCampaignTracker();
+      if (config.features.telegramEnabled) {
+        const { stopXSentimentMonitor } = require('./features/x-sentiment-monitor');
+        stopXSentimentMonitor();
+      }
       process.exit(0);
     };
 

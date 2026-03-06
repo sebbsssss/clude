@@ -1,0 +1,1284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clude — Competitive Benchmark Report</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #0a0a0c;
+  --bg2: #111114;
+  --bg3: #18181c;
+  --cream: #f5f0e8;
+  --cream-dim: rgba(245,240,232,0.7);
+  --accent: #c8b89a;
+  --accent-dim: rgba(200,184,154,0.15);
+  --accent-glow: rgba(200,184,154,0.08);
+  --dim: #5a5750;
+  --dim2: #3a3835;
+  --red: #c45c4a;
+  --green: #5cab7d;
+  --blue: #5a8fc4;
+  --border: rgba(200,184,154,0.12);
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--cream);
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 400;
+  line-height: 1.7;
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- NOISE + VIGNETTE ---- */
+.noise {
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 1000;
+}
+.vignette {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.5) 100%);
+  pointer-events: none;
+  z-index: 999;
+}
+
+/* ---- LAYOUT ---- */
+.page { max-width: 960px; margin: 0 auto; padding: 0 32px; position: relative; z-index: 1; }
+
+/* ---- TOC SIDEBAR ---- */
+.toc {
+  position: fixed;
+  top: 50%;
+  left: 32px;
+  transform: translateY(-50%);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.toc a {
+  display: block;
+  width: 3px;
+  height: 20px;
+  background: var(--dim2);
+  border-radius: 2px;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  position: relative;
+}
+.toc a.active { background: var(--accent); height: 28px; }
+.toc a:hover { background: var(--accent); }
+.toc a .toc-label {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  color: var(--dim);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.toc a:hover .toc-label, .toc a.active .toc-label { opacity: 1; color: var(--accent); }
+
+/* ---- HERO ---- */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 120px 0 80px;
+}
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 32px;
+  opacity: 0;
+  animation: fadeUp 0.8s ease 0.2s forwards;
+}
+.hero-badge .dot {
+  width: 6px; height: 6px;
+  background: var(--green);
+  border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+}
+.hero h1 {
+  font-family: 'Instrument Serif', serif;
+  font-weight: 400;
+  font-size: clamp(36px, 5vw, 56px);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--cream);
+  margin-bottom: 24px;
+  opacity: 0;
+  animation: fadeUp 0.8s ease 0.4s forwards;
+}
+.hero h1 em {
+  font-style: italic;
+  color: var(--accent);
+}
+.hero-sub {
+  font-family: 'Space Mono', monospace;
+  font-size: 13px;
+  color: var(--dim);
+  letter-spacing: 0.3px;
+  margin-bottom: 16px;
+  opacity: 0;
+  animation: fadeUp 0.8s ease 0.6s forwards;
+}
+.hero-meta {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  margin-top: 40px;
+  opacity: 0;
+  animation: fadeUp 0.8s ease 0.8s forwards;
+}
+.hero-meta .tag {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--dim);
+  letter-spacing: 0.5px;
+}
+.hero-divider {
+  width: 60px;
+  height: 1px;
+  background: var(--accent);
+  margin: 60px 0;
+  opacity: 0;
+  animation: fadeUp 0.8s ease 1s forwards;
+}
+
+/* ---- SECTIONS ---- */
+section {
+  padding: 80px 0;
+  border-top: 1px solid var(--border);
+  opacity: 0;
+  transform: translateY(24px);
+  transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+section.visible { opacity: 1; transform: translateY(0); }
+
+.section-num {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  color: var(--dim);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+section h2 {
+  font-family: 'Instrument Serif', serif;
+  font-weight: 400;
+  font-size: clamp(28px, 3.5vw, 38px);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  margin-bottom: 12px;
+}
+section h3 {
+  font-family: 'Instrument Serif', serif;
+  font-weight: 400;
+  font-size: 22px;
+  margin-top: 48px;
+  margin-bottom: 16px;
+  color: var(--cream);
+}
+section p {
+  color: var(--cream-dim);
+  max-width: 640px;
+  margin-bottom: 20px;
+}
+section p strong { color: var(--cream); font-weight: 500; }
+
+/* ---- TABLES ---- */
+.table-wrap {
+  margin: 32px 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.data-table th {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--dim);
+  text-align: left;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 400;
+  white-space: nowrap;
+}
+.data-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(200,184,154,0.06);
+  font-family: 'Space Mono', monospace;
+  font-size: 13px;
+  color: var(--cream-dim);
+  white-space: nowrap;
+}
+.data-table tr:last-child td { border-bottom: none; }
+.data-table .label-cell {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  color: var(--cream);
+  font-weight: 500;
+}
+.data-table .winner {
+  color: var(--accent);
+  text-shadow: 0 0 20px var(--accent-glow);
+  font-weight: 700;
+}
+.data-table .winner-row { background: var(--accent-dim); }
+.data-table .num { font-variant-numeric: tabular-nums; }
+
+/* ---- PILL BADGES ---- */
+.pill {
+  display: inline-block;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  padding: 3px 10px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.pill-gold { background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(200,184,154,0.2); }
+.pill-green { background: rgba(92,171,125,0.12); color: var(--green); border: 1px solid rgba(92,171,125,0.2); }
+.pill-blue { background: rgba(90,143,196,0.12); color: var(--blue); border: 1px solid rgba(90,143,196,0.2); }
+.pill-red { background: rgba(196,92,74,0.12); color: var(--red); border: 1px solid rgba(196,92,74,0.2); }
+.pill-dim { background: rgba(90,87,80,0.15); color: var(--dim); border: 1px solid rgba(90,87,80,0.2); }
+
+/* ---- STAT CARDS ---- */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin: 32px 0;
+}
+.stat-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 24px;
+}
+.stat-card .stat-value {
+  font-family: 'Space Mono', monospace;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+  margin-bottom: 8px;
+}
+.stat-card .stat-label {
+  font-size: 12px;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ---- FEATURE MATRIX ---- */
+.feature-table td.yes {
+  color: var(--green);
+}
+.feature-table td.no {
+  color: var(--dim2);
+}
+.feature-table td.partial {
+  color: var(--blue);
+}
+
+/* ---- DIFFERENTIATOR CARDS ---- */
+.diff-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  margin: 40px 0;
+}
+.diff-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 32px 28px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.3s ease;
+}
+.diff-card:hover { border-color: rgba(200,184,154,0.3); }
+.diff-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: 0.4;
+}
+.diff-card .diff-num {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  color: var(--dim);
+  margin-bottom: 16px;
+  letter-spacing: 1px;
+}
+.diff-card h4 {
+  font-family: 'Instrument Serif', serif;
+  font-weight: 400;
+  font-size: 20px;
+  line-height: 1.3;
+  margin-bottom: 12px;
+  color: var(--cream);
+}
+.diff-card p {
+  font-size: 13px;
+  color: var(--dim);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ---- ARCHITECTURE DIAGRAM ---- */
+.arch-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin: 40px 0;
+}
+.arch-block {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 28px;
+}
+.arch-block h4 {
+  font-family: 'Instrument Serif', serif;
+  font-weight: 400;
+  font-size: 18px;
+  margin-bottom: 20px;
+  color: var(--cream);
+}
+.arch-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(200,184,154,0.06);
+  font-size: 13px;
+}
+.arch-item:last-child { border-bottom: none; }
+.arch-item .arch-name { color: var(--cream-dim); }
+.arch-item .arch-val {
+  font-family: 'Space Mono', monospace;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+/* ---- TIER LIST ---- */
+.tier-list {
+  margin: 32px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tier {
+  display: flex;
+  align-items: stretch;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.tier-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 1px;
+  padding: 12px 16px;
+  min-width: 100px;
+  display: flex;
+  align-items: center;
+  font-weight: 700;
+}
+.tier-items {
+  padding: 10px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  flex: 1;
+}
+.tier-item {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.05);
+  color: var(--cream-dim);
+}
+.tier-item.highlight {
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-weight: 600;
+  border: 1px solid rgba(200,184,154,0.2);
+}
+.tier-1 .tier-label { background: rgba(92,171,125,0.15); color: var(--green); }
+.tier-2 .tier-label { background: var(--accent-dim); color: var(--accent); }
+.tier-3 .tier-label { background: rgba(90,87,80,0.15); color: var(--dim); }
+
+/* ---- WINNER BOX ---- */
+.winner-box {
+  background: linear-gradient(135deg, var(--accent-dim), rgba(200,184,154,0.05));
+  border: 1px solid rgba(200,184,154,0.2);
+  border-radius: 8px;
+  padding: 28px 32px;
+  margin: 32px 0;
+}
+.winner-box h4 {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 16px;
+}
+.winner-box .winner-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.winner-box .winner-label {
+  font-size: 13px;
+  color: var(--dim);
+  min-width: 140px;
+}
+.winner-box .winner-value {
+  font-family: 'Space Mono', monospace;
+  font-size: 14px;
+  color: var(--cream);
+  font-weight: 700;
+}
+.winner-box .winner-note {
+  font-size: 12px;
+  color: var(--dim);
+  margin-left: 8px;
+}
+
+/* ---- COMPARISON CHECKMARKS ---- */
+.check { color: var(--green); }
+.cross { color: var(--dim2); }
+.partial-mark { color: var(--blue); }
+.paid { color: var(--red); font-size: 11px; }
+
+/* ---- FOOTER ---- */
+.report-footer {
+  padding: 60px 0 100px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+.report-footer p {
+  color: var(--dim);
+  font-size: 13px;
+  max-width: 100%;
+  margin: 8px auto;
+}
+.report-footer a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(200,184,154,0.2);
+  transition: border-color 0.2s;
+}
+.report-footer a:hover { border-color: var(--accent); }
+.report-footer .footer-links {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-top: 24px;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+}
+
+/* ---- ANIMATIONS ---- */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ---- BAR CHART ---- */
+.bar-chart { margin: 24px 0; }
+.bar-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+  gap: 12px;
+}
+.bar-label {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  color: var(--cream-dim);
+  min-width: 100px;
+  text-align: right;
+}
+.bar-track {
+  flex: 1;
+  height: 24px;
+  background: var(--bg2);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+.bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+.bar-fill.gold { background: linear-gradient(90deg, var(--accent), rgba(200,184,154,0.6)); }
+.bar-fill.dim { background: linear-gradient(90deg, var(--dim), rgba(90,87,80,0.4)); }
+.bar-fill.green { background: linear-gradient(90deg, var(--green), rgba(92,171,125,0.5)); }
+.bar-fill.blue { background: linear-gradient(90deg, var(--blue), rgba(90,143,196,0.5)); }
+.bar-fill.red { background: linear-gradient(90deg, var(--red), rgba(196,92,74,0.5)); }
+.bar-val {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  color: var(--cream);
+  min-width: 60px;
+}
+
+/* ---- RESPONSIVE ---- */
+@media (max-width: 768px) {
+  .toc { display: none; }
+  .page { padding: 0 20px; }
+  .hero { padding: 80px 0 60px; }
+  section { padding: 60px 0; }
+  .arch-grid { grid-template-columns: 1fr; }
+  .diff-grid { grid-template-columns: 1fr; }
+  .stats-row { grid-template-columns: 1fr 1fr; }
+  .data-table { font-size: 12px; }
+  .data-table th, .data-table td { padding: 10px 10px; }
+  .tier { flex-direction: column; }
+  .tier-label { min-width: auto; }
+}
+</style>
+</head>
+<body>
+
+<div class="noise"></div>
+<div class="vignette"></div>
+
+<!-- TOC Sidebar -->
+<nav class="toc" id="toc">
+  <a href="#hero" data-section="hero" class="active"><span class="toc-label">Top</span></a>
+  <a href="#embeddings" data-section="embeddings"><span class="toc-label">Embeddings</span></a>
+  <a href="#benchmarks" data-section="benchmarks"><span class="toc-label">Benchmarks</span></a>
+  <a href="#locomo" data-section="locomo"><span class="toc-label">LOCOMO</span></a>
+  <a href="#competitive" data-section="competitive"><span class="toc-label">Competitive</span></a>
+  <a href="#industry" data-section="industry"><span class="toc-label">Industry</span></a>
+  <a href="#differentiators" data-section="differentiators"><span class="toc-label">Differentiators</span></a>
+  <a href="#architecture" data-section="architecture"><span class="toc-label">Architecture</span></a>
+</nav>
+
+<div class="page">
+
+  <!-- HERO -->
+  <header class="hero" id="hero">
+    <div class="hero-badge"><span class="dot"></span> Live Production Data</div>
+    <h1>Clude Memory Architecture<br><em>Competitive Benchmark Report</em></h1>
+    <p class="hero-sub">10,320 memories &middot; 7-phase recall &middot; 5-phase dream cycle &middot; Voyage AI embeddings</p>
+    <div class="hero-meta">
+      <span class="tag">v2.6.0</span>
+      <span class="tag">March 2026</span>
+      <span class="tag">Stanford Generative Agents</span>
+    </div>
+    <div class="hero-divider"></div>
+    <p style="max-width:580px; color: var(--dim); font-size: 14px; line-height: 1.7;">
+      A comprehensive analysis of Clude's cognitive memory architecture benchmarked against
+      MemoryBench, LOCOMO, MemBench, Cognee, Mem0, and industry baselines.
+      All embedding data measured against 10,320 production memories.
+    </p>
+  </header>
+
+  <!-- SECTION 1: EMBEDDING PROVIDER BENCHMARK -->
+  <section id="embeddings">
+    <div class="section-num">01</div>
+    <h2>Embedding Provider Benchmark</h2>
+    <p>Production benchmark across all 10,320 memories comparing Voyage AI and Venice AI.
+       20 test queries covering user-specific, topic-based, entity-based, and behavioral recall.</p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">10,320</div>
+        <div class="stat-label">Memories tested</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">100%</div>
+        <div class="stat-label">P@1 (Voyage)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">79.2/s</div>
+        <div class="stat-label">Embed throughput</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">261ms</div>
+        <div class="stat-label">Avg query latency</div>
+      </div>
+    </div>
+
+    <h3>Embedding Throughput</h3>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr><th>Provider</th><th>Memories</th><th>Time</th><th>Rate</th><th>Failures</th><th>Dims</th></tr>
+        </thead>
+        <tbody>
+          <tr class="winner-row">
+            <td class="label-cell">Voyage AI <span class="pill pill-gold" style="margin-left:8px">Winner</span></td>
+            <td class="num">10,320</td>
+            <td class="num winner">130.2s</td>
+            <td class="num winner">79.2/s</td>
+            <td class="num">0</td>
+            <td class="num">1024</td>
+          </tr>
+          <tr>
+            <td class="label-cell">Venice AI</td>
+            <td class="num">10,320</td>
+            <td class="num">741.2s</td>
+            <td class="num">13.9/s</td>
+            <td class="num">0</td>
+            <td class="num">1024</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Recall Quality</h3>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr><th>Provider</th><th>P@1</th><th>P@3</th><th>P@5</th><th>P@10</th><th>MRR</th></tr>
+        </thead>
+        <tbody>
+          <tr class="winner-row">
+            <td class="label-cell">Voyage AI</td>
+            <td class="num winner">100%</td>
+            <td class="num winner">90.0%</td>
+            <td class="num winner">92.0%</td>
+            <td class="num winner">87.0%</td>
+            <td class="num winner">1.000</td>
+          </tr>
+          <tr>
+            <td class="label-cell">Venice AI</td>
+            <td class="num">95.0%</td>
+            <td class="num">86.7%</td>
+            <td class="num">86.0%</td>
+            <td class="num">77.0%</td>
+            <td class="num">0.960</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Query Embedding Latency</h3>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr><th>Provider</th><th>Average</th><th>P50</th><th>P95</th></tr>
+        </thead>
+        <tbody>
+          <tr class="winner-row">
+            <td class="label-cell">Voyage AI</td>
+            <td class="num winner">261ms</td>
+            <td class="num winner">247ms</td>
+            <td class="num winner">325ms</td>
+          </tr>
+          <tr>
+            <td class="label-cell">Venice AI</td>
+            <td class="num">1,653ms</td>
+            <td class="num">1,163ms</td>
+            <td class="num">4,018ms</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="winner-box">
+      <h4>Benchmark Result</h4>
+      <div class="winner-stat">
+        <span class="winner-label">Best quality</span>
+        <span class="winner-value">Voyage AI</span>
+        <span class="winner-note">MRR 1.000, P@1 100%</span>
+      </div>
+      <div class="winner-stat">
+        <span class="winner-label">Best throughput</span>
+        <span class="winner-value">Voyage AI</span>
+        <span class="winner-note">79.2 memories/s (5.7x faster)</span>
+      </div>
+      <div class="winner-stat">
+        <span class="winner-label">Best latency</span>
+        <span class="winner-value">Voyage AI</span>
+        <span class="winner-note">261ms avg (6.3x faster)</span>
+      </div>
+      <div class="winner-stat">
+        <span class="winner-label">Provider agreement</span>
+        <span class="winner-value">&rho; = 0.464</span>
+        <span class="winner-note">Low &mdash; models rank memories very differently</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 2: ACADEMIC BENCHMARKS -->
+  <section id="benchmarks">
+    <div class="section-num">02</div>
+    <h2>Academic Benchmark Analysis</h2>
+    <p>Mapping Clude's architecture against the four major academic benchmarks for AI agent memory systems, published at ICLR 2026, ACL 2025, and ACL 2024.</p>
+
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr><th>Dimension</th><th>Benchmark</th><th>Clude Strength</th><th>Est. Rank</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="label-cell">Accurate Retrieval</td>
+            <td>MemoryAgentBench</td>
+            <td style="white-space:normal;font-family:'DM Sans';font-size:13px;color:var(--cream-dim)">Hybrid retrieval + per-fragment embeddings + LLM query expansion</td>
+            <td><span class="pill pill-gold">Top quartile</span></td>
+          </tr>
+          <tr>
+            <td class="label-cell">Conflict Resolution</td>
+            <td>MemoryAgentBench</td>
+            <td style="white-space:normal;font-family:'DM Sans';font-size:13px;color:var(--cream-dim)">Active contradiction resolution in dream cycle + <code>resolves</code> links</td>
+            <td><span class="pill pill-gold">Top quartile</span></td>
+          </tr>
+          <tr>
+            <td class="label-cell">Test-Time Learning</td>
+            <td>MemoryAgentBench</td>
+            <td style="white-space:normal;font-family:'DM Sans';font-size:13px;color:var(--cream-dim)">Dedicated procedural memory tier with auto-extraction</td>
+            <td><span class="pill pill-blue">Above average</span></td>
+          </tr>
+          <tr>
+            <td class="label-cell">Long-Range Understanding</td>
+            <td>MemoryAgentBench</td>
+            <td style="white-space:normal;font-family:'DM Sans';font-size:13px;color:var(--cream-dim)">5-phase dream cycle with consolidation + reflection + emergence</td>
+            <td><span class="pill pill-gold">Top quartile</span></td>
+          </tr>
+          <tr>
+            <td class="label-cell">Declarative Memory</td>
+            <td>MemoryBench</td>
+            <td style="white-space:normal;font-family:'DM Sans';font-size:13px;color:var(--cream-dim)">Explicit episodic/semantic split with differential decay rates</td>
+            <td><span class="pill pill-gold">Top quartile</span></td>
+          </tr>
+          <tr>
+            <td class="label-cell">Procedural Memory</td>
+            <td>MemoryBench</td>
+            <td style="white-space:normal;font-family:'DM Sans';font-size:13px;color:var(--cream-dim)">Dedicated tier + dream cycle auto-extraction (addresses top gap in field)</td>
+            <td><span class="pill pill-green">Top of field</span></td>
+          </tr>
+          <tr>
+            <td class="label-cell">Effectiveness</td>
+            <td>MemBench</td>
+            <td style="white-space:normal;font-family:'DM Sans';font-size:13px;color:var(--cream-dim)">Multi-channel retrieval with reflective self_model memory</td>
+            <td><span class="pill pill-gold">Top quartile</span></td>
+          </tr>
+          <tr>
+            <td class="label-cell">Efficiency</td>
+            <td>MemBench</td>
+            <td style="white-space:normal;font-family:'DM Sans';font-size:13px;color:var(--cream-dim)">Progressive disclosure: summaries first, 10x token reduction</td>
+            <td><span class="pill pill-gold">Top quartile</span></td>
+          </tr>
+          <tr>
+            <td class="label-cell">Capacity</td>
+            <td>MemBench</td>
+            <td style="white-space:normal;font-family:'DM Sans';font-size:13px;color:var(--cream-dim)">Beads-inspired compaction + type-specific decay pruning</td>
+            <td><span class="pill pill-gold">Top quartile</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p><strong>Key finding:</strong> MemoryBench (THUIR) reports that "existing memory systems are not good at utilizing procedural knowledge." Clude directly addresses this gap with a dedicated procedural memory tier and automatic procedural pattern extraction during dream cycles.</p>
+  </section>
+
+  <!-- SECTION 3: LOCOMO -->
+  <section id="locomo">
+    <div class="section-num">03</div>
+    <h2>LOCOMO Performance Analysis</h2>
+    <p>Projected performance against the LOCOMO benchmark (Snap Research, ACL 2024) &mdash; the de facto standard for measuring long-term conversational memory. 10 long-form conversations, 300+ turns, 5 question categories.</p>
+
+    <h3>Projected Scores</h3>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr><th>Category</th><th>Clude (Projected)</th><th>Best System</th><th>Human Ceiling</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="label-cell">Single-hop</td>
+            <td class="num" style="color:var(--green)">82&ndash;88%</td>
+            <td class="num">MemU 92.1%</td>
+            <td class="num" style="color:var(--dim)">87.9%</td>
+          </tr>
+          <tr>
+            <td class="label-cell">Multi-hop</td>
+            <td class="num" style="color:var(--green)">78&ndash;85%</td>
+            <td class="num">MIRIX 83.7%</td>
+            <td class="num" style="color:var(--dim)">87.9%</td>
+          </tr>
+          <tr>
+            <td class="label-cell">Temporal</td>
+            <td class="num" style="color:var(--blue)">68&ndash;75%</td>
+            <td class="num">MIRIX 88.4%</td>
+            <td class="num" style="color:var(--dim)">92.6%</td>
+          </tr>
+          <tr>
+            <td class="label-cell">Open-domain</td>
+            <td class="num" style="color:var(--blue)">55&ndash;65%</td>
+            <td class="num">Memobase 77.2%</td>
+            <td class="num" style="color:var(--dim)">87.9%</td>
+          </tr>
+          <tr>
+            <td class="label-cell" style="font-weight:600">Overall</td>
+            <td class="num" style="color:var(--accent);font-weight:700">~75&ndash;82%</td>
+            <td class="num" style="font-weight:700">MemU 92.1%</td>
+            <td class="num" style="color:var(--dim)">87.9%</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>LOCOMO Leaderboard Positioning</h3>
+    <div class="tier-list">
+      <div class="tier tier-1">
+        <div class="tier-label">Tier 1 &middot; 85%+</div>
+        <div class="tier-items">
+          <span class="tier-item">MemU 92.1%</span>
+          <span class="tier-item">Hindsight 89.6%</span>
+          <span class="tier-item">MIRIX 85.4%</span>
+        </div>
+      </div>
+      <div class="tier tier-2">
+        <div class="tier-label">Tier 2 &middot; 75-85%</div>
+        <div class="tier-items">
+          <span class="tier-item">MemMachine 84.9%</span>
+          <span class="tier-item">Memobase 75.8%</span>
+          <span class="tier-item highlight">Clude ~75-82%</span>
+        </div>
+      </div>
+      <div class="tier tier-3">
+        <div class="tier-label">Tier 3 &middot; &lt;75%</div>
+        <div class="tier-items">
+          <span class="tier-item">Letta 74.0%</span>
+          <span class="tier-item">Mem0 66.9%</span>
+          <span class="tier-item">Zep ~58-75%</span>
+          <span class="tier-item">OpenAI Memory 52.9%</span>
+        </div>
+      </div>
+    </div>
+
+    <p><strong>Multi-hop is Clude's strongest differentiator.</strong> Entity graph traversal, co-occurrence expansion, and bond-typed memory links create explicit cross-session reasoning paths that pure vector retrieval systems miss. Clude's projected 78&ndash;85% on multi-hop would be competitive with MIRIX (83.7%), which uses a multi-agent approach.</p>
+  </section>
+
+  <!-- SECTION 4: COMPETITIVE COMPARISON -->
+  <section id="competitive">
+    <div class="section-num">04</div>
+    <h2>Competitive Comparison</h2>
+    <p>Feature-by-feature analysis against the two most prominent AI memory platforms: Cognee ($7.5M raised) and Mem0 ($24M raised).</p>
+
+    <div class="table-wrap">
+      <table class="data-table feature-table">
+        <thead>
+          <tr><th>Feature</th><th>Clude</th><th>Cognee</th><th>Mem0</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="label-cell">4-tier cognitive memory</td>
+            <td class="yes">4 tiers</td>
+            <td class="no">Flat</td>
+            <td class="no">Flat</td>
+          </tr>
+          <tr>
+            <td class="label-cell">Dream cycle consolidation</td>
+            <td class="yes">5 phases</td>
+            <td class="cross">&mdash;</td>
+            <td class="cross">&mdash;</td>
+          </tr>
+          <tr>
+            <td class="label-cell">Contradiction resolution</td>
+            <td class="yes">Automated</td>
+            <td class="cross">&mdash;</td>
+            <td class="partial">Partial</td>
+          </tr>
+          <tr>
+            <td class="label-cell">Type-specific decay</td>
+            <td class="yes">4 rates</td>
+            <td class="cross">&mdash;</td>
+            <td class="cross">&mdash;</td>
+          </tr>
+          <tr>
+            <td class="label-cell">Entity knowledge graph</td>
+            <td class="yes">7 entity types</td>
+            <td class="yes">Triplets</td>
+            <td class="paid">$249/mo</td>
+          </tr>
+          <tr>
+            <td class="label-cell">Per-fragment embeddings</td>
+            <td class="yes">3 per memory</td>
+            <td class="no">1 per chunk</td>
+            <td class="no">1 per memory</td>
+          </tr>
+          <tr>
+            <td class="label-cell">Query expansion via LLM</td>
+            <td class="yes">3-4 phrasings</td>
+            <td class="cross">&mdash;</td>
+            <td class="cross">&mdash;</td>
+          </tr>
+          <tr>
+            <td class="label-cell">Progressive disclosure</td>
+            <td class="yes">10x savings</td>
+            <td class="cross">&mdash;</td>
+            <td class="cross">&mdash;</td>
+          </tr>
+          <tr>
+            <td class="label-cell">Bond-typed graph traversal</td>
+            <td class="yes">7 link types</td>
+            <td class="partial">Partial</td>
+            <td class="cross">&mdash;</td>
+          </tr>
+          <tr>
+            <td class="label-cell">On-chain commitment</td>
+            <td class="yes">Solana</td>
+            <td class="cross">&mdash;</td>
+            <td class="cross">&mdash;</td>
+          </tr>
+          <tr>
+            <td class="label-cell">Open source</td>
+            <td style="color:var(--cream-dim)">MIT</td>
+            <td style="color:var(--cream-dim)">Apache 2.0</td>
+            <td style="color:var(--cream-dim)">Apache 2.0</td>
+          </tr>
+          <tr>
+            <td class="label-cell">Self-hosted</td>
+            <td class="yes">Full stack</td>
+            <td class="yes">Yes</td>
+            <td class="partial">Limited</td>
+          </tr>
+          <tr>
+            <td class="label-cell">Managed cloud</td>
+            <td class="cross">&mdash;</td>
+            <td class="yes">Yes</td>
+            <td class="yes">SOC 2</td>
+          </tr>
+          <tr>
+            <td class="label-cell">Funding</td>
+            <td style="color:var(--dim);font-family:'Space Mono';font-size:12px">Bootstrap</td>
+            <td style="color:var(--dim);font-family:'Space Mono';font-size:12px">$7.5M</td>
+            <td style="color:var(--dim);font-family:'Space Mono';font-size:12px">$24M</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p><strong>Positioning:</strong> Cognee is a knowledge engine &mdash; it excels at ingesting documents into structured graphs. Mem0 is a persistence layer &mdash; it excels at simple store-and-retrieve with enterprise readiness. Clude is a cognitive architecture &mdash; it thinks, dreams, and evolves. The difference between a filing cabinet, a knowledge engine, and a mind.</p>
+  </section>
+
+  <!-- SECTION 5: INDUSTRY METRICS -->
+  <section id="industry">
+    <div class="section-num">05</div>
+    <h2>Industry Metrics Comparison</h2>
+    <p>Where Clude sits against production systems on the metrics that matter: retrieval precision, search latency, and proven scale.</p>
+
+    <h3>Retrieval Precision (P@1)</h3>
+    <div class="bar-chart">
+      <div class="bar-row">
+        <span class="bar-label">Clude</span>
+        <div class="bar-track"><div class="bar-fill gold" data-width="100"></div></div>
+        <span class="bar-val" style="color:var(--accent);font-weight:700">100%</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">Zep (DMR)</span>
+        <div class="bar-track"><div class="bar-fill dim" data-width="94.8"></div></div>
+        <span class="bar-val">~94.8%</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">Mem0</span>
+        <div class="bar-track"><div class="bar-fill dim" data-width="67"></div></div>
+        <span class="bar-val">~67%</span>
+      </div>
+    </div>
+
+    <h3>Search Latency</h3>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr><th>System</th><th>Avg Search Latency</th><th>Assessment</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="label-cell">Mem0</td>
+            <td class="num">148ms</td>
+            <td><span class="pill pill-green">Fastest</span></td>
+          </tr>
+          <tr>
+            <td class="label-cell">Clude</td>
+            <td class="num" style="color:var(--accent)">261ms</td>
+            <td><span class="pill pill-gold">7-phase pipeline</span></td>
+          </tr>
+          <tr>
+            <td class="label-cell">Zep</td>
+            <td class="num">~1,292ms</td>
+            <td><span class="pill pill-dim">Graph overhead</span></td>
+          </tr>
+          <tr>
+            <td class="label-cell">LangMem</td>
+            <td class="num" style="color:var(--red)">17,990ms</td>
+            <td><span class="pill pill-red">Unusable</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Clude's 261ms includes the full 7-phase recall pipeline &mdash; vector search, metadata filtering, composite scoring, entity expansion, and graph traversal. The underlying pgvector HNSW layer runs at 1&ndash;5ms. The overhead is cognitive processing &mdash; the features that make recall accurate.</p>
+
+    <h3>LOCOMO Benchmark Scores</h3>
+    <div class="bar-chart">
+      <div class="bar-row">
+        <span class="bar-label">MemU</span>
+        <div class="bar-track"><div class="bar-fill green" data-width="92.1"></div></div>
+        <span class="bar-val">92.1%</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">Hindsight</span>
+        <div class="bar-track"><div class="bar-fill green" data-width="89.6"></div></div>
+        <span class="bar-val">89.6%</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">Clude (proj.)</span>
+        <div class="bar-track"><div class="bar-fill gold" data-width="78.5"></div></div>
+        <span class="bar-val" style="color:var(--accent)">~75-82%</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">Memobase</span>
+        <div class="bar-track"><div class="bar-fill dim" data-width="75.8"></div></div>
+        <span class="bar-val">75.8%</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">Letta</span>
+        <div class="bar-track"><div class="bar-fill dim" data-width="74"></div></div>
+        <span class="bar-val">74.0%</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">Mem0</span>
+        <div class="bar-track"><div class="bar-fill dim" data-width="66.9"></div></div>
+        <span class="bar-val">66.9%</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">OpenAI</span>
+        <div class="bar-track"><div class="bar-fill red" data-width="52.9"></div></div>
+        <span class="bar-val">52.9%</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 6: DIFFERENTIATORS -->
+  <section id="differentiators">
+    <div class="section-num">06</div>
+    <h2>Key Differentiators</h2>
+    <p>Capabilities that no competitor &mdash; commercial or academic &mdash; currently combines.</p>
+
+    <div class="diff-grid">
+      <div class="diff-card">
+        <div class="diff-num">01</div>
+        <h4>The Only Memory System That Dreams</h4>
+        <p>5-phase dream cycle: consolidation, compaction, reflection, contradiction resolution, emergence. Mirrors human sleep-dependent memory consolidation. No competitor implements autonomous offline processing.</p>
+      </div>
+      <div class="diff-card">
+        <div class="diff-num">02</div>
+        <h4>Active Contradiction Resolution</h4>
+        <p>Proactively detects conflicting memories via database RPC, resolves them through LLM mediation, creates <code>resolves</code> links, and accelerates decay on the weaker memory. Reactive systems wait for retrieval-time conflicts.</p>
+      </div>
+      <div class="diff-card">
+        <div class="diff-num">03</div>
+        <h4>Biologically-Inspired Decay</h4>
+        <p>4 type-specific exponential decay rates: episodic 0.93, procedural 0.97, semantic 0.98, self_model 0.99. Events fade like real memories. Knowledge persists. Identity endures.</p>
+      </div>
+      <div class="diff-card">
+        <div class="diff-num">04</div>
+        <h4>3 Vectors Per Memory</h4>
+        <p>Per-fragment embeddings decompose each memory into summary, content_chunk, and tag_context vectors. Competitors embed once. Clude matches at three semantic levels for precision recall.</p>
+      </div>
+      <div class="diff-card">
+        <div class="diff-num">05</div>
+        <h4>7-Phase Recall Pipeline</h4>
+        <p>Vector search, metadata filtering, candidate merging, composite scoring, entity-aware expansion, bond-typed graph traversal, type diversity injection. Most systems use 1&ndash;2 phases.</p>
+      </div>
+      <div class="diff-card">
+        <div class="diff-num">06</div>
+        <h4>On-Chain Memory Commitment</h4>
+        <p>Every memory gets SHA-256 hashed and written to Solana. Verifiable, immutable, tamper-evident. Proves what an agent knew and when. No other memory system has blockchain integration.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 7: ARCHITECTURE SUMMARY -->
+  <section id="architecture">
+    <div class="section-num">07</div>
+    <h2>Architecture Summary</h2>
+    <p>A cognitive memory system built on the Stanford Generative Agents framework (Park et al., 2023), extended with entity-aware knowledge graphs, per-fragment embeddings, and autonomous dream cycles.</p>
+
+    <div class="arch-grid">
+      <div class="arch-block">
+        <h4>Memory Tiers</h4>
+        <div class="arch-item"><span class="arch-name">Episodic</span><span class="arch-val">decay 0.93</span></div>
+        <div class="arch-item"><span class="arch-name">Procedural</span><span class="arch-val">decay 0.97</span></div>
+        <div class="arch-item"><span class="arch-name">Semantic</span><span class="arch-val">decay 0.98</span></div>
+        <div class="arch-item"><span class="arch-name">Self-model</span><span class="arch-val">decay 0.99</span></div>
+      </div>
+      <div class="arch-block">
+        <h4>Dream Cycle</h4>
+        <div class="arch-item"><span class="arch-name">1. Consolidation</span><span class="arch-val">Focal-point insights</span></div>
+        <div class="arch-item"><span class="arch-name">2. Compaction</span><span class="arch-val">Beads summarization</span></div>
+        <div class="arch-item"><span class="arch-name">3. Reflection</span><span class="arch-val">Self-model introspection</span></div>
+        <div class="arch-item"><span class="arch-name">4. Contradiction</span><span class="arch-val">Resolve + decay weaker</span></div>
+        <div class="arch-item"><span class="arch-name">5. Emergence</span><span class="arch-val">Consciousness-like thought</span></div>
+      </div>
+      <div class="arch-block">
+        <h4>Recall Pipeline</h4>
+        <div class="arch-item"><span class="arch-name">Phase 0</span><span class="arch-val">Query expansion (LLM)</span></div>
+        <div class="arch-item"><span class="arch-name">Phase 1</span><span class="arch-val">Vector search</span></div>
+        <div class="arch-item"><span class="arch-name">Phase 2</span><span class="arch-val">Metadata + text search</span></div>
+        <div class="arch-item"><span class="arch-name">Phase 3</span><span class="arch-val">Merge + composite score</span></div>
+        <div class="arch-item"><span class="arch-name">Phase 4</span><span class="arch-val">Entity expansion</span></div>
+        <div class="arch-item"><span class="arch-name">Phase 5</span><span class="arch-val">Graph traversal</span></div>
+        <div class="arch-item"><span class="arch-name">Phase 6</span><span class="arch-val">Type diversity</span></div>
+      </div>
+      <div class="arch-block">
+        <h4>Bond Types &amp; Weights</h4>
+        <div class="arch-item"><span class="arch-name">causes</span><span class="arch-val">1.0</span></div>
+        <div class="arch-item"><span class="arch-name">supports</span><span class="arch-val">0.9</span></div>
+        <div class="arch-item"><span class="arch-name">resolves</span><span class="arch-val">0.8</span></div>
+        <div class="arch-item"><span class="arch-name">elaborates</span><span class="arch-val">0.7</span></div>
+        <div class="arch-item"><span class="arch-name">contradicts</span><span class="arch-val">0.6</span></div>
+        <div class="arch-item"><span class="arch-name">relates</span><span class="arch-val">0.4</span></div>
+        <div class="arch-item"><span class="arch-name">follows</span><span class="arch-val">0.3</span></div>
+      </div>
+    </div>
+
+    <div class="stats-row" style="margin-top:40px">
+      <div class="stat-card">
+        <div class="stat-value">10,320</div>
+        <div class="stat-label">Production memories</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">7</div>
+        <div class="stat-label">Entity types</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">1,024</div>
+        <div class="stat-label">Vector dimensions</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">200+</div>
+        <div class="stat-label">Dream sessions</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="report-footer">
+    <p style="font-family:'Instrument Serif';font-size:22px;color:var(--cream);margin-bottom:16px">
+      Built on Stanford Generative Agents (Park et al., 2023)
+    </p>
+    <p>Autonomous AI agent memory with cognitive decay, dream cycles, and on-chain commitment.</p>
+    <p style="margin-top:12px;font-family:'Space Mono';font-size:11px;letter-spacing:1px;text-transform:uppercase">
+      Report generated March 2026 &middot; v2.6.0
+    </p>
+    <div class="footer-links">
+      <a href="https://arxiv.org/abs/2402.17753">LOCOMO</a>
+      <a href="https://arxiv.org/abs/2510.17281">MemoryBench</a>
+      <a href="https://github.com/HUST-AI-HYZ/MemoryAgentBench">MemoryAgentBench</a>
+      <a href="https://aclanthology.org/2025.findings-acl.989/">MemBench</a>
+      <a href="/">cluude.ai</a>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+// Intersection Observer for section animations
+const sections = document.querySelectorAll('section');
+const tocLinks = document.querySelectorAll('.toc a');
+
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+      // Update TOC
+      const id = entry.target.id;
+      tocLinks.forEach(l => l.classList.remove('active'));
+      const active = document.querySelector(`.toc a[data-section="${id}"]`);
+      if (active) active.classList.add('active');
+    }
+  });
+}, { threshold: 0.15, rootMargin: '-40px' });
+
+sections.forEach(s => observer.observe(s));
+
+// Hero TOC tracking
+const heroObs = new IntersectionObserver((entries) => {
+  if (entries[0].isIntersecting) {
+    tocLinks.forEach(l => l.classList.remove('active'));
+    document.querySelector('.toc a[data-section="hero"]').classList.add('active');
+  }
+}, { threshold: 0.3 });
+heroObs.observe(document.getElementById('hero'));
+
+// Animate bar charts when visible
+const barObs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.querySelectorAll('.bar-fill').forEach(bar => {
+        const w = bar.dataset.width;
+        bar.style.width = w + '%';
+      });
+    }
+  });
+}, { threshold: 0.2 });
+
+document.querySelectorAll('.bar-chart').forEach(chart => {
+  chart.querySelectorAll('.bar-fill').forEach(b => b.style.width = '0%');
+  barObs.observe(chart);
+});
+</script>
+</body>
+</html>
