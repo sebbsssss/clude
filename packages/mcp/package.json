@@ -4,7 +4,8 @@
   "description": "Clude MCP server — persistent memory for any AI agent",
   "type": "module",
   "bin": {
-    "clude-mcp": "./dist/index.js"
+    "clude-mcp": "./dist/index.js",
+    "clude-setup": "./dist/setup.js"
   },
   "main": "dist/index.js",
   "scripts": {

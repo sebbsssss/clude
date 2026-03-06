@@ -4,7 +4,31 @@ Persistent memory for any AI agent via [MCP](https://modelcontextprotocol.io).
 
 Works with Claude Desktop, Claude Code, Cursor, Windsurf, and any MCP-compatible client.
 
-## Setup
+## Quick Setup (60 seconds)
+
+```bash
+cd clude/packages/mcp
+npm install
+npx tsx src/setup.ts
+```
+
+The wizard will:
+1. Check dependencies
+2. Auto-detect Claude Desktop / offer Claude Code command
+3. Tell you what to say to test it
+
+That's it. For cloud mode (Supabase + vector search):
+```bash
+npx tsx src/setup.ts --cloud
+```
+
+## Manual Setup
+
+### Claude Code
+
+```bash
+claude mcp add clude -- npx tsx /path/to/clude/packages/mcp/src/index.ts
+```
 
 ### Claude Desktop
 
@@ -19,12 +43,6 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
     }
   }
 }
-```
-
-### Claude Code
-
-```bash
-claude mcp add clude npx tsx /path/to/clude/packages/mcp/src/index.ts
 ```
 
 ### Cursor / Windsurf
