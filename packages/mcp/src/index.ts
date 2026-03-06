@@ -25,9 +25,11 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
-import { resolve } from 'path';
+import { resolve, dirname } from 'path';
 import { homedir } from 'os';
-import { mkdirSync } from 'fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { createServer } from 'http';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -497,6 +499,141 @@ async function main() {
           text: JSON.stringify(s, null, 2),
         }],
       };
+    }
+  );
+
+  // ── Tool: visualize ──
+
+  server.tool(
+    'visualize',
+    'Open an interactive 3D visualization of the memory graph in the browser. Shows all memories as nodes in a neural network with connections, types, and importance.',
+    {
+      limit: z.number().min(10).max(500).default(200).describe('Max memories to visualize'),
+      port: z.number().default(3847).describe('Local server port'),
+    },
+    async (args) => {
+      try {
+        // Fetch memories
+        const memories = await store.recall({
+          limit: args.limit,
+        });
+
+        // Build brain data in the format brain.html expects
+        const brainData = {
+          nodes: memories.map(m => ({
+            id: m.id,
+            type: m.memory_type,
+            summary: m.summary,
+            tags: m.tags || [],
+            importance: m.importance,
+            decay: m.decay_factor,
+            valence: 0,
+            accessCount: m.access_count,
+            source: m.source,
+            evidenceIds: [],
+            solanaSignature: null,
+            createdAt: m.created_at,
+            lastAccessed: m.last_accessed,
+          })),
+          total: memories.length,
+          timestamp: new Date().toISOString(),
+        };
+
+        // Build consciousness data
+        const selfModelMems = memories.filter(m => m.memory_type === 'self_model').slice(0, 10);
+        const proceduralMems = memories.filter(m => m.memory_type === 'procedural').slice(0, 10);
+        const emergenceMems = memories.filter(m => m.source === 'emergence').slice(0, 5);
+        const stats = await store.stats();
+
+        const consciousnessData = {
+          emergence: emergenceMems.map(m => ({
+            id: m.id, summary: m.summary, importance: m.importance,
+            createdAt: m.created_at, tags: m.tags,
+          })),
+          selfModel: selfModelMems.map(m => ({
+            id: m.id, summary: m.summary, importance: m.importance,
+            createdAt: m.created_at, tags: m.tags,
+          })),
+          procedural: proceduralMems.map(m => ({
+            id: m.id, summary: m.summary, importance: m.importance,
+            createdAt: m.created_at, tags: m.tags,
+          })),
+          recentEpisodic: memories.filter(m => m.memory_type === 'episodic').slice(0, 5).map(m => ({
+            id: m.id, summary: m.summary, importance: m.importance,
+            createdAt: m.created_at, tags: m.tags,
+          })),
+          stats: {
+            total: stats.total,
+            ...stats.by_type,
+            dreamSessions: 0,
+          },
+        };
+
+        // Read brain template and inject data
+        const templatePath = resolve(dirname(fileURLToPath(import.meta.url)), 'brain-template.html');
+        let html: string;
+        try {
+          html = readFileSync(templatePath, 'utf-8');
+        } catch {
+          // Try relative to package root
+          const altPath = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'brain-template.html');
+          html = readFileSync(altPath, 'utf-8');
+        }
+
+        // Inject data as global variables before the closing </head>
+        const dataScript = `
+<script>
+window.__CLUDE_BRAIN_DATA__ = ${JSON.stringify(brainData)};
+window.__CLUDE_CONSCIOUSNESS_DATA__ = ${JSON.stringify(consciousnessData)};
+</script>`;
+        html = html.replace('</head>', dataScript + '\n</head>');
+
+        // Start local HTTP server
+        const port = args.port;
+        const httpServer = createServer((req, res) => {
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(html);
+        });
+
+        await new Promise<void>((resolve, reject) => {
+          httpServer.on('error', (err: any) => {
+            if (err.code === 'EADDRINUSE') {
+              // Port in use, try to just return the URL
+              resolve();
+            } else {
+              reject(err);
+            }
+          });
+          httpServer.listen(port, () => resolve());
+        });
+
+        const url = `http://localhost:${port}`;
+        log(`Brain visualization: ${url}`);
+
+        // Try to open browser
+        const { exec } = await import('child_process');
+        const openCmd = process.platform === 'darwin' ? 'open' :
+                        process.platform === 'win32' ? 'start' : 'xdg-open';
+        exec(`${openCmd} ${url}`);
+
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              url,
+              memories_loaded: memories.length,
+              message: `Brain visualization opened at ${url} with ${memories.length} memories. The server will keep running until this MCP session ends.`,
+            }, null, 2),
+          }],
+        };
+      } catch (err: any) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({ error: err.message }),
+          }],
+        };
+      }
     }
   );
 
