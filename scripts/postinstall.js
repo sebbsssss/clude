@@ -95,7 +95,8 @@ try {
 } catch {}
 
 if (!canReadTty) {
-  writeTty(`\n  ${bold}To set up, run:${reset}  ${cyan}npx clude-bot setup${reset}\n\n`);
+  writeTty(`\n  ${bold}To set up, run:${reset}  ${cyan}npx clude-bot setup${reset}\n`);
+  writeTty(`  ${gray}Or visit:${reset}       ${cyan}https://cluude.ai/setup${reset}\n\n`);
   writeTty(`${dim}────────────────────────────────────────────────────${reset}\n`);
   process.exit(0);
 }
@@ -286,15 +287,8 @@ if (apiKey) ok('API key configured');
 else warn('No API key yet — run: npx clude-bot register');
 ok('.env created');
 
-writeTty(`\n  ${bold}Quick start:${reset}\n`);
-writeTty(`  ${dim}┌──────────────────────────────────────────────────${reset}\n`);
-writeTty(`  ${dim}│${reset} const { Cortex } = require('clude-bot');\n`);
-writeTty(`  ${dim}│${reset} const brain = new Cortex({\n`);
-writeTty(`  ${dim}│${reset}   hosted: { apiKey: process.env.CORTEX_API_KEY },\n`);
-writeTty(`  ${dim}│${reset} });\n`);
-writeTty(`  ${dim}│${reset} await brain.init();\n`);
-writeTty(`  ${dim}└──────────────────────────────────────────────────${reset}\n`);
-
-writeTty(`\n  ${dim}Dashboard:${reset}  ${cyan}https://clude.io/explore${reset}\n`);
-writeTty(`  ${dim}Docs:${reset}       ${cyan}https://clude.io/docs${reset}\n`);
+writeTty(`\n  ${bold}Next steps:${reset}\n`);
+writeTty(`  ${dim}Explorer:${reset}   ${cyan}https://cluude.ai/explore${reset}\n`);
+writeTty(`  ${dim}Docs:${reset}       ${cyan}https://cluude.ai/docs${reset}\n`);
+writeTty(`  ${dim}Reconfigure:${reset} ${cyan}npx clude-bot setup${reset}\n`);
 writeTty(`${dim}────────────────────────────────────────────────────${reset}\n\n`);

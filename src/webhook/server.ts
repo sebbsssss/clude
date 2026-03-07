@@ -812,6 +812,12 @@ export function createServer(): express.Application {
     next();
   });
 
+  // Setup wizard at /setup
+  app.get('/setup', (req: Request, _res: Response, next: express.NextFunction) => {
+    req.url = '/setup.html';
+    next();
+  });
+
   app.use(express.static(publicDir));
   app.use(express.static(distPublicDir));
   app.use('/api', verifyRoutes());

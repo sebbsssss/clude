@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Get Started — CLUDE</title>
+  <meta name="description" content="Set up persistent memory for your AI agent in 60 seconds. No coding required.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f5f5f0;
+      --surface: rgba(255,255,255,0.92);
+      --text: #111;
+      --text-muted: #666;
+      --text-faint: #999;
+      --border: rgba(0,0,0,0.08);
+      --blue: #2244ff;
+      --blue-light: rgba(34,68,255,0.06);
+      --blue-mid: rgba(34,68,255,0.12);
+      --green: #1a8a4a;
+      --green-bg: rgba(26,138,74,0.06);
+      --red: #cc2233;
+      --red-bg: rgba(204,34,51,0.06);
+      --mono: 'JetBrains Mono', monospace;
+      --radius: 6px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--mono);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      min-height: 100vh;
+    }
+    ::selection { background: var(--text); color: var(--bg); }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; width: 100%; z-index: 100;
+      background: rgba(245,245,240,0.9);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      max-width: 1200px; margin: 0 auto; padding: 0 40px;
+      height: 56px; display: flex; align-items: center;
+    }
+    .nav-logo {
+      font-size: 13px; font-weight: 800; letter-spacing: 5px;
+      color: var(--text); text-transform: uppercase; text-decoration: none;
+    }
+    .nav-links {
+      display: flex; align-items: center; gap: 32px; margin-left: auto;
+    }
+    .nav-links a {
+      color: var(--text-muted); font-size: 11px; letter-spacing: 2px;
+      text-transform: uppercase; text-decoration: none; transition: color 0.3s;
+    }
+    .nav-links a:hover { color: var(--text); }
+    .nav-links a.nav-active { color: var(--text); font-weight: 600; }
+    .nav-toggle {
+      display: none; background: none; border: none; cursor: pointer;
+      width: 32px; height: 32px; position: relative; margin-left: auto;
+    }
+    .nav-toggle span {
+      display: block; width: 18px; height: 1.5px; background: var(--text);
+      position: absolute; left: 7px; transition: 0.3s;
+    }
+    .nav-toggle span:nth-child(1) { top: 10px; }
+    .nav-toggle span:nth-child(2) { top: 15px; }
+    .nav-toggle span:nth-child(3) { top: 20px; }
+
+    /* ── WIZARD CONTAINER ── */
+    .wizard-wrap {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 56px 24px 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── STEP INDICATOR ── */
+    .steps-indicator {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      padding: 48px 0 0;
+      user-select: none;
+    }
+    .step-dot {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 600;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      color: var(--text-faint);
+      background: transparent;
+      border: 1.5px solid var(--border);
+    }
+    .step-dot.active {
+      background: var(--text);
+      color: var(--bg);
+      border-color: var(--text);
+      transform: scale(1.1);
+    }
+    .step-dot.done {
+      background: var(--blue);
+      color: #fff;
+      border-color: var(--blue);
+    }
+    .step-line {
+      width: 40px; height: 1.5px;
+      background: var(--border);
+      transition: background 0.4s;
+    }
+    .step-line.done { background: var(--blue); }
+
+    /* ── STEPS VIEWPORT ── */
+    .steps-viewport {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+    .steps-track {
+      display: flex;
+      transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+      will-change: transform;
+    }
+    .step-panel {
+      min-width: 100%;
+      padding: 48px 0 120px;
+      opacity: 0;
+      transform: scale(0.98);
+      transition: opacity 0.4s 0.1s, transform 0.4s 0.1s;
+    }
+    .step-panel.visible {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    /* ── WIZARD NAV BUTTONS ── */
+    .wizard-nav {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: rgba(245,245,240,0.95);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-top: 1px solid var(--border);
+      z-index: 50;
+    }
+    .wizard-nav-inner {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .btn {
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      border: none;
+      cursor: pointer;
+      transition: all 0.25s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-primary {
+      background: var(--text);
+      color: var(--bg);
+      padding: 12px 32px;
+      border-radius: var(--radius);
+    }
+    .btn-primary:hover { background: var(--blue); }
+    .btn-primary:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+    .btn-primary:disabled:hover { background: var(--text); }
+    .btn-ghost {
+      background: none;
+      color: var(--text-muted);
+      padding: 12px 16px;
+    }
+    .btn-ghost:hover { color: var(--text); }
+    .btn-outline {
+      background: var(--surface);
+      color: var(--text);
+      padding: 10px 20px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+    }
+    .btn-outline:hover {
+      border-color: var(--blue);
+      color: var(--blue);
+    }
+    .btn-blue {
+      background: var(--blue);
+      color: #fff;
+      padding: 12px 32px;
+      border-radius: var(--radius);
+    }
+    .btn-blue:hover { background: #1a36dd; }
+    .btn-blue:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-blue:disabled:hover { background: var(--blue); }
+
+    /* ── STEP 1: WELCOME ── */
+    .welcome-center {
+      text-align: center;
+      padding-top: 48px;
+    }
+    .welcome-label {
+      font-size: 10px;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: var(--text-faint);
+      margin-bottom: 20px;
+    }
+    .welcome-title {
+      font-size: clamp(28px, 5vw, 42px);
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -1px;
+      margin-bottom: 16px;
+    }
+    .welcome-title span {
+      background: linear-gradient(135deg, var(--blue), #5566ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .welcome-sub {
+      font-size: 14px;
+      color: var(--text-muted);
+      font-weight: 400;
+      max-width: 400px;
+      margin: 0 auto 40px;
+      line-height: 1.6;
+    }
+    .pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 48px;
+    }
+    .pill {
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 8px 16px;
+      border-radius: 100px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .pill-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--blue);
+      display: inline-block;
+    }
+    .welcome-cta {
+      display: inline-block;
+    }
+    .welcome-cta .btn-primary {
+      font-size: 13px;
+      padding: 16px 48px;
+    }
+
+    /* ── STEP 2: REGISTER ── */
+    .form-section { margin-bottom: 28px; }
+    .form-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .label-optional {
+      font-weight: 400;
+      color: var(--text-faint);
+      text-transform: lowercase;
+      letter-spacing: 0;
+      font-size: 11px;
+    }
+    .form-input {
+      width: 100%;
+      font-family: var(--mono);
+      font-size: 14px;
+      padding: 14px 16px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.25s;
+    }
+    .form-input::placeholder { color: var(--text-faint); }
+    .form-input:focus { border-color: var(--blue); }
+    .form-hint {
+      font-size: 11px;
+      color: var(--text-faint);
+      margin-top: 6px;
+    }
+    .step-title {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .step-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 32px;
+      line-height: 1.6;
+    }
+    .register-result {
+      padding: 16px 20px;
+      border-radius: var(--radius);
+      margin-top: 20px;
+      display: none;
+    }
+    .register-result.success {
+      display: block;
+      background: var(--green-bg);
+      border: 1px solid rgba(26,138,74,0.15);
+    }
+    .register-result.error {
+      display: block;
+      background: var(--red-bg);
+      border: 1px solid rgba(204,34,51,0.15);
+    }
+    .result-icon {
+      font-size: 16px;
+      margin-right: 8px;
+    }
+    .result-key {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--green);
+      margin-top: 8px;
+      word-break: break-all;
+    }
+    .result-error {
+      color: var(--red);
+      font-size: 12px;
+    }
+    .alt-link {
+      font-size: 12px;
+      color: var(--text-faint);
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      transition: color 0.2s;
+      border: none;
+      background: none;
+      font-family: var(--mono);
+    }
+    .alt-link:hover { color: var(--blue); }
+    .alt-section {
+      display: none;
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+    }
+    .alt-section.show { display: block; }
+    .register-spinner {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      margin-top: 16px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .register-spinner.show { display: flex; }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .spinner-ring {
+      width: 18px; height: 18px;
+      border: 2px solid var(--border);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    /* ── STEP 3: MCP ── */
+    .ide-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+    .ide-card {
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.25s;
+      background: var(--surface);
+      user-select: none;
+    }
+    .ide-card:hover {
+      border-color: rgba(0,0,0,0.15);
+    }
+    .ide-card.selected {
+      border-color: var(--blue);
+      background: var(--blue-light);
+    }
+    .ide-icon {
+      width: 36px; height: 36px;
+      margin: 0 auto 10px;
+      opacity: 0.6;
+      transition: opacity 0.25s;
+    }
+    .ide-card.selected .ide-icon { opacity: 1; }
+    .ide-card-name {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .config-block {
+      margin-bottom: 20px;
+    }
+    .config-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .config-label {
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-faint);
+      font-weight: 600;
+    }
+    .config-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .config-actions .btn-outline {
+      font-size: 10px;
+      padding: 6px 12px;
+    }
+    .config-pre {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.8;
+      overflow-x: auto;
+      white-space: pre;
+      color: var(--text);
+      tab-size: 2;
+    }
+    .config-pre .key { color: var(--blue); }
+    .config-pre .str { color: #1a8a4a; }
+    .copy-toast {
+      position: fixed;
+      bottom: 90px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--text);
+      color: var(--bg);
+      padding: 10px 24px;
+      border-radius: var(--radius);
+      font-size: 12px;
+      font-weight: 500;
+      opacity: 0;
+      transition: all 0.3s;
+      pointer-events: none;
+      z-index: 200;
+    }
+    .copy-toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    .collapsible-toggle {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      cursor: pointer;
+      background: none;
+      border: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 12px 0;
+      transition: color 0.2s;
+    }
+    .collapsible-toggle:hover { color: var(--text); }
+    .collapsible-chevron {
+      transition: transform 0.25s;
+      font-size: 10px;
+    }
+    .collapsible-toggle.open .collapsible-chevron {
+      transform: rotate(90deg);
+    }
+    .collapsible-body {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.35s ease;
+    }
+    .collapsible-body.open { max-height: 400px; }
+    .path-list {
+      list-style: none;
+      padding: 0;
+    }
+    .path-list li {
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+    }
+    .path-list li:last-child { border-bottom: none; }
+    .path-label {
+      font-weight: 600;
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+    .path-value {
+      font-size: 11px;
+      color: var(--text-muted);
+      word-break: break-all;
+    }
+    .instructions-list {
+      list-style: none;
+      counter-reset: inst;
+      margin-top: 20px;
+    }
+    .instructions-list li {
+      counter-increment: inst;
+      padding: 8px 0 8px 32px;
+      position: relative;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .instructions-list li::before {
+      content: counter(inst);
+      position: absolute;
+      left: 0; top: 8px;
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: var(--blue-light);
+      color: var(--blue);
+      font-size: 10px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ── STEP 4: ENV ── */
+    .env-preview {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      font-size: 12px;
+      line-height: 1.9;
+      white-space: pre;
+      overflow-x: auto;
+      margin-bottom: 20px;
+    }
+    .env-comment { color: var(--text-faint); }
+    .env-key { color: var(--blue); font-weight: 500; }
+    .env-val { color: #1a8a4a; }
+    .env-actions {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .info-box {
+      background: var(--blue-light);
+      border: 1px solid var(--blue-mid);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* ── STEP 5: DONE ── */
+    .done-center { text-align: center; padding-top: 24px; }
+    .done-check {
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      background: var(--green-bg);
+      border: 2px solid rgba(26,138,74,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 24px;
+      animation: checkPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    }
+    @keyframes checkPop {
+      from { transform: scale(0); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    .done-check svg {
+      width: 32px; height: 32px;
+      stroke: var(--green);
+      stroke-width: 2.5;
+      fill: none;
+      stroke-dasharray: 40;
+      stroke-dashoffset: 40;
+      animation: drawCheck 0.4s 0.3s ease forwards;
+    }
+    @keyframes drawCheck {
+      to { stroke-dashoffset: 0; }
+    }
+    .done-title {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .done-sub {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 40px;
+    }
+    .done-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 40px;
+    }
+    .done-card {
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px 16px;
+      text-align: center;
+      text-decoration: none;
+      color: var(--text);
+      transition: all 0.25s;
+      background: var(--surface);
+    }
+    .done-card:hover {
+      border-color: var(--blue);
+      transform: translateY(-2px);
+    }
+    .done-card-icon {
+      font-size: 24px;
+      margin-bottom: 10px;
+      opacity: 0.7;
+    }
+    .done-card-title {
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .done-card-desc {
+      font-size: 11px;
+      color: var(--text-faint);
+    }
+    .done-footer {
+      font-size: 12px;
+      color: var(--text-faint);
+      padding: 16px 0;
+      border-top: 1px solid var(--border);
+      text-align: center;
+    }
+    .summary-list {
+      text-align: left;
+      list-style: none;
+      margin: 0 auto 40px;
+      max-width: 340px;
+    }
+    .summary-list li {
+      padding: 6px 0;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .summary-check {
+      color: var(--green);
+      font-weight: 700;
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 640px) {
+      .nav-inner { padding: 0 20px; }
+      .nav-links {
+        display: none; position: fixed; top: 56px; left: 0; right: 0;
+        background: rgba(245,245,240,0.98); flex-direction: column;
+        padding: 20px; gap: 16px; border-bottom: 1px solid var(--border);
+      }
+      .nav-links.open { display: flex; }
+      .nav-toggle { display: block; }
+      .wizard-wrap { padding: 56px 16px 0; }
+      .ide-cards { grid-template-columns: 1fr; }
+      .done-cards { grid-template-columns: 1fr; }
+      .welcome-title { font-size: 28px; }
+      .env-actions { flex-direction: column; }
+      .config-actions { flex-direction: column; }
+    }
+
+    /* ── STAGGER ANIMATIONS ── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .step-panel.visible .anim-1 { animation: fadeUp 0.4s 0.05s both; }
+    .step-panel.visible .anim-2 { animation: fadeUp 0.4s 0.12s both; }
+    .step-panel.visible .anim-3 { animation: fadeUp 0.4s 0.19s both; }
+    .step-panel.visible .anim-4 { animation: fadeUp 0.4s 0.26s both; }
+    .step-panel.visible .anim-5 { animation: fadeUp 0.4s 0.33s both; }
+    .step-panel.visible .anim-6 { animation: fadeUp 0.4s 0.40s both; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="/" class="nav-logo">Clude</a>
+    <button class="nav-toggle" id="navToggle" aria-label="Menu"><span></span><span></span><span></span></button>
+    <div class="nav-links" id="navLinks">
+      <a href="/docs.html">Docs</a>
+      <a href="/demo.html">Demo</a>
+      <a href="/brain.html">Brain</a>
+      <a href="/explore">Explorer</a>
+      <a href="/setup" class="nav-active">Get Started</a>
+    </div>
+  </div>
+</nav>
+
+<div class="wizard-wrap">
+
+  <!-- Step Indicator -->
+  <div class="steps-indicator" id="stepsIndicator">
+    <div class="step-dot active" data-step="0">1</div>
+    <div class="step-line"></div>
+    <div class="step-dot" data-step="1">2</div>
+    <div class="step-line"></div>
+    <div class="step-dot" data-step="2">3</div>
+    <div class="step-line"></div>
+    <div class="step-dot" data-step="3">4</div>
+    <div class="step-line"></div>
+    <div class="step-dot" data-step="4">5</div>
+  </div>
+
+  <!-- Steps Viewport -->
+  <div class="steps-viewport">
+    <div class="steps-track" id="stepsTrack">
+
+      <!-- STEP 1: WELCOME -->
+      <div class="step-panel visible" data-step="0">
+        <div class="welcome-center">
+          <div class="welcome-label anim-1">Get Started</div>
+          <h1 class="welcome-title anim-2">Give your AI<br><span>a brain</span></h1>
+          <p class="welcome-sub anim-3">Set up persistent memory in 60 seconds.<br>No coding required.</p>
+          <div class="pills anim-4">
+            <span class="pill"><span class="pill-dot"></span>Claude Desktop</span>
+            <span class="pill"><span class="pill-dot"></span>Cursor</span>
+            <span class="pill"><span class="pill-dot"></span>Claude Code</span>
+          </div>
+          <div class="welcome-cta anim-5">
+            <button class="btn btn-primary" onclick="goTo(1)">Get Started</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 2: REGISTER -->
+      <div class="step-panel" data-step="1">
+        <h2 class="step-title anim-1">Register your agent</h2>
+        <p class="step-desc anim-2">We'll generate an API key so your agent can store and recall memories.</p>
+
+        <div class="form-section anim-3">
+          <div class="form-label">Agent Name</div>
+          <input type="text" class="form-input" id="agentName" placeholder="my-agent" autocomplete="off" spellcheck="false">
+          <div class="form-hint">A name for your project. Min 2 characters.</div>
+        </div>
+
+        <div class="form-section anim-4">
+          <div class="form-label">Wallet Address <span class="label-optional">optional</span></div>
+          <input type="text" class="form-input" id="walletAddr" placeholder="Your Solana address" autocomplete="off" spellcheck="false">
+          <div class="form-hint">Proves ownership of your agent's memories.</div>
+        </div>
+
+        <div class="anim-5">
+          <button class="btn btn-blue" id="registerBtn" onclick="register()">Register</button>
+
+          <div class="register-spinner" id="registerSpinner">
+            <div class="spinner-ring"></div>
+            Registering on clude.io...
+          </div>
+
+          <div class="register-result" id="registerResult"></div>
+        </div>
+
+        <div class="anim-6" style="margin-top: 24px">
+          <button class="alt-link" onclick="toggleAlt()">Already have an API key?</button>
+          <div class="alt-section" id="altSection">
+            <div class="form-section">
+              <div class="form-label">Paste API Key</div>
+              <input type="text" class="form-input" id="existingKey" placeholder="ctx_..." autocomplete="off" spellcheck="false">
+            </div>
+            <button class="btn btn-outline" onclick="useExistingKey()">Use This Key</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 3: MCP CONFIG -->
+      <div class="step-panel" data-step="2">
+        <h2 class="step-title anim-1">Install MCP Server</h2>
+        <p class="step-desc anim-2">Choose your AI IDE. We'll generate the config for you.</p>
+
+        <div class="ide-cards anim-3">
+          <div class="ide-card selected" onclick="selectIde('claude-desktop')" data-ide="claude-desktop">
+            <svg class="ide-icon" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="4" y="4" width="28" height="20" rx="2"/><line x1="18" y1="24" x2="18" y2="30"/><line x1="12" y1="30" x2="24" y2="30"/>
+            </svg>
+            <div class="ide-card-name">Claude Desktop</div>
+          </div>
+          <div class="ide-card" onclick="selectIde('claude-code')" data-ide="claude-code">
+            <svg class="ide-icon" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="4" y="6" width="28" height="24" rx="2"/><polyline points="12,16 8,20 12,24"/><polyline points="24,16 28,20 24,24"/><line x1="20" y1="14" x2="16" y2="26"/>
+            </svg>
+            <div class="ide-card-name">Claude Code</div>
+          </div>
+          <div class="ide-card" onclick="selectIde('cursor')" data-ide="cursor">
+            <svg class="ide-icon" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M8 4 L28 18 L18 20 L14 30 Z"/><line x1="18" y1="20" x2="26" y2="28"/>
+            </svg>
+            <div class="ide-card-name">Cursor</div>
+          </div>
+        </div>
+
+        <div class="config-block anim-4">
+          <div class="config-header">
+            <span class="config-label">Generated Config</span>
+            <div class="config-actions">
+              <button class="btn btn-outline" onclick="copyConfig()">Copy</button>
+              <button class="btn btn-outline" onclick="downloadConfig()">Download</button>
+            </div>
+          </div>
+          <div class="config-pre" id="configPre"></div>
+        </div>
+
+        <div class="anim-5">
+          <button class="collapsible-toggle" onclick="toggleCollapsible(this)">
+            <span class="collapsible-chevron">&#9654;</span> Where does this file go?
+          </button>
+          <div class="collapsible-body" id="pathsBody">
+            <ul class="path-list">
+              <li>
+                <div class="path-label">Claude Desktop</div>
+                <div class="path-value">~/Library/Application Support/Claude/claude_desktop_config.json</div>
+              </li>
+              <li>
+                <div class="path-label">Claude Code</div>
+                <div class="path-value">.mcp.json in your project folder</div>
+              </li>
+              <li>
+                <div class="path-label">Cursor</div>
+                <div class="path-value">~/.cursor/mcp.json</div>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <ol class="instructions-list anim-6">
+          <li>Copy the config above</li>
+          <li>Open the config file for your IDE</li>
+          <li>Paste the config (merge if file already exists)</li>
+          <li>Restart your IDE</li>
+        </ol>
+      </div>
+
+      <!-- STEP 4: ENV FILE -->
+      <div class="step-panel" data-step="3">
+        <h2 class="step-title anim-1">Download .env</h2>
+        <p class="step-desc anim-2">Your environment file with API credentials. Place it in your project root.</p>
+
+        <div class="env-preview anim-3" id="envPreview"></div>
+
+        <div class="env-actions anim-4">
+          <button class="btn btn-blue" onclick="downloadEnv()">Download .env</button>
+          <button class="btn btn-outline" onclick="copyEnv()">Copy to Clipboard</button>
+        </div>
+
+        <div class="info-box anim-5">
+          Place this file in your project's root directory.<br>
+          Add <strong>.env</strong> to your <strong>.gitignore</strong> to keep your keys safe.
+        </div>
+      </div>
+
+      <!-- STEP 5: DONE -->
+      <div class="step-panel" data-step="4">
+        <div class="done-center">
+          <div class="done-check anim-1">
+            <svg viewBox="0 0 24 24"><polyline points="4,12 10,18 20,6"/></svg>
+          </div>
+          <h2 class="done-title anim-2">You're all set!</h2>
+          <p class="done-sub anim-3">Restart your IDE to activate the MCP server.</p>
+
+          <ul class="summary-list anim-4">
+            <li><span class="summary-check">&#10003;</span> Agent registered</li>
+            <li><span class="summary-check">&#10003;</span> MCP config generated</li>
+            <li><span class="summary-check">&#10003;</span> Environment file ready</li>
+          </ul>
+
+          <div class="done-cards anim-5">
+            <a href="/explore" class="done-card">
+              <div class="done-card-icon">&#9673;</div>
+              <div class="done-card-title">Explorer</div>
+              <div class="done-card-desc">Visualize memories</div>
+            </a>
+            <a href="/docs.html" class="done-card">
+              <div class="done-card-icon">&#9783;</div>
+              <div class="done-card-title">Docs</div>
+              <div class="done-card-desc">Learn the SDK</div>
+            </a>
+            <a href="/demo.html" class="done-card">
+              <div class="done-card-icon">&#9655;</div>
+              <div class="done-card-title">Demo</div>
+              <div class="done-card-desc">See it in action</div>
+            </a>
+          </div>
+
+          <div class="done-footer anim-6">
+            Your AI will now remember. Every conversation builds on the last.
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Wizard Nav -->
+<div class="wizard-nav" id="wizardNav">
+  <div class="wizard-nav-inner">
+    <button class="btn btn-ghost" id="backBtn" onclick="prevStep()" style="visibility:hidden">&#8592; Back</button>
+    <button class="btn btn-primary" id="nextBtn" onclick="nextStep()" style="display:none">Continue &#8594;</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="copy-toast" id="copyToast">Copied to clipboard</div>
+
+<script>
+// ─── State ──────────────────────────────────────────
+
+const state = {
+  step: 0,
+  agentName: '',
+  wallet: '',
+  apiKey: '',
+  agentId: '',
+  selectedIde: 'claude-desktop',
+  registered: false,
+};
+
+const TOTAL_STEPS = 5;
+
+// ─── Navigation ─────────────────────────────────────
+
+function goTo(step) {
+  state.step = step;
+  render();
+}
+
+function nextStep() {
+  if (state.step === 1 && !state.apiKey) return;
+  if (state.step < TOTAL_STEPS - 1) {
+    state.step++;
+    render();
+  }
+}
+
+function prevStep() {
+  if (state.step > 0) {
+    state.step--;
+    render();
+  }
+}
+
+function render() {
+  const track = document.getElementById('stepsTrack');
+  track.style.transform = `translateX(-${state.step * 100}%)`;
+
+  // Panels
+  document.querySelectorAll('.step-panel').forEach((p, i) => {
+    p.classList.toggle('visible', i === state.step);
+  });
+
+  // Dots
+  document.querySelectorAll('.step-dot').forEach((d, i) => {
+    d.classList.remove('active', 'done');
+    if (i === state.step) d.classList.add('active');
+    else if (i < state.step) d.classList.add('done');
+  });
+  document.querySelectorAll('.step-line').forEach((l, i) => {
+    l.classList.toggle('done', i < state.step);
+  });
+
+  // Nav buttons
+  const backBtn = document.getElementById('backBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const wizNav = document.getElementById('wizardNav');
+
+  backBtn.style.visibility = state.step > 0 && state.step < TOTAL_STEPS - 1 ? 'visible' : 'hidden';
+
+  if (state.step === 0) {
+    nextBtn.style.display = 'none';
+    wizNav.style.display = 'none';
+  } else if (state.step === TOTAL_STEPS - 1) {
+    nextBtn.style.display = 'none';
+    wizNav.style.display = 'none';
+  } else {
+    wizNav.style.display = 'block';
+    nextBtn.style.display = 'inline-flex';
+    if (state.step === 1) {
+      nextBtn.disabled = !state.apiKey;
+      nextBtn.textContent = 'Continue \u2192';
+    } else {
+      nextBtn.disabled = false;
+      nextBtn.textContent = state.step === TOTAL_STEPS - 2 ? 'Finish \u2192' : 'Continue \u2192';
+    }
+  }
+
+  // Update config preview when on step 3
+  if (state.step === 2) renderConfig();
+  if (state.step === 3) renderEnv();
+}
+
+// ─── Registration ───────────────────────────────────
+
+async function register() {
+  const nameInput = document.getElementById('agentName');
+  const walletInput = document.getElementById('walletAddr');
+  const name = nameInput.value.trim();
+  const wallet = walletInput.value.trim();
+
+  if (name.length < 2) {
+    nameInput.focus();
+    nameInput.style.borderColor = 'var(--red)';
+    setTimeout(() => nameInput.style.borderColor = '', 1500);
+    return;
+  }
+
+  if (wallet && !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet)) {
+    walletInput.focus();
+    walletInput.style.borderColor = 'var(--red)';
+    setTimeout(() => walletInput.style.borderColor = '', 1500);
+    return;
+  }
+
+  state.agentName = name;
+  state.wallet = wallet;
+
+  const btn = document.getElementById('registerBtn');
+  const spinner = document.getElementById('registerSpinner');
+  const result = document.getElementById('registerResult');
+
+  btn.disabled = true;
+  btn.style.display = 'none';
+  spinner.classList.add('show');
+  result.className = 'register-result';
+  result.style.display = 'none';
+
+  try {
+    const res = await fetch('https://cluude.ai/api/cortex/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, wallet: wallet || 'pending' }),
+    });
+
+    const data = await res.json();
+
+    spinner.classList.remove('show');
+
+    if (res.ok && data.apiKey) {
+      state.apiKey = data.apiKey;
+      state.agentId = data.agentId || '';
+      state.registered = true;
+
+      result.className = 'register-result success';
+      result.innerHTML = `
+        <span class="result-icon">\u2713</span> <strong>Registered!</strong>
+        <div class="result-key">${maskKey(data.apiKey)}</div>
+        <div class="form-hint" style="margin-top:8px">Key saved \u2014 we'll use this in the next steps.</div>
+      `;
+      render();
+    } else {
+      btn.style.display = 'inline-flex';
+      btn.disabled = false;
+      result.className = 'register-result error';
+      result.innerHTML = `<span class="result-icon">\u2717</span> <span class="result-error">${data.error || 'Registration failed. Try again.'}</span>`;
+    }
+  } catch (err) {
+    spinner.classList.remove('show');
+    btn.style.display = 'inline-flex';
+    btn.disabled = false;
+    result.className = 'register-result error';
+    result.innerHTML = `<span class="result-icon">\u2717</span> <span class="result-error">Could not reach clude.io. Check your connection and try again.</span>`;
+  }
+}
+
+function maskKey(key) {
+  if (key.length <= 12) return key;
+  return key.slice(0, 8) + '\u2022'.repeat(12) + key.slice(-4);
+}
+
+function toggleAlt() {
+  document.getElementById('altSection').classList.toggle('show');
+}
+
+function useExistingKey() {
+  const key = document.getElementById('existingKey').value.trim();
+  if (!key) return;
+  state.apiKey = key;
+  state.agentName = document.getElementById('agentName').value.trim() || 'my-agent';
+  state.wallet = document.getElementById('walletAddr').value.trim();
+  state.registered = true;
+
+  const result = document.getElementById('registerResult');
+  result.className = 'register-result success';
+  result.innerHTML = `<span class="result-icon">\u2713</span> <strong>Key accepted</strong>
+    <div class="result-key">${maskKey(key)}</div>`;
+  document.getElementById('registerBtn').style.display = 'none';
+  document.getElementById('altSection').classList.remove('show');
+  render();
+}
+
+// ─── IDE Selection ──────────────────────────────────
+
+function selectIde(ide) {
+  state.selectedIde = ide;
+  document.querySelectorAll('.ide-card').forEach(c => {
+    c.classList.toggle('selected', c.dataset.ide === ide);
+  });
+  renderConfig();
+}
+
+// ─── Config Generation ──────────────────────────────
+
+function getConfigJson() {
+  const env = {};
+  if (state.agentName) env.CLUDE_AGENT_NAME = state.agentName;
+  if (state.wallet) env.CLUDE_WALLET = state.wallet;
+
+  return {
+    mcpServers: {
+      'clude-memory': {
+        command: 'npx',
+        args: ['-y', '@clude/mcp'],
+        env,
+      }
+    }
+  };
+}
+
+function getConfigFileName() {
+  switch (state.selectedIde) {
+    case 'claude-desktop': return 'claude_desktop_config.json';
+    case 'claude-code': return '.mcp.json';
+    case 'cursor': return 'mcp.json';
+    default: return 'mcp-config.json';
+  }
+}
+
+function renderConfig() {
+  const config = getConfigJson();
+  const json = JSON.stringify(config, null, 2);
+
+  // Syntax highlight
+  const highlighted = json
+    .replace(/"([^"]+)":/g, '<span class="key">"$1"</span>:')
+    .replace(/: "([^"]+)"/g, ': <span class="str">"$1"</span>');
+
+  document.getElementById('configPre').innerHTML = highlighted;
+}
+
+function copyConfig() {
+  const config = getConfigJson();
+  navigator.clipboard.writeText(JSON.stringify(config, null, 2));
+  showToast('Config copied to clipboard');
+}
+
+function downloadConfig() {
+  const config = getConfigJson();
+  downloadBlob(JSON.stringify(config, null, 2), getConfigFileName(), 'application/json');
+}
+
+// ─── Env File ───────────────────────────────────────
+
+function getEnvContent() {
+  let env = `# Generated by clude.io/setup\n\nCORTEX_API_KEY=${state.apiKey}\nCORTEX_HOST_URL=https://cluude.ai\n`;
+  if (state.wallet) env += `OWNER_WALLET=${state.wallet}\n`;
+  return env;
+}
+
+function renderEnv() {
+  const raw = getEnvContent();
+  const highlighted = raw
+    .replace(/^(#.*)$/gm, '<span class="env-comment">$1</span>')
+    .replace(/^([A-Z_]+)=(.*)$/gm, '<span class="env-key">$1</span>=<span class="env-val">$2</span>');
+  document.getElementById('envPreview').innerHTML = highlighted;
+}
+
+function downloadEnv() {
+  downloadBlob(getEnvContent(), '.env', 'text/plain');
+}
+
+function copyEnv() {
+  navigator.clipboard.writeText(getEnvContent());
+  showToast('Copied to clipboard');
+}
+
+// ─── Collapsible ────────────────────────────────────
+
+function toggleCollapsible(btn) {
+  btn.classList.toggle('open');
+  document.getElementById('pathsBody').classList.toggle('open');
+}
+
+// ─── Helpers ────────────────────────────────────────
+
+function downloadBlob(content, filename, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function showToast(msg) {
+  const toast = document.getElementById('copyToast');
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2000);
+}
+
+// ─── Nav toggle ─────────────────────────────────────
+
+document.getElementById('navToggle').addEventListener('click', () => {
+  document.getElementById('navLinks').classList.toggle('open');
+});
+
+// ─── Init ───────────────────────────────────────────
+
+render();
+renderConfig();
+</script>
+</body>
+</html>
