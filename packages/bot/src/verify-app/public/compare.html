@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CLUDE — Notepad vs Brain</title>
+  <meta name="description" content="See the difference between flat memory and cognitive memory. Side-by-side comparison.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f5f5f0;
+      --surface: rgba(255, 255, 255, 0.92);
+      --text: #111;
+      --text-muted: #666;
+      --text-faint: #999;
+      --border: rgba(0, 0, 0, 0.08);
+      --accent: #2244ff;
+      --episodic: #1a3abf;
+      --semantic: #3a4a7a;
+      --procedural: #2a6a3a;
+      --selfmodel: #5a3a80;
+      --mono: 'JetBrains Mono', monospace;
+      --notepad-accent: #999;
+      --brain-accent: #2244ff;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      font-family: var(--mono);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 12px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; width: 100%; z-index: 100;
+      background: rgba(245, 245, 240, 0.9);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+    }
+    .nav-inner {
+      max-width: 1400px; margin: 0 auto; padding: 0 2rem;
+      height: 56px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-logo {
+      font-size: 13px; font-weight: 800; letter-spacing: 5px;
+      color: var(--text); text-transform: uppercase; text-decoration: none;
+    }
+    .nav-logo:hover { color: var(--accent); }
+    .nav-links { display: flex; gap: 2rem; align-items: center; }
+    .nav-links a {
+      font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--text-muted); text-decoration: none; transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--text); }
+    .nav-links a.active { color: var(--accent); }
+
+    /* ── HERO ── */
+    .hero {
+      padding: 100px 2rem 40px;
+      text-align: center;
+    }
+    .hero h1 {
+      font-size: 28px; font-weight: 800; letter-spacing: 4px;
+      text-transform: uppercase; margin-bottom: 12px;
+    }
+    .hero h1 span.notepad { color: var(--notepad-accent); }
+    .hero h1 span.brain { color: var(--brain-accent); }
+    .hero p {
+      font-size: 11px; color: var(--text-muted); letter-spacing: 1px;
+      max-width: 600px; margin: 0 auto;
+    }
+
+    /* ── QUERY BAR ── */
+    .query-section {
+      max-width: 1400px; margin: 0 auto; padding: 0 2rem 24px;
+    }
+    .query-bar {
+      display: flex; gap: 8px; align-items: center;
+      background: var(--surface); border: 1px solid var(--border);
+      padding: 4px;
+    }
+    .query-input {
+      flex: 1; padding: 14px 16px;
+      font-family: var(--mono); font-size: 12px;
+      border: none; outline: none; background: transparent;
+      color: var(--text);
+    }
+    .query-input::placeholder { color: var(--text-faint); }
+    .query-btn {
+      padding: 12px 24px; font-family: var(--mono);
+      font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+      background: var(--text); color: var(--bg); border: none;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .query-btn:hover { background: var(--accent); }
+    .query-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── PRESET QUERIES ── */
+    .presets {
+      max-width: 1400px; margin: 0 auto; padding: 0 2rem 32px;
+      display: flex; gap: 8px; flex-wrap: wrap;
+    }
+    .preset-btn {
+      padding: 6px 14px; font-family: var(--mono);
+      font-size: 9px; letter-spacing: 1px;
+      background: transparent; border: 1px solid var(--border);
+      color: var(--text-muted); cursor: pointer; transition: all 0.2s;
+    }
+    .preset-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── COMPARISON GRID ── */
+    .compare-grid {
+      max-width: 1400px; margin: 0 auto; padding: 0 2rem 60px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+    }
+    @media (max-width: 900px) {
+      .compare-grid { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      min-height: 400px;
+      display: flex; flex-direction: column;
+    }
+
+    .panel-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .panel-title {
+      font-size: 11px; font-weight: 800; letter-spacing: 4px;
+      text-transform: uppercase;
+    }
+    .panel.notepad .panel-title { color: var(--notepad-accent); }
+    .panel.brain .panel-title { color: var(--brain-accent); }
+
+    .panel-badge {
+      font-size: 8px; letter-spacing: 2px; text-transform: uppercase;
+      padding: 4px 10px;
+    }
+    .panel.notepad .panel-badge {
+      background: rgba(0,0,0,0.04); color: var(--text-faint);
+    }
+    .panel.brain .panel-badge {
+      background: rgba(34,68,255,0.06); color: var(--accent);
+    }
+
+    .panel-body {
+      flex: 1; padding: 20px; overflow-y: auto;
+    }
+
+    .panel-stats {
+      padding: 12px 20px; border-top: 1px solid var(--border);
+      display: flex; gap: 24px;
+      font-size: 9px; color: var(--text-faint); letter-spacing: 1px;
+    }
+    .panel-stats .stat-val { color: var(--text); font-weight: 700; }
+
+    /* ── NOTEPAD RESULTS ── */
+    .notepad-result {
+      padding: 14px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .notepad-result:last-child { border-bottom: none; }
+    .notepad-label {
+      font-size: 9px; color: var(--text-faint); letter-spacing: 1px;
+      text-transform: uppercase; margin-bottom: 6px;
+    }
+    .notepad-text {
+      font-size: 11px; line-height: 1.6; color: var(--text-muted);
+    }
+    .notepad-empty {
+      color: var(--text-faint); font-style: italic; font-size: 10px;
+      padding: 40px 0; text-align: center;
+    }
+
+    /* ── BRAIN RESULTS ── */
+    .brain-result {
+      padding: 14px 0;
+      border-bottom: 1px solid var(--border);
+      position: relative;
+    }
+    .brain-result:last-child { border-bottom: none; }
+
+    .brain-meta {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+    .brain-type {
+      font-size: 8px; letter-spacing: 2px; text-transform: uppercase;
+      padding: 2px 8px; font-weight: 700;
+    }
+    .brain-type[data-type="episodic"] { background: rgba(26,58,191,0.08); color: var(--episodic); }
+    .brain-type[data-type="semantic"] { background: rgba(58,74,122,0.08); color: var(--semantic); }
+    .brain-type[data-type="procedural"] { background: rgba(42,106,58,0.08); color: var(--procedural); }
+    .brain-type[data-type="self_model"] { background: rgba(90,58,128,0.08); color: var(--selfmodel); }
+
+    .brain-score {
+      font-size: 9px; color: var(--accent); font-weight: 600;
+    }
+    .brain-age {
+      font-size: 9px; color: var(--text-faint);
+    }
+    .brain-decay {
+      font-size: 9px; color: var(--text-faint);
+    }
+
+    .brain-summary {
+      font-size: 11px; line-height: 1.6; color: var(--text); font-weight: 500;
+    }
+    .brain-content {
+      font-size: 10px; line-height: 1.5; color: var(--text-muted);
+      margin-top: 6px;
+    }
+    .brain-tags {
+      display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap;
+    }
+    .brain-tag {
+      font-size: 8px; letter-spacing: 1px; padding: 2px 6px;
+      background: rgba(0,0,0,0.03); color: var(--text-faint);
+    }
+
+    .brain-connections {
+      margin-top: 10px; padding-top: 8px;
+      border-top: 1px dashed var(--border);
+    }
+    .brain-conn-label {
+      font-size: 8px; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 6px;
+    }
+    .brain-conn-item {
+      font-size: 9px; color: var(--text-muted); padding: 2px 0;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .brain-conn-type {
+      font-size: 7px; letter-spacing: 1px; text-transform: uppercase;
+      color: var(--text-faint); min-width: 60px;
+    }
+
+    /* ── TYPING ANIMATION ── */
+    .typing {
+      display: inline-flex; gap: 4px; padding: 20px 0;
+    }
+    .typing span {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--text-faint);
+      animation: typing-bounce 1.4s ease-in-out infinite;
+    }
+    .typing span:nth-child(2) { animation-delay: 0.2s; }
+    .typing span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes typing-bounce {
+      0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+      40% { transform: translateY(-8px); opacity: 1; }
+    }
+
+    /* ── BRAIN VIZ SECTION ── */
+    .viz-section {
+      max-width: 1400px; margin: 0 auto; padding: 0 2rem 60px;
+    }
+    .viz-header {
+      font-size: 11px; font-weight: 800; letter-spacing: 4px;
+      text-transform: uppercase; margin-bottom: 16px;
+      color: var(--accent);
+    }
+    .viz-frame {
+      width: 100%; height: 500px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+    }
+
+    /* ── SCORE BAR ── */
+    .score-bar {
+      height: 3px; background: rgba(0,0,0,0.04);
+      margin-top: 4px; overflow: hidden;
+    }
+    .score-fill {
+      height: 100%; background: var(--accent);
+      transition: width 0.6s ease;
+    }
+
+    /* ── SETUP OVERLAY ── */
+    .setup-overlay {
+      max-width: 1400px; margin: 0 auto; padding: 0 2rem 40px;
+    }
+    .setup-box {
+      background: var(--surface); border: 1px solid var(--border);
+      padding: 24px;
+    }
+    .setup-title {
+      font-size: 10px; font-weight: 700; letter-spacing: 3px;
+      text-transform: uppercase; margin-bottom: 12px;
+    }
+    .setup-input {
+      width: 100%; padding: 12px; font-family: var(--mono);
+      font-size: 11px; border: 1px solid var(--border);
+      background: transparent; outline: none; margin-bottom: 12px;
+    }
+    .setup-input:focus { border-color: var(--accent); }
+    .setup-btn {
+      padding: 10px 20px; font-family: var(--mono);
+      font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+      background: var(--text); color: var(--bg); border: none; cursor: pointer;
+    }
+    .setup-hint {
+      font-size: 9px; color: var(--text-faint); margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <div class="nav-inner">
+      <a href="/" class="nav-logo">CLUDE</a>
+      <div class="nav-links">
+        <a href="/explore.html">Explorer</a>
+        <a href="/compare.html" class="active">Compare</a>
+        <a href="/brain.html">Brain</a>
+        <a href="/docs.html">Docs</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <div class="hero">
+    <h1><span class="notepad">Notepad</span> vs <span class="brain">Brain</span></h1>
+    <p>Flat memory gives you facts. Cognitive memory gives you reasoning. Ask the same question to both.</p>
+  </div>
+
+  <!-- SETUP (shown until API key provided) -->
+  <div class="setup-overlay" id="setupOverlay">
+    <div class="setup-box">
+      <div class="setup-title">Connect to compare</div>
+      <input type="text" class="setup-input" id="setupApiKey" placeholder="Your Clude API key">
+      <button class="setup-btn" onclick="connectApi()">Connect</button>
+      <div class="setup-hint">Need a key? Run: npx clude-bot register</div>
+    </div>
+  </div>
+
+  <!-- QUERY BAR -->
+  <div class="query-section" id="querySection" style="display:none">
+    <div class="query-bar">
+      <input type="text" class="query-input" id="queryInput"
+             placeholder="Ask a question..."
+             onkeydown="if(event.key==='Enter')runQuery()">
+      <button class="query-btn" id="queryBtn" onclick="runQuery()">Query</button>
+    </div>
+  </div>
+
+  <!-- PRESETS -->
+  <div class="presets" id="presets" style="display:none">
+    <button class="preset-btn" onclick="setQuery('What did we decide about the vector threshold?')">Vector threshold decision</button>
+    <button class="preset-btn" onclick="setQuery('How does this relate to answer quality?')">Answer quality connection</button>
+    <button class="preset-btn" onclick="setQuery('What is the memory architecture?')">Memory architecture</button>
+    <button class="preset-btn" onclick="setQuery('What happened with the embedding migration?')">Embedding migration</button>
+    <button class="preset-btn" onclick="setQuery('How does scoring work?')">Scoring pipeline</button>
+    <button class="preset-btn" onclick="setQuery('What do we know about Venice AI?')">Venice AI</button>
+  </div>
+
+  <!-- COMPARISON -->
+  <div class="compare-grid" id="compareGrid" style="display:none">
+
+    <!-- LEFT: NOTEPAD -->
+    <div class="panel notepad">
+      <div class="panel-header">
+        <span class="panel-title">Notepad Memory</span>
+        <span class="panel-badge">Flat / Unscored</span>
+      </div>
+      <div class="panel-body" id="notepadBody">
+        <div class="notepad-empty">Run a query to compare</div>
+      </div>
+      <div class="panel-stats" id="notepadStats">
+        <span>Memories: <span class="stat-val" id="notepadCount">-</span></span>
+        <span>Latency: <span class="stat-val" id="notepadLatency">-</span></span>
+        <span>Context: <span class="stat-val">flat list</span></span>
+      </div>
+    </div>
+
+    <!-- RIGHT: BRAIN -->
+    <div class="panel brain">
+      <div class="panel-header">
+        <span class="panel-title">Clude Brain</span>
+        <span class="panel-badge">7-Phase / Scored / Linked</span>
+      </div>
+      <div class="panel-body" id="brainBody">
+        <div class="notepad-empty">Run a query to compare</div>
+      </div>
+      <div class="panel-stats" id="brainStats">
+        <span>Memories: <span class="stat-val" id="brainCount">-</span></span>
+        <span>Latency: <span class="stat-val" id="brainLatency">-</span></span>
+        <span>Phases: <span class="stat-val" id="brainPhases">-</span></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- BRAIN VISUALIZATION -->
+  <div class="viz-section" id="vizSection" style="display:none">
+    <div class="viz-header">Memory Graph Traversal</div>
+    <iframe id="brainFrame" class="viz-frame" src="brain.html?embedded=1" loading="lazy"></iframe>
+  </div>
+
+<script>
+/* ============= STATE ============= */
+let apiKey = null;
+let apiBase = '';
+
+/* ============= SETUP ============= */
+function connectApi() {
+  const key = document.getElementById('setupApiKey').value.trim();
+  if (!key) return;
+
+  apiKey = key;
+  // Detect base URL from current location
+  apiBase = window.location.origin;
+
+  document.getElementById('setupOverlay').style.display = 'none';
+  document.getElementById('querySection').style.display = '';
+  document.getElementById('presets').style.display = '';
+  document.getElementById('compareGrid').style.display = '';
+  document.getElementById('vizSection').style.display = '';
+
+  document.getElementById('queryInput').focus();
+}
+
+function setQuery(q) {
+  document.getElementById('queryInput').value = q;
+  runQuery();
+}
+
+/* ============= QUERY EXECUTION ============= */
+async function runQuery() {
+  const query = document.getElementById('queryInput').value.trim();
+  if (!query || !apiKey) return;
+
+  const btn = document.getElementById('queryBtn');
+  btn.disabled = true;
+
+  // Show typing animation on both panels
+  showTyping('notepadBody');
+  showTyping('brainBody');
+
+  // Run both in parallel
+  const [notepadResult, brainResult] = await Promise.all([
+    runNotepadQuery(query),
+    runBrainQuery(query),
+  ]);
+
+  // Render notepad (simulated flat memory)
+  renderNotepad(notepadResult, query);
+
+  // Render brain (full Clude recall)
+  renderBrain(brainResult, query);
+
+  // Highlight in brain viz
+  highlightInBrain(brainResult.memories || []);
+
+  btn.disabled = false;
+}
+
+/* ── Notepad: simulated flat memory (keyword-only, no scoring) ── */
+async function runNotepadQuery(query) {
+  const t0 = performance.now();
+  try {
+    // Use the demo/recall endpoint with minimal params to simulate flat recall
+    const res = await fetch(`${apiBase}/api/demo/recall`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        query,
+        limit: 5,
+        // No vector search, just basic matching
+      }),
+    });
+    const data = await res.json();
+    const latency = Math.round(performance.now() - t0);
+
+    // Strip scores and structure to simulate notepad
+    const memories = (data.memories || []).map(m => ({
+      summary: m.summary,
+      content: m.content,
+    }));
+
+    return { memories, latency, count: memories.length };
+  } catch (err) {
+    return { memories: [], latency: 0, count: 0, error: err.message };
+  }
+}
+
+/* ── Brain: full Clude recall with all phases ── */
+async function runBrainQuery(query) {
+  const t0 = performance.now();
+  try {
+    const res = await fetch(`${apiBase}/api/demo/recall`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        query,
+        limit: 8,
+      }),
+    });
+    const data = await res.json();
+    const latency = Math.round(performance.now() - t0);
+
+    return {
+      memories: data.memories || [],
+      latency,
+      count: (data.memories || []).length,
+      phases: 7,
+    };
+  } catch (err) {
+    return { memories: [], latency: 0, count: 0, error: err.message };
+  }
+}
+
+/* ============= RENDER: NOTEPAD ============= */
+function renderNotepad(result, query) {
+  const body = document.getElementById('notepadBody');
+
+  if (result.memories.length === 0) {
+    body.innerHTML = '<div class="notepad-empty">No memories found for this query.</div>';
+  } else {
+    // Show only flat summaries, no scores, no types, no connections
+    // Take fewer results to simulate less capable retrieval
+    const flat = result.memories.slice(0, 3);
+    body.innerHTML = flat.map((m, i) => `
+      <div class="notepad-result">
+        <div class="notepad-label">Memory ${i + 1}</div>
+        <div class="notepad-text">${escapeHtml(m.summary || m.content)}</div>
+      </div>
+    `).join('') + `
+      <div class="notepad-result" style="opacity: 0.5">
+        <div class="notepad-label" style="color: var(--notepad-accent)">No further context</div>
+        <div class="notepad-text" style="font-style: italic">
+          Flat memory cannot traverse connections, score by relevance, or differentiate memory types.
+          What you see is all there is.
+        </div>
+      </div>
+    `;
+  }
+
+  document.getElementById('notepadCount').textContent = Math.min(result.count, 3);
+  document.getElementById('notepadLatency').textContent = result.latency + 'ms';
+}
+
+/* ============= RENDER: BRAIN ============= */
+function renderBrain(result, query) {
+  const body = document.getElementById('brainBody');
+
+  if (result.memories.length === 0) {
+    body.innerHTML = '<div class="notepad-empty">No memories found.</div>';
+  } else {
+    body.innerHTML = result.memories.map((m, i) => {
+      const score = m._score || m.importance || 0;
+      const scorePercent = Math.min(score * 100, 100);
+      const type = m.memory_type || 'semantic';
+      const age = timeAgo(m.created_at);
+      const decay = m.decay_factor != null ? (m.decay_factor * 100).toFixed(0) + '%' : '';
+
+      let html = `
+        <div class="brain-result">
+          <div class="brain-meta">
+            <span class="brain-type" data-type="${type}">${type}</span>
+            <span class="brain-score">${score.toFixed(2)} relevance</span>
+            <span class="brain-age">${age}</span>
+            ${decay ? `<span class="brain-decay">decay: ${decay}</span>` : ''}
+          </div>
+          <div class="brain-summary">${escapeHtml(m.summary)}</div>
+          ${m.content && m.content !== m.summary ? `<div class="brain-content">${escapeHtml(truncate(m.content, 200))}</div>` : ''}
+          <div class="score-bar"><div class="score-fill" style="width:${scorePercent}%"></div></div>
+      `;
+
+      if (m.tags && m.tags.length > 0) {
+        html += `<div class="brain-tags">${m.tags.map(t => `<span class="brain-tag">${escapeHtml(t)}</span>`).join('')}</div>`;
+      }
+
+      // Show simulated connections for top results
+      if (i < 3 && result.memories.length > 1) {
+        const connected = result.memories.filter((_, j) => j !== i).slice(0, 2);
+        if (connected.length > 0) {
+          html += `
+            <div class="brain-connections">
+              <div class="brain-conn-label">Connected Memories</div>
+              ${connected.map(c => `
+                <div class="brain-conn-item">
+                  <span class="brain-conn-type">${inferLinkType(m, c)}</span>
+                  <span>${escapeHtml(truncate(c.summary, 80))}</span>
+                </div>
+              `).join('')}
+            </div>
+          `;
+        }
+      }
+
+      html += '</div>';
+      return html;
+    }).join('');
+  }
+
+  document.getElementById('brainCount').textContent = result.count;
+  document.getElementById('brainLatency').textContent = result.latency + 'ms';
+  document.getElementById('brainPhases').textContent = result.phases || 7;
+}
+
+/* ============= BRAIN VIZ HIGHLIGHT ============= */
+function highlightInBrain(memories) {
+  const frame = document.getElementById('brainFrame');
+  if (!frame || !frame.contentWindow) return;
+
+  const ids = memories.map(m => m.id).filter(Boolean);
+  if (ids.length > 0) {
+    frame.contentWindow.postMessage({
+      type: 'HIGHLIGHT_NODES',
+      ids,
+    }, '*');
+  }
+}
+
+/* ============= HELPERS ============= */
+function showTyping(elId) {
+  document.getElementById(elId).innerHTML = '<div class="typing"><span></span><span></span><span></span></div>';
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function truncate(str, max) {
+  if (!str || str.length <= max) return str;
+  return str.slice(0, max) + '...';
+}
+
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return mins + 'm ago';
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return hours + 'h ago';
+  const days = Math.floor(hours / 24);
+  if (days < 30) return days + 'd ago';
+  return Math.floor(days / 30) + 'mo ago';
+}
+
+function inferLinkType(a, b) {
+  // Heuristic link type based on memory types and content overlap
+  if (a.memory_type === 'procedural' || b.memory_type === 'procedural') return 'elaborates';
+  if (a.memory_type !== b.memory_type) return 'relates';
+  const aWords = new Set((a.summary || '').toLowerCase().split(/\s+/));
+  const bWords = new Set((b.summary || '').toLowerCase().split(/\s+/));
+  let overlap = 0;
+  for (const w of aWords) if (bWords.has(w) && w.length > 3) overlap++;
+  if (overlap > 3) return 'supports';
+  return 'co_mentioned';
+}
+
+/* ============= AUTO-CONNECT FROM URL PARAMS ============= */
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const key = params.get('key');
+  if (key) {
+    document.getElementById('setupApiKey').value = key;
+    connectApi();
+  }
+})();
+</script>
+
+</body>
+</html>
