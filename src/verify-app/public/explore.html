@@ -500,6 +500,162 @@
       font-weight: 600; letter-spacing: 1px;
     }
 
+    .card-actions {
+      display: flex; gap: 6px; margin-top: 10px;
+      border-top: 1px solid var(--border); padding-top: 10px;
+    }
+
+    .card-actions button {
+      font-family: var(--mono); font-size: 8px;
+      letter-spacing: 1.5px; text-transform: uppercase;
+      padding: 5px 12px; cursor: pointer;
+      background: transparent; border: 1px solid var(--border);
+      color: var(--text-muted); transition: all 0.2s;
+    }
+    .card-actions button:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── PROVENANCE PANEL ── */
+    .provenance-overlay {
+      position: fixed; inset: 0; z-index: 150;
+      background: rgba(245, 245, 240, 0.97);
+      backdrop-filter: blur(8px);
+      display: none; overflow-y: auto;
+    }
+    .provenance-overlay.visible { display: block; }
+
+    .prov-container {
+      max-width: 1200px; margin: 0 auto; padding: 2rem;
+    }
+
+    .prov-header {
+      display: flex; align-items: center; gap: 1rem;
+      margin-bottom: 1.5rem; padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .prov-close {
+      background: none; border: 1px solid var(--border);
+      font-family: var(--mono); font-size: 9px;
+      letter-spacing: 2px; text-transform: uppercase;
+      padding: 8px 16px; cursor: pointer; color: var(--text-muted);
+      transition: all 0.2s;
+    }
+    .prov-close:hover { border-color: var(--text); color: var(--text); }
+
+    .prov-title {
+      font-size: 14px; font-weight: 700; letter-spacing: -0.5px;
+    }
+    .prov-title em {
+      font-style: normal;
+      background: linear-gradient(135deg, #2244ff, #5566ff);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .prov-stats {
+      display: flex; gap: 1.5rem; flex-wrap: wrap;
+      padding: 12px 0; margin-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border);
+      font-size: 10px; color: var(--text-faint); letter-spacing: 0.5px;
+    }
+    .prov-stats .v { color: var(--text); font-weight: 600; }
+
+    .prov-layout {
+      display: grid; grid-template-columns: 1fr 380px; gap: 1.5rem;
+    }
+    @media (max-width: 900px) { .prov-layout { grid-template-columns: 1fr; } }
+
+    .prov-graph {
+      background: var(--surface); border: 1px solid var(--border);
+      position: relative; overflow: hidden; min-height: 420px;
+    }
+    .prov-graph canvas { width: 100%; height: 100%; display: block; }
+
+    .prov-graph-legend {
+      position: absolute; bottom: 10px; left: 10px;
+      display: flex; gap: 10px; font-size: 9px;
+      background: rgba(255,255,255,0.9); padding: 5px 10px;
+      letter-spacing: 0.5px;
+    }
+    .prov-legend-dot {
+      width: 7px; height: 7px; border-radius: 50%; display: inline-block;
+      margin-right: 3px; vertical-align: middle;
+    }
+
+    .prov-sidebar { display: flex; flex-direction: column; gap: 1rem; }
+
+    .prov-section-label {
+      font-size: 9px; font-weight: 700; letter-spacing: 3px;
+      text-transform: uppercase; color: var(--text-faint);
+      margin-bottom: 4px;
+    }
+
+    .prov-node-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-left: 3px solid var(--text-faint); padding: 12px 14px;
+      cursor: pointer; transition: all 0.2s; font-size: 10px;
+    }
+    .prov-node-card:hover { border-color: rgba(0,0,0,0.12); }
+    .prov-node-card.prov-root { border-left-color: var(--accent); }
+    .prov-node-card.prov-ancestor { border-left-color: #3498db; }
+    .prov-node-card.prov-descendant { border-left-color: #2a6a3a; }
+    .prov-node-card.prov-related { border-left-color: #9b59b6; }
+
+    .prov-node-head {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 6px;
+    }
+    .prov-node-type {
+      font-size: 8px; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    .prov-node-date { font-size: 9px; color: var(--text-faint); }
+    .prov-node-relation { font-size: 9px; color: var(--accent); margin-bottom: 4px; }
+    .prov-node-summary { font-size: 10px; line-height: 1.6; color: var(--text-muted); margin-bottom: 6px; }
+    .prov-node-meta {
+      display: flex; gap: 10px; font-size: 9px; color: var(--text-faint);
+    }
+    .prov-node-meta .v { color: var(--text-muted); font-weight: 500; }
+
+    /* ── EXPLAIN / ASK ── */
+    .prov-ask {
+      background: var(--surface); border: 1px solid var(--border);
+      padding: 16px; margin-top: 1rem;
+    }
+    .prov-ask-label {
+      font-size: 9px; font-weight: 700; letter-spacing: 3px;
+      text-transform: uppercase; color: var(--text-faint);
+      margin-bottom: 10px;
+    }
+    .prov-ask-row { display: flex; gap: 6px; }
+    .prov-ask-input {
+      flex: 1; padding: 10px 12px; font-family: var(--mono);
+      font-size: 10px; background: var(--bg); border: 1px solid var(--border);
+      color: var(--text); outline: none; transition: border-color 0.2s;
+    }
+    .prov-ask-input:focus { border-color: var(--accent); }
+    .prov-ask-btn {
+      padding: 10px 18px; font-family: var(--mono); font-size: 9px;
+      letter-spacing: 2px; text-transform: uppercase;
+      background: var(--text); color: var(--bg); border: 1px solid var(--text);
+      cursor: pointer; transition: all 0.2s;
+    }
+    .prov-ask-btn:hover { background: transparent; color: var(--text); }
+
+    .prov-answer {
+      margin-top: 14px; font-size: 10px; line-height: 1.8;
+      color: var(--text-muted); white-space: pre-wrap;
+    }
+    .prov-chain {
+      margin-top: 12px; padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+    .prov-chain-step {
+      display: flex; gap: 8px; margin-bottom: 4px; font-size: 9px;
+    }
+    .prov-chain-date { color: var(--accent); white-space: nowrap; min-width: 70px; }
+    .prov-chain-text { color: var(--text-muted); }
+
     /* ── HOW-TO GUIDE ── */
     .guide-section {
       max-width: 680px; margin: 28px auto 0; padding: 0 20px;
@@ -840,6 +996,39 @@
       </div>
     </div>
   </section>
+
+  <!-- PROVENANCE OVERLAY -->
+  <div class="provenance-overlay" id="provOverlay">
+    <div class="prov-container">
+      <div class="prov-header">
+        <button class="prov-close" onclick="closeProvenance()">← Back</button>
+        <div class="prov-title">Memory <em>Provenance</em></div>
+      </div>
+      <div class="prov-stats" id="provStats"></div>
+      <div class="prov-layout">
+        <div>
+          <div class="prov-graph" id="provGraphPanel">
+            <canvas id="provCanvas"></canvas>
+            <div class="prov-graph-legend">
+              <span><span class="prov-legend-dot" style="background:#2244ff"></span>Root</span>
+              <span><span class="prov-legend-dot" style="background:#3498db"></span>Ancestor</span>
+              <span><span class="prov-legend-dot" style="background:#2a6a3a"></span>Descendant</span>
+              <span><span class="prov-legend-dot" style="background:#9b59b6"></span>Related</span>
+            </div>
+          </div>
+          <div class="prov-ask">
+            <div class="prov-ask-label">Ask about this memory</div>
+            <div class="prov-ask-row">
+              <input type="text" class="prov-ask-input" id="provAskInput" placeholder="Why did you form this memory? What led to this decision?">
+              <button class="prov-ask-btn" onclick="askProvenance()">Ask</button>
+            </div>
+            <div id="provAnswer"></div>
+          </div>
+        </div>
+        <div class="prov-sidebar" id="provSidebar"></div>
+      </div>
+    </div>
+  </div>
 
   <!-- LOADING OVERLAY -->
   <div class="loading-overlay" id="loadingOverlay">
@@ -1234,6 +1423,10 @@
           '<span>' + age + '</span>' +
         '</div>' +
         (tags ? '<div class="card-tags">' + tags + '</div>' : '') +
+        '<div class="card-actions">' +
+          '<button onclick="event.stopPropagation(); openProvenance(' + n.id + ')">&#x2B95; Trace</button>' +
+          '<button onclick="event.stopPropagation(); focusInBrain(' + n.id + ')">&#x25CE; Focus</button>' +
+        '</div>' +
       '</div>';
     }).join('');
   }
@@ -1384,6 +1577,205 @@
       connectWithApiKey();
     }
   })();
+
+  /* ============= PROVENANCE ============= */
+  let currentProvTrace = null;
+
+  async function openProvenance(memoryId) {
+    const overlay = document.getElementById('provOverlay');
+    overlay.classList.add('visible');
+    document.getElementById('provStats').innerHTML = '<span style="letter-spacing:2px">TRACING...</span>';
+    document.getElementById('provSidebar').innerHTML = '';
+    document.getElementById('provAnswer').innerHTML = '';
+    document.getElementById('provAskInput').value = '';
+
+    try {
+      const res = await fetch('/api/memory/' + memoryId + '/trace');
+      if (!res.ok) throw new Error('Memory not found');
+      currentProvTrace = await res.json();
+      renderProvenance(currentProvTrace);
+    } catch (err) {
+      document.getElementById('provStats').innerHTML = '<span style="color:var(--error)">Error: ' + esc(err.message) + '</span>';
+    }
+  }
+
+  function closeProvenance() {
+    document.getElementById('provOverlay').classList.remove('visible');
+    currentProvTrace = null;
+  }
+
+  function renderProvenance(trace) {
+    // Stats
+    const linkSummary = Object.entries(trace.stats.link_types || {}).map(([k,v]) => k + ':' + v).join('  ');
+    document.getElementById('provStats').innerHTML =
+      '<span><span class="v">' + trace.stats.total_nodes + '</span> nodes</span>' +
+      '<span><span class="v">' + trace.ancestors.length + '</span> ancestors</span>' +
+      '<span><span class="v">' + trace.descendants.length + '</span> descendants</span>' +
+      '<span><span class="v">' + trace.related.length + '</span> related</span>' +
+      '<span>depth <span class="v">' + trace.stats.max_depth + '</span></span>' +
+      '<span>span <span class="v">' + trace.stats.time_span_days + 'd</span></span>' +
+      (trace.entities.length ? '<span>entities: <span class="v">' + trace.entities.map(e => e.name).join(', ') + '</span></span>' : '');
+
+    // Sidebar
+    let html = '';
+    html += provNodeCard(trace.root, 'root');
+
+    if (trace.ancestors.length > 0) {
+      html += '<div class="prov-section-label" style="margin-top:12px">Ancestors (' + trace.ancestors.length + ')</div>';
+      trace.ancestors.forEach(a => html += provNodeCard(a, 'ancestor'));
+    }
+    if (trace.descendants.length > 0) {
+      html += '<div class="prov-section-label" style="margin-top:12px">Descendants (' + trace.descendants.length + ')</div>';
+      trace.descendants.forEach(d => html += provNodeCard(d, 'descendant'));
+    }
+    if (trace.related.length > 0) {
+      html += '<div class="prov-section-label" style="margin-top:12px">Related (' + trace.related.length + ')</div>';
+      trace.related.forEach(r => html += provNodeCard(r, 'related'));
+    }
+    document.getElementById('provSidebar').innerHTML = html;
+
+    // Graph
+    renderProvGraph(trace);
+  }
+
+  function provNodeCard(node, category) {
+    const date = new Date(node.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return '<div class="prov-node-card prov-' + category + '" onclick="openProvenance(' + node.id + ')">' +
+      '<div class="prov-node-head">' +
+        '<span class="prov-node-type">' + category + ' · ' + esc(node.memory_type) + '</span>' +
+        '<span class="prov-node-date">' + date + '</span>' +
+      '</div>' +
+      (node.relation !== 'root' ? '<div class="prov-node-relation">↳ ' + esc(node.relation) + ' (' + node.strength.toFixed(2) + ')</div>' : '') +
+      '<div class="prov-node-summary">' + esc((node.summary || '').slice(0, 180)) + '</div>' +
+      '<div class="prov-node-meta">' +
+        '<span>imp <span class="v">' + (node.importance || 0).toFixed(2) + '</span></span>' +
+        '<span>decay <span class="v">' + ((node.decay_factor || 1) * 100).toFixed(0) + '%</span></span>' +
+        '<span>accessed <span class="v">' + (node.access_count || 0) + 'x</span></span>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderProvGraph(trace) {
+    const canvas = document.getElementById('provCanvas');
+    const panel = document.getElementById('provGraphPanel');
+    const rect = panel.getBoundingClientRect();
+    const W = rect.width || 700;
+    const H = 420;
+    canvas.width = W * 2; canvas.height = H * 2;
+    canvas.style.height = H + 'px';
+    const ctx = canvas.getContext('2d');
+    ctx.scale(2, 2);
+
+    const allN = [trace.root, ...trace.ancestors, ...trace.descendants, ...trace.related];
+    const nodeMap = new Map();
+    const colors = { root: '#2244ff', ancestor: '#3498db', descendant: '#2a6a3a', related: '#9b59b6' };
+
+    const nodes = allN.map(n => {
+      const cat = n.depth === 0 ? 'root' :
+        trace.ancestors.includes(n) ? 'ancestor' :
+        trace.descendants.includes(n) ? 'descendant' : 'related';
+      const obj = {
+        id: n.id, x: W/2 + (Math.random()-0.5)*W*0.5, y: H/2 + (Math.random()-0.5)*H*0.5,
+        vx: 0, vy: 0, r: n.depth === 0 ? 13 : Math.max(5, 9 - n.depth*2),
+        color: colors[cat], label: (n.summary||'').slice(0, 25), importance: n.importance, cat, data: n,
+      };
+      nodeMap.set(n.id, obj);
+      return obj;
+    });
+
+    const edges = (trace.links||[]).map(l => ({
+      source: nodeMap.get(l.source_id), target: nodeMap.get(l.target_id),
+      strength: l.strength, type: l.link_type,
+    })).filter(e => e.source && e.target);
+
+    // Ensure connectivity
+    for (const n of [...trace.ancestors, ...trace.descendants]) {
+      if (!edges.some(e => (e.source.id===n.id && e.target.id===trace.root.id) || (e.target.id===n.id && e.source.id===trace.root.id))) {
+        if (nodeMap.has(n.id)) edges.push({ source: nodeMap.get(n.id), target: nodeMap.get(trace.root.id), strength: n.strength, type: n.relation });
+      }
+    }
+
+    function tick() {
+      for (let i=0;i<nodes.length;i++) for (let j=i+1;j<nodes.length;j++) {
+        let dx=nodes[j].x-nodes[i].x, dy=nodes[j].y-nodes[i].y, d=Math.sqrt(dx*dx+dy*dy)||1, f=600/(d*d);
+        nodes[i].vx-=dx/d*f; nodes[i].vy-=dy/d*f; nodes[j].vx+=dx/d*f; nodes[j].vy+=dy/d*f;
+      }
+      for (const e of edges) {
+        let dx=e.target.x-e.source.x, dy=e.target.y-e.source.y, d=Math.sqrt(dx*dx+dy*dy)||1, f=(d-90)*0.01*e.strength;
+        e.source.vx+=dx/d*f; e.source.vy+=dy/d*f; e.target.vx-=dx/d*f; e.target.vy-=dy/d*f;
+      }
+      for (const n of nodes) {
+        n.vx+=(W/2-n.x)*0.002; n.vy+=(H/2-n.y)*0.002; n.vx*=0.85; n.vy*=0.85;
+        n.x+=n.vx; n.y+=n.vy;
+        n.x=Math.max(n.r+5,Math.min(W-n.r-5,n.x)); n.y=Math.max(n.r+5,Math.min(H-n.r-5,n.y));
+      }
+    }
+    function draw() {
+      ctx.clearRect(0,0,W,H);
+      for (const e of edges) {
+        ctx.beginPath(); ctx.moveTo(e.source.x,e.source.y); ctx.lineTo(e.target.x,e.target.y);
+        ctx.strokeStyle='rgba(0,0,0,'+(0.06+e.strength*0.1)+')'; ctx.lineWidth=0.5+e.strength; ctx.stroke();
+      }
+      for (const n of nodes) {
+        ctx.beginPath(); ctx.arc(n.x,n.y,n.r,0,Math.PI*2);
+        ctx.fillStyle=n.color; ctx.globalAlpha=0.25+n.importance*0.75; ctx.fill();
+        ctx.globalAlpha=1; ctx.strokeStyle=n.color; ctx.lineWidth=n.cat==='root'?2:1; ctx.stroke();
+        if (n.r>=7) { ctx.font=(n.cat==='root'?9:7)+'px JetBrains Mono'; ctx.fillStyle='#333'; ctx.textAlign='center'; ctx.fillText(n.label,n.x,n.y+n.r+10); }
+      }
+    }
+    let frame=0;
+    (function animate(){ tick(); draw(); if(++frame<180) requestAnimationFrame(animate); })();
+
+    canvas.onclick = function(e) {
+      const r = canvas.getBoundingClientRect();
+      const x = e.clientX-r.left, y = e.clientY-r.top;
+      for (const n of nodes) {
+        if ((n.x-x)**2+(n.y-y)**2 < (n.r+5)**2) { openProvenance(n.id); break; }
+      }
+    };
+  }
+
+  async function askProvenance() {
+    if (!currentProvTrace) return;
+    const q = document.getElementById('provAskInput').value.trim();
+    if (!q) return;
+
+    const ansDiv = document.getElementById('provAnswer');
+    ansDiv.innerHTML = '<div style="font-size:10px;color:var(--text-faint);letter-spacing:2px;padding:12px 0">ANALYZING...</div>';
+
+    try {
+      const res = await fetch('/api/memory/' + currentProvTrace.root.id + '/explain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q }),
+      });
+      if (!res.ok) throw new Error('Explain failed');
+      const result = await res.json();
+
+      let html = '<div class="prov-answer">' + esc(result.explanation) + '</div>';
+      if (result.reasoning_chain && result.reasoning_chain.length > 0) {
+        html += '<div class="prov-chain"><div class="prov-section-label">Reasoning Chain</div>';
+        result.reasoning_chain.forEach(step => {
+          const [date, ...rest] = step.split(': ');
+          html += '<div class="prov-chain-step"><span class="prov-chain-date">' + esc(date) + '</span><span class="prov-chain-text">' + esc(rest.join(': ')) + '</span></div>';
+        });
+        html += '</div>';
+      }
+      ansDiv.innerHTML = html;
+    } catch (err) {
+      ansDiv.innerHTML = '<div style="color:var(--error);font-size:10px">Error: ' + esc(err.message) + '</div>';
+    }
+  }
+
+  // Enter key for ask input
+  document.getElementById('provAskInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') askProvenance();
+  });
+
+  // Escape to close
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && currentProvTrace) closeProvenance();
+  });
 
   /* ============= PRIVY WALLET EVENT ============= */
   window.addEventListener('privy-wallet', async (e) => {
