@@ -21,6 +21,12 @@ if (command === 'init') {
     console.error('Ship failed:', err.message);
     process.exit(1);
   });
+} else if (command === 'export') {
+  const { runExport } = require('./export');
+  runExport().catch((err: Error) => {
+    console.error('Export failed:', err.message);
+    process.exit(1);
+  });
 } else if (command === 'start' || command === 'bot') {
   // Start the full Clude bot (requires env config)
   require('../index');
@@ -34,6 +40,7 @@ if (command === 'init') {
   console.log(`  ${c.bold}Usage:${c.reset}\n`);
   console.log(`    ${c.cyan}npx clude-bot init${c.reset}        Set up hosted or self-hosted mode`);
   console.log(`    ${c.cyan}npx clude-bot register${c.reset}    Get an API key for hosted mode`);
+  console.log(`    ${c.cyan}npx clude-bot export${c.reset}      Export memories to file (JSON or Markdown)`);
   console.log(`    ${c.cyan}npx clude-bot ship "msg"${c.reset}  Broadcast to Telegram channel`);
   console.log(`    ${c.cyan}npx clude-bot help${c.reset}        Show this help message`);
   console.log(`    ${c.cyan}npx clude-bot start${c.reset}       Start the Clude bot (requires full config)\n`);

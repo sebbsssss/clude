@@ -397,8 +397,8 @@
       <a href="/docs.html" class="nav-active">Docs</a>
       <a href="/demo.html">Demo</a>
       <a href="/brain.html">Brain</a>
+      <a href="/explore">Explorer</a>
       <a href="/benchmark">Benchmark</a>
-      <a href="https://x.com/Cludebot" target="_blank">X</a>
     </div>
   </div>
 </nav>
@@ -410,9 +410,11 @@
     <div class="sidebar-label">Documentation</div>
     <ul class="sidebar-nav" id="sidebarNav">
       <li><a href="#quick-start" class="active">Quick Start</a></li>
+      <li><a href="#hosted-mode">Hosted Mode</a></li>
       <li><a href="#configuration">Configuration</a></li>
       <li><a href="#storing">Storing Memories</a></li>
       <li><a href="#recalling">Recalling Memories</a></li>
+      <li><a href="#export-import">Export &amp; Import</a></li>
       <li><a href="#dream-cycles">Dream Cycles</a></li>
       <li><a href="#association-graph">Association Graph</a></li>
       <li><a href="#utilities">Utilities</a></li>
@@ -420,7 +422,7 @@
       <li><a href="#database">Database Schema</a></li>
       <li><a href="#degradation">Graceful Degradation</a></li>
     </ul>
-    <div class="sidebar-version">v2.2.0</div>
+    <div class="sidebar-version">v2.6.0</div>
   </aside>
 
   <main class="docs-content">
@@ -428,27 +430,39 @@
     <!-- ═══════ QUICK START ═══════ -->
     <div class="doc-section" id="quick-start">
       <h2>Quick Start</h2>
-      <p class="doc-lead">Install the SDK, run the interactive wizard, and give your AI agent persistent memory in under a minute.</p>
+      <p class="doc-lead">Give your AI agent persistent memory in under a minute. Choose hosted (zero setup) or self-hosted (your own database).</p>
 
       <h3>Install</h3>
       <div class="code">
         <span class="prompt">$</span> <span class="cmd">npm install clude-bot</span>
       </div>
 
-      <h3>Setup</h3>
-      <p>The init wizard walks you through configuring Supabase, Anthropic, Solana, and embeddings. All steps are skippable.</p>
+      <h3>Option A: Hosted (recommended)</h3>
+      <p>No database required. Register for an API key and start storing memories immediately.</p>
       <div class="code">
-        <span class="prompt">$</span> <span class="cmd">npx clude-bot init</span>
+<span class="prompt">$</span> <span class="cmd">npx clude-bot register</span>    <span class="cmt"># Get your API key</span>
       </div>
-      <p>This generates a <code>.env</code> file and shows a ready-to-use code snippet.</p>
-
-      <h3>Database</h3>
-      <p>Clude uses Supabase with pgvector. Run the schema against your Supabase project:</p>
       <div class="code">
-        <span class="prompt">$</span> <span class="cmd">psql</span> <span class="flag">$DATABASE_URL</span> <span class="cmd">-f node_modules/clude-bot/supabase-schema.sql</span>
+<span class="kw">import</span> { Cortex } <span class="kw">from</span> <span class="str">'clude-bot'</span>;
+
+<span class="kw">const</span> brain = <span class="kw">new</span> <span class="type">Cortex</span>({
+  hosted: { apiKey: process.env.<span class="flag">CORTEX_API_KEY</span> },
+  ownerWallet: process.env.<span class="flag">OWNER_WALLET</span>,
+});
+
+<span class="kw">await</span> brain.<span class="fn">init</span>();
+<span class="kw">await</span> brain.<span class="fn">store</span>({ type: <span class="str">'episodic'</span>, content: <span class="str">'Hello world'</span>, summary: <span class="str">'First memory'</span>, source: <span class="str">'my-agent'</span> });
       </div>
 
-      <h3>Usage</h3>
+      <h3>Option B: Self-hosted</h3>
+      <p>Run the init wizard to configure your own Supabase + pgvector database.</p>
+      <div class="code">
+<span class="prompt">$</span> <span class="cmd">npx clude-bot init</span>       <span class="cmt"># Interactive setup wizard</span>
+      </div>
+      <p>This generates a <code>.env</code> file. Then run the database schema:</p>
+      <div class="code">
+<span class="prompt">$</span> <span class="cmd">psql</span> <span class="flag">$DATABASE_URL</span> <span class="cmd">-f node_modules/clude-bot/supabase-schema.sql</span>
+      </div>
       <div class="code">
 <span class="kw">import</span> { Cortex } <span class="kw">from</span> <span class="str">'clude-bot'</span>;
 
@@ -460,37 +474,99 @@
 });
 
 <span class="kw">await</span> brain.<span class="fn">init</span>();
+      </div>
 
+      <h3>Store &amp; Recall</h3>
+      <p>The API is the same regardless of mode:</p>
+      <div class="code">
 <span class="cmt">// Store a memory</span>
+<span class="kw">await</span> brain.<span class="fn">store</span>({
+  type: <span class="str">'semantic'</span>,
+  content: <span class="str">'User prefers dark mode and compact layouts'</span>,
+  summary: <span class="str">'User UI preferences'</span>,
+  source: <span class="str">'my-agent'</span>,
+  tags: [<span class="str">'preferences'</span>, <span class="str">'ui'</span>],
+});
+
+<span class="cmt">// Recall with hybrid search</span>
+<span class="kw">const</span> memories = <span class="kw">await</span> brain.<span class="fn">recall</span>({
+  query: <span class="str">'what does the user prefer'</span>,
+});
+      </div>
+
+      <h3>Export &amp; Visualize</h3>
+      <p>Export your agent's memories and explore them visually:</p>
+      <div class="code">
+<span class="prompt">$</span> <span class="cmd">npx clude-bot export</span>     <span class="cmt"># → clude-memories.json</span>
+      </div>
+      <p>Then drag the file into <a href="/explore" style="color:var(--blue)">clude.io/explore</a> to see your agent's neural map.</p>
+
+      <div class="callout">
+        <div class="callout-label">No lock-in</div>
+        Both modes use the same SDK API. Switch between hosted and self-hosted anytime. Export your memories with <code>npx clude-bot export</code> at any point.
+      </div>
+    </div>
+
+    <!-- ═══════ HOSTED MODE ═══════ -->
+    <div class="doc-section" id="hosted-mode">
+      <h2>Hosted Mode</h2>
+      <p class="doc-lead">The fastest way to get started. No database setup required — your memories are stored on CLUDE infrastructure.</p>
+
+      <h3>1. Register for an API key</h3>
+      <div class="code">
+<span class="prompt">$</span> <span class="cmd">npx clude-bot register</span>
+      </div>
+      <p>You'll be asked for your agent name and Solana wallet address. Save the API key — it won't be shown again.</p>
+
+      <h3>2. Use in your code</h3>
+      <div class="code">
+<span class="kw">import</span> { Cortex } <span class="kw">from</span> <span class="str">'clude-bot'</span>;
+
+<span class="kw">const</span> brain = <span class="kw">new</span> <span class="type">Cortex</span>({
+  hosted: {
+    apiKey: process.env.<span class="flag">CORTEX_API_KEY</span>,
+  },
+  ownerWallet: process.env.<span class="flag">OWNER_WALLET</span>,
+});
+
+<span class="kw">await</span> brain.<span class="fn">init</span>();
+
+<span class="cmt">// Store, recall, dream — same API as self-hosted</span>
 <span class="kw">await</span> brain.<span class="fn">store</span>({
   type: <span class="str">'episodic'</span>,
   content: <span class="str">'User asked about deployment options'</span>,
   summary: <span class="str">'Deployment inquiry'</span>,
   source: <span class="str">'my-agent'</span>,
 });
-
-<span class="cmt">// Recall with hybrid search</span>
-<span class="kw">const</span> memories = <span class="kw">await</span> brain.<span class="fn">recall</span>({
-  query: <span class="str">'what did the user ask about'</span>,
-});
-
-console.<span class="fn">log</span>(memories);
       </div>
 
+      <h3>3. Export your memories</h3>
+      <p>Download your agent's memories to a file at any time:</p>
+      <div class="code">
+<span class="prompt">$</span> <span class="cmd">npx clude-bot export</span>                     <span class="cmt"># → clude-memories.json</span>
+<span class="prompt">$</span> <span class="cmd">npx clude-bot export</span> <span class="flag">--format md</span>          <span class="cmt"># → clude-memories.md</span>
+      </div>
+      <p>Then visualize them at <a href="/explore" style="color:var(--blue)">clude.io/explore</a> — drag and drop the file to see your agent's neural map.</p>
+
       <div class="callout">
-        <div class="callout-label">Note</div>
-        Only <code>supabase</code> config is required. Everything else (Anthropic, embeddings, Solana) is optional and degrades gracefully.
+        <div class="callout-label">Portability</div>
+        Hosted mode stores memories on CLUDE infrastructure, but you own your data. Export anytime, switch to self-hosted anytime. No lock-in.
       </div>
     </div>
 
     <!-- ═══════ CONFIGURATION ═══════ -->
     <div class="doc-section" id="configuration">
       <h2>Configuration</h2>
-      <p class="doc-lead">The <code>Cortex</code> constructor accepts a <code>CortexConfig</code> object. Only Supabase credentials are required.</p>
+      <p class="doc-lead">The <code>Cortex</code> constructor accepts a <code>CortexConfig</code> object. Use <code>hosted</code> for zero-setup or <code>supabase</code> for self-hosted.</p>
 
       <div class="code">
 <span class="kw">const</span> brain = <span class="kw">new</span> <span class="type">Cortex</span>({
-  <span class="cmt">// Required</span>
+  <span class="cmt">// Option A: Hosted (no database setup)</span>
+  hosted: {
+    apiKey: <span class="str">'your-cortex-api-key'</span>,
+  },
+
+  <span class="cmt">// Option B: Self-hosted (your own Supabase)</span>
   supabase: {
     url: <span class="str">'https://xxx.supabase.co'</span>,
     serviceKey: <span class="str">'eyJ...'</span>,
@@ -518,7 +594,14 @@ console.<span class="fn">log</span>(memories);
 });
       </div>
 
-      <h3>supabase (required)</h3>
+      <h3>hosted (zero-setup)</h3>
+      <table class="doc-table">
+        <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+        <tr><td><code>apiKey</code></td><td class="required">string</td><td>API key from <code>npx clude-bot register</code></td></tr>
+        <tr><td><code>baseUrl</code></td><td class="optional">string</td><td>API base URL. Default: <code>https://cluude.ai</code></td></tr>
+      </table>
+
+      <h3>supabase (self-hosted)</h3>
       <table class="doc-table">
         <tr><th>Field</th><th>Type</th><th>Description</th></tr>
         <tr><td><code>url</code></td><td class="required">string</td><td>Supabase project URL</td></tr>
@@ -656,6 +739,70 @@ score = (<span class="num">0.5</span> * recency) + (<span class="num">3.0</span>
       </div>
     </div>
 
+    <!-- ═══════ EXPORT & IMPORT ═══════ -->
+    <div class="doc-section" id="export-import">
+      <h2>Export &amp; Import</h2>
+      <p class="doc-lead">Your memories are portable. Export them to a file, visualize them in the browser, or move them between providers.</p>
+
+      <h3>CLI Export</h3>
+      <p>The fastest way to get your memories out:</p>
+      <div class="code">
+<span class="prompt">$</span> <span class="cmd">npx clude-bot export</span>                           <span class="cmt"># → clude-memories.json</span>
+<span class="prompt">$</span> <span class="cmd">npx clude-bot export</span> <span class="flag">--format md</span>                <span class="cmt"># → clude-memories.md</span>
+<span class="prompt">$</span> <span class="cmd">npx clude-bot export</span> <span class="flag">--types</span> episodic,semantic  <span class="cmt"># Filter by type</span>
+<span class="prompt">$</span> <span class="cmd">npx clude-bot export</span> <span class="flag">--output</span> backup.json       <span class="cmt"># Custom filename</span>
+      </div>
+      <p>Works with both hosted and self-hosted modes — reads your <code>.env</code> to detect which.</p>
+
+      <h3>Memory Explorer</h3>
+      <p>Visualize your exported memories at <a href="/explore" style="color:var(--blue)">clude.io/explore</a>. Three ways to load:</p>
+      <table class="doc-table">
+        <tr><th>Method</th><th>How</th></tr>
+        <tr><td><strong>Local File</strong></td><td>Drag and drop your <code>clude-memories.json</code> or <code>.md</code> file</td></tr>
+        <tr><td><strong>API Key</strong></td><td>Paste your Cortex API key to load directly from the cloud</td></tr>
+        <tr><td><strong>Wallet</strong></td><td>Connect your Solana wallet to retrieve wallet-linked memories</td></tr>
+      </table>
+      <p>Once loaded, you'll see a 3D neural map of your agent's brain, searchable memory cards, and can export again in JSON or Markdown format.</p>
+
+      <h3>SDK Export</h3>
+      <p>Programmatic export via the SDK:</p>
+      <div class="code">
+<span class="cmt">// Export as MemoryPack</span>
+<span class="kw">const</span> pack = <span class="kw">await</span> brain.<span class="fn">exportPack</span>({
+  name: <span class="str">'weekly-backup'</span>,
+  description: <span class="str">'Full memory backup'</span>,
+  limit: <span class="num">1000</span>,
+});
+
+<span class="cmt">// Import into another instance</span>
+<span class="kw">const</span> result = <span class="kw">await</span> brain.<span class="fn">importPack</span>(pack, {
+  importanceMultiplier: <span class="num">0.8</span>,  <span class="cmt">// Discount imported memories slightly</span>
+});
+console.<span class="fn">log</span>(result); <span class="cmt">// { imported: 142, skipped: 0 }</span>
+      </div>
+
+      <h3>REST API Export</h3>
+      <p>For hosted users, the Cortex API exposes export/import endpoints:</p>
+      <div class="code">
+<span class="cmt"># Export</span>
+<span class="prompt">$</span> <span class="cmd">curl</span> <span class="flag">-X POST</span> https://cluude.ai/api/cortex/packs/export \
+    <span class="flag">-H</span> <span class="str">"Authorization: Bearer YOUR_API_KEY"</span> \
+    <span class="flag">-H</span> <span class="str">"Content-Type: application/json"</span> \
+    <span class="flag">-d</span> <span class="str">'{"name":"backup","limit":1000}'</span>
+
+<span class="cmt"># Import</span>
+<span class="prompt">$</span> <span class="cmd">curl</span> <span class="flag">-X POST</span> https://cluude.ai/api/cortex/packs/import \
+    <span class="flag">-H</span> <span class="str">"Authorization: Bearer YOUR_API_KEY"</span> \
+    <span class="flag">-H</span> <span class="str">"Content-Type: application/json"</span> \
+    <span class="flag">-d</span> <span class="str">'{"pack": { ... }}'</span>
+      </div>
+
+      <div class="callout">
+        <div class="callout-label">Formats</div>
+        <strong>JSON</strong> preserves everything — importance scores, decay factors, access counts, timestamps, and connections. <strong>Markdown</strong> is human-readable and preserves content and importance, but loses metadata like decay and access history.
+      </div>
+    </div>
+
     <!-- ═══════ DREAM CYCLES ═══════ -->
     <div class="doc-section" id="dream-cycles">
       <h2>Dream Cycles</h2>
@@ -716,6 +863,7 @@ brain.<span class="fn">stopDreamSchedule</span>();
         <tr><td><code>contradicts</code></td><td>Source conflicts with target</td></tr>
         <tr><td><code>elaborates</code></td><td>Source adds detail to target</td></tr>
         <tr><td><code>causes</code></td><td>Source led to or caused target</td></tr>
+        <tr><td><code>resolves</code></td><td>Source resolves a contradiction in target</td></tr>
         <tr><td><code>follows</code></td><td>Source happened after target (temporal)</td></tr>
         <tr><td><code>relates</code></td><td>General association</td></tr>
       </table>
@@ -857,7 +1005,7 @@ brain.<span class="fn">on</span>(<span class="str">'memory:stored'</span>, (payl
 
       <table class="doc-table">
         <tr><th>Feature</th><th>Config Needed</th><th>Without It</th></tr>
-        <tr><td>Store / Recall</td><td><code>supabase</code></td><td>Constructor throws</td></tr>
+        <tr><td>Store / Recall</td><td><code>hosted</code> or <code>supabase</code></td><td>Constructor throws</td></tr>
         <tr><td>Vector search</td><td><code>embedding</code></td><td>Keyword + tag scoring only</td></tr>
         <tr><td>LLM importance</td><td><code>anthropic</code></td><td>Rule-based <code>calculateImportance()</code></td></tr>
         <tr><td>Dream cycles</td><td><code>anthropic</code></td><td><code>dream()</code> throws clear error</td></tr>
@@ -867,7 +1015,7 @@ brain.<span class="fn">on</span>(<span class="str">'memory:stored'</span>, (payl
 
       <div class="callout">
         <div class="callout-label">Minimal setup</div>
-        With just <code>supabase</code> config, you get full store/recall with keyword matching, tag scoring, type-specific decay, and the association graph. Add embedding and anthropic configs later as needed.
+        With just <code>hosted</code> or <code>supabase</code> config, you get full store/recall with keyword matching, tag scoring, type-specific decay, and the association graph. Add embedding and anthropic configs later as needed.
       </div>
     </div>
 

@@ -500,6 +500,84 @@
       font-weight: 600; letter-spacing: 1px;
     }
 
+    /* ── HOW-TO GUIDE ── */
+    .guide-section {
+      max-width: 680px; margin: 28px auto 0; padding: 0 20px;
+    }
+
+    .guide-toggle {
+      width: 100%; text-align: left; padding: 12px 0;
+      font-family: var(--mono); font-size: 11px;
+      color: var(--text-muted); background: none; border: none;
+      cursor: pointer; display: flex; align-items: center; gap: 8px;
+      letter-spacing: 1px; transition: color 0.2s;
+    }
+    .guide-toggle:hover { color: var(--text); }
+
+    .guide-chevron {
+      font-size: 10px; transition: transform 0.3s; display: inline-block;
+    }
+    .guide-toggle.open .guide-chevron { transform: rotate(90deg); }
+
+    .guide-content {
+      max-height: 0; overflow: hidden;
+      transition: max-height 0.4s ease, opacity 0.3s;
+      opacity: 0;
+    }
+    .guide-content.open {
+      max-height: 400px; opacity: 1;
+    }
+
+    .guide-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 12px; padding: 8px 0 20px;
+    }
+
+    .guide-card {
+      padding: 16px; border: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    .guide-step {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: var(--accent); color: white;
+      font-size: 10px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 10px;
+    }
+
+    .guide-card-title {
+      font-size: 10px; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; margin-bottom: 8px;
+    }
+
+    .guide-card p {
+      font-size: 10px; color: var(--text-muted); line-height: 1.7;
+      margin-bottom: 6px;
+    }
+
+    .guide-card code {
+      display: inline-block; padding: 3px 8px;
+      background: rgba(0,0,0,0.04); font-size: 10px;
+      color: var(--accent); letter-spacing: 0.5px;
+    }
+
+    /* ── ACTION BAR ── */
+    .action-bar {
+      max-width: 680px; margin: 16px auto 0; padding: 0 20px;
+      display: none;
+    }
+    .action-bar.visible { display: block; }
+
+    .action-inner {
+      display: flex; gap: 8px; align-items: center;
+    }
+
+    .action-label {
+      font-size: 9px; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--text-faint); margin-right: 4px;
+    }
+
     /* ── EMPTY STATE ── */
     .empty-state {
       text-align: center; padding: 80px 20px;
@@ -518,17 +596,30 @@
 
     .empty-sub {
       font-size: 11px; color: var(--text-muted); line-height: 1.8;
+      margin-bottom: 20px;
     }
 
-    .empty-arrow {
-      font-size: 18px; color: var(--text-faint);
-      margin-top: 20px; opacity: 0.4;
-      animation: float-up 2s ease-in-out infinite;
+    .empty-steps {
+      display: flex; flex-direction: column; gap: 10px;
+      text-align: left; max-width: 360px; margin: 0 auto;
     }
 
-    @keyframes float-up {
-      0%, 100% { transform: translateY(0); opacity: 0.4; }
-      50% { transform: translateY(-6px); opacity: 0.7; }
+    .empty-step {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 10px; color: var(--text-muted); line-height: 1.6;
+    }
+
+    .empty-step code {
+      padding: 2px 6px; background: rgba(0,0,0,0.04);
+      font-size: 10px; color: var(--accent);
+    }
+
+    .empty-step-num {
+      width: 20px; height: 20px; border-radius: 50%;
+      background: var(--border); color: var(--text-muted);
+      font-size: 9px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
     }
 
     /* ── LOADING OVERLAY ── */
@@ -575,6 +666,7 @@
       .brain-frame-wrap iframe { height: 40vh; }
       .cards-grid { grid-template-columns: 1fr; }
       .stats-inner { gap: 12px; }
+      .guide-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -607,6 +699,37 @@
     <p class="hero-sub">Visualize, search, and explore your agent's mind.</p>
   </section>
 
+  <!-- HOW-TO GUIDE -->
+  <section class="guide-section">
+    <button class="guide-toggle" id="guideToggle" onclick="toggleGuide()">
+      How do I get my memories? <span class="guide-chevron">&#x25B8;</span>
+    </button>
+    <div class="guide-content" id="guideContent">
+      <div class="guide-grid">
+        <div class="guide-card">
+          <div class="guide-step">1</div>
+          <div class="guide-card-title">Export from CLI</div>
+          <p>Run this in your terminal:</p>
+          <code>npx clude-bot export</code>
+          <p>This creates a <strong>clude-memories.json</strong> file. Then drag it into the Local File tab below.</p>
+        </div>
+        <div class="guide-card">
+          <div class="guide-step">2</div>
+          <div class="guide-card-title">Use your API Key</div>
+          <p>Get a key by running:</p>
+          <code>npx clude-bot register</code>
+          <p>Then paste it in the API Key tab below. Your memories load automatically from the cloud.</p>
+        </div>
+        <div class="guide-card">
+          <div class="guide-step">3</div>
+          <div class="guide-card-title">Connect Wallet</div>
+          <p>If your agent uses wallet-linked memory, connect via the Wallet tab.</p>
+          <p>We'll fetch your memories from the Cortex cloud.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- SOURCE SELECTOR -->
   <section class="source-section">
     <div class="source-tabs">
@@ -631,6 +754,7 @@
         </div>
       </div>
       <div class="error-msg" id="apiKeyError" style="display:none"></div>
+      <p style="font-size:10px;color:var(--text-faint);margin-top:10px;line-height:1.7;letter-spacing:0.5px">Don't have a key? Run <code style="padding:2px 6px;background:rgba(0,0,0,0.04);color:var(--accent);font-size:10px">npx clude-bot register</code> to get one.</p>
     </div>
 
     <!-- WALLET -->
@@ -659,6 +783,15 @@
   <!-- STATS BAR -->
   <div class="stats-bar" id="statsBar">
     <div class="stats-inner" id="statsInner"></div>
+  </div>
+
+  <!-- ACTION BAR -->
+  <div class="action-bar" id="actionBar">
+    <div class="action-inner">
+      <span class="action-label">Export</span>
+      <button class="btn btn-outline" onclick="exportJSON()" style="padding:8px 16px;font-size:9px">JSON</button>
+      <button class="btn btn-outline" onclick="exportMarkdown()" style="padding:8px 16px;font-size:9px">Markdown</button>
+    </div>
   </div>
 
   <!-- BRAIN VISUALIZATION -->
@@ -691,8 +824,21 @@
   <section class="empty-state" id="emptyState">
     <div class="empty-icon">&#x25C9;</div>
     <div class="empty-title">Load your memories</div>
-    <p class="empty-sub">Connect with an API key, link your wallet, or upload a local memory file to begin exploring.</p>
-    <div class="empty-arrow">&#x2191;</div>
+    <p class="empty-sub">Three ways to get started:</p>
+    <div class="empty-steps">
+      <div class="empty-step">
+        <span class="empty-step-num">1</span>
+        <span>Run <code>npx clude-bot export</code> then drag the file into <strong>Local File</strong></span>
+      </div>
+      <div class="empty-step">
+        <span class="empty-step-num">2</span>
+        <span>Paste your API key in the <strong>API Key</strong> tab</span>
+      </div>
+      <div class="empty-step">
+        <span class="empty-step-num">3</span>
+        <span>Connect your wallet in the <strong>Wallet</strong> tab</span>
+      </div>
+    </div>
   </section>
 
   <!-- LOADING OVERLAY -->
@@ -720,6 +866,14 @@
   let pendingData = null;
   let searchMode = 'keyword';
   let searchTimer = null;
+
+  /* ============= GUIDE TOGGLE ============= */
+  function toggleGuide() {
+    const btn = document.getElementById('guideToggle');
+    const content = document.getElementById('guideContent');
+    btn.classList.toggle('open');
+    content.classList.toggle('open');
+  }
 
   /* ============= TAB SWITCHING ============= */
   function setTab(name) {
@@ -1084,10 +1238,90 @@
     }).join('');
   }
 
+  /* ============= EXPORT ============= */
+  function exportJSON() {
+    if (allNodes.length === 0) return;
+    const pack = {
+      version: 1,
+      wallet: '',
+      memories: allNodes.map(function(n) {
+        return {
+          id: n.id,
+          content: n.content || n.summary || '',
+          summary: n.summary || '',
+          type: n.type || 'episodic',
+          importance: n.importance ?? 0.5,
+          tags: n.tags || [],
+          created_at: n.createdAt || new Date().toISOString(),
+          access_count: n.accessCount || 0,
+          decay_factor: n.decay ?? 1,
+          emotional_valence: n.valence || 0,
+          source: n.source || '',
+        };
+      }),
+      connections: [],
+      meta: {
+        exported_at: new Date().toISOString(),
+        memory_count: allNodes.length,
+        content_hash: simpleHash(allNodes.map(function(n){ return n.summary; }).join('')),
+      },
+    };
+    var json = JSON.stringify(pack, null, 2);
+    downloadBlob(new Blob([json], { type: 'application/json' }), 'clude-memories.json');
+  }
+
+  function exportMarkdown() {
+    if (allNodes.length === 0) return;
+    var byType = { episodic: [], semantic: [], procedural: [], self_model: [] };
+    for (var i = 0; i < allNodes.length; i++) {
+      var n = allNodes[i];
+      var t = n.type || 'episodic';
+      if (byType[t]) byType[t].push(n); else byType.episodic.push(n);
+    }
+
+    var md = '# Clude Memory Export\n\n';
+    md += '> ' + allNodes.length + ' memories — exported ' + new Date().toISOString() + '\n\n---\n\n';
+
+    var types = ['episodic', 'semantic', 'procedural', 'self_model'];
+    var titles = { episodic: 'Episodic', semantic: 'Semantic', procedural: 'Procedural', self_model: 'Self Model' };
+    for (var ti = 0; ti < types.length; ti++) {
+      var key = types[ti];
+      var mems = byType[key];
+      if (!mems || mems.length === 0) continue;
+      md += '## ' + titles[key] + ' (' + mems.length + ')\n\n';
+      for (var mi = 0; mi < mems.length; mi++) {
+        md += '- [' + (mems[mi].importance || 0).toFixed(2) + '] ' + (mems[mi].summary || mems[mi].content || '') + '\n';
+      }
+      md += '\n';
+    }
+
+    downloadBlob(new Blob([md], { type: 'text/markdown' }), 'clude-memories.md');
+  }
+
+  function downloadBlob(blob, filename) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function simpleHash(str) {
+    var hash = 0;
+    for (var i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+    }
+    return Math.abs(hash).toString(16).padStart(8, '0');
+  }
+
   /* ============= UI HELPERS ============= */
   function showDataUI() {
     document.getElementById('emptyState').style.display = 'none';
     document.getElementById('statsBar').classList.add('visible');
+    document.getElementById('actionBar').classList.add('visible');
     document.getElementById('brainSection').classList.add('visible');
     document.getElementById('searchSection').classList.add('visible');
     document.getElementById('cardsSection').classList.add('visible');
@@ -1098,6 +1332,7 @@
     allNodes = [];
     document.getElementById('emptyState').style.display = 'block';
     document.getElementById('statsBar').classList.remove('visible');
+    document.getElementById('actionBar').classList.remove('visible');
     document.getElementById('brainSection').classList.remove('visible');
     document.getElementById('searchSection').classList.remove('visible');
     document.getElementById('cardsSection').classList.remove('visible');
