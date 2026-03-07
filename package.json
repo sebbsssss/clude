@@ -1,6 +1,6 @@
 {
   "name": "clude-bot",
-  "version": "2.6.3",
+  "version": "2.6.4",
   "description": "Persistent memory SDK for AI agents — Stanford Generative Agents architecture on Supabase + pgvector",
   "main": "dist/sdk/index.js",
   "types": "dist/sdk/index.d.ts",
