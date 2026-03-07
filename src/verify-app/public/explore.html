@@ -778,6 +778,45 @@
       flex-shrink: 0;
     }
 
+    /* ── SAMPLE PACKS ── */
+    .samples-section {
+      max-width: 680px; margin: 28px auto 0; padding: 0 20px;
+    }
+    .samples-label {
+      font-size: 9px; letter-spacing: 4px; text-transform: uppercase;
+      color: var(--text-faint); margin-bottom: 12px;
+    }
+    .samples-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+    }
+    .sample-card {
+      padding: 16px; border: 1px solid var(--border);
+      background: var(--surface); cursor: pointer;
+      transition: all 0.25s; text-align: left;
+      font-family: var(--mono);
+    }
+    .sample-card:hover {
+      border-color: rgba(0,0,0,0.15);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+    }
+    .sample-card-icon {
+      font-size: 18px; margin-bottom: 10px;
+    }
+    .sample-card-name {
+      font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
+      text-transform: uppercase; margin-bottom: 6px;
+    }
+    .sample-card-desc {
+      font-size: 9px; color: var(--text-muted); line-height: 1.7;
+      margin-bottom: 8px;
+    }
+    .sample-card-meta {
+      font-size: 8px; color: var(--text-faint); letter-spacing: 1px;
+    }
+    @media (max-width: 768px) {
+      .samples-grid { grid-template-columns: 1fr; }
+    }
+
     /* ── LOADING OVERLAY ── */
     .loading-overlay {
       position: fixed; inset: 0; z-index: 200;
@@ -974,6 +1013,31 @@
   <!-- MEMORY CARDS -->
   <section class="cards-section" id="cardsSection">
     <div class="cards-grid" id="cardsGrid"></div>
+  </section>
+
+  <!-- SAMPLE PACKS -->
+  <section class="samples-section" id="samplesSection">
+    <div class="samples-label">Or try a sample agent</div>
+    <div class="samples-grid">
+      <div class="sample-card" onclick="loadSample('defi-trader')">
+        <div class="sample-card-icon">📈</div>
+        <div class="sample-card-name">DeFi Trader</div>
+        <div class="sample-card-desc">90 days on Solana. Rug pulls, alpha discovery, strategy evolution.</div>
+        <div class="sample-card-meta">~350 memories</div>
+      </div>
+      <div class="sample-card" onclick="loadSample('support-agent')">
+        <div class="sample-card-icon">💬</div>
+        <div class="sample-card-name">Support Agent</div>
+        <div class="sample-card-desc">60 days of tickets. Learned empathy, improved satisfaction 3.2→4.6.</div>
+        <div class="sample-card-meta">~350 memories</div>
+      </div>
+      <div class="sample-card" onclick="loadSample('research-agent')">
+        <div class="sample-card-icon">🔬</div>
+        <div class="sample-card-name">Research Agent</div>
+        <div class="sample-card-desc">45 days tracking memory/AI papers. Thesis: "memory is the moat."</div>
+        <div class="sample-card-meta">~350 memories</div>
+      </div>
+    </div>
   </section>
 
   <!-- EMPTY STATE -->
@@ -1513,6 +1577,7 @@
   /* ============= UI HELPERS ============= */
   function showDataUI() {
     document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('samplesSection').style.display = 'none';
     document.getElementById('statsBar').classList.add('visible');
     document.getElementById('actionBar').classList.add('visible');
     document.getElementById('brainSection').classList.add('visible');
@@ -1524,6 +1589,7 @@
     brainNodes = [];
     allNodes = [];
     document.getElementById('emptyState').style.display = 'block';
+    document.getElementById('samplesSection').style.display = 'block';
     document.getElementById('statsBar').classList.remove('visible');
     document.getElementById('actionBar').classList.remove('visible');
     document.getElementById('brainSection').classList.remove('visible');
@@ -1577,6 +1643,21 @@
       connectWithApiKey();
     }
   })();
+
+  /* ============= SAMPLE PACKS ============= */
+  async function loadSample(name) {
+    showLoading('Loading ' + name + ' sample...');
+    try {
+      const res = await fetch('/samples/' + name + '.json');
+      if (!res.ok) throw new Error('Sample not found');
+      const pack = await res.json();
+      loadFromMemoryPack(pack);
+      hideLoading();
+    } catch (err) {
+      hideLoading();
+      alert('Failed to load sample: ' + err.message);
+    }
+  }
 
   /* ============= PROVENANCE ============= */
   let currentProvTrace = null;

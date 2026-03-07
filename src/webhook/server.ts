@@ -873,6 +873,10 @@ export function createServer(): express.Application {
     next();
   });
 
+  // Sample memory packs
+  const samplesDir = path.join(__dirname, '..', 'verify-app', 'public', 'samples');
+  app.use('/samples', express.static(samplesDir));
+
   app.use(express.static(publicDir));
   app.use(express.static(distPublicDir));
   app.use('/api', verifyRoutes());
