@@ -27,7 +27,7 @@ export interface ContextOptions {
   maxTokens?: number;
   memory?: RecallOptions;
   skipMood?: boolean;
-  /** If true, adds instruction to keep response under 270 chars for Twitter */
+  /** If true, adds Twitter/X response style instructions */
   forTwitter?: boolean;
 }
 

@@ -135,7 +135,7 @@ async function generateShiftReport(): Promise<void> {
       'Format as a thread of 3-5 tweets separated by ---. ' +
       'Start with "SHIFT REPORT" and the date. ' +
       'Reference specific data points: wallet addresses (truncated), amounts, behaviors. ' +
-      'End with a sign-off. Each tweet under 270 characters. ' +
+      'End with a sign-off. ' +
       'Tone: bureaucratic exhaustion. You are clocking out.',
   });
 

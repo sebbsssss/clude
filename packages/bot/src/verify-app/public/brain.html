@@ -645,6 +645,17 @@ document.getElementById('navToggle').addEventListener('click', function() {
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+/* ============= EMBEDDED MODE ============= */
+const _params = new URLSearchParams(location.search);
+const embeddedMode = _params.get('embedded') === '1';
+if (embeddedMode) {
+  document.querySelector('nav').style.display = 'none';
+  const psyche = document.getElementById('psycheCard');
+  if (psyche) psyche.style.display = 'none';
+  document.documentElement.style.background = 'transparent';
+  document.body.style.background = 'transparent';
+}
+
 /* ============= CONFIG ============= */
 // Ink-on-paper: dark, saturated colors for nodes
 const TYPE_COLORS = {
@@ -1653,6 +1664,40 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+/* ============= POSTMESSAGE API (embedded mode) ============= */
+window.addEventListener('message', (e) => {
+  if (!e.data?.type) return;
+  switch (e.data.type) {
+    case 'LOAD_BRAIN_DATA': {
+      const d = e.data.payload;
+      if (d.total) totalMemoryCount = d.total;
+      if (d.nodes?.length) {
+        buildMemoryNodes(d.nodes);
+        document.getElementById('loading').classList.add('gone');
+        initialLoadDone = true;
+      }
+      break;
+    }
+    case 'HIGHLIGHT_NODES': {
+      const ids = new Set(e.data.ids);
+      for (const n of memoryNodes) {
+        if (ids.has(n.id)) { n.fireGlow = 4.0; n.visible = true; }
+        else { n.visible = false; }
+      }
+      buildEdges();
+      break;
+    }
+    case 'RESET_HIGHLIGHTS':
+      applyFilters();
+      break;
+    case 'FOCUS_NODE': {
+      const node = nodeMap[e.data.id];
+      if (node) selectNode(node);
+      break;
+    }
+  }
+});
+
 /* ============= DATA FETCH ============= */
 let initialLoadDone = false;
 
@@ -1861,11 +1906,16 @@ createRiverSystem();
 createNodeSystems();
 createSignalSystem();
 createSpawnBurstSystem();
-fetchBrain();
-fetchConsciousness();
+if (!embeddedMode) {
+  fetchBrain();
+  fetchConsciousness();
+  setInterval(fetchBrain, 15000);
+  setInterval(fetchConsciousness, 30000);
+} else {
+  // Signal parent that we're ready to receive data
+  try { window.parent.postMessage({ type: 'BRAIN_READY' }, '*'); } catch {}
+}
 renderLoop();
-setInterval(fetchBrain, 15000);
-setInterval(fetchConsciousness, 30000);
 
 </script>
 </body>

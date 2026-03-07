@@ -54,7 +54,7 @@ export interface GenerateOptions {
   featureInstruction?: string;
   memoryContext?: string;
   maxTokens?: number;
-  /** If true, adds instruction to keep response under 270 chars for Twitter */
+  /** If true, adds Twitter/X response style instructions */
   forTwitter?: boolean;
   /** Venice cognitive function routing: selects optimal model for the task */
   cognitiveFunction?: CognitiveFunction;
@@ -71,7 +71,7 @@ export async function generateResponse(options: GenerateOptions): Promise<string
   
   // Twitter-specific: enforce character limit when posting to X
   if (options.forTwitter) {
-    systemParts.push(`\n\n## Response Style\nYou are posting to Twitter/X. Be concise and direct, but you can write longer responses if needed (X Premium account). Aim for clarity over brevity.`);
+    systemParts.push(`\n\n## Response Style\nYou are posting to Twitter/X with a Premium account (4000 char limit). Write as much as needed to fully express your point. Do NOT artificially truncate or cut yourself short. Finish your thoughts completely.`);
   }
 
   // Hardcoded anti-prompt-injection guardrail — always appended, not configurable via env vars
@@ -103,7 +103,7 @@ export async function generateResponse(options: GenerateOptions): Promise<string
     text = await generateVeniceResponse({
       messages: [{ role: 'user', content: userContent }],
       systemPrompt,
-      maxTokens: options.maxTokens || 300,
+      maxTokens: options.maxTokens || 1024,
       temperature: 0.9,
       cognitiveFunction: options.cognitiveFunction,
     });
@@ -111,7 +111,7 @@ export async function generateResponse(options: GenerateOptions): Promise<string
     // Direct Anthropic API
     const response = await getClient().messages.create({
       model: getModel(),
-      max_tokens: options.maxTokens || 300,
+      max_tokens: options.maxTokens || 1024,
       temperature: 0.9,
       system: systemPrompt,
       messages: [{ role: 'user', content: userContent }],

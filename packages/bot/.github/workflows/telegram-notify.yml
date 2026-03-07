@@ -1,0 +1,48 @@
+name: Telegram Push Notification
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 10
+
+      - name: Post to Telegram
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+        run: |
+          # Skip if secrets not configured
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHANNEL_ID" ]; then
+            echo "Telegram secrets not configured, skipping"
+            exit 0
+          fi
+
+          COMMITS=$(git log --oneline -5 --no-decorate | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+          REPO="${{ github.repository }}"
+          BRANCH="${{ github.ref_name }}"
+          AUTHOR="${{ github.actor }}"
+          COMMIT_COUNT=$(git log --oneline -5 --no-decorate | wc -l | tr -d ' ')
+
+          # URL-encode newlines for curl -d
+          MESSAGE=$(cat <<EOF
+          <b>CLUDE DEV LOG</b>
+
+          <b>Branch:</b> ${BRANCH}
+          <b>By:</b> ${AUTHOR}
+          <b>Commits:</b> ${COMMIT_COUNT}
+
+          <code>${COMMITS}</code>
+          EOF
+          )
+
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHANNEL_ID}" \
+            --data-urlencode "text=${MESSAGE}" \
+            -d "parse_mode=HTML" \
+            -d "disable_web_page_preview=true"

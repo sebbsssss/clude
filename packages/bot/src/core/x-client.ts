@@ -273,6 +273,103 @@ export async function searchHashtagTweets(
 }
 
 /**
+ * Search tweets mentioning $CLUDE or @cludebot.
+ * Used by the sentiment monitor for Telegram digests.
+ */
+export async function searchTokenMentions(
+  sinceId?: string,
+  maxResults: number = 50
+): Promise<CampaignTweet[]> {
+  log.info({ sinceId, maxResults }, 'Searching $CLUDE mentions');
+
+  try {
+    const query = '($CLUDE OR @cludebot) -is:retweet';
+    const params: Record<string, string> = {
+      'tweet.fields': 'created_at,author_id,public_metrics',
+      'expansions': 'author_id',
+      'user.fields': 'username',
+      max_results: String(Math.min(maxResults, 100)),
+    };
+    if (sinceId) params.since_id = sinceId;
+
+    const result = await rwClient.v2.search(query, params);
+
+    const authorMap = new Map<string, string>();
+    if (result.includes?.users) {
+      for (const user of result.includes.users) {
+        authorMap.set(user.id, user.username);
+      }
+    }
+
+    const tweets: CampaignTweet[] = [];
+    for (const tweet of result.data?.data || []) {
+      tweets.push({
+        id: tweet.id,
+        text: tweet.text,
+        authorId: tweet.author_id || '',
+        authorUsername: authorMap.get(tweet.author_id || '') || undefined,
+        createdAt: tweet.created_at,
+        publicMetrics: tweet.public_metrics ? {
+          like_count: tweet.public_metrics.like_count || 0,
+          retweet_count: tweet.public_metrics.retweet_count || 0,
+          reply_count: tweet.public_metrics.reply_count || 0,
+          quote_count: tweet.public_metrics.quote_count || 0,
+        } : undefined,
+      });
+    }
+
+    log.info({ found: tweets.length }, 'Token mention search complete');
+    return tweets;
+  } catch (err) {
+    log.error({ err }, 'Failed to search token mentions');
+    return [];
+  }
+}
+
+/**
+ * Get recent tweets from a specific user (e.g. the creator's account).
+ */
+export async function getUserTweets(
+  userId: string,
+  sinceId?: string,
+  maxResults: number = 10
+): Promise<CampaignTweet[]> {
+  log.debug({ userId, sinceId }, 'Fetching user tweets');
+
+  try {
+    const params: Record<string, string> = {
+      'tweet.fields': 'created_at,author_id,public_metrics',
+      max_results: String(Math.min(maxResults, 100)),
+      exclude: 'retweets,replies',
+    };
+    if (sinceId) params.since_id = sinceId;
+
+    const result = await rwClient.v2.userTimeline(userId, params);
+
+    const tweets: CampaignTweet[] = [];
+    for (const tweet of result.data?.data || []) {
+      tweets.push({
+        id: tweet.id,
+        text: tweet.text,
+        authorId: tweet.author_id || userId,
+        createdAt: tweet.created_at,
+        publicMetrics: tweet.public_metrics ? {
+          like_count: tweet.public_metrics.like_count || 0,
+          retweet_count: tweet.public_metrics.retweet_count || 0,
+          reply_count: tweet.public_metrics.reply_count || 0,
+          quote_count: tweet.public_metrics.quote_count || 0,
+        } : undefined,
+      });
+    }
+
+    return tweets;
+  } catch (err) {
+    log.warn({ userId, err }, 'Failed to fetch user tweets');
+    return [];
+  }
+}
+
+/**
  * Refresh engagement metrics for a batch of tweet IDs.
  * Returns a map of tweetId → { likes, retweets, replies, quotes }.
  */

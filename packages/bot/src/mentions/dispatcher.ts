@@ -147,7 +147,7 @@ async function handleVestingQuestion(
 
 ${vestingInfo}
 
-Be concise and direct. Under 280 characters. If they ask about a specific aspect (like community vs hackathon allocation), focus on that.`;
+Be direct and informative. If they ask about a specific aspect (like community vs hackathon allocation), focus on that.`;
 
   const response = await buildAndGenerate({
     message: cleanText,
@@ -282,7 +282,7 @@ async function handleGeneralReply(
     context: contextParts.length > 0 ? contextParts.join('\n') : undefined,
     tierModifier: creatorMode ? undefined : getTierModifier(tier),
     instruction,
-    forTwitter: true,  // Enforce 270 char limit
+    forTwitter: true,
     memory: {
       relatedUser: getUsernameOrId(authorId),
       query: cleanText,
@@ -343,7 +343,7 @@ async function handleMemoryRecall(
       `The user is asking if you remember them. You have ${memories.length} memories of past interactions. ` +
       `Summarize what you remember about them naturally — reference specific past topics or questions. ` +
       `Include how many memories you found and the retrieval time (${recallMs}ms). ` +
-      'Be warm but not robotic. Under 270 characters.',
+      'Be warm but not robotic.',
     forTwitter: true,
   });
 

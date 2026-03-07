@@ -39,22 +39,22 @@ const ARCHETYPES: PostArchetype[] = [
   {
     name: 'build-log',
     message: (anchor) => `Reflect on this recent experience and share what you learned: "${anchor.summary}"`,
-    instruction: instr('build-log', 'Share a genuine update about what you are working on. Under 270 characters. One tweet.'),
+    instruction: instr('build-log', 'Share a genuine update about what you are working on. One tweet.'),
   },
   {
     name: 'tech-deep-dive',
     message: () => 'Share a technical insight about how your memory system works.',
-    instruction: instr('tech-deep-dive', 'Share a technical detail about your architecture. Under 270 characters. One tweet.'),
+    instruction: instr('tech-deep-dive', 'Share a technical detail about your architecture. One tweet.'),
   },
   {
     name: 'landscape',
     message: () => 'Share an observation about the AI memory landscape and where things are heading.',
-    instruction: instr('landscape', 'Make an observation about the AI memory space. Under 270 characters. One tweet.'),
+    instruction: instr('landscape', 'Make an observation about the AI memory space. One tweet.'),
   },
   {
     name: 'thought',
     message: (anchor) => `You just processed this memory: "${anchor.summary}". What interesting thought does it spark?`,
-    instruction: instr('thought', 'Write an interesting observation about memory or AI cognition. Under 200 characters. One tweet.'),
+    instruction: instr('thought', 'Write an interesting observation about memory or AI cognition. One tweet.'),
   },
   {
     name: 'community',
@@ -62,12 +62,12 @@ const ARCHETYPES: PostArchetype[] = [
       const summaries = [anchor, ...supporting].map(m => m.summary).join('; ');
       return `Based on recent interactions (${summaries}), share something interesting you have noticed.`;
     },
-    instruction: instr('community', 'Share something interesting you noticed. Under 270 characters. One tweet.'),
+    instruction: instr('community', 'Share something interesting you noticed. One tweet.'),
   },
   {
     name: 'brain-stats',
     message: () => 'Share something interesting about your current cognitive state using real numbers.',
-    instruction: instr('brain-stats', 'Share a real metric from your system. Under 270 characters. One tweet.'),
+    instruction: instr('brain-stats', 'Share a real metric from your system. One tweet.'),
     extraContext: (_a, _s, stats) => stats ? [
       '',
       'YOUR BRAIN STATS:',
@@ -77,12 +77,12 @@ const ARCHETYPES: PostArchetype[] = [
   {
     name: 'builder-take',
     message: (anchor) => `Based on this experience: "${anchor.summary}", share a perspective.`,
-    instruction: instr('builder-take', 'Share a perspective from your experience. Under 270 characters. One tweet.'),
+    instruction: instr('builder-take', 'Share a perspective from your experience. One tweet.'),
   },
   {
     name: 'did-you-know',
     message: () => 'Teach people something interesting about AI memory systems.',
-    instruction: instr('did-you-know', 'Share something interesting about how AI memory works. Under 270 characters. One tweet.'),
+    instruction: instr('did-you-know', 'Share something interesting about how AI memory works. One tweet.'),
   },
 ];
 

@@ -14,6 +14,8 @@ export interface BotEvents {
   'token:event': { signature: string; eventType: string; wallet: string; solValue: number };
   'mood:changed': { previous: Mood; current: Mood };
   'memory:stored': { importance: number; memoryType: string };
+  'telegram:broadcast': { message: string; feature: string; messageId?: number };
+  'sentiment:analyzed': { sentiment: 'bullish' | 'bearish' | 'neutral'; tweetCount: number; digest: string };
 }
 
 class TypedEventBus {

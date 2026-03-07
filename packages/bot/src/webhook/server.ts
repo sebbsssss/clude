@@ -317,6 +317,47 @@ export function createServer(): express.Application {
     }
   });
 
+  // Privy-authenticated brain data (wallet-scoped, for Memory Explorer)
+  app.get('/api/user/brain', requirePrivyAuth, async (req: Request, res: Response) => {
+    try {
+      const wallet = req.query.wallet as string;
+      if (!wallet || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet)) {
+        res.status(400).json({ error: 'Valid Solana wallet address required' });
+        return;
+      }
+
+      const limit = Math.min(parseInt(req.query.limit as string) || 300, 500);
+      const memories = await getRecentMemories(8760, undefined, limit);
+      // Filter to wallet-owned memories
+      const walletMemories = memories.filter(m => (m as any).owner_wallet === wallet);
+      const stats = await getMemoryStats();
+
+      res.json({
+        nodes: walletMemories.map(m => ({
+          id: m.id,
+          type: m.memory_type,
+          summary: m.summary,
+          content: m.content,
+          tags: m.tags || [],
+          importance: m.importance,
+          decay: m.decay_factor,
+          valence: m.emotional_valence,
+          accessCount: m.access_count,
+          source: m.source,
+          evidenceIds: m.evidence_ids || [],
+          createdAt: m.created_at,
+          lastAccessed: m.last_accessed,
+        })),
+        total: walletMemories.length,
+        wallet,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) {
+      log.error({ err }, 'User brain endpoint error');
+      res.status(500).json({ error: 'Failed to fetch brain data' });
+    }
+  });
+
   // Export memory pack
   app.post('/api/memory-packs/export', requirePrivyAuth, async (req: Request, res: Response) => {
     try {
@@ -762,6 +803,12 @@ export function createServer(): express.Application {
   // Memory benchmark comparison at /benchmark
   app.get('/benchmark', (req: Request, _res: Response, next: express.NextFunction) => {
     req.url = '/benchmark.html';
+    next();
+  });
+
+  // Memory explorer at /explore
+  app.get('/explore', (req: Request, _res: Response, next: express.NextFunction) => {
+    req.url = '/explore.html';
     next();
   });
 
