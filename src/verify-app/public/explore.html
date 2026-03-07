@@ -2206,26 +2206,36 @@
     return { explanation, reasoning_chain: chain };
   }
 
+  let provAsking = false;
   async function askProvenance() {
-    if (!currentProvTrace) return;
+    if (!currentProvTrace || provAsking) return;
     const q = document.getElementById('provAskInput').value.trim();
     if (!q) return;
 
+    provAsking = true;
     const ansDiv = document.getElementById('provAnswer');
+    const btn = document.querySelector('.prov-ask-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '...'; }
     ansDiv.innerHTML = '<div style="font-size:10px;color:var(--text-faint);letter-spacing:2px;padding:12px 0">ANALYZING...</div>';
 
     let result;
     try {
       if (usingSampleData) {
-        // Local explanation from trace data
         result = localExplain(currentProvTrace, q);
       } else {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000);
         const res = await fetch('/api/memory/' + currentProvTrace.root.id + '/explain', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ question: q }),
+          signal: controller.signal,
         });
-        if (!res.ok) throw new Error('Explain failed');
+        clearTimeout(timeout);
+        if (!res.ok) {
+          const errBody = await res.text().catch(() => '');
+          throw new Error('Explain failed (' + res.status + ')' + (errBody ? ': ' + errBody : ''));
+        }
         result = await res.json();
       }
 
@@ -2240,7 +2250,11 @@
       }
       ansDiv.innerHTML = html;
     } catch (err) {
-      ansDiv.innerHTML = '<div style="color:var(--error);font-size:10px">Error: ' + esc(err.message) + '</div>';
+      const msg = err.name === 'AbortError' ? 'Request timed out (30s). Try again.' : err.message;
+      ansDiv.innerHTML = '<div style="color:var(--error);font-size:10px">Error: ' + esc(msg) + '</div>';
+    } finally {
+      provAsking = false;
+      if (btn) { btn.disabled = false; btn.textContent = 'ASK'; }
     }
   }
 
