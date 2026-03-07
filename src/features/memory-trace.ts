@@ -404,8 +404,8 @@ Question: ${question}`;
   const response = await generateResponse({
     userMessage: userPrompt,
     featureInstruction: systemPrompt,
-    cognitiveFunction: 'reflect' as CognitiveFunction,
-    maxTokens: 2000,
+    cognitiveFunction: 'summarize' as CognitiveFunction,
+    maxTokens: 1500,
   });
 
   if (!response) return null;
