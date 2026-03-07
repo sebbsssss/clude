@@ -4,363 +4,741 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Memory Provenance — Clude</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
-    
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    
+
     :root {
-      --bg: #f5f5f0;
-      --card: #ffffff;
-      --border: #e0ddd5;
-      --text: #1a1a1a;
-      --text-secondary: #666;
-      --blue: #455cfa;
-      --blue-light: #455cfa15;
-      --red: #e84b3c;
-      --green: #2ecc71;
-      --orange: #f39c12;
-      --purple: #9b59b6;
-      --ancestor: #3498db;
-      --descendant: #2ecc71;
-      --related: #9b59b6;
-      --root: #455cfa;
+      --bg: #06080f;
+      --bg-secondary: #0c1020;
+      --surface: rgba(14, 20, 40, 0.85);
+      --surface-hover: rgba(20, 30, 60, 0.9);
+      --border: rgba(80, 140, 255, 0.1);
+      --border-hover: rgba(80, 140, 255, 0.3);
+      --text: #d0d8f0;
+      --text-secondary: #6878a0;
+      --text-faint: #3a4868;
+
+      --cyan: #00e5ff;
+      --cyan-dim: rgba(0, 229, 255, 0.15);
+      --blue: #4488ff;
+      --blue-dim: rgba(68, 136, 255, 0.12);
+      --purple: #a855f7;
+      --purple-dim: rgba(168, 85, 247, 0.12);
+      --green: #22d68a;
+      --green-dim: rgba(34, 214, 138, 0.12);
+      --orange: #ff8844;
+      --red: #ff4466;
+
+      --root-color: #00e5ff;
+      --ancestor-color: #4488ff;
+      --descendant-color: #22d68a;
+      --related-color: #a855f7;
+
+      --glow-cyan: 0 0 20px rgba(0, 229, 255, 0.3), 0 0 60px rgba(0, 229, 255, 0.1);
+      --glow-blue: 0 0 20px rgba(68, 136, 255, 0.3), 0 0 60px rgba(68, 136, 255, 0.1);
     }
-    
+
     body {
       font-family: 'JetBrains Mono', monospace;
       background: var(--bg);
       color: var(--text);
       line-height: 1.6;
+      overflow-x: hidden;
+      min-height: 100vh;
     }
-    
+
+    /* ── Ambient Background ── */
+    #bg-canvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .grid-overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(68, 136, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(68, 136, 255, 0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+    }
+
+    .vignette {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 0;
+      pointer-events: none;
+      background: radial-gradient(ellipse at center, transparent 40%, var(--bg) 100%);
+    }
+
+    /* ── Container ── */
     .container {
-      max-width: 1200px;
+      position: relative;
+      z-index: 1;
+      max-width: 1280px;
       margin: 0 auto;
       padding: 2rem;
     }
-    
+
+    /* ── Header ── */
     header {
       display: flex;
       align-items: center;
       gap: 1rem;
-      margin-bottom: 2rem;
-      padding-bottom: 1rem;
+      margin-bottom: 2.5rem;
+      padding-bottom: 1.25rem;
       border-bottom: 1px solid var(--border);
+      opacity: 0;
     }
-    
+
     header h1 {
-      font-size: 1.4rem;
+      font-size: 1.3rem;
       font-weight: 600;
+      letter-spacing: 0.05em;
+      color: var(--text);
     }
-    
-    header h1 span { color: var(--blue); }
-    
+
+    header h1 span {
+      background: linear-gradient(135deg, var(--cyan), var(--blue));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
     .back-link {
       color: var(--text-secondary);
       text-decoration: none;
-      font-size: 0.85rem;
+      font-size: 0.8rem;
+      transition: color 0.3s, text-shadow 0.3s;
     }
-    
-    .back-link:hover { color: var(--blue); }
-    
-    /* Search */
+
+    .back-link:hover {
+      color: var(--cyan);
+      text-shadow: 0 0 10px rgba(0, 229, 255, 0.3);
+    }
+
+    /* ── Search ── */
     .search-bar {
       display: flex;
       gap: 0.5rem;
       margin-bottom: 2rem;
+      opacity: 0;
     }
-    
+
     .search-bar input {
       flex: 1;
-      padding: 0.75rem 1rem;
+      padding: 0.85rem 1.25rem;
       font-family: inherit;
       font-size: 0.85rem;
+      color: var(--text);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      background: var(--card);
+      border-radius: 10px;
+      background: var(--surface);
+      backdrop-filter: blur(12px);
       outline: none;
+      transition: border-color 0.3s, box-shadow 0.3s;
     }
-    
-    .search-bar input:focus { border-color: var(--blue); }
-    
+
+    .search-bar input::placeholder { color: var(--text-faint); }
+
+    .search-bar input:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 20px rgba(0, 229, 255, 0.1), inset 0 0 20px rgba(0, 229, 255, 0.03);
+    }
+
     .search-bar button {
-      padding: 0.75rem 1.5rem;
+      padding: 0.85rem 2rem;
       font-family: inherit;
       font-size: 0.85rem;
-      font-weight: 500;
-      background: var(--blue);
-      color: white;
-      border: none;
-      border-radius: 8px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      background: linear-gradient(135deg, rgba(0, 229, 255, 0.15), rgba(68, 136, 255, 0.15));
+      color: var(--cyan);
+      border: 1px solid rgba(0, 229, 255, 0.3);
+      border-radius: 10px;
       cursor: pointer;
+      transition: all 0.3s;
+      position: relative;
+      overflow: hidden;
     }
-    
-    .search-bar button:hover { opacity: 0.9; }
-    
-    /* Stats bar */
+
+    .search-bar button::before {
+      content: '';
+      position: absolute;
+      top: 0; left: -100%;
+      width: 100%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(0, 229, 255, 0.1), transparent);
+      transition: left 0.5s;
+    }
+
+    .search-bar button:hover::before { left: 100%; }
+
+    .search-bar button:hover {
+      background: linear-gradient(135deg, rgba(0, 229, 255, 0.25), rgba(68, 136, 255, 0.25));
+      box-shadow: var(--glow-cyan);
+      transform: translateY(-1px);
+    }
+
+    /* ── Stats Bar ── */
     .stats-bar {
       display: flex;
       gap: 1.5rem;
       padding: 1rem 1.5rem;
-      background: var(--card);
+      background: var(--surface);
+      backdrop-filter: blur(12px);
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 10px;
       margin-bottom: 2rem;
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       flex-wrap: wrap;
+      opacity: 0;
     }
-    
+
     .stat { display: flex; align-items: center; gap: 0.4rem; }
     .stat .label { color: var(--text-secondary); }
-    .stat .value { font-weight: 600; }
-    
-    /* Layout */
+    .stat .value {
+      font-weight: 600;
+      color: var(--cyan);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat .value[data-animate] {
+      display: inline-block;
+    }
+
+    /* ── Layout ── */
     .trace-layout {
       display: grid;
       grid-template-columns: 1fr 400px;
       gap: 1.5rem;
     }
-    
-    @media (max-width: 900px) {
+
+    @media (max-width: 960px) {
       .trace-layout { grid-template-columns: 1fr; }
     }
-    
-    /* Graph canvas */
+
+    /* ── Graph Panel ── */
     .graph-panel {
-      background: var(--card);
+      background: var(--surface);
+      backdrop-filter: blur(12px);
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 12px;
       overflow: hidden;
       position: relative;
-      min-height: 500px;
+      min-height: 520px;
     }
-    
+
     .graph-panel canvas {
       width: 100%;
       height: 100%;
       display: block;
     }
-    
+
     .graph-legend {
       position: absolute;
-      bottom: 12px;
-      left: 12px;
+      bottom: 14px;
+      left: 14px;
       display: flex;
       gap: 1rem;
-      font-size: 0.7rem;
-      background: rgba(255,255,255,0.9);
-      padding: 6px 12px;
-      border-radius: 6px;
+      font-size: 0.68rem;
+      background: rgba(6, 8, 15, 0.8);
+      backdrop-filter: blur(8px);
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
     }
-    
-    .legend-item { display: flex; align-items: center; gap: 4px; }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--text-secondary);
+    }
+
     .legend-dot {
-      width: 8px; height: 8px; border-radius: 50%;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      box-shadow: 0 0 6px currentColor;
     }
-    
-    /* Detail panel */
+
+    /* ── Detail Panel ── */
     .detail-panel {
       display: flex;
       flex-direction: column;
-      gap: 1rem;
+      gap: 0.75rem;
+      max-height: 800px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+      padding-right: 4px;
     }
-    
+
+    .detail-panel::-webkit-scrollbar { width: 4px; }
+    .detail-panel::-webkit-scrollbar-track { background: transparent; }
+    .detail-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* ── Memory Cards ── */
     .memory-card {
-      background: var(--card);
+      background: var(--surface);
+      backdrop-filter: blur(12px);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 1.25rem;
+      border-radius: 10px;
+      padding: 1.1rem 1.25rem;
       cursor: pointer;
-      transition: border-color 0.15s;
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      opacity: 0;
+      transform: translateX(20px);
+      position: relative;
+      overflow: hidden;
     }
-    
-    .memory-card:hover { border-color: var(--blue); }
-    .memory-card.active { border-color: var(--blue); border-width: 2px; }
-    
+
+    .memory-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      width: 3px; height: 100%;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .memory-card:hover {
+      border-color: var(--border-hover);
+      background: var(--surface-hover);
+      transform: translateX(0) scale(1.01);
+    }
+
+    .memory-card:hover::before { opacity: 1; }
+
+    .memory-card.active {
+      border-color: var(--cyan);
+      box-shadow: 0 0 20px rgba(0, 229, 255, 0.08), inset 0 0 30px rgba(0, 229, 255, 0.03);
+    }
+
+    .memory-card.active::before { opacity: 1; }
+
     .memory-card .card-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 0.5rem;
     }
-    
+
     .memory-card .card-type {
-      font-size: 0.7rem;
+      font-size: 0.65rem;
       font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
-      padding: 2px 8px;
-      border-radius: 4px;
+      letter-spacing: 0.08em;
+      padding: 3px 10px;
+      border-radius: 5px;
     }
-    
-    .type-root { background: var(--blue-light); color: var(--blue); }
-    .type-ancestor { background: #3498db20; color: var(--ancestor); }
-    .type-descendant { background: #2ecc7120; color: var(--descendant); }
-    .type-related { background: #9b59b620; color: var(--related); }
-    
+
+    .type-root {
+      background: var(--cyan-dim);
+      color: var(--cyan);
+      box-shadow: 0 0 10px rgba(0, 229, 255, 0.1);
+    }
+
+    .type-root + .card-date { color: var(--cyan); }
+
+    .type-ancestor {
+      background: var(--blue-dim);
+      color: var(--ancestor-color);
+    }
+
+    .type-descendant {
+      background: var(--green-dim);
+      color: var(--descendant-color);
+    }
+
+    .type-related {
+      background: var(--purple-dim);
+      color: var(--related-color);
+    }
+
+    .memory-card.type-root-card::before { background: linear-gradient(180deg, var(--cyan), transparent); }
+    .memory-card.type-ancestor-card::before { background: linear-gradient(180deg, var(--ancestor-color), transparent); }
+    .memory-card.type-descendant-card::before { background: linear-gradient(180deg, var(--descendant-color), transparent); }
+    .memory-card.type-related-card::before { background: linear-gradient(180deg, var(--related-color), transparent); }
+
     .memory-card .card-date {
-      font-size: 0.7rem;
-      color: var(--text-secondary);
+      font-size: 0.68rem;
+      color: var(--text-faint);
     }
-    
+
     .memory-card .card-summary {
-      font-size: 0.8rem;
-      line-height: 1.5;
+      font-size: 0.78rem;
+      line-height: 1.55;
       margin-bottom: 0.5rem;
+      color: var(--text);
     }
-    
+
     .memory-card .card-meta {
       display: flex;
       gap: 0.75rem;
-      font-size: 0.7rem;
-      color: var(--text-secondary);
+      font-size: 0.68rem;
+      color: var(--text-faint);
     }
-    
+
     .card-relation {
-      font-size: 0.7rem;
+      font-size: 0.68rem;
       color: var(--blue);
       margin-bottom: 0.5rem;
+      opacity: 0.8;
     }
-    
-    /* Explain panel */
+
+    /* ── Section Headers ── */
+    .section-header {
+      font-size: 0.78rem;
+      font-weight: 600;
+      margin: 0.75rem 0 0.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      opacity: 0;
+    }
+
+    .section-count {
+      font-size: 0.65rem;
+      font-weight: 400;
+      color: var(--text-faint);
+    }
+
+    /* ── Explain Section ── */
     .explain-section {
-      background: var(--card);
+      background: var(--surface);
+      backdrop-filter: blur(12px);
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 10px;
       padding: 1.25rem;
+      margin-top: 1rem;
+      opacity: 0;
     }
-    
+
     .explain-section h3 {
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       margin-bottom: 0.75rem;
+      background: linear-gradient(135deg, var(--text), var(--cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
-    
+
     .explain-input {
       display: flex;
       gap: 0.5rem;
       margin-bottom: 1rem;
     }
-    
+
     .explain-input input {
       flex: 1;
-      padding: 0.6rem 0.8rem;
+      padding: 0.65rem 0.9rem;
       font-family: inherit;
-      font-size: 0.8rem;
+      font-size: 0.78rem;
+      color: var(--text);
       border: 1px solid var(--border);
-      border-radius: 6px;
-      background: var(--bg);
+      border-radius: 8px;
+      background: rgba(6, 8, 15, 0.6);
+      outline: none;
+      transition: border-color 0.3s, box-shadow 0.3s;
     }
-    
+
+    .explain-input input::placeholder { color: var(--text-faint); }
+    .explain-input input:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 15px rgba(0, 229, 255, 0.08);
+    }
+
     .explain-input button {
-      padding: 0.6rem 1rem;
+      padding: 0.65rem 1.2rem;
       font-family: inherit;
-      font-size: 0.8rem;
-      background: var(--blue);
-      color: white;
-      border: none;
-      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      background: linear-gradient(135deg, rgba(0, 229, 255, 0.12), rgba(68, 136, 255, 0.12));
+      color: var(--cyan);
+      border: 1px solid rgba(0, 229, 255, 0.25);
+      border-radius: 8px;
       cursor: pointer;
+      transition: all 0.3s;
     }
-    
+
+    .explain-input button:hover {
+      background: linear-gradient(135deg, rgba(0, 229, 255, 0.2), rgba(68, 136, 255, 0.2));
+      box-shadow: 0 0 15px rgba(0, 229, 255, 0.15);
+    }
+
     .explain-result {
-      font-size: 0.8rem;
-      line-height: 1.7;
+      font-size: 0.78rem;
+      line-height: 1.8;
       white-space: pre-wrap;
+      color: var(--text);
     }
-    
+
     .explain-chain {
       margin-top: 1rem;
       padding-top: 1rem;
       border-top: 1px solid var(--border);
     }
-    
+
     .chain-step {
       display: flex;
-      gap: 0.5rem;
-      margin-bottom: 0.4rem;
-      font-size: 0.75rem;
+      gap: 0.75rem;
+      margin-bottom: 0.5rem;
+      font-size: 0.72rem;
+      padding: 0.4rem 0;
+      border-bottom: 1px solid rgba(68, 136, 255, 0.05);
     }
-    
+
     .chain-step .step-date {
-      color: var(--blue);
+      color: var(--cyan);
       white-space: nowrap;
-      min-width: 80px;
+      min-width: 85px;
+      font-weight: 500;
     }
-    
-    /* Section headers */
-    .section-header {
-      font-size: 0.85rem;
-      font-weight: 600;
-      margin: 1rem 0 0.5rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-    
-    .section-count {
-      font-size: 0.7rem;
-      font-weight: 400;
-      color: var(--text-secondary);
-    }
-    
-    /* Loading */
+
+    .chain-step span:last-child { color: var(--text-secondary); }
+
+    /* ── Loading ── */
     .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.5rem;
+      height: 260px;
+      color: var(--text-secondary);
+      font-size: 0.82rem;
+      letter-spacing: 0.05em;
+    }
+
+    .loading-ring {
+      width: 48px; height: 48px;
+      border: 2px solid var(--border);
+      border-top-color: var(--cyan);
+      border-right-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 1s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+      box-shadow: 0 0 20px rgba(0, 229, 255, 0.15);
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-text {
+      animation: pulse-text 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-text {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+
+    /* ── Empty State ── */
+    .empty-state {
+      text-align: center;
+      padding: 5rem 2rem;
+      color: var(--text-secondary);
+      font-size: 0.82rem;
+    }
+
+    .empty-state .empty-icon {
+      width: 80px; height: 80px;
+      margin: 0 auto 2rem;
+      border: 2px solid var(--border);
+      border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      height: 200px;
-      color: var(--text-secondary);
-      font-size: 0.85rem;
+      font-size: 2rem;
+      color: var(--text-faint);
+      animation: empty-pulse 3s ease-in-out infinite;
     }
-    
-    .loading::after {
-      content: '';
-      width: 16px; height: 16px;
-      border: 2px solid var(--border);
-      border-top-color: var(--blue);
-      border-radius: 50%;
-      animation: spin 0.6s linear infinite;
-      margin-left: 0.5rem;
+
+    @keyframes empty-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(0, 229, 255, 0); border-color: var(--border); }
+      50% { box-shadow: 0 0 30px 5px rgba(0, 229, 255, 0.05); border-color: rgba(0, 229, 255, 0.2); }
     }
-    
-    @keyframes spin { to { transform: rotate(360deg); } }
-    
-    .empty-state {
-      text-align: center;
-      padding: 3rem;
-      color: var(--text-secondary);
-      font-size: 0.85rem;
+
+    .empty-state p { margin-bottom: 0.6rem; }
+    .empty-state code {
+      background: var(--surface);
+      color: var(--cyan);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.78rem;
+      border: 1px solid var(--border);
     }
-    
-    .empty-state p { margin-bottom: 0.5rem; }
-    .empty-state code { background: var(--bg); padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; }
+
+    .empty-state a {
+      color: var(--cyan);
+      text-decoration: none;
+      transition: text-shadow 0.3s;
+    }
+
+    .empty-state a:hover { text-shadow: 0 0 10px rgba(0, 229, 255, 0.3); }
+
+    /* ── Scanline (subtle) ── */
+    .scanline {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 999;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 229, 255, 0.008) 2px,
+        rgba(0, 229, 255, 0.008) 4px
+      );
+    }
   </style>
 </head>
 <body>
+  <canvas id="bg-canvas"></canvas>
+  <div class="grid-overlay"></div>
+  <div class="vignette"></div>
+  <div class="scanline"></div>
+
   <div class="container">
-    <header>
-      <a href="/" class="back-link">← clude.io</a>
+    <header id="header">
+      <a href="/" class="back-link">&larr; clude.io</a>
       <h1>Memory <span>Provenance</span></h1>
     </header>
 
-    <div class="search-bar">
-      <input type="text" id="search-input" placeholder="Enter memory ID or search term..." />
+    <div class="search-bar" id="search-bar">
+      <input type="text" id="search-input" placeholder="Enter memory ID to trace its provenance..." />
       <button onclick="doSearch()">Trace</button>
     </div>
 
     <div id="stats-bar" class="stats-bar" style="display:none"></div>
 
     <div id="content">
-      <div class="empty-state">
+      <div class="empty-state" id="empty-state">
+        <div class="empty-icon">&#x2b21;</div>
         <p>Enter a memory ID to trace its provenance.</p>
         <p>See every memory that led to it, what it spawned, and why it exists.</p>
-        <p style="margin-top:1rem; font-size:0.75rem; color:#999">Try: <code>12067</code> or any memory ID from the <a href="/explore" style="color:var(--blue)">Explorer</a></p>
+        <p style="margin-top:1.2rem; font-size:0.72rem; color:var(--text-faint)">
+          Try: <code>12067</code> or any memory ID from the <a href="/explore">Explorer</a>
+        </p>
       </div>
     </div>
   </div>
 
   <script>
+    // ── Ambient Particle Background ───────────────────────────────────
+    (function initParticles() {
+      const canvas = document.getElementById('bg-canvas');
+      const ctx = canvas.getContext('2d');
+      let particles = [];
+      let w, h;
+
+      function resize() {
+        w = canvas.width = window.innerWidth;
+        h = canvas.height = window.innerHeight;
+      }
+      resize();
+      window.addEventListener('resize', resize);
+
+      class Particle {
+        constructor() { this.reset(); }
+        reset() {
+          this.x = Math.random() * w;
+          this.y = Math.random() * h;
+          this.size = Math.random() * 1.5 + 0.3;
+          this.speedX = (Math.random() - 0.5) * 0.15;
+          this.speedY = (Math.random() - 0.5) * 0.15;
+          this.opacity = Math.random() * 0.4 + 0.05;
+          this.hue = Math.random() > 0.5 ? 195 : 220; // cyan or blue tint
+          this.pulse = Math.random() * Math.PI * 2;
+          this.pulseSpeed = Math.random() * 0.01 + 0.005;
+        }
+        update() {
+          this.x += this.speedX;
+          this.y += this.speedY;
+          this.pulse += this.pulseSpeed;
+          if (this.x < 0 || this.x > w || this.y < 0 || this.y > h) this.reset();
+        }
+        draw() {
+          const alpha = this.opacity * (0.5 + 0.5 * Math.sin(this.pulse));
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+          ctx.fillStyle = `hsla(${this.hue}, 80%, 70%, ${alpha})`;
+          ctx.fill();
+        }
+      }
+
+      for (let i = 0; i < 80; i++) particles.push(new Particle());
+
+      // Draw faint connection lines between nearby particles
+      function drawConnections() {
+        for (let i = 0; i < particles.length; i++) {
+          for (let j = i + 1; j < particles.length; j++) {
+            const dx = particles[i].x - particles[j].x;
+            const dy = particles[i].y - particles[j].y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 120) {
+              ctx.beginPath();
+              ctx.moveTo(particles[i].x, particles[i].y);
+              ctx.lineTo(particles[j].x, particles[j].y);
+              ctx.strokeStyle = `rgba(68, 136, 255, ${0.03 * (1 - dist / 120)})`;
+              ctx.lineWidth = 0.5;
+              ctx.stroke();
+            }
+          }
+        }
+      }
+
+      function animate() {
+        ctx.clearRect(0, 0, w, h);
+        particles.forEach(p => { p.update(); p.draw(); });
+        drawConnections();
+        requestAnimationFrame(animate);
+      }
+      animate();
+    })();
+
+    // ── Entrance Animations ──────────────────────────────────────────
+    anime({
+      targets: '#header',
+      opacity: [0, 1],
+      translateY: [-20, 0],
+      duration: 800,
+      easing: 'easeOutExpo',
+      delay: 200,
+    });
+
+    anime({
+      targets: '#search-bar',
+      opacity: [0, 1],
+      translateY: [-15, 0],
+      duration: 800,
+      easing: 'easeOutExpo',
+      delay: 400,
+    });
+
+    anime({
+      targets: '#empty-state',
+      opacity: [0, 1],
+      scale: [0.95, 1],
+      duration: 1000,
+      easing: 'easeOutExpo',
+      delay: 600,
+    });
+
+    // ── App State ────────────────────────────────────────────────────
     const API_BASE = window.location.origin;
     let currentTrace = null;
     let selectedNode = null;
@@ -371,12 +749,15 @@
 
       const memoryId = parseInt(input);
       if (isNaN(memoryId)) {
-        // TODO: search by term, pick first result
         alert('Enter a numeric memory ID for now');
         return;
       }
 
-      document.getElementById('content').innerHTML = '<div class="loading">Tracing memory provenance</div>';
+      document.getElementById('content').innerHTML = `
+        <div class="loading">
+          <div class="loading-ring"></div>
+          <span class="loading-text">Tracing memory provenance...</span>
+        </div>`;
       document.getElementById('stats-bar').style.display = 'none';
 
       try {
@@ -385,26 +766,49 @@
         currentTrace = await res.json();
         renderTrace(currentTrace);
       } catch (err) {
-        document.getElementById('content').innerHTML = 
-          `<div class="empty-state"><p>Error: ${err.message}</p></div>`;
+        document.getElementById('content').innerHTML =
+          `<div class="empty-state"><div class="empty-icon" style="border-color:var(--red);color:var(--red)">!</div><p style="color:var(--red)">${escapeHtml(err.message)}</p></div>`;
       }
     }
 
     function renderTrace(trace) {
-      // Stats bar
+      // Stats bar with animated counters
       const statsBar = document.getElementById('stats-bar');
       statsBar.style.display = 'flex';
+      statsBar.style.opacity = '0';
       statsBar.innerHTML = `
-        <div class="stat"><span class="label">Nodes:</span><span class="value">${trace.stats.total_nodes}</span></div>
-        <div class="stat"><span class="label">Ancestors:</span><span class="value">${trace.ancestors.length}</span></div>
-        <div class="stat"><span class="label">Descendants:</span><span class="value">${trace.descendants.length}</span></div>
-        <div class="stat"><span class="label">Related:</span><span class="value">${trace.related.length}</span></div>
-        <div class="stat"><span class="label">Depth:</span><span class="value">${trace.stats.max_depth}</span></div>
-        <div class="stat"><span class="label">Span:</span><span class="value">${trace.stats.time_span_days}d</span></div>
-        ${trace.entities.length ? `<div class="stat"><span class="label">Entities:</span><span class="value">${trace.entities.map(e => e.name).join(', ')}</span></div>` : ''}
+        <div class="stat"><span class="label">Nodes</span><span class="value" data-animate data-target="${trace.stats.total_nodes}">0</span></div>
+        <div class="stat"><span class="label">Ancestors</span><span class="value" data-animate data-target="${trace.ancestors.length}">0</span></div>
+        <div class="stat"><span class="label">Descendants</span><span class="value" data-animate data-target="${trace.descendants.length}">0</span></div>
+        <div class="stat"><span class="label">Related</span><span class="value" data-animate data-target="${trace.related.length}">0</span></div>
+        <div class="stat"><span class="label">Depth</span><span class="value" data-animate data-target="${trace.stats.max_depth}">0</span></div>
+        <div class="stat"><span class="label">Span</span><span class="value">${trace.stats.time_span_days}d</span></div>
+        ${trace.entities.length ? `<div class="stat"><span class="label">Entities</span><span class="value" style="color:var(--purple)">${trace.entities.map(e => escapeHtml(e.name)).join(', ')}</span></div>` : ''}
       `;
 
-      // Main content
+      // Animate stats bar in
+      anime({
+        targets: statsBar,
+        opacity: [0, 1],
+        translateY: [-10, 0],
+        duration: 600,
+        easing: 'easeOutExpo',
+      });
+
+      // Animate counter values
+      document.querySelectorAll('.value[data-animate]').forEach(el => {
+        const target = parseInt(el.dataset.target);
+        anime({
+          targets: el,
+          innerHTML: [0, target],
+          round: 1,
+          duration: 1200,
+          delay: 300,
+          easing: 'easeOutExpo',
+        });
+      });
+
+      // Main layout
       const content = document.getElementById('content');
       content.innerHTML = `
         <div class="trace-layout">
@@ -412,16 +816,16 @@
             <div class="graph-panel" id="graph-panel">
               <canvas id="graph-canvas"></canvas>
               <div class="graph-legend">
-                <div class="legend-item"><div class="legend-dot" style="background:var(--root)"></div>Root</div>
-                <div class="legend-item"><div class="legend-dot" style="background:var(--ancestor)"></div>Ancestor</div>
-                <div class="legend-item"><div class="legend-dot" style="background:var(--descendant)"></div>Descendant</div>
-                <div class="legend-item"><div class="legend-dot" style="background:var(--related)"></div>Related</div>
+                <div class="legend-item"><div class="legend-dot" style="background:var(--root-color);color:var(--root-color)"></div>Root</div>
+                <div class="legend-item"><div class="legend-dot" style="background:var(--ancestor-color);color:var(--ancestor-color)"></div>Ancestor</div>
+                <div class="legend-item"><div class="legend-dot" style="background:var(--descendant-color);color:var(--descendant-color)"></div>Descendant</div>
+                <div class="legend-item"><div class="legend-dot" style="background:var(--related-color);color:var(--related-color)"></div>Related</div>
               </div>
             </div>
-            <div class="explain-section" style="margin-top:1rem">
+            <div class="explain-section" id="explain-section">
               <h3>Ask about this memory</h3>
               <div class="explain-input">
-                <input type="text" id="explain-input" placeholder="Why did you form this memory? What led to this decision?" />
+                <input type="text" id="explain-input" placeholder="Why did you form this memory? What led to this?" />
                 <button onclick="doExplain()">Ask</button>
               </div>
               <div id="explain-result"></div>
@@ -433,46 +837,71 @@
 
       renderGraph(trace);
       renderDetailPanel(trace);
+
+      // Animate explain section
+      anime({
+        targets: '#explain-section',
+        opacity: [0, 1],
+        translateY: [20, 0],
+        duration: 800,
+        easing: 'easeOutExpo',
+        delay: 600,
+      });
     }
 
     function renderDetailPanel(trace) {
       const panel = document.getElementById('detail-panel');
       let html = '';
 
-      // Root
       html += renderCard(trace.root, 'root');
 
-      // Ancestors
       if (trace.ancestors.length > 0) {
         html += `<div class="section-header">Ancestors <span class="section-count">(${trace.ancestors.length})</span></div>`;
         for (const a of trace.ancestors) html += renderCard(a, 'ancestor');
       }
 
-      // Descendants
       if (trace.descendants.length > 0) {
         html += `<div class="section-header">Descendants <span class="section-count">(${trace.descendants.length})</span></div>`;
         for (const d of trace.descendants) html += renderCard(d, 'descendant');
       }
 
-      // Related
       if (trace.related.length > 0) {
         html += `<div class="section-header">Related <span class="section-count">(${trace.related.length})</span></div>`;
         for (const r of trace.related) html += renderCard(r, 'related');
       }
 
       panel.innerHTML = html;
+
+      // Staggered card entrance animation
+      anime({
+        targets: '.section-header',
+        opacity: [0, 1],
+        translateX: [-10, 0],
+        duration: 500,
+        delay: anime.stagger(60, { start: 200 }),
+        easing: 'easeOutExpo',
+      });
+
+      anime({
+        targets: '.memory-card',
+        opacity: [0, 1],
+        translateX: [30, 0],
+        duration: 700,
+        delay: anime.stagger(80, { start: 100 }),
+        easing: 'easeOutExpo',
+      });
     }
 
     function renderCard(node, category) {
       const date = new Date(node.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
       const time = new Date(node.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
       return `
-        <div class="memory-card" onclick="selectNode(${node.id})" data-id="${node.id}">
+        <div class="memory-card type-${category}-card" onclick="selectNode(${node.id})" data-id="${node.id}">
           <div class="card-header">
-            <span class="card-type type-${category}">${category} · ${node.memory_type}</span>
+            <span class="card-type type-${category}">${category} &middot; ${escapeHtml(node.memory_type)}</span>
             <span class="card-date">${date} ${time}</span>
           </div>
-          ${node.relation !== 'root' ? `<div class="card-relation">↳ ${node.relation} (strength: ${node.strength.toFixed(2)})</div>` : ''}
+          ${node.relation !== 'root' ? `<div class="card-relation">&xrarr; ${escapeHtml(node.relation)} (strength: ${node.strength.toFixed(2)})</div>` : ''}
           <div class="card-summary">${escapeHtml(node.summary.slice(0, 200))}</div>
           <div class="card-meta">
             <span>importance: ${node.importance.toFixed(2)}</span>
@@ -487,7 +916,16 @@
     function selectNode(id) {
       document.querySelectorAll('.memory-card').forEach(c => c.classList.remove('active'));
       const card = document.querySelector(`[data-id="${id}"]`);
-      if (card) card.classList.add('active');
+      if (card) {
+        card.classList.add('active');
+        // Subtle pulse animation on select
+        anime({
+          targets: card,
+          scale: [1, 1.02, 1],
+          duration: 400,
+          easing: 'easeInOutQuad',
+        });
+      }
       selectedNode = id;
     }
 
@@ -496,7 +934,7 @@
       if (!question || !currentTrace) return;
 
       const resultDiv = document.getElementById('explain-result');
-      resultDiv.innerHTML = '<div class="loading">Analyzing memory provenance</div>';
+      resultDiv.innerHTML = `<div class="loading" style="height:120px"><div class="loading-ring" style="width:32px;height:32px"></div><span class="loading-text">Analyzing memory provenance...</span></div>`;
 
       try {
         const res = await fetch(`${API_BASE}/api/memory/${currentTrace.root.id}/explain`, {
@@ -510,54 +948,72 @@
         let html = `<div class="explain-result">${escapeHtml(result.explanation)}</div>`;
 
         if (result.reasoning_chain && result.reasoning_chain.length > 0) {
-          html += `<div class="explain-chain"><div class="section-header">Reasoning Chain</div>`;
+          html += `<div class="explain-chain"><div class="section-header" style="opacity:1">Reasoning Chain</div>`;
           for (const step of result.reasoning_chain) {
             const [date, ...rest] = step.split(': ');
-            html += `<div class="chain-step"><span class="step-date">${date}</span><span>${escapeHtml(rest.join(': '))}</span></div>`;
+            html += `<div class="chain-step"><span class="step-date">${escapeHtml(date)}</span><span>${escapeHtml(rest.join(': '))}</span></div>`;
           }
           html += '</div>';
         }
 
         resultDiv.innerHTML = html;
+
+        // Animate explanation in
+        anime({
+          targets: resultDiv.children,
+          opacity: [0, 1],
+          translateY: [10, 0],
+          duration: 600,
+          delay: anime.stagger(100),
+          easing: 'easeOutExpo',
+        });
       } catch (err) {
-        resultDiv.innerHTML = `<p style="color:var(--red)">Error: ${err.message}</p>`;
+        resultDiv.innerHTML = `<p style="color:var(--red)">Error: ${escapeHtml(err.message)}</p>`;
       }
     }
 
-    // ── Graph Rendering (force-directed) ────────────────────────────
+    // ── Graph Rendering (force-directed + glow) ──────────────────────
 
     function renderGraph(trace) {
       const canvas = document.getElementById('graph-canvas');
       const panel = document.getElementById('graph-panel');
       const rect = panel.getBoundingClientRect();
-      canvas.width = rect.width * 2;
-      canvas.height = 500 * 2;
-      canvas.style.height = '500px';
+      const dpr = window.devicePixelRatio || 2;
+      canvas.width = rect.width * dpr;
+      canvas.height = 520 * dpr;
+      canvas.style.height = '520px';
       const ctx = canvas.getContext('2d');
-      ctx.scale(2, 2);
+      ctx.scale(dpr, dpr);
 
       const W = rect.width;
-      const H = 500;
+      const H = 520;
 
       // Build nodes
       const allNodes = [trace.root, ...trace.ancestors, ...trace.descendants, ...trace.related];
       const nodeMap = new Map();
-      const nodes = allNodes.map((n, i) => {
-        const category = n.depth === 0 ? 'root' : 
+      const colors = {
+        root: '#00e5ff',
+        ancestor: '#4488ff',
+        descendant: '#22d68a',
+        related: '#a855f7',
+      };
+
+      const nodes = allNodes.map((n) => {
+        const category = n.depth === 0 ? 'root' :
           trace.ancestors.includes(n) ? 'ancestor' :
           trace.descendants.includes(n) ? 'descendant' : 'related';
-        const colors = { root: '#455cfa', ancestor: '#3498db', descendant: '#2ecc71', related: '#9b59b6' };
         const obj = {
           id: n.id,
-          x: W/2 + (Math.random() - 0.5) * W * 0.6,
-          y: H/2 + (Math.random() - 0.5) * H * 0.6,
+          x: W / 2 + (Math.random() - 0.5) * W * 0.5,
+          y: H / 2 + (Math.random() - 0.5) * H * 0.5,
           vx: 0, vy: 0,
-          r: n.depth === 0 ? 14 : Math.max(5, 10 - n.depth * 2),
+          r: n.depth === 0 ? 16 : Math.max(5, 12 - n.depth * 2),
           color: colors[category],
-          label: n.summary.slice(0, 30),
+          label: n.summary.slice(0, 28),
           importance: n.importance,
           category,
           data: n,
+          pulsePhase: Math.random() * Math.PI * 2,
         };
         nodeMap.set(n.id, obj);
         return obj;
@@ -569,11 +1025,12 @@
         target: nodeMap.get(l.target_id),
         strength: l.strength,
         type: l.link_type,
+        flowOffset: Math.random() * 100,
       })).filter(e => e.source && e.target);
 
-      // Also link ancestors/descendants to root if no explicit link
+      // Auto-link ancestors/descendants to root if no explicit link
       for (const n of [...trace.ancestors, ...trace.descendants]) {
-        const hasLink = edges.some(e => 
+        const hasLink = edges.some(e =>
           (e.source.id === n.id && e.target.id === trace.root.id) ||
           (e.target.id === n.id && e.source.id === trace.root.id)
         );
@@ -583,113 +1040,233 @@
             target: nodeMap.get(trace.root.id),
             strength: n.strength,
             type: n.relation,
+            flowOffset: Math.random() * 100,
           });
         }
       }
 
-      // Force simulation
+      let frame = 0;
+      let hoveredNode = null;
+      let mouseX = -1, mouseY = -1;
+
+      // Force simulation tick
       function tick() {
+        const damping = frame < 80 ? 0.88 : 0.92;
+
         // Repulsion
         for (let i = 0; i < nodes.length; i++) {
           for (let j = i + 1; j < nodes.length; j++) {
             let dx = nodes[j].x - nodes[i].x;
             let dy = nodes[j].y - nodes[i].y;
-            let d = Math.sqrt(dx*dx + dy*dy) || 1;
-            let force = 800 / (d * d);
-            nodes[i].vx -= dx/d * force;
-            nodes[i].vy -= dy/d * force;
-            nodes[j].vx += dx/d * force;
-            nodes[j].vy += dy/d * force;
+            let d = Math.sqrt(dx * dx + dy * dy) || 1;
+            let force = 1000 / (d * d);
+            let fx = dx / d * force;
+            let fy = dy / d * force;
+            nodes[i].vx -= fx;
+            nodes[i].vy -= fy;
+            nodes[j].vx += fx;
+            nodes[j].vy += fy;
           }
         }
 
-        // Attraction (edges)
+        // Attraction along edges
         for (const e of edges) {
           let dx = e.target.x - e.source.x;
           let dy = e.target.y - e.source.y;
-          let d = Math.sqrt(dx*dx + dy*dy) || 1;
-          let force = (d - 100) * 0.01 * e.strength;
-          e.source.vx += dx/d * force;
-          e.source.vy += dy/d * force;
-          e.target.vx -= dx/d * force;
-          e.target.vy -= dy/d * force;
+          let d = Math.sqrt(dx * dx + dy * dy) || 1;
+          let force = (d - 110) * 0.012 * e.strength;
+          let fx = dx / d * force;
+          let fy = dy / d * force;
+          e.source.vx += fx;
+          e.source.vy += fy;
+          e.target.vx -= fx;
+          e.target.vy -= fy;
         }
 
-        // Center gravity
+        // Center gravity + boundary
         for (const n of nodes) {
-          n.vx += (W/2 - n.x) * 0.002;
-          n.vy += (H/2 - n.y) * 0.002;
-          n.vx *= 0.85;
-          n.vy *= 0.85;
+          n.vx += (W / 2 - n.x) * 0.003;
+          n.vy += (H / 2 - n.y) * 0.003;
+          n.vx *= damping;
+          n.vy *= damping;
           n.x += n.vx;
           n.y += n.vy;
-          n.x = Math.max(n.r + 5, Math.min(W - n.r - 5, n.x));
-          n.y = Math.max(n.r + 5, Math.min(H - n.r - 5, n.y));
+          n.x = Math.max(n.r + 10, Math.min(W - n.r - 10, n.x));
+          n.y = Math.max(n.r + 10, Math.min(H - n.r - 10, n.y));
         }
       }
 
       function draw() {
         ctx.clearRect(0, 0, W, H);
 
-        // Edges
+        const time = frame * 0.02;
+
+        // ── Draw edges with glow + flow particles ──
         for (const e of edges) {
+          const sx = e.source.x, sy = e.source.y;
+          const tx = e.target.x, ty = e.target.y;
+          const alpha = 0.08 + e.strength * 0.15;
+
+          // Edge glow
+          ctx.save();
           ctx.beginPath();
-          ctx.moveTo(e.source.x, e.source.y);
-          ctx.lineTo(e.target.x, e.target.y);
-          ctx.strokeStyle = `rgba(0,0,0,${0.08 + e.strength * 0.12})`;
-          ctx.lineWidth = 0.5 + e.strength;
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(tx, ty);
+          ctx.strokeStyle = `rgba(68, 136, 255, ${alpha * 0.5})`;
+          ctx.lineWidth = 2 + e.strength * 2;
+          ctx.filter = 'blur(3px)';
           ctx.stroke();
+          ctx.restore();
+
+          // Edge line
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(tx, ty);
+          ctx.strokeStyle = `rgba(68, 136, 255, ${alpha})`;
+          ctx.lineWidth = 0.6 + e.strength * 0.8;
+          ctx.stroke();
+
+          // Flow particle along edge
+          const flowT = ((time * 0.8 + e.flowOffset) % 3) / 3;
+          const px = sx + (tx - sx) * flowT;
+          const py = sy + (ty - sy) * flowT;
+          const particleAlpha = Math.sin(flowT * Math.PI) * 0.6;
+          ctx.beginPath();
+          ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(0, 229, 255, ${particleAlpha})`;
+          ctx.fill();
         }
 
-        // Nodes
+        // ── Draw nodes ──
         for (const n of nodes) {
-          ctx.beginPath();
-          ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
-          ctx.fillStyle = n.color;
-          ctx.globalAlpha = 0.3 + n.importance * 0.7;
-          ctx.fill();
-          ctx.globalAlpha = 1;
-          ctx.strokeStyle = n.color;
-          ctx.lineWidth = n.category === 'root' ? 2 : 1;
-          ctx.stroke();
+          const pulse = Math.sin(time * 1.5 + n.pulsePhase) * 0.15 + 0.85;
+          const isHovered = hoveredNode === n;
+          const isSelected = selectedNode === n.id;
+          const nodeR = n.r * (isHovered ? 1.3 : 1);
 
-          // Label for root and large nodes
-          if (n.r >= 8) {
-            ctx.font = `${n.category === 'root' ? 10 : 8}px JetBrains Mono`;
-            ctx.fillStyle = '#333';
+          // Outer glow
+          const glowRadius = nodeR * (n.category === 'root' ? 3.5 : 2.5) * pulse;
+          const gradient = ctx.createRadialGradient(n.x, n.y, nodeR * 0.5, n.x, n.y, glowRadius);
+          const c = hexToRgb(n.color);
+          gradient.addColorStop(0, `rgba(${c}, ${(isSelected ? 0.25 : 0.12) * pulse})`);
+          gradient.addColorStop(1, `rgba(${c}, 0)`);
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, glowRadius, 0, Math.PI * 2);
+          ctx.fillStyle = gradient;
+          ctx.fill();
+
+          // Node body
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, nodeR, 0, Math.PI * 2);
+          const fillAlpha = 0.25 + n.importance * 0.5;
+          ctx.fillStyle = `rgba(${c}, ${fillAlpha})`;
+          ctx.fill();
+
+          // Node border
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, nodeR, 0, Math.PI * 2);
+          ctx.strokeStyle = n.color;
+          ctx.lineWidth = n.category === 'root' ? 2.5 : (isSelected ? 2 : 1.2);
+          ctx.globalAlpha = isHovered || isSelected ? 1 : 0.7 + n.importance * 0.3;
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+
+          // Inner bright core
+          if (n.category === 'root') {
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, nodeR * 0.3, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(${c}, ${0.6 * pulse})`;
+            ctx.fill();
+          }
+
+          // Label
+          if (nodeR >= 7 || isHovered) {
+            ctx.font = `${isHovered ? '11' : n.category === 'root' ? '10' : '8'}px JetBrains Mono`;
+            ctx.fillStyle = `rgba(208, 216, 240, ${isHovered ? 0.95 : 0.6})`;
             ctx.textAlign = 'center';
-            ctx.fillText(n.label, n.x, n.y + n.r + 12);
+            const labelY = n.y + nodeR + (isHovered ? 16 : 14);
+            ctx.fillText(isHovered ? n.label : n.label.slice(0, 20), n.x, labelY);
+          }
+
+          // Selection ring
+          if (isSelected) {
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, nodeR + 4, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(${c}, 0.3)`;
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 3]);
+            ctx.stroke();
+            ctx.setLineDash([]);
           }
         }
       }
 
-      // Run simulation
-      let frame = 0;
+      // Animation loop
       function animate() {
         tick();
         draw();
         frame++;
-        if (frame < 200) requestAnimationFrame(animate);
+        requestAnimationFrame(animate);
       }
+
+      // Animate graph panel entrance
+      anime({
+        targets: '.graph-panel',
+        opacity: [0, 1],
+        scale: [0.97, 1],
+        duration: 800,
+        easing: 'easeOutExpo',
+        delay: 100,
+      });
+
       animate();
 
-      // Click detection
+      // ── Mouse interaction ──
+      canvas.addEventListener('mousemove', (e) => {
+        const r = canvas.getBoundingClientRect();
+        mouseX = e.clientX - r.left;
+        mouseY = e.clientY - r.top;
+        hoveredNode = null;
+        for (const n of nodes) {
+          const dx = n.x - mouseX;
+          const dy = n.y - mouseY;
+          if (dx * dx + dy * dy < (n.r + 8) * (n.r + 8)) {
+            hoveredNode = n;
+            break;
+          }
+        }
+        canvas.style.cursor = hoveredNode ? 'pointer' : 'default';
+      });
+
+      canvas.addEventListener('mouseleave', () => {
+        hoveredNode = null;
+        canvas.style.cursor = 'default';
+      });
+
       canvas.addEventListener('click', (e) => {
-        const rect = canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        const r = canvas.getBoundingClientRect();
+        const x = e.clientX - r.left;
+        const y = e.clientY - r.top;
         for (const n of nodes) {
           const dx = n.x - x;
           const dy = n.y - y;
-          if (dx*dx + dy*dy < (n.r + 5) * (n.r + 5)) {
+          if (dx * dx + dy * dy < (n.r + 6) * (n.r + 6)) {
             selectNode(n.id);
-            // Scroll to card
             const card = document.querySelector(`[data-id="${n.id}"]`);
             if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
             break;
           }
         }
       });
+    }
+
+    // ── Utility ──────────────────────────────────────────────────────
+
+    function hexToRgb(hex) {
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      return `${r},${g},${b}`;
     }
 
     function escapeHtml(str) {
