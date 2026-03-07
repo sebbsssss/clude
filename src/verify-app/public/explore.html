@@ -2157,6 +2157,55 @@
     };
   }
 
+  function localExplain(trace, question) {
+    const root = trace.root;
+    const ancestors = trace.ancestors || [];
+    const descendants = trace.descendants || [];
+    const q = question.toLowerCase();
+
+    // Build explanation from trace context
+    let explanation = '';
+    const rootType = root.memory_type || 'memory';
+
+    // Summarize the root
+    explanation += 'This ' + rootType + ' memory captures: "' + (root.content || root.summary || '') + '"\n\n';
+
+    // Describe ancestry
+    if (ancestors.length > 0) {
+      const byRelation = {};
+      ancestors.forEach(a => {
+        const r = a.relation || 'related';
+        if (!byRelation[r]) byRelation[r] = [];
+        byRelation[r].push(a);
+      });
+
+      explanation += 'It is connected to ' + ancestors.length + ' ancestor memories:\n\n';
+      for (const [relation, mems] of Object.entries(byRelation)) {
+        explanation += '• ' + relation + ' (' + mems.length + '): ';
+        explanation += mems.slice(0, 5).map(m => '"' + (m.summary || m.content || '').slice(0, 80) + '"').join(', ');
+        if (mems.length > 5) explanation += ' and ' + (mems.length - 5) + ' more';
+        explanation += '\n';
+      }
+    }
+
+    if (descendants.length > 0) {
+      explanation += '\nThis memory led to ' + descendants.length + ' downstream memories, including: ';
+      explanation += descendants.slice(0, 5).map(d => '"' + (d.summary || d.content || '').slice(0, 80) + '"').join(', ');
+      explanation += '\n';
+    }
+
+    // Build reasoning chain from trace timeline
+    const allNodes = [root, ...ancestors, ...descendants].filter(n => n.created_at);
+    allNodes.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    const chain = allNodes.slice(0, 8).map(n => {
+      const date = new Date(n.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const rel = n.relation && n.relation !== 'root' ? ' [' + n.relation + ']' : '';
+      return date + ': ' + (n.summary || (n.content || '').slice(0, 100)) + rel;
+    });
+
+    return { explanation, reasoning_chain: chain };
+  }
+
   async function askProvenance() {
     if (!currentProvTrace) return;
     const q = document.getElementById('provAskInput').value.trim();
@@ -2165,14 +2214,20 @@
     const ansDiv = document.getElementById('provAnswer');
     ansDiv.innerHTML = '<div style="font-size:10px;color:var(--text-faint);letter-spacing:2px;padding:12px 0">ANALYZING...</div>';
 
+    let result;
     try {
-      const res = await fetch('/api/memory/' + currentProvTrace.root.id + '/explain', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: q }),
-      });
-      if (!res.ok) throw new Error('Explain failed');
-      const result = await res.json();
+      if (usingSampleData) {
+        // Local explanation from trace data
+        result = localExplain(currentProvTrace, q);
+      } else {
+        const res = await fetch('/api/memory/' + currentProvTrace.root.id + '/explain', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: q }),
+        });
+        if (!res.ok) throw new Error('Explain failed');
+        result = await res.json();
+      }
 
       let html = '<div class="prov-answer">' + esc(result.explanation) + '</div>';
       if (result.reasoning_chain && result.reasoning_chain.length > 0) {
