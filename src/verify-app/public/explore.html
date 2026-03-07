@@ -1267,7 +1267,67 @@
       createdAt: m.created_at || m.createdAt || new Date().toISOString(),
       lastAccessed: m.last_accessed || m.lastAccessed || m.created_at || new Date().toISOString(),
     }));
+    // Auto-build connections from evidence_ids if none provided
+    if (loadedConnections.length === 0) {
+      buildAutoConnections(nodes);
+    }
     loadBrainData({ nodes, total: nodes.length });
+  }
+
+  function buildAutoConnections(nodes) {
+    loadedConnections = [];
+    const idSet = new Set(nodes.map(n => n.id));
+    
+    // 1. Evidence links
+    for (const n of nodes) {
+      if (n.evidenceIds && n.evidenceIds.length > 0) {
+        for (const eid of n.evidenceIds) {
+          if (idSet.has(eid)) {
+            loadedConnections.push({ source_id: eid, target_id: n.id, link_type: 'supports', strength: 0.85 });
+          }
+        }
+      }
+    }
+    
+    // 2. Source-based chains (consolidation → its nearby episodics)
+    const bySource = {};
+    for (const n of nodes) bySource[n.source] = (bySource[n.source] || []).push ? (bySource[n.source] || []) : [];
+    for (const n of nodes) (bySource[n.source] = bySource[n.source] || []).push(n);
+    
+    // 3. Tag co-occurrence (memories sharing 2+ tags within 7 days = related)
+    // Only do this for non-huge datasets to avoid O(n^2) explosion
+    if (nodes.length <= 2000) {
+      for (let i = 0; i < nodes.length; i++) {
+        const a = nodes[i];
+        if (!a.tags || a.tags.length === 0) continue;
+        const aTags = new Set(a.tags);
+        for (let j = i + 1; j < Math.min(i + 50, nodes.length); j++) {
+          const b = nodes[j];
+          if (!b.tags) continue;
+          const overlap = b.tags.filter(t => aTags.has(t)).length;
+          if (overlap >= 2) {
+            const daysDiff = Math.abs(new Date(a.createdAt) - new Date(b.createdAt)) / 86400000;
+            if (daysDiff < 7) {
+              loadedConnections.push({ source_id: a.id, target_id: b.id, link_type: 'relates', strength: Math.min(0.7, overlap * 0.25) });
+            }
+          }
+        }
+      }
+    }
+    
+    // 4. Temporal chains (same source, sequential = follows)
+    const sorted = [...nodes].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = sorted[i-1], curr = sorted[i];
+      if (prev.source === curr.source && prev.source !== '' && prev.source !== 'consolidation') {
+        const hoursDiff = (new Date(curr.createdAt) - new Date(prev.createdAt)) / 3600000;
+        if (hoursDiff < 2) {
+          loadedConnections.push({ source_id: prev.id, target_id: curr.id, link_type: 'follows', strength: 0.5 });
+        }
+      }
+    }
+    
+    console.log('Auto-built ' + loadedConnections.length + ' connections');
   }
 
   function loadFromMarkdown(text) {
@@ -1378,8 +1438,41 @@
   }
 
   function focusInBrain(id) {
+    // Try brain iframe focus
     const iframe = document.getElementById('brainFrame');
-    iframe.contentWindow.postMessage({ type: 'FOCUS_NODE', id }, '*');
+    if (iframe) iframe.contentWindow.postMessage({ type: 'FOCUS_NODE', id }, '*');
+    
+    // Also highlight the card visually
+    document.querySelectorAll('.memory-card').forEach(c => c.style.outline = '');
+    const card = document.querySelector('.memory-card[onclick*="' + id + '"]');
+    if (card) {
+      card.style.outline = '2px solid var(--accent)';
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => card.style.outline = '', 3000);
+    } else {
+      // Card not rendered yet (paginated) — find and show it
+      const idx = currentDisplayNodes.findIndex(n => n.id === id);
+      if (idx >= 0 && idx >= displayedCount) {
+        // Render up to that point
+        const grid = document.getElementById('cardsGrid');
+        const end = Math.min(idx + 5, currentDisplayNodes.length);
+        let html = '';
+        for (let i = displayedCount; i < end; i++) {
+          html += renderCardHtml(currentDisplayNodes[i]);
+        }
+        grid.insertAdjacentHTML('beforeend', html);
+        displayedCount = end;
+        // Now scroll to it
+        setTimeout(() => {
+          const newCard = document.querySelector('.memory-card[onclick*="' + id + '"]');
+          if (newCard) {
+            newCard.style.outline = '2px solid var(--accent)';
+            newCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => newCard.style.outline = '', 3000);
+          }
+        }, 100);
+      }
+    }
   }
 
   window.addEventListener('message', (e) => {
@@ -1775,61 +1868,95 @@
     const related = [];
     const links = [];
     const visited = new Set([memoryId]);
+    const MAX_DEPTH = 3;
 
-    // Walk evidence_ids (ancestors)
-    const evidenceIds = root.evidenceIds || [];
-    for (const eid of evidenceIds) {
-      const eNode = nodeMap.get(eid);
-      if (eNode && !visited.has(eid)) {
-        visited.add(eid);
-        ancestors.push(toTraceNode(eNode, 1, 'evidence', 0.9));
-        links.push({ source_id: eid, target_id: memoryId, link_type: 'supports', strength: 0.9 });
-      }
-    }
-
-    // Walk connections
+    // Build adjacency index for fast lookup
+    const inbound = new Map();  // target_id → [{source_id, link_type, strength}]
+    const outbound = new Map(); // source_id → [{target_id, link_type, strength}]
     for (const conn of loadedConnections) {
-      // Backward: connections pointing TO this memory
-      if (conn.target_id === memoryId && !visited.has(conn.source_id)) {
-        const src = nodeMap.get(conn.source_id);
-        if (src) {
-          visited.add(conn.source_id);
-          ancestors.push(toTraceNode(src, 1, conn.link_type, conn.strength));
-          links.push(conn);
-        }
-      }
-      // Forward: connections FROM this memory
-      if (conn.source_id === memoryId && !visited.has(conn.target_id)) {
-        const tgt = nodeMap.get(conn.target_id);
-        if (tgt) {
-          visited.add(conn.target_id);
-          descendants.push(toTraceNode(tgt, 1, conn.link_type, conn.strength));
-          links.push(conn);
-        }
-      }
+      if (!inbound.has(conn.target_id)) inbound.set(conn.target_id, []);
+      inbound.get(conn.target_id).push(conn);
+      if (!outbound.has(conn.source_id)) outbound.set(conn.source_id, []);
+      outbound.get(conn.source_id).push(conn);
     }
 
-    // Also find memories that cite this one as evidence
+    // Also index evidence_ids as inbound
     for (const n of allNodes) {
-      if (n.evidenceIds && n.evidenceIds.includes(memoryId) && !visited.has(n.id)) {
-        visited.add(n.id);
-        descendants.push(toTraceNode(n, 1, 'derived', 0.8));
-        links.push({ source_id: memoryId, target_id: n.id, link_type: 'supports', strength: 0.8 });
+      if (n.evidenceIds) {
+        for (const eid of n.evidenceIds) {
+          const conn = { source_id: eid, target_id: n.id, link_type: 'supports', strength: 0.85 };
+          if (!inbound.has(n.id)) inbound.set(n.id, []);
+          inbound.get(n.id).push(conn);
+          if (!outbound.has(eid)) outbound.set(eid, []);
+          outbound.get(eid).push(conn);
+        }
       }
     }
 
-    // Find concept-related (same tags)
+    // Walk ancestors (multi-hop backward)
+    let frontier = [memoryId];
+    for (let depth = 1; depth <= MAX_DEPTH && frontier.length > 0; depth++) {
+      const nextFrontier = [];
+      for (const fid of frontier) {
+        const ins = inbound.get(fid) || [];
+        for (const conn of ins) {
+          if (visited.has(conn.source_id)) continue;
+          const src = nodeMap.get(conn.source_id);
+          if (!src) continue;
+          visited.add(conn.source_id);
+          ancestors.push(toTraceNode(src, depth, conn.link_type, conn.strength));
+          links.push(conn);
+          nextFrontier.push(conn.source_id);
+        }
+      }
+      frontier = nextFrontier.slice(0, 10); // cap per-hop
+    }
+
+    // Walk descendants (multi-hop forward)
+    frontier = [memoryId];
+    for (let depth = 1; depth <= MAX_DEPTH && frontier.length > 0; depth++) {
+      const nextFrontier = [];
+      for (const fid of frontier) {
+        const outs = outbound.get(fid) || [];
+        for (const conn of outs) {
+          if (visited.has(conn.target_id)) continue;
+          const tgt = nodeMap.get(conn.target_id);
+          if (!tgt) continue;
+          visited.add(conn.target_id);
+          descendants.push(toTraceNode(tgt, depth, conn.link_type, conn.strength));
+          links.push(conn);
+          nextFrontier.push(conn.target_id);
+        }
+      }
+      frontier = nextFrontier.slice(0, 10);
+    }
+
+    // Find tag-related memories (best matches not yet visited)
     const rootTags = new Set(root.tags || []);
     if (rootTags.size > 0) {
-      const scored = allNodes.filter(n => !visited.has(n.id) && n.id !== memoryId)
+      const scored = allNodes.filter(n => !visited.has(n.id))
         .map(n => ({ node: n, overlap: (n.tags || []).filter(t => rootTags.has(t)).length }))
         .filter(x => x.overlap > 0)
-        .sort((a, b) => b.overlap - a.overlap)
-        .slice(0, 8);
+        .sort((a, b) => b.overlap - a.overlap || (b.node.importance||0) - (a.node.importance||0))
+        .slice(0, 10);
       for (const { node, overlap } of scored) {
         visited.add(node.id);
         const sharedTag = (node.tags || []).find(t => rootTags.has(t)) || 'tag';
-        related.push(toTraceNode(node, 1, 'shared:' + sharedTag, overlap * 0.3));
+        related.push(toTraceNode(node, 1, 'shared:' + sharedTag, Math.min(0.8, overlap * 0.3)));
+      }
+    }
+
+    // If still very few results, find temporally close memories (same day, same source)
+    if (ancestors.length + descendants.length + related.length < 5) {
+      const rootDate = new Date(root.createdAt).getTime();
+      const nearby = allNodes.filter(n => !visited.has(n.id))
+        .map(n => ({ node: n, diff: Math.abs(new Date(n.createdAt).getTime() - rootDate) }))
+        .filter(x => x.diff < 86400000) // within 24 hours
+        .sort((a, b) => a.diff - b.diff)
+        .slice(0, 8);
+      for (const { node } of nearby) {
+        visited.add(node.id);
+        related.push(toTraceNode(node, 1, 'temporal', 0.4));
       }
     }
 
@@ -1837,13 +1964,15 @@
     const timeline = [...allN].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
     const linkTypes = {};
     for (const l of links) linkTypes[l.link_type] = (linkTypes[l.link_type] || 0) + 1;
+    if (related.length) linkTypes['related'] = related.length;
     const dates = allN.map(n => new Date(n.created_at).getTime()).filter(t => !isNaN(t));
     const span = dates.length > 1 ? (Math.max(...dates) - Math.min(...dates)) / 86400000 : 0;
+    const maxD = Math.max(0, ...allN.map(n => n.depth));
 
     return {
       root: toTraceNode(root, 0, 'root', 1.0),
       ancestors, descendants, related, links, entities: [], timeline,
-      stats: { total_nodes: allN.length, max_depth: 1, link_types: linkTypes, time_span_days: Math.round(span * 10) / 10 }
+      stats: { total_nodes: allN.length, max_depth: maxD, link_types: linkTypes, time_span_days: Math.round(span * 10) / 10 }
     };
   }
 
