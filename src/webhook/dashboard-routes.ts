@@ -1,10 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { getDb } from '../core/database';
 import { createChildLogger } from '../core/logger';
+import { requirePrivyAuth } from './privy-auth';
 
 const log = createChildLogger('dashboard');
 
 const CLUDE_AGENT_NAME = 'Clude';
+const OWNER_WALLET = '5vK6WRCq5V6BCte8cQvaNeNv2KzErCfGzeBDwtBGGv2r';
 
 /**
  * Auto-register the Clude bot as the first dashboard agent if not present.
@@ -44,6 +46,25 @@ export async function autoRegisterClude(): Promise<void> {
 
 export function dashboardRoutes(): Router {
   const router = Router();
+
+  // All dashboard routes require Privy JWT authentication
+  router.use(requirePrivyAuth);
+
+  // ── AUTH ────────────────────────────────────────────────
+
+  // GET /auth — verify connected wallet is the owner
+  router.get('/auth', (req: Request, res: Response) => {
+    const wallet = req.query.wallet as string;
+    if (!wallet) {
+      res.status(400).json({ error: 'wallet query parameter required' });
+      return;
+    }
+    const authorized = wallet === OWNER_WALLET;
+    res.json({
+      authorized,
+      wallet: wallet.slice(0, 4) + '...' + wallet.slice(-4),
+    });
+  });
 
   // ── AGENTS ──────────────────────────────────────────────
 

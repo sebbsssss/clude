@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CLUDE — Agent Dashboard</title>
   <meta name="description" content="Monitor and orchestrate your AI agents. Status, tasks, costs, activity.">
+  <meta name="privy-app-id" content="">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -470,6 +471,51 @@
     @keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes toastOut { to { opacity: 0; transform: translateY(-8px); } }
 
+    /* ── AUTH GATE ── */
+    .auth-gate {
+      position: fixed; inset: 0; z-index: 150;
+      background: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column;
+    }
+    .auth-gate.hidden { display: none; }
+    .auth-gate-inner {
+      text-align: center; max-width: 380px; padding: 40px;
+    }
+    .auth-gate-logo {
+      font-size: 16px; font-weight: 800; letter-spacing: 6px;
+      text-transform: uppercase; margin-bottom: 8px;
+    }
+    .auth-gate-sub {
+      font-size: 11px; color: var(--text-faint); letter-spacing: 1px;
+      margin-bottom: 32px;
+    }
+    .auth-gate-status {
+      font-size: 11px; color: var(--text-muted); margin-top: 16px;
+      letter-spacing: 0.5px; min-height: 20px;
+    }
+    .auth-gate-denied {
+      color: var(--red); font-size: 11px;
+      margin-top: 16px; letter-spacing: 0.5px;
+    }
+    .auth-wallet-display {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 8px 16px; margin-top: 12px;
+      background: rgba(42,106,58,0.06);
+      border: 1px solid rgba(42,106,58,0.15);
+      font-size: 10px; color: var(--green);
+      letter-spacing: 1px;
+    }
+    .auth-wallet-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--green);
+    }
+    #privy-root { display: inline-block; }
+    .nav-wallet {
+      display: flex; align-items: center; gap: 8px;
+      margin-left: 24px;
+    }
+
     /* ── RESPONSIVE ── */
     @media (max-width: 1024px) {
       .grid-top { grid-template-columns: 1fr; }
@@ -496,11 +542,24 @@
         <a href="/explore">Explorer</a>
         <a href="/brain.html">Brain</a>
         <a href="/docs.html">Docs</a>
+        <div class="nav-wallet" id="privy-root"></div>
       </div>
     </div>
   </nav>
 
-  <main class="dashboard">
+  <!-- Auth Gate -->
+  <div class="auth-gate" id="authGate">
+    <div class="auth-gate-inner">
+      <div class="auth-gate-logo">Clude</div>
+      <div class="auth-gate-sub">Agent Dashboard</div>
+      <div id="authConnect">
+        <div id="privyFallback" style="font-size:10px;color:var(--text-faint);letter-spacing:1px;">Loading wallet connector...</div>
+      </div>
+      <div class="auth-gate-status" id="authStatus"></div>
+    </div>
+  </div>
+
+  <main class="dashboard" id="dashboardMain" style="display:none;">
     <!-- Header -->
     <div class="dash-header">
       <div>
@@ -704,15 +763,16 @@
     var tasks = [];
     var stats = {};
     var pollTimer = null;
+    var authToken = null;
 
     var API = '/api/dashboard';
 
     // ── FETCH HELPERS ──
     async function api(path, opts) {
       var url = API + path;
-      var res = await fetch(url, Object.assign({
-        headers: { 'Content-Type': 'application/json' },
-      }, opts));
+      var headers = { 'Content-Type': 'application/json' };
+      if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+      var res = await fetch(url, Object.assign({ headers: headers }, opts));
       if (!res.ok) {
         var err = await res.json().catch(function() { return { error: 'Request failed' }; });
         throw new Error(err.error || 'Request failed');
@@ -1177,9 +1237,155 @@
       }
     });
 
-    // ── INIT ──
-    loadAll();
-    pollTimer = setInterval(loadAll, 10000);
+    // ── AUTH ──
+    function showDashboard() {
+      document.getElementById('authGate').classList.add('hidden');
+      document.getElementById('dashboardMain').style.display = '';
+      loadAll();
+      pollTimer = setInterval(loadAll, 10000);
+    }
+
+    function hideDashboard() {
+      document.getElementById('authGate').classList.remove('hidden');
+      document.getElementById('dashboardMain').style.display = 'none';
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+      authToken = null;
+    }
+
+    // Listen for wallet auth from Privy React island
+    window.addEventListener('dashboard-auth', async function(e) {
+      var address = e.detail.address;
+      var token = e.detail.token;
+      authToken = token;
+
+      var statusEl = document.getElementById('authStatus');
+      statusEl.textContent = 'Verifying...';
+      statusEl.className = 'auth-gate-status';
+
+      try {
+        var result = await api('/auth?wallet=' + encodeURIComponent(address));
+        if (result.authorized) {
+          showDashboard();
+        } else {
+          statusEl.textContent = 'Access denied. Owner wallet required.';
+          statusEl.className = 'auth-gate-denied';
+          authToken = null;
+        }
+      } catch (err) {
+        statusEl.textContent = 'Auth failed: ' + err.message;
+        statusEl.className = 'auth-gate-denied';
+        authToken = null;
+      }
+    });
+
+    window.addEventListener('dashboard-disconnect', function() {
+      hideDashboard();
+      document.getElementById('authStatus').textContent = '';
+      document.getElementById('authStatus').className = 'auth-gate-status';
+    });
+  </script>
+
+  <!-- Privy SDK -->
+  <script type="importmap">
+  { "imports": {
+    "react": "https://esm.sh/react@19",
+    "react-dom/client": "https://esm.sh/react-dom@19/client",
+    "react/jsx-runtime": "https://esm.sh/react@19/jsx-runtime"
+  }}
+  </script>
+  <script type="module">
+  (async () => {
+    var fallback = document.getElementById('privyFallback');
+    try {
+      var [React, ReactDOM, PrivyModule] = await Promise.all([
+        import('react'),
+        import('react-dom/client'),
+        import('https://esm.sh/@privy-io/react-auth@2?external=react,react-dom'),
+      ]);
+
+      var { PrivyProvider, usePrivy, useWallets } = PrivyModule;
+      var { createElement: h, useState, useEffect } = React;
+
+      var appId = document.querySelector('meta[name="privy-app-id"]')?.content || '';
+      if (!appId) {
+        fallback.textContent = 'Privy not configured. Set PRIVY_APP_ID.';
+        return;
+      }
+
+      function WalletButton() {
+        var { ready, authenticated, login, logout, getAccessToken } = usePrivy();
+        var { wallets } = useWallets();
+        var [sent, setSent] = useState(false);
+
+        useEffect(function() {
+          if (!authenticated || !wallets?.length || sent) return;
+          var solana = wallets.find(function(w) { return w.walletClientType === 'solana' || w.chainType === 'solana'; });
+          var addr = solana?.address || wallets[0]?.address;
+          if (!addr) return;
+
+          setSent(true);
+          getAccessToken().then(function(token) {
+            window.dispatchEvent(new CustomEvent('dashboard-auth', { detail: { address: addr, token: token } }));
+          });
+        }, [authenticated, wallets]);
+
+        useEffect(function() {
+          if (!authenticated && sent) {
+            setSent(false);
+            window.dispatchEvent(new CustomEvent('dashboard-disconnect'));
+          }
+        }, [authenticated]);
+
+        if (!ready) return h('span', { style: { fontSize: '10px', color: '#999', letterSpacing: '1px' } }, 'Loading...');
+
+        if (authenticated) {
+          var addr = wallets?.[0]?.address || '';
+          return h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
+            h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 10px', background: 'rgba(42,106,58,0.06)', border: '1px solid rgba(42,106,58,0.15)', fontSize: '10px', color: '#2a6a3a', letterSpacing: '0.5px' } },
+              h('div', { style: { width: 5, height: 5, borderRadius: '50%', background: '#2a6a3a' } }),
+              addr.slice(0, 4) + '...' + addr.slice(-4)
+            ),
+            h('button', {
+              onClick: logout,
+              style: { fontFamily: 'var(--mono)', fontSize: '9px', letterSpacing: '1.5px', textTransform: 'uppercase', padding: '4px 10px', background: 'transparent', color: '#9a3030', border: '1px solid rgba(154,48,48,0.2)', cursor: 'pointer' }
+            }, 'Disconnect')
+          );
+        }
+
+        // Show connect button in both gate and nav
+        return h('button', {
+          onClick: login,
+          style: { fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '2px', textTransform: 'uppercase', padding: '10px 24px', background: '#111', color: '#f5f5f0', border: '1px solid #111', cursor: 'pointer', transition: 'all 0.25s' }
+        }, 'Connect Wallet');
+      }
+
+      function App() {
+        return h(PrivyProvider, {
+          appId: appId,
+          config: {
+            appearance: { theme: 'light' },
+            loginMethods: ['wallet'],
+            embeddedWallets: { createOnLogin: 'off' },
+          },
+        }, h(WalletButton));
+      }
+
+      // Mount in auth gate
+      fallback.style.display = 'none';
+      var gateContainer = document.createElement('div');
+      document.getElementById('authConnect').appendChild(gateContainer);
+      ReactDOM.createRoot(gateContainer).render(h(App));
+
+      // Also mount in nav
+      var navContainer = document.createElement('div');
+      document.getElementById('privy-root').appendChild(navContainer);
+      ReactDOM.createRoot(navContainer).render(h(App));
+
+    } catch (err) {
+      console.error('Privy load failed:', err);
+      fallback.textContent = 'Wallet connector unavailable.';
+    }
+  })();
   </script>
 </body>
 </html>
