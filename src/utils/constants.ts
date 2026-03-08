@@ -5,8 +5,6 @@
 // Solana
 export const MEMO_PROGRAM_ID = 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr';
 export const JUPITER_PRICE_URL = 'https://api.jup.ag/price/v2';
-export const HELIUS_RPC_BASE_URL = 'https://mainnet.helius-rpc.com';
-export const HELIUS_BALANCES_BASE_URL = 'https://api.helius.xyz/v0/addresses';
 export const SOLSCAN_TX_BASE_URL = 'https://solscan.io/tx';
 
 export const TWEET_MAX_LENGTH = 4000;

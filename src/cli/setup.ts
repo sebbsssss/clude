@@ -92,11 +92,13 @@ function getMcpTargets(): McpTarget[] {
   return targets;
 }
 
-function installMcpConfig(target: McpTarget, agentName: string, wallet: string): { ok: boolean; error?: string } {
+function installMcpConfig(target: McpTarget, agentName: string, wallet: string, apiKey?: string): { ok: boolean; error?: string } {
   const mcpEntry = {
     command: 'npx',
-    args: ['-y', '@clude/mcp'],
+    args: ['clude-bot', 'mcp-serve'],
     env: {
+      ...(apiKey ? { CORTEX_API_KEY: apiKey } : {}),
+      CORTEX_HOST_URL: 'https://cluude.ai',
       ...(wallet ? { CLUDE_WALLET: wallet } : {}),
       ...(agentName ? { CLUDE_AGENT_NAME: agentName } : {}),
     },
@@ -298,7 +300,7 @@ export async function runSetup(): Promise<void> {
     const toInstall = mcpChoice === 'all' ? targets : targets.filter(t => t.key === mcpChoice);
 
     for (const target of toInstall) {
-      const result = installMcpConfig(target, agentName, wallet);
+      const result = installMcpConfig(target, agentName, wallet, apiKey);
       if (result.ok) {
         printSuccess(`Added clude-memory to ${target.label}`);
         printInfo(`  ${c.dim}${target.configPath}${c.reset}`);

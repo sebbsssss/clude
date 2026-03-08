@@ -1183,6 +1183,8 @@ function selectIde(ide) {
 
 function getConfigJson() {
   const env = {};
+  if (state.apiKey) env.CORTEX_API_KEY = state.apiKey;
+  env.CORTEX_HOST_URL = 'https://cluude.ai';
   if (state.agentName) env.CLUDE_AGENT_NAME = state.agentName;
   if (state.wallet) env.CLUDE_WALLET = state.wallet;
 
@@ -1190,7 +1192,7 @@ function getConfigJson() {
     mcpServers: {
       'clude-memory': {
         command: 'npx',
-        args: ['-y', '@clude/mcp'],
+        args: ['clude-bot', 'mcp-serve'],
         env,
       }
     }

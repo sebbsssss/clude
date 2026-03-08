@@ -1630,9 +1630,13 @@ export function formatMemoryContext(memories: Memory[]): string {
   }
 
   if (procedural.length > 0) {
-    lines.push('### Behavioral Patterns');
+    lines.push('### Learned Strategies (from past outcomes)');
     for (const m of procedural) {
-      lines.push(`- ${m.summary}`);
+      const meta = m.metadata as Record<string, any> | undefined;
+      const confidence = meta?.positiveRate != null
+        ? ` [${Math.round(meta.positiveRate * 100)}% success rate, based on ${meta.basedOn || '?'} interactions]`
+        : '';
+      lines.push(`- ${m.summary}${confidence}`);
     }
   }
 
@@ -1644,7 +1648,11 @@ export function formatMemoryContext(memories: Memory[]): string {
   }
 
   lines.push('');
-  lines.push('Use these memories naturally. You REMEMBER these things. Reference them if relevant but do not force it.');
+  lines.push('You REMEMBER these interactions and facts. Reference them naturally if relevant.');
+  if (procedural.length > 0) {
+    lines.push('');
+    lines.push('IMPORTANT: You MUST follow the Learned Strategies above. They are behavioral rules you derived from analyzing your own past successes and failures. Apply them to this response.');
+  }
 
   return lines.join('\n');
 }
@@ -1661,9 +1669,7 @@ export function calculateImportance(opts: {
   else if (opts.tier === 'SMALL') score += 0.1;
   else if (opts.tier === 'SELLER') score += 0.2;
 
-  if (opts.feature === 'wallet-roast') score += 0.1;
-  else if (opts.feature === 'question') score += 0.15;
-  else if (opts.feature === 'exit-interview') score += 0.25;
+  if (opts.feature === 'question') score += 0.15;
 
   if (opts.mood === 'PUMPING' || opts.mood === 'DUMPING') score += 0.1;
   if (opts.mood === 'NEW_ATH' || opts.mood === 'WHALE_SELL') score += 0.15;

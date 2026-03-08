@@ -48,11 +48,32 @@ async function buildGenerateOptions(opts: ContextOptions): Promise<GenerateOptio
   let memoryContext: string | undefined;
   if (opts.memory) {
     const recallStart = Date.now();
-    const memories = await recallMemories(opts.memory);
+
+    // Parallel recall: main memories + top procedural strategies (guaranteed slots)
+    const [mainMemories, strategies] = await Promise.all([
+      recallMemories(opts.memory),
+      recallMemories({
+        memoryTypes: ['procedural'],
+        limit: 3,
+        minImportance: 0.5,
+        trackAccess: true,
+      }),
+    ]);
+
+    // Merge procedural strategies into main results, deduplicating by ID
+    const seen = new Set(mainMemories.map(m => m.id));
+    const memories = [...mainMemories];
+    for (const s of strategies) {
+      if (!seen.has(s.id)) {
+        memories.push(s);
+        seen.add(s.id);
+      }
+    }
+
     const recallMs = Date.now() - recallStart;
     const formatted = formatMemoryContext(memories);
     if (formatted) memoryContext = formatted;
-    log.info({ recallMs, memoriesFound: memories.length, user: opts.memory.relatedUser || opts.memory.relatedWallet || 'none' }, 'Memory recall completed');
+    log.info({ recallMs, memoriesFound: memories.length, strategiesFound: strategies.length, user: opts.memory.relatedUser || opts.memory.relatedWallet || 'none' }, 'Memory recall completed');
   }
 
   return {

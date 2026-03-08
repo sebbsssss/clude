@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { PublicKey } from '@solana/web3.js';
 import { verifySignature } from '../core/solana-client';
-import { linkWallet } from '../features/holder-tier';
+import { getDb } from '../core/database';
 import { createChildLogger } from '../core/logger';
 import * as bs58Module from 'bs58';
 const bs58 = (bs58Module as any).default || bs58Module;
@@ -60,7 +60,13 @@ export function verifyRoutes(): Router {
       }
 
       // Link wallet to X handle
-      await linkWallet(cleanHandle, cleanHandle, wallet_address);
+      const db = getDb();
+      await db.from('wallet_links').upsert({
+        x_handle: cleanHandle,
+        x_user_id: cleanHandle,
+        wallet_address,
+        verified_at: new Date().toISOString(),
+      }, { onConflict: 'x_user_id' });
 
       log.info({ x_handle: cleanHandle, wallet: wallet_address }, 'Wallet verified and linked');
       res.json({ success: true, message: `Wallet ${wallet_address} linked to @${cleanHandle}` });

@@ -35,19 +35,6 @@ export async function initDatabase(): Promise<void> {
           verified_at TIMESTAMPTZ DEFAULT NOW()
         );
 
-        CREATE TABLE IF NOT EXISTS token_events (
-          id BIGSERIAL PRIMARY KEY,
-          signature TEXT UNIQUE NOT NULL,
-          event_type TEXT NOT NULL,
-          wallet_address TEXT NOT NULL,
-          amount DOUBLE PRECISION,
-          sol_value DOUBLE PRECISION,
-          timestamp TIMESTAMPTZ NOT NULL,
-          metadata JSONB,
-          processed BOOLEAN DEFAULT FALSE,
-          created_at TIMESTAMPTZ DEFAULT NOW()
-        );
-
         CREATE TABLE IF NOT EXISTS processed_mentions (
           tweet_id TEXT PRIMARY KEY,
           feature TEXT NOT NULL,
@@ -79,8 +66,6 @@ export async function initDatabase(): Promise<void> {
           recorded_at TIMESTAMPTZ DEFAULT NOW()
         );
 
-        CREATE INDEX IF NOT EXISTS idx_token_events_processed ON token_events(processed);
-        CREATE INDEX IF NOT EXISTS idx_token_events_timestamp ON token_events(timestamp);
         CREATE INDEX IF NOT EXISTS idx_price_snapshots_recorded ON price_snapshots(recorded_at);
 
         CREATE EXTENSION IF NOT EXISTS pg_trgm;
@@ -133,12 +118,16 @@ export async function initDatabase(): Promise<void> {
           registered_at TIMESTAMPTZ DEFAULT NOW(),
           last_used TIMESTAMPTZ,
           is_active BOOLEAN DEFAULT TRUE,
-          metadata JSONB DEFAULT '{}'
+          metadata JSONB DEFAULT '{}',
+          owner_wallet TEXT
         );
 
         CREATE INDEX IF NOT EXISTS idx_agent_keys_api_key ON agent_keys(api_key);
-        CREATE INDEX IF NOT EXISTS idx_token_events_activity ON token_events(sol_value DESC, timestamp DESC);
+        CREATE INDEX IF NOT EXISTS idx_agent_keys_owner ON agent_keys(owner_wallet);
 
+        -- Cortex recall performance: owner_wallet scoped queries
+        CREATE INDEX IF NOT EXISTS idx_cortex_owner_recall ON memories(owner_wallet, decay_factor DESC, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_cortex_owner_type ON memories(owner_wallet, memory_type);
         -- Migration: evidence-linked reflections (Park et al. 2023)
         ALTER TABLE memories ADD COLUMN IF NOT EXISTS evidence_ids BIGINT[] DEFAULT '{}';
         CREATE INDEX IF NOT EXISTS idx_memories_evidence ON memories USING GIN(evidence_ids);

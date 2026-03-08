@@ -243,6 +243,7 @@ export function cortexRoutes(): Router {
         });
       });
 
+      await recordAgentInteraction(cortexReq.agent!.agent_id);
       res.json({ summaries, count: summaries.length });
     } catch (err) {
       log.error({ err }, 'Cortex recall summaries error');
@@ -269,6 +270,7 @@ export function cortexRoutes(): Router {
         return hydrateMemories(ids);
       });
 
+      await recordAgentInteraction(cortexReq.agent!.agent_id);
       res.json({ memories });
     } catch (err) {
       log.error({ err }, 'Cortex hydrate error');
@@ -285,6 +287,7 @@ export function cortexRoutes(): Router {
         return getMemoryStats();
       });
 
+      await recordAgentInteraction(cortexReq.agent!.agent_id);
       res.json(stats);
     } catch (err) {
       log.error({ err }, 'Cortex stats error');
@@ -304,6 +307,7 @@ export function cortexRoutes(): Router {
         return getRecentMemories(hours, types, limit);
       });
 
+      await recordAgentInteraction(cortexReq.agent!.agent_id);
       res.json({ memories, count: memories.length });
     } catch (err) {
       log.error({ err }, 'Cortex recent error');
@@ -324,6 +328,7 @@ export function cortexRoutes(): Router {
         ]);
       });
 
+      await recordAgentInteraction(cortexReq.agent!.agent_id);
       res.json({
         nodes: memories.map(m => ({
           id: m.id,
@@ -358,6 +363,7 @@ export function cortexRoutes(): Router {
         return getSelfModel();
       });
 
+      await recordAgentInteraction(cortexReq.agent!.agent_id);
       res.json({ memories });
     } catch (err) {
       log.error({ err }, 'Cortex self-model error');
@@ -382,10 +388,24 @@ export function cortexRoutes(): Router {
         return;
       }
 
+      // Verify both memories belong to this owner
+      const db = getDb();
+      const { data: owned } = await db
+        .from('memories')
+        .select('id')
+        .in('id', [source_id, target_id])
+        .eq('owner_wallet', cortexReq.ownerWallet!);
+
+      if (!owned || owned.length < 2) {
+        res.status(403).json({ error: 'Both memories must belong to your account' });
+        return;
+      }
+
       await withOwnerWallet(cortexReq.ownerWallet!, async () => {
         await createMemoryLink(source_id, target_id, link_type as MemoryLinkType, strength);
       });
 
+      await recordAgentInteraction(cortexReq.agent!.agent_id);
       res.json({ ok: true });
     } catch (err) {
       log.error({ err }, 'Cortex link error');
@@ -436,6 +456,8 @@ export function cortexRoutes(): Router {
         created_by: cortexReq.ownerWallet || '',
         format_version: 1,
       };
+
+      await recordAgentInteraction(cortexReq.agent!.agent_id);
 
       if (format === 'markdown') {
         const lines = [
@@ -493,6 +515,7 @@ export function cortexRoutes(): Router {
         }
       });
 
+      await recordAgentInteraction(cortexReq.agent!.agent_id);
       res.json({ imported, skipped, total: pack.memories.length });
     } catch (err) {
       log.error({ err }, 'Pack import error');

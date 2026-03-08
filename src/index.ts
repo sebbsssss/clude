@@ -20,7 +20,6 @@ if (require.main === module) {
   const { startPriceOracle, stopPriceOracle } = require('./core/price-oracle');
   const { startPolling, stopPolling } = require('./mentions/poller');
   const { startMoodTweeter, stopMoodTweeter } = require('./features/price-personality');
-  const { startShiftReports, stopShiftReports } = require('./features/shift-report');
   const { startMarketMonitor, stopMarketMonitor } = require('./features/market-monitor');
   const { startDreamCycle, stopDreamCycle } = require('./features/dream-cycle');
   const { startCampaignTracker, stopCampaignTracker } = require('./features/campaign-tracker');
@@ -107,9 +106,6 @@ if (require.main === module) {
     startMoodTweeter();
     log.info('Mood tweeter started');
 
-    startShiftReports();
-    log.info('Shift report scheduler started');
-
     startMarketMonitor();
     log.info('Market monitor started');
 
@@ -135,7 +131,6 @@ if (require.main === module) {
       stopPolling();
       stopPriceOracle();
       stopMoodTweeter();
-      stopShiftReports();
       stopMarketMonitor();
       stopDreamCycle();
       stopCampaignTracker();

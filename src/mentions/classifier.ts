@@ -1,7 +1,7 @@
 import { extractWalletAddress, isQuestion, cleanMentionText } from '../utils/text';
 import { isVestingQuestion, isCAQuestion } from '../knowledge/tokenomics';
 
-export type MentionType = 'wallet-roast' | 'question' | 'memory-recall' | 'vesting' | 'ca' | 'web-search' | 'general';
+export type MentionType = 'question' | 'memory-recall' | 'vesting' | 'ca' | 'web-search' | 'general';
 
 const WEB_SEARCH_PATTERNS = [
   /what(?:'s| is| are) (?:the )?(?:latest|recent|current|new)/i,
@@ -43,11 +43,6 @@ export function classifyMention(text: string): MentionType {
   if (isCAQuestion(cleaned)) {
     return 'ca';
   }
-
-  // Wallet roast disabled for now — treat wallet mentions as general replies
-  // if (extractWalletAddress(cleaned)) {
-  //   return 'wallet-roast';
-  // }
 
   // Check for web search requests (needs current/live info)
   if (WEB_SEARCH_PATTERNS.some(p => p.test(cleaned))) {

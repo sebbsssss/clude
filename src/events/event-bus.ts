@@ -9,9 +9,6 @@ export type Mood = 'PUMPING' | 'DUMPING' | 'SIDEWAYS' | 'NEW_ATH' | 'WHALE_SELL'
  * This prevents direct cross-layer imports (e.g. base-handler importing exit-interview).
  */
 export interface BotEvents {
-  'whale:sell': { wallet: string; solValue: number; signature: string };
-  'holder:exit': { wallet: string; tokenAmount: number; solValue: number };
-  'token:event': { signature: string; eventType: string; wallet: string; solValue: number };
   'mood:changed': { previous: Mood; current: Mood };
   'memory:stored': { importance: number; memoryType: string };
   'telegram:broadcast': { message: string; feature: string; messageId?: number };

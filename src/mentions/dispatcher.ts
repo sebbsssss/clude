@@ -1,11 +1,9 @@
 import { TweetV2 } from 'twitter-api-v2';
 import { classifyMention } from './classifier';
-import { handleWalletRoast } from '../features/wallet-roast';
 import { handleOnchainOpinion } from '../features/onchain-opinion';
-import { determineHolderTier, getLinkedWallet } from '../features/holder-tier';
 import { claimForProcessing, markProcessed } from '../core/database';
 import { getCurrentMood } from '../core/price-oracle';
-import { getTierModifier } from '../character/tier-modifiers';
+import { getTierModifier, type HolderTier } from '../character/tier-modifiers';
 import { getTweetWithContext, getUsernameOrId } from '../core/x-client';
 import { config } from '../config';
 import {
@@ -89,15 +87,10 @@ export async function dispatchMention(tweet: TweetV2): Promise<void> {
   }
 
   try {
-    // Determine holder tier for all interactions
-    const tier = await determineHolderTier(authorId);
+    const tier: HolderTier = 'UNKNOWN';
     const mentionType = classifyMention(text);
 
     switch (mentionType) {
-      case 'wallet-roast':
-        await handleWalletRoast(tweetId, text, authorId, tier);
-        break;
-
       case 'memory-recall':
         await handleMemoryRecall(tweetId, text, authorId, tier);
         break;
@@ -138,7 +131,7 @@ async function handleVestingQuestion(
   tweetId: string,
   text: string,
   authorId: string,
-  tier: Awaited<ReturnType<typeof determineHolderTier>>
+  tier: HolderTier
 ): Promise<void> {
   const cleanText = cleanMentionText(text);
   const vestingInfo = getVestingInfo();
@@ -165,7 +158,7 @@ async function handleCAQuestion(
   tweetId: string,
   _text: string,
   _authorId: string,
-  _tier: Awaited<ReturnType<typeof determineHolderTier>>
+  _tier: HolderTier
 ): Promise<void> {
   // Direct response with CA - no LLM needed for simple CA requests
   const response = `CA: ${CLUDE_CA}`;
@@ -178,7 +171,7 @@ async function handleWebSearch(
   tweetId: string,
   text: string,
   authorId: string,
-  tier: Awaited<ReturnType<typeof determineHolderTier>>
+  tier: HolderTier
 ): Promise<void> {
   const cleanText = cleanMentionText(text);
 
@@ -218,7 +211,7 @@ async function handleGeneralReply(
   tweetId: string,
   text: string,
   authorId: string,
-  tier: Awaited<ReturnType<typeof determineHolderTier>>
+  tier: HolderTier
 ): Promise<void> {
   const mood = getCurrentMood();
   const cleanText = cleanMentionText(text);
@@ -241,13 +234,15 @@ async function handleGeneralReply(
     relatedUser: getUsernameOrId(authorId),
     query: cleanText,
     tags: [tier, mood, 'general'],
-    memoryTypes: ['episodic', 'semantic', 'self_model'],
-    limit: 4,
+    memoryTypes: ['episodic', 'semantic', 'procedural', 'self_model'],
+    limit: 5,
   });
 
+  const hasStrategies = memories.some(m => m.memory_type === 'procedural');
   const creatorMode = isCreator(authorId);
   let instruction = loadInstruction('general', 'Respond helpfully and concisely.') +
     (memories.length > 0 ? ' You have memories of past interactions — use them naturally if relevant.' : '') +
+    (hasStrategies ? ' You have learned behavioral strategies from past outcomes — apply them.' : '') +
     (threadContext ? ' You can see the conversation thread — stay on topic.' : '') +
     `\n\nCRITICAL CONTEXT RULES:
 - Read the conversation thread carefully. If people are discussing OTHER projects, agents, or tokens — do NOT assume they are talking about you (Clude).
@@ -287,8 +282,8 @@ async function handleGeneralReply(
       relatedUser: getUsernameOrId(authorId),
       query: cleanText,
       tags: [tier, mood, 'general'],
-      memoryTypes: ['episodic', 'semantic', 'self_model'],
-      limit: 4,
+      memoryTypes: ['episodic', 'semantic', 'procedural', 'self_model'],
+      limit: 5,
     },
   });
 
@@ -300,7 +295,7 @@ async function handleMemoryRecall(
   tweetId: string,
   text: string,
   authorId: string,
-  tier: Awaited<ReturnType<typeof determineHolderTier>>
+  tier: HolderTier
 ): Promise<void> {
   const cleanText = cleanMentionText(text);
 
@@ -356,7 +351,7 @@ async function storeInteractionMemory(
   text: string,
   authorId: string,
   feature: string,
-  tier: Awaited<ReturnType<typeof determineHolderTier>>
+  tier: HolderTier
 ): Promise<void> {
   // Deduplicate: skip if we already stored a memory for this tweet
   const { getDb } = await import('../core/database');
@@ -386,10 +381,6 @@ async function storeInteractionMemory(
     log.debug({ tweetId }, 'Skipping memory storage for CA-related content (security)');
     return;
   }
-
-  // Get wallet address if linked
-  const walletLink = await getLinkedWallet(authorId);
-  const walletAddress = walletLink?.wallet_address;
 
   // Check if this is the first interaction with this user
   const existingMemories = await recallMemories({
@@ -430,7 +421,7 @@ async function storeInteractionMemory(
     source: feature,
     sourceId: tweetId,
     relatedUser: getUsernameOrId(authorId),
-    relatedWallet: walletAddress,
+    relatedWallet: undefined,
     metadata: {
       mood,
       isFirstInteraction: isFirst,

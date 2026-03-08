@@ -246,8 +246,10 @@ writeTty('\n');
 function installMcp(configPath) {
   const entry = {
     command: 'npx',
-    args: ['-y', '@clude/mcp'],
+    args: ['clude-bot', 'mcp-serve'],
     env: {
+      ...(apiKey ? { CORTEX_API_KEY: apiKey } : {}),
+      CORTEX_HOST_URL: 'https://cluude.ai',
       ...(wallet ? { CLUDE_WALLET: wallet } : {}),
       ...(agentName ? { CLUDE_AGENT_NAME: agentName } : {}),
     },

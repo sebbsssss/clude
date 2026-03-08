@@ -1,6 +1,6 @@
 {
   "name": "clude-bot",
-  "version": "2.6.6",
+  "version": "2.7.0",
   "description": "Persistent memory SDK for AI agents — Stanford Generative Agents architecture on Supabase + pgvector",
   "main": "dist/sdk/index.js",
   "types": "dist/sdk/index.d.ts",
@@ -78,7 +78,6 @@
     "@types/node-cron": "^3.0.11",
     "express": "^4.21.0",
     "express-rate-limit": "^8.2.1",
-    "helius-sdk": "^2.1.0",
     "node-cron": "^3.0.3",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0"

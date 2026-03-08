@@ -1,18 +1,16 @@
 import express, { Request, Response } from 'express';
 import path from 'path';
 import { config } from '../config';
-import { handleHeliusWebhook } from './helius-handler';
 import { verifyRoutes } from '../verify-app/routes';
 import { getMarketSnapshot } from '../core/allium-client';
 import { getMemoryStats, getRecentMemories, storeMemory, recallMemories } from '../core/memory';
 import { getDb, checkRateLimit } from '../core/database';
 import { writeMemo, solscanTxUrl } from '../core/solana-client';
-import { createHash, timingSafeEqual } from 'crypto';
+import { createHash } from 'crypto';
 import { agentRoutes } from './agent-routes';
 import { cortexRoutes } from './cortex-routes';
 import { graphRoutes } from './graph-routes';
 import { campaignRoutes } from './campaign-routes';
-import { getRecentActivity } from '../features/activity-stream';
 import { getVeniceStats } from '../core/venice-client';
 import { createChildLogger } from '../core/logger';
 import { checkInputContent } from '../core/guardrails';
@@ -23,15 +21,6 @@ import { dashboardRoutes, autoRegisterClude } from './dashboard-routes';
 
 const log = createChildLogger('server');
 
-// Rate limiters
-const webhookLimiter = rateLimit({
-  windowMs: 60_000,
-  max: 120,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many webhook requests' },
-});
-
 const apiLimiter = rateLimit({
   windowMs: 60_000,
   max: 60,
@@ -40,34 +29,6 @@ const apiLimiter = rateLimit({
   message: { error: 'Too many API requests' },
 });
 
-// Helius webhook signature verification middleware
-function verifyHeliusWebhook(req: express.Request, res: express.Response, next: express.NextFunction): void {
-  const secret = config.helius.webhookSecret;
-  if (!secret) {
-    // No secret configured — skip verification (log warning on first request)
-    next();
-    return;
-  }
-
-  const authHeader = req.headers['authorization'] as string | undefined;
-  if (!authHeader) {
-    log.warn('Helius webhook request missing Authorization header');
-    res.status(401).json({ error: 'Missing webhook authorization' });
-    return;
-  }
-
-  // Constant-time comparison to prevent timing attacks
-  const authBuffer = Buffer.from(authHeader);
-  const secretBuffer = Buffer.from(secret);
-  if (authBuffer.length !== secretBuffer.length || !timingSafeEqual(authBuffer, secretBuffer)) {
-    log.warn('Invalid Helius webhook authorization');
-    res.status(401).json({ error: 'Invalid webhook authorization' });
-    return;
-  }
-
-  next();
-}
-
 export function createServer(): express.Application {
   const app = express();
 
@@ -75,6 +36,18 @@ export function createServer(): express.Application {
   app.set('trust proxy', 1);
 
   app.use(express.json());
+
+  // CORS headers for Cortex SDK (browser-based consumers)
+  app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if (req.method === 'OPTIONS') {
+      res.sendStatus(204);
+      return;
+    }
+    next();
+  });
 
   // Health check with DB connectivity probe
   app.get('/health', async (_req: Request, res: Response) => {
@@ -89,17 +62,6 @@ export function createServer(): express.Application {
       });
     } catch {
       res.status(503).json({ status: 'error', timestamp: new Date().toISOString(), database: 'unreachable' });
-    }
-  });
-
-  // Helius webhook endpoint for token events (with signature verification + rate limiting)
-  app.post('/webhook/helius', webhookLimiter, verifyHeliusWebhook, async (req: Request, res: Response) => {
-    try {
-      await handleHeliusWebhook(req.body);
-      res.json({ ok: true });
-    } catch (err) {
-      log.error({ err }, 'Helius webhook error');
-      res.status(500).json({ error: 'Webhook processing failed' });
     }
   });
 
@@ -513,18 +475,6 @@ export function createServer(): express.Application {
     res.json([]);
   });
 
-  // Activity stream (recent on-chain events)
-  app.get('/api/activity', async (req: Request, res: Response) => {
-    try {
-      const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
-      const events = await getRecentActivity(limit);
-      res.json({ events, lastUpdate: new Date().toISOString() });
-    } catch (err) {
-      log.error({ err }, 'Activity endpoint error');
-      res.status(500).json({ error: 'Failed to fetch activity' });
-    }
-  });
-
   // Docs view counter (tracks agents.md views)
   app.get('/api/docs-views', async (_req: Request, res: Response) => {
     try {
@@ -702,7 +652,7 @@ export function createServer(): express.Application {
       const ip = req.ip || req.socket.remoteAddress || 'unknown';
       const allowed = await checkRateLimit(`demo:store:${ip}`, 10, 1);
       if (!allowed) {
-        res.status(429).json({ error: 'Rate limited. 3 stores per minute max.' });
+        res.status(429).json({ error: 'Rate limited. 10 stores per minute max.' });
         return;
       }
 
@@ -757,7 +707,7 @@ export function createServer(): express.Application {
       const ip = req.ip || req.socket.remoteAddress || 'unknown';
       const allowed = await checkRateLimit(`demo:recall:${ip}`, 30, 1);
       if (!allowed) {
-        res.status(429).json({ error: 'Rate limited. 5 recalls per minute max.' });
+        res.status(429).json({ error: 'Rate limited. 30 recalls per minute max.' });
         return;
       }
 

@@ -8,19 +8,6 @@ CREATE TABLE IF NOT EXISTS wallet_links (
   verified_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS token_events (
-  id BIGSERIAL PRIMARY KEY,
-  signature TEXT UNIQUE NOT NULL,
-  event_type TEXT NOT NULL,
-  wallet_address TEXT NOT NULL,
-  amount DOUBLE PRECISION,
-  sol_value DOUBLE PRECISION,
-  timestamp TIMESTAMPTZ NOT NULL,
-  metadata JSONB,
-  processed BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
 CREATE TABLE IF NOT EXISTS processed_mentions (
   tweet_id TEXT PRIMARY KEY,
   feature TEXT NOT NULL,
@@ -52,8 +39,6 @@ CREATE TABLE IF NOT EXISTS price_snapshots (
   recorded_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_token_events_processed ON token_events(processed);
-CREATE INDEX IF NOT EXISTS idx_token_events_timestamp ON token_events(timestamp);
 CREATE INDEX IF NOT EXISTS idx_price_snapshots_recorded ON price_snapshots(recorded_at);
 
 -- ============================================================

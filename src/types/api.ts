@@ -7,38 +7,6 @@ export interface JupiterPriceResponse {
   data: Record<string, { id: string; type: string; price: string } | undefined>;
 }
 
-// Helius token balances API (Solana)
-export interface HeliusTokenBalance {
-  mint: string;
-  amount: number;
-  decimals: number;
-}
-
-export interface HeliusBalancesResponse {
-  tokens?: HeliusTokenBalance[];
-}
-
-// Helius webhook payload (Solana)
-export interface HeliusWebhookPayload {
-  signature: string;
-  timestamp: number;
-  type: string;
-  description: string;
-  fee: number;
-  nativeTransfers: Array<{
-    fromUserAccount: string;
-    toUserAccount: string;
-    amount: number;
-  }>;
-  tokenTransfers: Array<{
-    mint: string;
-    fromUserAccount: string;
-    toUserAccount: string;
-    tokenAmount: number;
-    tokenStandard: string;
-  }>;
-}
-
 // Allium SOL stats (Solana)
 export interface AlliumSolStats {
   items?: Array<{
@@ -129,16 +97,3 @@ export interface AlliumNativeStats {
   }>;
 }
 
-// Supabase token_events row
-export interface TokenEventRow {
-  id: number;
-  signature: string;
-  event_type: string;
-  wallet_address: string;
-  amount: number;
-  sol_value: number;
-  timestamp: string;
-  metadata: Record<string, unknown> | string;
-  processed: boolean;
-  created_at: string;
-}

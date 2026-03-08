@@ -39,6 +39,9 @@ if (command === 'setup') {
     console.error('Export failed:', err.message);
     process.exit(1);
   });
+} else if (command === 'mcp-serve') {
+  // Start the MCP server (used by IDE integrations)
+  require('../mcp/server');
 } else if (command === 'start' || command === 'bot') {
   // Start the full Clude bot (requires env config)
   require('../index');

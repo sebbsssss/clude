@@ -11,6 +11,7 @@
  * The 5 P's: Private, Portable, Permissionless, Poly-model, Persistent
  */
 
+import crypto from 'crypto';
 import { Cortex } from './cortex';
 import type { CortexConfig, Memory, RecallOptions, StoreMemoryOptions, MemoryType } from './types';
 
