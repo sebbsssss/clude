@@ -353,3 +353,62 @@ BEGIN
   LIMIT match_count;
 END;
 $$;
+
+-- ============================================================
+-- AGENT DASHBOARD: Orchestration & Monitoring
+-- Multi-agent registry, task management, activity audit log
+-- ============================================================
+
+-- Agent registry
+CREATE TABLE IF NOT EXISTS dashboard_agents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  type TEXT DEFAULT 'claude_code' CHECK (type IN ('claude_code', 'script', 'webhook', 'clude_bot')),
+  status TEXT DEFAULT 'offline' CHECK (status IN ('online', 'offline', 'paused', 'error')),
+  description TEXT,
+  config JSONB DEFAULT '{}',
+  heartbeat_url TEXT,
+  heartbeat_interval_ms INTEGER DEFAULT 300000,
+  last_heartbeat_at TIMESTAMPTZ,
+  budget_monthly_usd NUMERIC(10,2) DEFAULT 0,
+  budget_used_usd NUMERIC(10,2) DEFAULT 0,
+  budget_reset_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_dashboard_agents_status ON dashboard_agents(status);
+CREATE INDEX IF NOT EXISTS idx_dashboard_agents_type ON dashboard_agents(type);
+
+-- Task/ticket system
+CREATE TABLE IF NOT EXISTS dashboard_tasks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_id UUID REFERENCES dashboard_agents(id) ON DELETE SET NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed', 'failed', 'cancelled')),
+  priority TEXT DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high', 'critical')),
+  parent_task_id UUID REFERENCES dashboard_tasks(id) ON DELETE SET NULL,
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_dashboard_tasks_agent ON dashboard_tasks(agent_id);
+CREATE INDEX IF NOT EXISTS idx_dashboard_tasks_status ON dashboard_tasks(status);
+CREATE INDEX IF NOT EXISTS idx_dashboard_tasks_priority ON dashboard_tasks(priority);
+
+-- Immutable activity/audit log
+CREATE TABLE IF NOT EXISTS dashboard_activity (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_id UUID REFERENCES dashboard_agents(id) ON DELETE SET NULL,
+  action TEXT NOT NULL,
+  details JSONB DEFAULT '{}',
+  cost_usd NUMERIC(10,4) DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_dashboard_activity_agent ON dashboard_activity(agent_id);
+CREATE INDEX IF NOT EXISTS idx_dashboard_activity_action ON dashboard_activity(action);
+CREATE INDEX IF NOT EXISTS idx_dashboard_activity_created ON dashboard_activity(created_at DESC);

@@ -19,6 +19,7 @@ import { checkInputContent } from '../core/guardrails';
 import rateLimit from 'express-rate-limit';
 import { requirePrivyAuth, optionalPrivyAuth } from './privy-auth';
 import { traceMemory, explainMemory } from '../features/memory-trace';
+import { dashboardRoutes, autoRegisterClude } from './dashboard-routes';
 
 const log = createChildLogger('server');
 
@@ -329,6 +330,9 @@ export function createServer(): express.Application {
 
   // Knowledge Graph API (entity-centric memory visualization)
   app.use('/api/graph', graphRoutes());
+
+  // Agent Dashboard (orchestration & monitoring)
+  app.use('/api/dashboard', dashboardRoutes());
 
   // Campaign: 10 Days of Growing a Blockchain Brain
   app.use('/api/campaign', apiLimiter, campaignRoutes());
@@ -861,6 +865,12 @@ export function createServer(): express.Application {
     next();
   });
 
+  // Agent dashboard at /dashboard
+  app.get('/dashboard', (req: Request, _res: Response, next: express.NextFunction) => {
+    req.url = '/dashboard.html';
+    next();
+  });
+
   // Memory explorer at /explore
   app.get('/explore', (req: Request, _res: Response, next: express.NextFunction) => {
     req.url = '/explore.html';
@@ -889,6 +899,8 @@ export function startServer(): Promise<void> {
     const app = createServer();
     app.listen(config.server.port, () => {
       log.info({ port: config.server.port }, 'Server started');
+      // Auto-register Clude as the first dashboard agent
+      autoRegisterClude().catch(err => log.warn({ err }, 'Auto-register Clude failed'));
       resolve();
     });
   });

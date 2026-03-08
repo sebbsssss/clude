@@ -375,6 +375,55 @@ export async function initDatabase(): Promise<void> {
         );
         INSERT INTO campaign_state (id, campaign_start, campaign_end)
           VALUES (1, '2026-02-25T00:00:00Z', '2026-03-07T00:00:00Z') ON CONFLICT DO NOTHING;
+
+        -- Agent Dashboard: orchestration & monitoring tables
+        CREATE TABLE IF NOT EXISTS dashboard_agents (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          name TEXT NOT NULL,
+          type TEXT DEFAULT 'claude_code' CHECK (type IN ('claude_code', 'script', 'webhook', 'clude_bot')),
+          status TEXT DEFAULT 'offline' CHECK (status IN ('online', 'offline', 'paused', 'error')),
+          description TEXT,
+          config JSONB DEFAULT '{}',
+          heartbeat_url TEXT,
+          heartbeat_interval_ms INTEGER DEFAULT 300000,
+          last_heartbeat_at TIMESTAMPTZ,
+          budget_monthly_usd NUMERIC(10,2) DEFAULT 0,
+          budget_used_usd NUMERIC(10,2) DEFAULT 0,
+          budget_reset_at TIMESTAMPTZ,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_dashboard_agents_status ON dashboard_agents(status);
+        CREATE INDEX IF NOT EXISTS idx_dashboard_agents_type ON dashboard_agents(type);
+
+        CREATE TABLE IF NOT EXISTS dashboard_tasks (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          agent_id UUID REFERENCES dashboard_agents(id) ON DELETE SET NULL,
+          title TEXT NOT NULL,
+          description TEXT,
+          status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed', 'failed', 'cancelled')),
+          priority TEXT DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high', 'critical')),
+          parent_task_id UUID REFERENCES dashboard_tasks(id) ON DELETE SET NULL,
+          metadata JSONB DEFAULT '{}',
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW(),
+          completed_at TIMESTAMPTZ
+        );
+        CREATE INDEX IF NOT EXISTS idx_dashboard_tasks_agent ON dashboard_tasks(agent_id);
+        CREATE INDEX IF NOT EXISTS idx_dashboard_tasks_status ON dashboard_tasks(status);
+        CREATE INDEX IF NOT EXISTS idx_dashboard_tasks_priority ON dashboard_tasks(priority);
+
+        CREATE TABLE IF NOT EXISTS dashboard_activity (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          agent_id UUID REFERENCES dashboard_agents(id) ON DELETE SET NULL,
+          action TEXT NOT NULL,
+          details JSONB DEFAULT '{}',
+          cost_usd NUMERIC(10,4) DEFAULT 0,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_dashboard_activity_agent ON dashboard_activity(agent_id);
+        CREATE INDEX IF NOT EXISTS idx_dashboard_activity_action ON dashboard_activity(action);
+        CREATE INDEX IF NOT EXISTS idx_dashboard_activity_created ON dashboard_activity(created_at DESC);
       `
     });
 
