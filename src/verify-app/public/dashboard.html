@@ -1316,15 +1316,22 @@
   (async () => {
     var fallback = document.getElementById('privyFallback');
     try {
-      var [React, ReactDOM, PrivyModule, SolanaModule] = await Promise.all([
+      var [React, ReactDOM, PrivyModule] = await Promise.all([
         import('react'),
         import('react-dom/client'),
         import('https://esm.sh/@privy-io/react-auth@2?external=react,react-dom'),
-        import('https://esm.sh/@privy-io/react-auth@2/solana?external=react,react-dom'),
       ]);
 
+      // Try loading Solana connectors — may fail on some CDN versions
+      var solanaConnectors = null;
+      try {
+        var SolanaModule = await import('https://esm.sh/@privy-io/react-auth@2.4.0/solana?external=react,react-dom&bundle-deps');
+        solanaConnectors = SolanaModule.toSolanaWalletConnectors({ shouldAutoConnect: true });
+      } catch (e) {
+        console.warn('Solana connectors failed to load, using default wallet detection:', e.message);
+      }
+
       var { PrivyProvider, usePrivy, useWallets } = PrivyModule;
-      var solanaConnectors = SolanaModule.toSolanaWalletConnectors({ shouldAutoConnect: true });
       var { createElement: h, useState, useEffect } = React;
 
       var appId = document.querySelector('meta[name="privy-app-id"]')?.content || '';
@@ -1381,19 +1388,22 @@
       }
 
       function App() {
+        var privyConfig = {
+          appearance: {
+            theme: 'light',
+            walletChainType: 'solana-only',
+          },
+          loginMethods: ['wallet'],
+          embeddedWallets: { createOnLogin: 'off' },
+        };
+        if (solanaConnectors) {
+          privyConfig.externalWallets = {
+            solana: { connectors: solanaConnectors },
+          };
+        }
         return h(PrivyProvider, {
           appId: appId,
-          config: {
-            appearance: {
-              theme: 'light',
-              walletChainType: 'solana-only',
-            },
-            loginMethods: ['wallet'],
-            embeddedWallets: { createOnLogin: 'off' },
-            externalWallets: {
-              solana: { connectors: solanaConnectors },
-            },
-          },
+          config: privyConfig,
         }, h(WalletButton));
       }
 
