@@ -11,7 +11,7 @@
     script-src 'self' 'unsafe-inline' https://esm.sh https://challenges.cloudflare.com;
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
     font-src 'self' https://fonts.gstatic.com;
-    img-src 'self' data: blob:;
+    img-src 'self' data: blob: https://auth.privy.io https://*.walletconnect.com;
     connect-src 'self' https://auth.privy.io wss://relay.walletconnect.com wss://relay.walletconnect.org wss://www.walletlink.org https://*.rpc.privy.systems https://explorer-api.walletconnect.com https://esm.sh;
     frame-src https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org https://challenges.cloudflare.com;
     child-src https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org;
@@ -1312,13 +1312,15 @@
   (async () => {
     var fallback = document.getElementById('privyFallback');
     try {
-      var [React, ReactDOM, PrivyModule] = await Promise.all([
+      var [React, ReactDOM, PrivyModule, SolanaModule] = await Promise.all([
         import('react'),
         import('react-dom/client'),
         import('https://esm.sh/@privy-io/react-auth@2?external=react,react-dom'),
+        import('https://esm.sh/@privy-io/react-auth@2/solana?external=react,react-dom'),
       ]);
 
       var { PrivyProvider, usePrivy, useWallets } = PrivyModule;
+      var solanaConnectors = SolanaModule.toSolanaWalletConnectors({ shouldAutoConnect: true });
       var { createElement: h, useState, useEffect } = React;
 
       var appId = document.querySelector('meta[name="privy-app-id"]')?.content || '';
@@ -1378,9 +1380,15 @@
         return h(PrivyProvider, {
           appId: appId,
           config: {
-            appearance: { theme: 'light' },
+            appearance: {
+              theme: 'light',
+              walletChainType: 'solana-only',
+            },
             loginMethods: ['wallet'],
             embeddedWallets: { createOnLogin: 'off' },
+            externalWallets: {
+              solana: { connectors: solanaConnectors },
+            },
           },
         }, h(WalletButton));
       }
