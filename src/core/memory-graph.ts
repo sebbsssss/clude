@@ -203,10 +203,14 @@ export async function getMemoriesByEntity(
     return [];
   }
 
+  const { getOwnerWallet } = require('./memory');
+  const ownerWallet = getOwnerWallet();
+
   const memories = (data || [])
     .map((d: any) => d.memories)
     .filter((m: any) => m !== null)
-    .filter((m: any) => !opts?.memoryTypes || opts.memoryTypes.includes(m.memory_type));
+    .filter((m: any) => !opts?.memoryTypes || opts.memoryTypes.includes(m.memory_type))
+    .filter((m: any) => !ownerWallet || m.owner_wallet === ownerWallet);
 
   return memories as Memory[];
 }
