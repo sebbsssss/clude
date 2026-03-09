@@ -1355,22 +1355,49 @@
       }
 
       function WalletButton() {
-        var { ready, authenticated, login, logout, getAccessToken } = usePrivy();
+        var { ready, authenticated, login, logout, getAccessToken, user } = usePrivy();
         var { wallets } = useWallets();
         var [sent, setSent] = useState(false);
 
         useEffect(function() {
-          if (!authenticated || !wallets?.length || sent) return;
-          var solana = wallets.find(function(w) { return w.walletClientType === 'solana' || w.chainType === 'solana'; });
-          var addr = solana?.address || wallets[0]?.address;
-          if (!addr) return;
+          if (!authenticated || sent) return;
+          console.log('[dashboard] Authenticated! wallets:', JSON.stringify(wallets?.map(function(w) { return { type: w.walletClientType, chain: w.chainType, addr: w.address?.slice(0,6) }; })));
+          console.log('[dashboard] Privy user:', JSON.stringify(user?.wallet));
+
+          // Try wallets array first, fall back to privy user's linked wallet
+          var addr = null;
+          if (wallets?.length) {
+            var solana = wallets.find(function(w) { return w.walletClientType === 'solana' || w.chainType === 'solana'; });
+            addr = solana?.address || wallets[0]?.address;
+          }
+          if (!addr && user?.wallet?.address) {
+            addr = user.wallet.address;
+          }
+          if (!addr) {
+            console.warn('[dashboard] No wallet address found yet, waiting...');
+            return;
+          }
 
           setSent(true);
           updateNavWallet(addr);
+          console.log('[dashboard] Getting access token for', addr.slice(0,4) + '...' + addr.slice(-4));
           getAccessToken().then(function(token) {
+            if (!token) {
+              console.error('[dashboard] getAccessToken returned null/empty');
+              document.getElementById('authStatus').textContent = 'Failed to get auth token. Try disconnecting and reconnecting.';
+              document.getElementById('authStatus').className = 'auth-gate-denied';
+              setSent(false);
+              return;
+            }
+            console.log('[dashboard] Token obtained, dispatching auth event');
             window.dispatchEvent(new CustomEvent('dashboard-auth', { detail: { address: addr, token: token } }));
+          }).catch(function(err) {
+            console.error('[dashboard] getAccessToken failed:', err);
+            document.getElementById('authStatus').textContent = 'Token error: ' + err.message + '. Try reconnecting.';
+            document.getElementById('authStatus').className = 'auth-gate-denied';
+            setSent(false);
           });
-        }, [authenticated, wallets]);
+        }, [authenticated, wallets, user]);
 
         useEffect(function() {
           if (!authenticated && sent) {
@@ -1383,7 +1410,7 @@
         if (!ready) return h('span', { style: { fontSize: '10px', color: '#999', letterSpacing: '1px' } }, 'Loading...');
 
         if (authenticated) {
-          var addr = wallets?.[0]?.address || '';
+          var addr = wallets?.[0]?.address || user?.wallet?.address || '';
           return h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
             h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 10px', background: 'rgba(42,106,58,0.06)', border: '1px solid rgba(42,106,58,0.15)', fontSize: '10px', color: '#2a6a3a', letterSpacing: '0.5px' } },
               h('div', { style: { width: 5, height: 5, borderRadius: '50%', background: '#2a6a3a' } }),
