@@ -239,11 +239,11 @@ async function handleGeneralReply(
       memoryTypes: ['episodic', 'semantic', 'procedural', 'self_model', 'introspective'],
       limit: 5,
     }),
-    // Pull recent conversation history with this specific user
+    // Pull FULL conversation history with this specific user (all past interactions)
     recallMemories({
       relatedUser: username,
       memoryTypes: ['episodic'],
-      limit: 5,
+      limit: 50,
       trackAccess: false,
     }),
   ]);
@@ -282,7 +282,7 @@ async function handleGeneralReply(
   if (hasHistory) {
     const historyItems = userHistory
       .filter(m => !memories.some(rm => rm.id === m.id)) // don't duplicate
-      .slice(0, 4);
+      .slice(0, 20);
     if (historyItems.length > 0) {
       contextParts.push(`YOUR HISTORY WITH @${username} (past interactions, newest first):`);
       for (const m of historyItems) {
