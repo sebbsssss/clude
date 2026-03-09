@@ -821,6 +821,18 @@ export function createServer(): express.Application {
     next();
   });
 
+  // Install page — agent-facing pitch + instructions
+  app.get('/install', (req: Request, _res: Response, next: express.NextFunction) => {
+    req.url = '/install.html';
+    next();
+  });
+
+  // Agents page — alias for install
+  app.get('/agents', (req: Request, _res: Response, next: express.NextFunction) => {
+    req.url = '/install.html';
+    next();
+  });
+
   // Journal (active reflection diary) at /journal
   app.get('/journal', (req: Request, _res: Response, next: express.NextFunction) => {
     req.url = '/journal.html';
