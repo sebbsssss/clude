@@ -285,6 +285,68 @@ server.tool(
   }
 );
 
+// --- Tool: find_clinamen (anomaly retrieval) ---
+server.tool(
+  'find_clinamen',
+  'Find anomalous memories: high importance but low relevance to the given context. Surfaces unexpected lateral connections for creative insight.',
+  {
+    context: z.string().describe('Current context/topic to find anomalies relative to'),
+    limit: z.number().min(1).max(10).optional().describe('Max results (default 3)'),
+    memory_types: z.array(z.enum(MEMORY_TYPES)).optional().describe('Filter by memory type'),
+    min_importance: z.number().min(0).max(1).optional().describe('Minimum importance (default 0.6)'),
+    max_relevance: z.number().min(0).max(1).optional().describe('Maximum relevance similarity (default 0.35)'),
+  },
+  async (args) => {
+    try {
+      let memories: any[];
+
+      if (isHostedMode) {
+        const result = await cortexFetch<{ memories: any[] }>('POST', '/api/cortex/clinamen', {
+          context: args.context,
+          limit: args.limit,
+          memory_types: args.memory_types,
+          min_importance: args.min_importance,
+          max_relevance: args.max_relevance,
+        });
+        memories = result.memories;
+      } else {
+        const { findClinamen } = require('../features/clinamen');
+        memories = await findClinamen({
+          context: args.context,
+          limit: args.limit,
+          memoryTypes: args.memory_types,
+          minImportance: args.min_importance,
+          maxRelevance: args.max_relevance,
+        });
+      }
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            count: memories.length,
+            memories: memories.map((m: any) => ({
+              id: m.id,
+              type: m.memory_type,
+              summary: m.summary,
+              content: m.content,
+              importance: m.importance,
+              divergence: m._divergence,
+              relevance_sim: m._relevanceSim,
+            })),
+          }, null, 2),
+        }],
+      };
+    } catch (err: any) {
+      console.error('[clude-mcp] find_clinamen error:', err.message);
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify({ error: err.message }) }],
+        isError: true,
+      };
+    }
+  }
+);
+
 // --- Start ---
 async function main() {
   // Validate configuration

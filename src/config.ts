@@ -2,20 +2,26 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const siteOnly = process.env.SITE_ONLY === 'true';
+const mcpMode = process.env.CLUDE_MCP === 'true' || process.argv.includes('mcp-serve');
 
 function isSDK(): boolean {
   return !!(globalThis as any).__CLUDE_SDK_MODE;
 }
 
+/** Returns true when running in a lightweight mode (SDK, MCP, site-only) */
+function isLightweight(): boolean {
+  return isSDK() || siteOnly || mcpMode;
+}
+
 function required(key: string): string {
-  if (isSDK()) return process.env[key] || '';
+  if (isLightweight()) return process.env[key] || '';
   const val = process.env[key];
   if (!val) throw new Error(`Missing required env var: ${key}`);
   return val;
 }
 
 function requiredUnlessSiteOnly(key: string): string {
-  if (isSDK() || siteOnly) return process.env[key] || '';
+  if (isLightweight()) return process.env[key] || '';
   return required(key);
 }
 
