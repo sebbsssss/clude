@@ -310,6 +310,46 @@ export class Cortex {
     this.dreamActive = false;
   }
 
+  /** Run a single active reflection (meditation) session. Self-hosted only. */
+  async reflect(opts?: { onReflection?: (journal: any) => Promise<void> }): Promise<any> {
+    this.requireSelfHosted('reflect');
+    if (!this.config.anthropic?.apiKey) {
+      throw new Error('Cortex.reflect() requires anthropic config');
+    }
+
+    const { setReflectionHandler, runReflectionOnce } = require('../features/active-reflection');
+
+    if (opts?.onReflection) {
+      setReflectionHandler(opts.onReflection);
+    }
+
+    try {
+      return await runReflectionOnce();
+    } finally {
+      if (opts?.onReflection) {
+        setReflectionHandler(null);
+      }
+    }
+  }
+
+  /** Start the active reflection (meditation) schedule. Self-hosted only. */
+  startReflectionSchedule(): void {
+    this.guard();
+    this.requireSelfHosted('startReflectionSchedule');
+    if (!this.config.anthropic?.apiKey) {
+      throw new Error('Reflection schedule requires anthropic config');
+    }
+    const { startActiveReflection } = require('../features/active-reflection');
+    startActiveReflection();
+  }
+
+  /** Stop the active reflection schedule. */
+  stopReflectionSchedule(): void {
+    if (this.hostedMode) return;
+    const { stopActiveReflection } = require('../features/active-reflection');
+    stopActiveReflection();
+  }
+
   /** Score memory importance using LLM. Self-hosted only. */
   async scoreImportance(description: string): Promise<number> {
     this.requireSelfHosted('scoreImportance');

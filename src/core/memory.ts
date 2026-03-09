@@ -135,7 +135,7 @@ const log = createChildLogger('memory');
 //   self_model  — Clude's evolving understanding of itself
 // ============================================================
 
-export type MemoryType = 'episodic' | 'semantic' | 'procedural' | 'self_model';
+export type MemoryType = 'episodic' | 'semantic' | 'procedural' | 'self_model' | 'introspective';
 
 export interface Memory {
   id: number;
@@ -1439,7 +1439,7 @@ export async function getMemoryStats(): Promise<MemoryStats> {
   const db = getDb();
   const stats: MemoryStats = {
     total: 0,
-    byType: { episodic: 0, semantic: 0, procedural: 0, self_model: 0 },
+    byType: { episodic: 0, semantic: 0, procedural: 0, self_model: 0, introspective: 0 },
     avgImportance: 0,
     avgDecay: 0,
     oldestMemory: null,

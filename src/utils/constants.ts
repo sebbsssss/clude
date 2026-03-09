@@ -37,6 +37,7 @@ export const KNOWLEDGE_TYPE_BOOST: Record<string, number> = {
   semantic:   0.15,    // Distilled knowledge gets meaningful boost
   procedural: 0.12,    // Learned behaviors get moderate boost
   self_model: 0.10,    // Identity/reflection gets slight boost
+  introspective: 0.12, // Self-generated journal entries — moderate boost (original thought)
   episodic:   0.0,     // Raw experiences — no boost (majority of memories)
 };
 

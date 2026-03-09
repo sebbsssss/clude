@@ -22,6 +22,7 @@ if (require.main === module) {
   const { startMoodTweeter, stopMoodTweeter } = require('./features/price-personality');
   const { startMarketMonitor, stopMarketMonitor } = require('./features/market-monitor');
   const { startDreamCycle, stopDreamCycle } = require('./features/dream-cycle');
+  const { startActiveReflection, stopActiveReflection } = require('./features/active-reflection');
   const { startCampaignTracker, stopCampaignTracker } = require('./features/campaign-tracker');
   const { startServer } = require('./webhook/server');
   const { getBotWallet } = require('./core/solana-client');
@@ -112,6 +113,9 @@ if (require.main === module) {
     await startDreamCycle();
     log.info('Dream cycle started — memory consolidation active');
 
+    await startActiveReflection();
+    log.info('Active reflection started — meditation cycle active');
+
     if (config.features.campaignEnabled) {
       startCampaignTracker();
       log.info('Campaign tracker started — 10 Days of Growing a Brain');
@@ -133,6 +137,7 @@ if (require.main === module) {
       stopMoodTweeter();
       stopMarketMonitor();
       stopDreamCycle();
+      stopActiveReflection();
       stopCampaignTracker();
       if (config.features.telegramEnabled) {
         const { stopXSentimentMonitor } = require('./features/x-sentiment-monitor');
