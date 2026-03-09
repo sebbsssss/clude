@@ -821,6 +821,52 @@ export function createServer(): express.Application {
     next();
   });
 
+  // Journal (active reflection diary) at /journal
+  app.get('/journal', (req: Request, _res: Response, next: express.NextFunction) => {
+    req.url = '/journal.html';
+    next();
+  });
+
+  // Journal API — fetch introspective + self_model + emergence memories
+  app.get('/api/journal', async (_req: Request, res: Response) => {
+    try {
+      const db = getDb();
+      const { getOwnerWallet: getWallet } = require('../core/memory');
+      const ownerWallet = getWallet();
+
+      // Fetch journal-worthy memories: introspective, self_model (reflections), emergence
+      let query = db
+        .from('memories')
+        .select('id, memory_type, content, summary, tags, importance, decay_factor, created_at, source')
+        .in('source', ['active_reflection', 'reflection', 'emergence', 'consolidation'])
+        .gte('decay_factor', 0.05)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (ownerWallet) query = query.eq('owner_wallet', ownerWallet);
+
+      const { data, error } = await query;
+      if (error) {
+        res.status(500).json({ error: error.message });
+        return;
+      }
+
+      // Count total reflection sessions (unique dates with reflection entries)
+      const sessionDates = new Set(
+        (data || []).map(m => new Date(m.created_at).toISOString().slice(0, 10))
+      );
+
+      res.json({
+        entries: data || [],
+        sessionCount: sessionDates.size,
+        total: (data || []).length,
+      });
+    } catch (err: any) {
+      log.error({ err }, 'Journal API error');
+      res.status(500).json({ error: 'Failed to fetch journal entries' });
+    }
+  });
+
   // Memory explorer at /explore
   app.get('/explore', (req: Request, _res: Response, next: express.NextFunction) => {
     req.url = '/explore.html';
