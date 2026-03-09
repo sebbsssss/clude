@@ -1024,7 +1024,7 @@
     <div class="section-inner reveal">
       <div class="section-label">Live Tracker</div>
       <div class="section-title">Community in motion.</div>
-      <div class="section-desc">Tweets tagged @cludebot with #CludeHackathon. Updates every 5 minutes.</div>
+      <div class="section-desc">Tweets tagged @cludeproject with #CludeHackathon. Updates every 5 minutes.</div>
 
       <div class="tracker-stats" id="trackerStats">
         <div class="tracker-stat">
@@ -1069,7 +1069,7 @@
     <div class="footer-inner">
       <div class="footer-left">Clude — The cognitive layer for AI agents</div>
       <div class="footer-links">
-        <a href="https://x.com/Cludebot" target="_blank">Twitter</a>
+        <a href="https://x.com/cludeproject" target="_blank">Twitter</a>
         <a href="https://github.com/cludebot" target="_blank">GitHub</a>
         <a href="/docs.html">Docs</a>
       </div>
@@ -1325,7 +1325,7 @@
       // body
       var bodyText = '';
       if (day.type === 'content') {
-        bodyText = 'Create and share your best content about Clude. Tag @cludebot and include #CludeHackathon. Top 10 by engagement score win a share of ' + day.tokens + ' $CLUDE.';
+        bodyText = 'Create and share your best content about Clude. Tag @cludeproject and include #CludeHackathon. Top 10 by engagement score win a share of ' + day.tokens + ' $CLUDE.';
       } else if (day.type === 'gacha') {
         bodyText = 'The Gacha Machine is live. Odds: ' + day.odds + '. Multiplier: ' + day.multiplier + '. Enter your wallet and X handle, then spin. Winners get tokens sent directly. ' + (day.multiplier === '3x' ? 'Triple or nothing.' : '10x or bust.');
       } else if (day.type === 'grant') {
@@ -1342,7 +1342,7 @@
       // CTA
       var ctaHtml = '';
       if (day.type === 'content') {
-        ctaHtml = '<button class="copy-tag-btn" onclick="copyTag()">@cludebot #CludeHackathon</button>';
+        ctaHtml = '<button class="copy-tag-btn" onclick="copyTag()">@cludeproject #CludeHackathon</button>';
         ctaHtml += '<span style="font-size:11px;color:var(--text-faint);">Click to copy</span>';
       } else if (day.type === 'gacha') {
         ctaHtml = '<a href="#gacha-section" class="btn btn-primary" style="font-size:11px;">Go to Machine</a>';
@@ -1359,11 +1359,11 @@
     }
 
     window.copyTag = function() {
-      navigator.clipboard.writeText('@cludebot #CludeHackathon').then(function() {
+      navigator.clipboard.writeText('@cludeproject #CludeHackathon').then(function() {
         var btns = document.querySelectorAll('.copy-tag-btn');
         if (btns.length) {
           btns[0].textContent = 'Copied!';
-          setTimeout(function() { btns[0].textContent = '@cludebot #CludeHackathon'; }, 2000);
+          setTimeout(function() { btns[0].textContent = '@cludeproject #CludeHackathon'; }, 2000);
         }
       }).catch(function() {});
     };
@@ -1429,7 +1429,7 @@
       var feed = $('tweetFeed');
 
       if (!state.tweets || state.tweets.length === 0) {
-        feed.innerHTML = '<div class="feed-empty">No submissions yet. Be the first — tag @cludebot with #CludeHackathon</div>';
+        feed.innerHTML = '<div class="feed-empty">No submissions yet. Be the first — tag @cludeproject with #CludeHackathon</div>';
         return;
       }
 
