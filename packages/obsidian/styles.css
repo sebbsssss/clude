@@ -1,0 +1,693 @@
+/* ============================================================
+   CLUDE OBSIDIAN PLUGIN STYLES
+   
+   Matches Clude's design language:
+   - JetBrains Mono for code/technical elements
+   - Clean, minimal design
+   - Memory type color coding
+   - Light and dark theme support
+   ============================================================ */
+
+/* Root Variables */
+:root {
+  --clude-font-mono: 'JetBrains Mono', 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Droid Sans Mono', 'Source Code Pro', monospace;
+  
+  /* Memory type colors */
+  --clude-episodic: #3b82f6;      /* Blue */
+  --clude-semantic: #10b981;      /* Green */  
+  --clude-procedural: #f59e0b;    /* Orange */
+  --clude-self-model: #8b5cf6;    /* Purple */
+  
+  /* UI Colors - Light theme */
+  --clude-bg-primary: var(--background-primary);
+  --clude-bg-secondary: var(--background-secondary);
+  --clude-bg-accent: var(--background-modifier-border);
+  --clude-text-primary: var(--text-normal);
+  --clude-text-secondary: var(--text-muted);
+  --clude-text-accent: var(--text-accent);
+  --clude-border: var(--background-modifier-border);
+  --clude-shadow: rgba(0, 0, 0, 0.1);
+}
+
+.theme-dark {
+  --clude-shadow: rgba(0, 0, 0, 0.3);
+}
+
+/* ============================================================
+   RIBBON ICON
+   ============================================================ */
+
+.clude-ribbon-icon {
+  font-size: 18px;
+}
+
+.clude-ribbon-icon:hover {
+  color: var(--clude-episodic);
+}
+
+/* ============================================================
+   STATUS BAR
+   ============================================================ */
+
+.clude-status-bar {
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+  font-family: var(--clude-font-mono);
+  font-size: 12px;
+}
+
+.clude-status-bar:hover {
+  background-color: var(--clude-bg-accent);
+}
+
+.clude-status-icon {
+  margin-right: 4px;
+}
+
+.clude-status-text {
+  color: var(--clude-text-secondary);
+}
+
+/* ============================================================
+   RECALL VIEW
+   ============================================================ */
+
+.clude-recall-view {
+  padding: 16px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.clude-recall-header {
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--clude-border);
+  padding-bottom: 12px;
+}
+
+.clude-recall-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--clude-text-primary);
+}
+
+/* Search Input */
+.clude-search-container {
+  margin-bottom: 16px;
+}
+
+.clude-search-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--clude-border);
+  border-radius: 6px;
+  background: var(--clude-bg-primary);
+  color: var(--clude-text-primary);
+  font-size: 14px;
+  font-family: var(--font-interface);
+}
+
+.clude-search-input:focus {
+  outline: none;
+  border-color: var(--clude-episodic);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.clude-search-input::placeholder {
+  color: var(--clude-text-secondary);
+}
+
+/* Type Filters */
+.clude-filters-container {
+  margin-bottom: 16px;
+}
+
+.clude-filters-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--clude-text-secondary);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.clude-filters-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.clude-type-filter {
+  padding: 4px 8px;
+  border: 1px solid var(--clude-border);
+  border-radius: 12px;
+  background: var(--clude-bg-primary);
+  color: var(--clude-text-secondary);
+  font-size: 11px;
+  font-family: var(--clude-font-mono);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: capitalize;
+}
+
+.clude-type-filter:hover {
+  background: var(--clude-bg-secondary);
+}
+
+.clude-type-filter.active {
+  color: white;
+  border-color: transparent;
+}
+
+.clude-type-filter.clude-type-blue.active {
+  background: var(--clude-episodic);
+}
+
+.clude-type-filter.clude-type-green.active {
+  background: var(--clude-semantic);
+}
+
+.clude-type-filter.clude-type-orange.active {
+  background: var(--clude-procedural);
+}
+
+.clude-type-filter.clude-type-purple.active {
+  background: var(--clude-self-model);
+}
+
+.clude-clear-filters {
+  padding: 4px 8px;
+  border: 1px solid var(--clude-border);
+  border-radius: 12px;
+  background: var(--clude-bg-primary);
+  color: var(--clude-text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.clude-clear-filters:hover {
+  background: var(--background-modifier-error);
+  color: white;
+  border-color: var(--background-modifier-error);
+}
+
+/* Status */
+.clude-status {
+  margin-bottom: 12px;
+  padding: 6px 0;
+  font-size: 12px;
+  color: var(--clude-text-secondary);
+  font-family: var(--clude-font-mono);
+}
+
+/* Results */
+.clude-results {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.clude-no-results {
+  text-align: center;
+  color: var(--clude-text-secondary);
+  font-style: italic;
+  padding: 32px 16px;
+}
+
+/* ============================================================
+   MEMORY CARDS
+   ============================================================ */
+
+.clude-memory-card {
+  padding: 16px;
+  border: 1px solid var(--clude-border);
+  border-radius: 8px;
+  background: var(--clude-bg-primary);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.clude-memory-card:hover {
+  border-color: var(--clude-episodic);
+  box-shadow: 0 2px 8px var(--clude-shadow);
+  transform: translateY(-1px);
+}
+
+.clude-memory-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.clude-score-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.clude-score {
+  font-family: var(--clude-font-mono);
+  font-size: 11px;
+  color: var(--clude-text-accent);
+  font-weight: 600;
+}
+
+.clude-importance {
+  font-family: var(--clude-font-mono);
+  font-size: 11px;
+  color: var(--clude-text-secondary);
+}
+
+.clude-memory-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--clude-text-primary);
+  margin-bottom: 6px;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.clude-memory-title:hover {
+  color: var(--clude-episodic);
+}
+
+.clude-memory-content {
+  font-size: 13px;
+  color: var(--clude-text-secondary);
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+
+.clude-tags-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.clude-tag {
+  padding: 2px 6px;
+  background: var(--clude-bg-secondary);
+  border-radius: 4px;
+  font-size: 10px;
+  font-family: var(--clude-font-mono);
+  color: var(--clude-text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.clude-tag:hover {
+  background: var(--clude-episodic);
+  color: white;
+}
+
+.clude-tag-more {
+  padding: 2px 6px;
+  background: var(--clude-bg-accent);
+  border-radius: 4px;
+  font-size: 10px;
+  font-family: var(--clude-font-mono);
+  color: var(--clude-text-secondary);
+  font-style: italic;
+}
+
+.clude-memory-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.clude-action-button {
+  padding: 4px 8px;
+  border: 1px solid var(--clude-border);
+  border-radius: 4px;
+  background: var(--clude-bg-primary);
+  color: var(--clude-text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.clude-action-button:hover {
+  background: var(--clude-episodic);
+  color: white;
+  border-color: var(--clude-episodic);
+}
+
+.clude-memory-metadata {
+  font-size: 10px;
+  color: var(--clude-text-secondary);
+  font-family: var(--clude-font-mono);
+  border-top: 1px solid var(--clude-bg-accent);
+  padding-top: 6px;
+}
+
+.clude-metadata-text {
+  opacity: 0.7;
+}
+
+/* ============================================================
+   TYPE BADGES
+   ============================================================ */
+
+.clude-type-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-family: var(--clude-font-mono);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: white;
+}
+
+.clude-type-badge.clude-type-blue {
+  background: var(--clude-episodic);
+}
+
+.clude-type-badge.clude-type-green {
+  background: var(--clude-semantic);
+}
+
+.clude-type-badge.clude-type-orange {
+  background: var(--clude-procedural);
+}
+
+.clude-type-badge.clude-type-purple {
+  background: var(--clude-self-model);
+}
+
+/* ============================================================
+   PROVENANCE MODAL
+   ============================================================ */
+
+.clude-provenance-modal {
+  min-width: 600px;
+  max-width: 900px;
+  max-height: 80vh;
+}
+
+.clude-provenance-modal .modal-content {
+  padding: 0;
+}
+
+.clude-provenance-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--clude-border);
+  background: var(--clude-bg-secondary);
+}
+
+.clude-provenance-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--clude-text-primary);
+}
+
+.clude-close-button {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--clude-text-secondary);
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.clude-close-button:hover {
+  background: var(--background-modifier-error);
+  color: white;
+}
+
+.clude-loading {
+  text-align: center;
+  padding: 40px;
+  color: var(--clude-text-secondary);
+  font-style: italic;
+}
+
+.clude-provenance-content {
+  padding: 24px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.clude-provenance-level {
+  margin-bottom: 24px;
+}
+
+.clude-level-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--clude-border);
+}
+
+.clude-level-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--clude-text-primary);
+}
+
+.clude-level-arrow {
+  font-size: 18px;
+  color: var(--clude-episodic);
+  font-weight: bold;
+}
+
+.clude-level-nodes {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.clude-provenance-node {
+  padding: 12px;
+  border: 1px solid var(--clude-border);
+  border-radius: 6px;
+  background: var(--clude-bg-primary);
+  transition: all 0.2s ease;
+}
+
+.clude-provenance-node:hover {
+  border-color: var(--clude-episodic);
+  box-shadow: 0 2px 6px var(--clude-shadow);
+}
+
+.clude-root-node {
+  border-color: var(--clude-episodic);
+  background: rgba(59, 130, 246, 0.05);
+  border-width: 2px;
+}
+
+.clude-node-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--clude-text-primary);
+  margin-bottom: 4px;
+  cursor: pointer;
+  line-height: 1.3;
+}
+
+.clude-node-title:hover {
+  color: var(--clude-episodic);
+}
+
+.clude-node-metadata {
+  font-size: 10px;
+  color: var(--clude-text-secondary);
+  font-family: var(--clude-font-mono);
+  margin-bottom: 6px;
+}
+
+.clude-node-connections {
+  margin-bottom: 6px;
+}
+
+.clude-connections-text {
+  font-size: 11px;
+  color: var(--clude-text-secondary);
+  font-family: var(--clude-font-mono);
+}
+
+.clude-connection-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.clude-connection-type {
+  padding: 1px 4px;
+  background: var(--clude-bg-accent);
+  border-radius: 3px;
+  font-size: 9px;
+  font-family: var(--clude-font-mono);
+  color: var(--clude-text-secondary);
+}
+
+.clude-node-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.clude-provenance-legend {
+  margin-top: 24px;
+  padding: 16px;
+  background: var(--clude-bg-secondary);
+  border-radius: 6px;
+  border: 1px solid var(--clude-border);
+}
+
+.clude-provenance-legend h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--clude-text-primary);
+}
+
+.clude-legend-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.clude-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.clude-legend-desc {
+  font-size: 12px;
+  color: var(--clude-text-secondary);
+}
+
+.clude-legend-instructions {
+  font-size: 12px;
+  color: var(--clude-text-secondary);
+  line-height: 1.4;
+}
+
+.clude-legend-instructions p {
+  margin: 0 0 8px 0;
+  font-weight: 600;
+}
+
+.clude-legend-instructions ul {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.clude-legend-instructions li {
+  margin-bottom: 4px;
+}
+
+/* ============================================================
+   RESPONSIVE DESIGN
+   ============================================================ */
+
+@media (max-width: 768px) {
+  .clude-recall-view {
+    padding: 12px;
+  }
+  
+  .clude-memory-card {
+    padding: 12px;
+  }
+  
+  .clude-provenance-modal {
+    min-width: 95vw;
+    max-width: 95vw;
+    max-height: 90vh;
+  }
+  
+  .clude-provenance-content {
+    padding: 16px;
+  }
+  
+  .clude-filters-row {
+    gap: 4px;
+  }
+  
+  .clude-type-filter {
+    font-size: 10px;
+    padding: 3px 6px;
+  }
+}
+
+/* ============================================================
+   ACCESSIBILITY
+   ============================================================ */
+
+.clude-memory-card:focus,
+.clude-type-filter:focus,
+.clude-search-input:focus,
+.clude-action-button:focus {
+  outline: 2px solid var(--clude-episodic);
+  outline-offset: 2px;
+}
+
+.clude-tag:focus {
+  outline: 2px solid var(--clude-episodic);
+  outline-offset: 1px;
+}
+
+/* ============================================================
+   DARK THEME ADJUSTMENTS
+   ============================================================ */
+
+.theme-dark .clude-memory-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.theme-dark .clude-provenance-node:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.theme-dark .clude-root-node {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+/* ============================================================
+   ANIMATIONS
+   ============================================================ */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.clude-memory-card {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.clude-provenance-node {
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* Stagger animation for memory cards */
+.clude-memory-card:nth-child(1) { animation-delay: 0ms; }
+.clude-memory-card:nth-child(2) { animation-delay: 50ms; }
+.clude-memory-card:nth-child(3) { animation-delay: 100ms; }
+.clude-memory-card:nth-child(4) { animation-delay: 150ms; }
+.clude-memory-card:nth-child(5) { animation-delay: 200ms; }

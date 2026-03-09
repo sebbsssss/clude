@@ -1,0 +1,10 @@
+{
+  "id": "clude",
+  "name": "Clude — AI Memory Engine",
+  "version": "0.1.0",
+  "minAppVersion": "1.0.0",
+  "description": "Give your vault a cognitive memory system. Store, recall, and trace connections between notes using Clude's AI memory engine.",
+  "author": "Clude",
+  "authorUrl": "https://clude.io",
+  "isDesktopOnly": true
+}

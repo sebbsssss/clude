@@ -1,0 +1,29 @@
+{
+  "name": "clude-obsidian",
+  "version": "0.1.0",
+  "description": "Give your vault a cognitive memory system. Store, recall, and trace connections between notes using Clude's AI memory engine.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "release": "npm run build"
+  },
+  "keywords": [
+    "obsidian",
+    "plugin",
+    "memory",
+    "ai",
+    "knowledge",
+    "clude"
+  ],
+  "author": "Clude",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^16.11.6",
+    "builtin-modules": "^3.3.0",
+    "esbuild": "0.17.3",
+    "obsidian": "latest",
+    "tslib": "2.4.0",
+    "typescript": "4.7.4"
+  }
+}
