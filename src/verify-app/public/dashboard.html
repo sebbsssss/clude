@@ -830,28 +830,28 @@
 
     // ── LOAD DATA ──
     async function loadAll() {
-      try {
-        var results = await Promise.all([
-          api('/agents'),
-          api('/tasks'),
-          api('/stats'),
-          api('/activity?limit=50'),
-        ]);
-        agents = results[0];
-        tasks = results[1];
-        stats = results[2];
-        var activity = results[3];
+      var errors = [];
 
-        renderAgents();
-        renderStats();
-        renderKanban();
-        renderActivity(activity);
-        populateAgentDropdowns();
+      try { agents = await api('/agents'); renderAgents(); }
+      catch (err) { errors.push('agents: ' + err.message); console.error('Agents load failed:', err); }
+
+      try { tasks = await api('/tasks'); renderKanban(); }
+      catch (err) { errors.push('tasks: ' + err.message); console.error('Tasks load failed:', err); }
+
+      try { stats = await api('/stats'); renderStats(); }
+      catch (err) { errors.push('stats: ' + err.message); console.error('Stats load failed:', err); }
+
+      try { var activity = await api('/activity?limit=50'); renderActivity(activity); }
+      catch (err) { errors.push('activity: ' + err.message); console.error('Activity load failed:', err); }
+
+      populateAgentDropdowns();
+
+      if (errors.length > 0) {
+        toast('Load errors: ' + errors.join('; '), true);
+        document.getElementById('lastUpdate').textContent = 'Some data failed to load';
+      } else {
         document.getElementById('lastUpdate').textContent =
           'Last updated ' + new Date().toLocaleTimeString();
-      } catch (err) {
-        console.error('Load failed:', err);
-        toast('Failed to load data: ' + err.message, true);
       }
     }
 
@@ -1258,6 +1258,7 @@
 
     // ── AUTH ──
     function showDashboard() {
+      console.log('[dashboard] Showing dashboard, authToken:', authToken ? 'present' : 'MISSING');
       document.getElementById('authGate').classList.add('hidden');
       document.getElementById('dashboardMain').style.display = '';
       loadAll();
@@ -1275,6 +1276,7 @@
     window.addEventListener('dashboard-auth', async function(e) {
       var address = e.detail.address;
       var token = e.detail.token;
+      console.log('[dashboard] Auth event received, wallet:', address?.slice(0,4) + '...' + address?.slice(-4), 'token:', token ? 'present (' + token.length + ' chars)' : 'MISSING');
       authToken = token;
 
       var statusEl = document.getElementById('authStatus');
@@ -1283,6 +1285,7 @@
 
       try {
         var result = await api('/auth?wallet=' + encodeURIComponent(address));
+        console.log('[dashboard] Auth response:', result);
         if (result.authorized) {
           showDashboard();
         } else {
@@ -1291,6 +1294,7 @@
           authToken = null;
         }
       } catch (err) {
+        console.error('[dashboard] Auth call failed:', err);
         statusEl.textContent = 'Auth failed: ' + err.message;
         statusEl.className = 'auth-gate-denied';
         authToken = null;
