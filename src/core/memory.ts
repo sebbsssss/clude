@@ -929,6 +929,17 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
       }
     }
 
+    // Final owner_wallet guard: strip any memories that don't belong to the current owner
+    // This catches leaks from entity/graph/fragment paths that may not filter by owner
+    const finalOwner = getOwnerWallet();
+    if (finalOwner) {
+      const beforeCount = results.length;
+      results = results.filter((m: Memory) => m.owner_wallet === finalOwner);
+      if (results.length < beforeCount) {
+        log.warn({ stripped: beforeCount - results.length, owner: finalOwner }, 'Owner guard stripped foreign memories from recall results');
+      }
+    }
+
     // Update access counts in parallel (skip for internal processing like dream cycles)
     if (opts.trackAccess !== false) {
       const ids = results.map((m: Memory) => m.id);
