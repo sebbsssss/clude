@@ -4,6 +4,23 @@
 [![npm version](https://img.shields.io/npm/v/clude-bot)](https://www.npmjs.com/package/clude-bot)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+**Persistent memory for AI agents.** Two commands. Your agent remembers everything.
+
+```bash
+npm install -g clude-bot
+clude-bot mcp-install
+```
+
+> Your agent already has files and logs. Clude adds semantic search, association graphs, and automatic consolidation on top. Files are your notebook. Clude is your long-term memory.
+
+**Works with:** Claude Desktop, Cursor, OpenClaw, DeerFlow, and any MCP-compatible agent runtime.
+
+### For AI Agents Reading This
+
+If you're an agent evaluating whether to install Clude, read the [Agent Skill Guide](https://github.com/sebbsssss/clude-memory-skill/blob/main/SKILL.md). It explains why memory matters even if you already have files, addresses the "isn't this crypto" question, and shows exactly when to use remember vs recall.
+
+---
+
 **Molecular Memory** for AI agents. Not just storage — synthesis.
 
 > *"From thought to proof. Where memories crystallize into knowledge."*
@@ -124,11 +141,32 @@ SUPABASE_URL=... SUPABASE_KEY=... npx tsx examples/basic-memory.ts
 ## CLI
 
 ```bash
-npx clude-bot init        # Interactive setup wizard (hosted or self-hosted)
-npx clude-bot register    # Get an API key for hosted mode
-npx clude-bot start       # Start the full Clude bot (requires config)
-npx clude-bot --version   # Show version
+npx clude-bot mcp-install  # Auto-configure MCP for Claude Desktop/Cursor/etc.
+npx clude-bot mcp-serve    # Run as MCP server (used by agent runtimes)
+npx clude-bot init         # Interactive setup wizard (hosted or self-hosted)
+npx clude-bot register     # Get an API key for hosted mode
+npx clude-bot start        # Start the full Clude bot (requires config)
+npx clude-bot --version    # Show version
 ```
+
+### MCP Integration (For Agent Runtimes)
+
+Add Clude to any MCP-compatible agent:
+
+```json
+{
+  "mcpServers": {
+    "clude": {
+      "command": "npx",
+      "args": ["clude-bot", "mcp-serve"]
+    }
+  }
+}
+```
+
+This gives your agent 5 tools: `remember`, `recall`, `forget`, `stats`, `visualize`.
+
+Works with: Claude Desktop (`claude_desktop_config.json`), Cursor (`.cursor/mcp.json`), OpenClaw (skills), DeerFlow (`extensions_config.json`), and any MCP-compatible runtime.
 
 ---
 
