@@ -360,8 +360,10 @@ export async function runSetup(): Promise<void> {
 // ─── Standalone MCP Install ─────────────────────────────────
 
 export async function runMcpInstall(): Promise<void> {
+  const isLocal = process.argv.includes('--local');
+
   printBanner();
-  console.log(`  ${c.bold}MCP Server Install${c.reset}`);
+  console.log(`  ${c.bold}MCP Server Install${c.reset}${isLocal ? ` ${c.green}(local mode)${c.reset}` : ''}`);
   console.log(`  ${c.gray}Add Clude memory to your AI IDE.${c.reset}\n`);
 
   const rl = createPrompt();
@@ -377,14 +379,12 @@ export async function runMcpInstall(): Promise<void> {
 
   const agentName = await ask(rl, 'Agent name (Enter for folder name): ');
   const name = agentName || path.basename(process.cwd());
-
-  const wallet = await ask(rl, 'Solana wallet (Enter to skip): ');
   console.log('');
 
   const toInstall = mcpChoice === 'all' ? targets : targets.filter(t => t.key === mcpChoice);
 
   for (const target of toInstall) {
-    const result = installMcpConfig(target, name, wallet);
+    const result = installMcpConfig(target, name, '', undefined);
     if (result.ok) {
       printSuccess(`Added clude-memory to ${target.label}`);
       printInfo(`  ${c.dim}${target.configPath}${c.reset}`);
@@ -394,6 +394,10 @@ export async function runMcpInstall(): Promise<void> {
   }
 
   console.log('');
+  if (isLocal) {
+    printSuccess('Local mode: memories stored on-device, fully offline.');
+    printInfo('No API keys needed. ~30MB model downloads on first use.');
+  }
   printInfo('Restart your IDE to activate the MCP server.');
   printDivider();
   console.log('');
