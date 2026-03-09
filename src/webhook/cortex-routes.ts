@@ -131,10 +131,25 @@ export function cortexRoutes(): Router {
       const { agentId, apiKey } = await registerAgent(name, 'AGENT_VERIFIED');
 
       // Set owner_wallet on the agent_keys row
-      await db
+      const { error: updateError } = await db
         .from('agent_keys')
         .update({ owner_wallet: wallet })
         .eq('agent_id', agentId);
+
+      if (updateError) {
+        // Roll back: deactivate the key so it can't be used without a wallet
+        await db.from('agent_keys').update({ is_active: false }).eq('agent_id', agentId);
+
+        // Unique constraint violation = wallet was just claimed by another request
+        if (updateError.code === '23505') {
+          res.status(409).json({ error: 'Wallet already registered. Contact support for key recovery.' });
+          return;
+        }
+
+        log.error({ err: updateError, agentId }, 'Failed to set owner_wallet');
+        res.status(500).json({ error: 'Registration failed — could not link wallet' });
+        return;
+      }
 
       log.info({ agentId, wallet: wallet.slice(0, 8) + '...' }, 'Cortex user registered');
 

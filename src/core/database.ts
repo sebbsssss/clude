@@ -124,6 +124,7 @@ export async function initDatabase(): Promise<void> {
 
         CREATE INDEX IF NOT EXISTS idx_agent_keys_api_key ON agent_keys(api_key);
         CREATE INDEX IF NOT EXISTS idx_agent_keys_owner ON agent_keys(owner_wallet);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_keys_owner_unique ON agent_keys(owner_wallet) WHERE owner_wallet IS NOT NULL;
 
         -- Cortex recall performance: owner_wallet scoped queries
         CREATE INDEX IF NOT EXISTS idx_cortex_owner_recall ON memories(owner_wallet, decay_factor DESC, created_at DESC);
