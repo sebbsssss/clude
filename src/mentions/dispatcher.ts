@@ -230,17 +230,29 @@ async function handleGeneralReply(
   }
 
   // Recall relevant memories for this user and context
-  const memories = await recallMemories({
-    relatedUser: getUsernameOrId(authorId),
-    query: cleanText,
-    tags: [tier, mood, 'general'],
-    memoryTypes: ['episodic', 'semantic', 'procedural', 'self_model'],
-    limit: 5,
-  });
+  const username = getUsernameOrId(authorId);
+  const [memories, userHistory] = await Promise.all([
+    recallMemories({
+      relatedUser: username,
+      query: cleanText,
+      tags: [tier, mood, 'general'],
+      memoryTypes: ['episodic', 'semantic', 'procedural', 'self_model', 'introspective'],
+      limit: 5,
+    }),
+    // Pull recent conversation history with this specific user
+    recallMemories({
+      relatedUser: username,
+      memoryTypes: ['episodic'],
+      limit: 5,
+      trackAccess: false,
+    }),
+  ]);
 
   const hasStrategies = memories.some(m => m.memory_type === 'procedural');
+  const hasHistory = userHistory.length > 0;
   const creatorMode = isCreator(authorId);
   let instruction = loadInstruction('general', 'Respond helpfully and concisely.') +
+    (hasHistory ? ` You have a history with this person — this is a CONTINUING relationship, not a new conversation. Reference past interactions naturally, like catching up with someone you know.` : '') +
     (memories.length > 0 ? ' You have memories of past interactions — use them naturally if relevant.' : '') +
     (hasStrategies ? ' You have learned behavioral strategies from past outcomes — apply them.' : '') +
     (threadContext ? ' You can see the conversation thread — stay on topic.' : '') +
@@ -253,17 +265,36 @@ async function handleGeneralReply(
 
   if (creatorMode) {
     instruction = loadInstruction('creator', 'Your creator is talking to you. Be warm and helpful.') +
+      (hasHistory ? ' You have a long history with your creator — this is an ongoing relationship. Pick up where you left off.' : '') +
       (memories.length > 0 ? ' You have memories of past interactions with them — reference them naturally.' : '') +
       (threadContext ? ' You can see the conversation thread.' : '');
   }
 
-  // Build context with thread if available
+  // Build context with thread and user history
   const contextParts: string[] = [];
   
   // Always include token status so bot knows it's live
   contextParts.push('IMPORTANT FACTS:');
   contextParts.push(getTokenStatus());
   contextParts.push('');
+
+  // User conversation history (continuity across sessions)
+  if (hasHistory) {
+    const historyItems = userHistory
+      .filter(m => !memories.some(rm => rm.id === m.id)) // don't duplicate
+      .slice(0, 4);
+    if (historyItems.length > 0) {
+      contextParts.push(`YOUR HISTORY WITH @${username} (past interactions, newest first):`);
+      for (const m of historyItems) {
+        const ago = Math.round((Date.now() - new Date(m.created_at).getTime()) / (1000 * 60 * 60));
+        const timeLabel = ago < 1 ? 'just now' : ago < 24 ? `${ago}h ago` : `${Math.round(ago / 24)}d ago`;
+        contextParts.push(`- [${timeLabel}] ${m.summary}`);
+      }
+      contextParts.push('');
+      contextParts.push('Continue naturally from where you left off. Don\'t re-introduce yourself or start fresh.');
+      contextParts.push('');
+    }
+  }
   
   if (threadContext) {
     contextParts.push('CONVERSATION THREAD (oldest first):');

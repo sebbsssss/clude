@@ -1614,6 +1614,7 @@ export function formatMemoryContext(memories: Memory[]): string {
   const semantic = memories.filter(m => m.memory_type === 'semantic');
   const procedural = memories.filter(m => m.memory_type === 'procedural');
   const selfModel = memories.filter(m => m.memory_type === 'self_model');
+  const introspective = memories.filter(m => m.memory_type === 'introspective');
 
   if (episodic.length > 0) {
     lines.push('### Past Interactions');
@@ -1637,6 +1638,13 @@ export function formatMemoryContext(memories: Memory[]): string {
         ? ` [${Math.round(meta.positiveRate * 100)}% success rate, based on ${meta.basedOn || '?'} interactions]`
         : '';
       lines.push(`- ${m.summary}${confidence}`);
+    }
+  }
+
+  if (introspective.length > 0) {
+    lines.push('### Your Own Reflections');
+    for (const m of introspective) {
+      lines.push(`- [${timeAgo(m.created_at)}] ${m.summary}`);
     }
   }
 
