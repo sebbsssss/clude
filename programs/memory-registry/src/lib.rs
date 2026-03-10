@@ -6,7 +6,7 @@ pub mod state;
 
 use instructions::*;
 
-// Placeholder — replace with actual program ID after `anchor keys list`
+// Program ID — generated via `anchor keys list`
 declare_id!("MemRYEnFVuMPH8qQd4W5Rk2dkNFUsRkqDRyEGfP9uZ");
 
 #[program]

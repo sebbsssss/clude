@@ -23,7 +23,7 @@ export function _setResponsePostProcessor(fn: (text: string) => string): void {
 
 let anthropic: Anthropic;
 try {
-  anthropic = new Anthropic({ apiKey: config.anthropic.apiKey || 'placeholder' });
+  anthropic = new Anthropic({ apiKey: config.anthropic.apiKey || '' });
 } catch {
   anthropic = null as unknown as Anthropic;
 }
