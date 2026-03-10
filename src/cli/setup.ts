@@ -92,8 +92,12 @@ function getMcpTargets(): McpTarget[] {
   return targets;
 }
 
-function installMcpConfig(target: McpTarget, agentName: string, wallet: string, apiKey?: string): { ok: boolean; error?: string } {
-  const mcpEntry = {
+function installMcpConfig(target: McpTarget, agentName: string, wallet: string, apiKey?: string, local?: boolean): { ok: boolean; error?: string } {
+  const mcpEntry = local ? {
+    command: 'npx',
+    args: ['clude-bot', 'mcp-serve', '--local'],
+    env: {},
+  } : {
     command: 'npx',
     args: ['clude-bot', 'mcp-serve'],
     env: {
@@ -384,7 +388,7 @@ export async function runMcpInstall(): Promise<void> {
   const toInstall = mcpChoice === 'all' ? targets : targets.filter(t => t.key === mcpChoice);
 
   for (const target of toInstall) {
-    const result = installMcpConfig(target, name, '', undefined);
+    const result = installMcpConfig(target, name, '', undefined, isLocal);
     if (result.ok) {
       printSuccess(`Added clude-memory to ${target.label}`);
       printInfo(`  ${c.dim}${target.configPath}${c.reset}`);

@@ -16,7 +16,8 @@ import { z } from 'zod';
 
 const CORTEX_API_KEY = process.env.CORTEX_API_KEY || '';
 const CORTEX_HOST_URL = process.env.CORTEX_HOST_URL || 'https://cluude.ai';
-const isHostedMode = !!CORTEX_API_KEY;
+const isLocalMode = process.argv.includes('--local') || process.env.CLUDE_LOCAL === 'true';
+const isHostedMode = !isLocalMode && !!CORTEX_API_KEY;
 
 const FETCH_TIMEOUT_MS = 30_000;
 
@@ -118,7 +119,17 @@ server.tool(
     try {
       let memories: MemoryResult[];
 
-      if (isHostedMode) {
+      if (isLocalMode) {
+        const { localRecall } = require('./local-store');
+        memories = localRecall({
+          query: args.query,
+          tags: args.tags,
+          memory_types: args.memory_types,
+          limit: args.limit,
+          min_importance: args.min_importance,
+          min_decay: args.min_decay,
+        }) as any;
+      } else if (isHostedMode) {
         const result = await cortexFetch<{ memories: MemoryResult[] }>('POST', '/api/cortex/recall', {
           query: args.query,
           tags: args.tags,
@@ -200,7 +211,23 @@ server.tool(
     try {
       let memoryId: number | null;
 
-      if (isHostedMode) {
+      if (isLocalMode) {
+        const { localStore } = require('./local-store');
+        memoryId = localStore({
+          type: args.type,
+          content: args.content,
+          summary: args.summary,
+          tags: args.tags,
+          concepts: args.concepts,
+          importance: args.importance,
+          emotional_valence: args.emotional_valence,
+          source: args.source,
+          source_id: args.source_id,
+          related_user: args.related_user,
+          related_wallet: args.related_wallet,
+          metadata: args.metadata,
+        });
+      } else if (isHostedMode) {
         const result = await cortexFetch<{ stored: boolean; memory_id: number | null }>('POST', '/api/cortex/store', {
           type: args.type,
           content: args.content,
@@ -262,7 +289,10 @@ server.tool(
     try {
       let stats: unknown;
 
-      if (isHostedMode) {
+      if (isLocalMode) {
+        const { localStats } = require('./local-store');
+        stats = localStats();
+      } else if (isHostedMode) {
         stats = await cortexFetch('GET', '/api/cortex/stats');
       } else {
         loadSelfHosted();
@@ -300,7 +330,14 @@ server.tool(
     try {
       let memories: any[];
 
-      if (isHostedMode) {
+      if (isLocalMode) {
+        const { localClinamen } = require('./local-store');
+        memories = localClinamen({
+          context: args.context,
+          limit: args.limit,
+          min_importance: args.min_importance,
+        });
+      } else if (isHostedMode) {
         const result = await cortexFetch<{ memories: any[] }>('POST', '/api/cortex/clinamen', {
           context: args.context,
           limit: args.limit,
@@ -350,7 +387,10 @@ server.tool(
 // --- Start ---
 async function main() {
   // Validate configuration
-  if (isHostedMode) {
+  if (isLocalMode) {
+    console.error('[clude-mcp] Local mode — memories stored in ~/.clude/memories.json');
+    console.error('[clude-mcp] No API keys required. Fully offline.');
+  } else if (isHostedMode) {
     if (CORTEX_API_KEY.length < 10) {
       console.error('[clude-mcp] Warning: CORTEX_API_KEY looks invalid (too short)');
     }
