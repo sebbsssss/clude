@@ -16,7 +16,6 @@
   },
   "files": [
     "dist",
-    "scripts/postinstall.js",
     "supabase-schema.sql",
     "README.md",
     "LICENSE"
@@ -27,7 +26,6 @@
     "build:sdk": "tsc -p tsconfig.sdk.json",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "postinstall": "node scripts/postinstall.js",
     "prepublishOnly": "npm run build:sdk",
     "mcp": "MCP_MODE=1 tsx src/mcp/server.ts",
     "dashboard": "cd dashboard && npm run dev",
