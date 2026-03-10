@@ -1,0 +1,665 @@
+[07:51:36] INFO: Using embedded PostgreSQL because no DATABASE_URL set (dataDir=/Users/sebastien/.paperclip/instances/default/db, port=54329)
+[07:51:45] INFO: Created embedded PostgreSQL database: paperclip
+[07:51:45] INFO: Detected first-run embedded PostgreSQL setup; applying pending migrations automatically
+[07:51:45] INFO: Applying 24 pending migrations for Embedded PostgreSQL
+    pendingMigrations: [
+      "0000_mature_masked_marvel.sql",
+      "0001_fast_northstar.sql",
+      "0002_big_zaladane.sql",
+      "0003_shallow_quentin_quire.sql",
+      "0004_issue_identifiers.sql",
+      "0005_chief_luke_cage.sql",
+      "0006_overjoyed_mister_sinister.sql",
+      "0007_new_quentin_quire.sql",
+      "0008_amused_zzzax.sql",
+      "0009_fast_jackal.sql",
+      "0010_stale_justin_hammer.sql",
+      "0011_windy_corsair.sql",
+      "0012_perpetual_ser_duncan.sql",
+      "0013_dashing_wasp.sql",
+      "0014_many_mikhail_rasputin.sql",
+      "0015_project_color_archived.sql",
+      "0016_agent_icon.sql",
+      "0017_tiresome_gabe_jones.sql",
+      "0018_flat_sleepwalker.sql",
+      "0019_public_victor_mancha.sql",
+      "0020_white_anita_blake.sql",
+      "0021_chief_vindicator.sql",
+      "0022_company_brand_color.sql",
+      "0023_fair_lethal_legion.sql"
+    ]
+[07:51:45] INFO: Embedded PostgreSQL ready
+[07:51:45] INFO: Server listening on 127.0.0.1:3100
+[07:51:45] INFO: Opened browser at http://127.0.0.1:3100
+[07:51:45] INFO: GET / 200
+    req: {
+      "id": 1,
+      "method": "GET",
+      "url": "/",
+      "query": {},
+      "params": {},
+      "headers": {
+        "host": "127.0.0.1:3100",
+        "connection": "keep-alive",
+        "sec-ch-ua": "\"Chromium\";v=\"145\", \"Not:A-Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"macOS\"",
+        "upgrade-insecure-requests": "1",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "sec-fetch-site": "none",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-user": "?1",
+        "sec-fetch-dest": "document",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "en-US,en;q=0.9"
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 62493
+    }
+    res: {
+      "statusCode": 200,
+      "headers": {
+        "x-powered-by": "Express",
+        "accept-ranges": "bytes",
+        "cache-control": "public, max-age=0",
+        "last-modified": "Thu, 05 Mar 2026 07:51:34 GMT",
+        "etag": "W/\"802-19cbcfb0825\"",
+        "content-type": "text/html; charset=utf-8",
+        "content-length": 2050
+      }
+    }
+    responseTime: 2
+[07:51:45] INFO: GET /assets/index-B6IJ7rtH.css 200
+    req: {
+      "id": 3,
+      "method": "GET",
+      "url": "/assets/index-B6IJ7rtH.css",
+      "query": {},
+      "params": {},
+      "headers": {
+        "host": "127.0.0.1:3100",
+        "connection": "keep-alive",
+        "origin": "http://127.0.0.1:3100",
+        "sec-ch-ua-platform": "\"macOS\"",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"145\", \"Not:A-Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "accept": "text/css,*/*;q=0.1",
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "style",
+        "referer": "http://127.0.0.1:3100/",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "en-US,en;q=0.9"
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 62494
+    }
+    res: {
+      "statusCode": 200,
+      "headers": {
+        "x-powered-by": "Express",
+        "accept-ranges": "bytes",
+        "cache-control": "public, max-age=0",
+        "last-modified": "Thu, 05 Mar 2026 07:51:34 GMT",
+        "etag": "W/\"2e796-19cbcfb0825\"",
+        "content-type": "text/css; charset=utf-8",
+        "content-length": 190358
+      }
+    }
+    responseTime: 2
+[07:51:45] INFO: GET /assets/index-CNeWfnNw.js 200
+    req: {
+      "id": 2,
+      "method": "GET",
+      "url": "/assets/index-CNeWfnNw.js",
+      "query": {},
+      "params": {},
+      "headers": {
+        "host": "127.0.0.1:3100",
+        "connection": "keep-alive",
+        "origin": "http://127.0.0.1:3100",
+        "sec-ch-ua-platform": "\"macOS\"",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"145\", \"Not:A-Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "accept": "*/*",
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "script",
+        "referer": "http://127.0.0.1:3100/",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "en-US,en;q=0.9"
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 62493
+    }
+    res: {
+      "statusCode": 200,
+      "headers": {
+        "x-powered-by": "Express",
+        "accept-ranges": "bytes",
+        "cache-control": "public, max-age=0",
+        "last-modified": "Thu, 05 Mar 2026 07:51:34 GMT",
+        "etag": "W/\"21e7f2-19cbcfb090a\"",
+        "content-type": "text/javascript; charset=utf-8",
+        "content-length": 2222066
+      }
+    }
+    responseTime: 37
+[07:51:46] INFO: GET / 200
+    req: {
+      "id": 4,
+      "method": "GET",
+      "url": "/api/health",
+      "query": {},
+      "params": {},
+      "headers": {
+        "host": "127.0.0.1:3100",
+        "connection": "keep-alive",
+        "sec-ch-ua-platform": "\"macOS\"",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+        "accept": "application/json",
+        "sec-ch-ua": "\"Chromium\";v=\"145\", \"Not:A-Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "referer": "http://127.0.0.1:3100/",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "en-US,en;q=0.9"
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 62493
+    }
+    res: {
+      "statusCode": 200,
+      "headers": {
+        "x-powered-by": "Express",
+        "content-type": "application/json; charset=utf-8",
+        "content-length": "165",
+        "etag": "W/\"a5-dQfiqtsgopHXTCmZZlPlGRxxgR0\""
+      }
+    }
+    responseTime: 2
+[07:51:46] INFO: GET / 200
+    req: {
+      "id": 5,
+      "method": "GET",
+      "url": "/api/companies",
+      "query": {},
+      "params": {},
+      "headers": {
+        "host": "127.0.0.1:3100",
+        "connection": "keep-alive",
+        "sec-ch-ua-platform": "\"macOS\"",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"145\", \"Not:A-Brand\";v=\"99\"",
+        "content-type": "application/json",
+        "sec-ch-ua-mobile": "?0",
+        "accept": "*/*",
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "referer": "http://127.0.0.1:3100/",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "en-US,en;q=0.9"
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 62494
+    }
+    res: {
+      "statusCode": 200,
+      "headers": {
+        "x-powered-by": "Express",
+        "content-type": "application/json; charset=utf-8",
+        "content-length": "2",
+        "etag": "W/\"2-l9Fw4VUO7kr8CvBlt4zaMCqXZ0w\""
+      }
+    }
+    responseTime: 1
+[07:51:46] INFO: GET /favicon.svg 200
+    req: {
+      "id": 6,
+      "method": "GET",
+      "url": "/favicon.svg",
+      "query": {},
+      "params": {},
+      "headers": {
+        "host": "127.0.0.1:3100",
+        "connection": "keep-alive",
+        "sec-ch-ua-platform": "\"macOS\"",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"145\", \"Not:A-Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-mode": "no-cors",
+        "sec-fetch-dest": "image",
+        "referer": "http://127.0.0.1:3100/",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "en-US,en;q=0.9"
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 62494
+    }
+    res: {
+      "statusCode": 200,
+      "headers": {
+        "x-powered-by": "Express",
+        "accept-ranges": "bytes",
+        "cache-control": "public, max-age=0",
+        "last-modified": "Thu, 05 Mar 2026 07:51:34 GMT",
+        "etag": "W/\"19a-19cbcfb0981\"",
+        "content-type": "image/svg+xml",
+        "content-length": 410
+      }
+    }
+    responseTime: 1
+[07:52:07] INFO: POST / 201
+    req: {
+      "id": 7,
+      "method": "POST",
+      "url": "/api/companies",
+      "query": {},
+      "params": {},
+      "headers": {
+        "host": "127.0.0.1:3100",
+        "connection": "keep-alive",
+        "content-length": "16",
+        "sec-ch-ua-platform": "\"macOS\"",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"145\", \"Not:A-Brand\";v=\"99\"",
+        "content-type": "application/json",
+        "sec-ch-ua-mobile": "?0",
+        "accept": "*/*",
+        "origin": "http://127.0.0.1:3100",
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "referer": "http://127.0.0.1:3100/",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "en-US,en;q=0.9"
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 62526
+    }
+    res: {
+      "statusCode": 201,
+      "headers": {
+        "x-powered-by": "Express",
+        "content-type": "application/json; charset=utf-8",
+        "content-length": "315",
+        "etag": "W/\"13b-WBqwnHiwmpZn60LmBbynIikaVas\""
+      }
+    }
+    responseTime: 15
+[07:52:07] INFO: GET / 200
+    req: {
+      "id": 8,
+      "method": "GET",
+      "url": "/api/companies",
+      "query": {},
+      "params": {},
+      "headers": {
+        "host": "127.0.0.1:3100",
+        "connection": "keep-alive",
+        "sec-ch-ua-platform": "\"macOS\"",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"145\", \"Not:A-Brand\";v=\"99\"",
+        "content-type": "application/json",
+        "sec-ch-ua-mobile": "?0",
+        "accept": "*/*",
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "referer": "http://127.0.0.1:3100/",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "en-US,en;q=0.9"
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 62526
+    }
+    res: {
+      "statusCode": 200,
+      "headers": {
+        "x-powered-by": "Express",
+        "content-type": "application/json; charset=utf-8",
+        "content-length": "317",
+        "etag": "W/\"13d-WDm0LI8byDVEwO7EzP8rl2d9XEw\""
+      }
+    }
+    responseTime: 3
+[07:52:07] INFO: POST /companies/ec2dc10d-89bb-43a2-9b51-73c6a6f116f9/goals 201
+    req: {
+      "id": 9,
+      "method": "POST",
+      "url": "/api/companies/ec2dc10d-89bb-43a2-9b51-73c6a6f116f9/goals",
+      "query": {},
+      "params": {},
+      "headers": {
+        "host": "127.0.0.1:3100",
+        "connection": "keep-alive",
+        "content-length": "80",
+        "sec-ch-ua-platform": "\"macOS\"",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"145\", \"Not:A-Brand\";v=\"99\"",
+        "content-type": "application/json",
+        "sec-ch-ua-mobile": "?0",
+        "accept": "*/*",
+        "origin": "http://127.0.0.1:3100",
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "referer": "http://127.0.0.1:3100/",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "en-US,en;q=0.9"
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 62528
+    }
+    res: {
+      "statusCode": 201,
+      "headers": {
+        "x-powered-by": "Express",
+        "content-type": "application/json; charset=utf-8",
+        "content-length": "308",
+        "etag": "W/\"134-HN7B5zvJE8RgPkH/+DfZrxCY8RY\""
+      }
+    }
+    responseTime: 21
+[07:52:07] INFO: GET /adapters/claude_local/models 200
+    req: {
+      "id": 10,
+      "method": "GET",
+      "url": "/api/adapters/claude_local/models",
+      "query": {},
+      "params": {},
+      "headers": {
+        "host": "127.0.0.1:3100",
+        "connection": "keep-alive",
+        "sec-ch-ua-platform": "\"macOS\"",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"145\", \"Not:A-Brand\";v=\"99\"",
+        "content-type": "application/json",
+        "sec-ch-ua-mobile": "?0",
+        "accept": "*/*",
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "referer": "http://127.0.0.1:3100/",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "en-US,en;q=0.9"
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 62528
+    }
+    res: {
+      "statusCode": 200,
+      "headers": {
+        "x-powered-by": "Express",
+        "content-type": "application/json; charset=utf-8",
+        "content-length": "178",
+        "etag": "W/\"b2-9WEyCmzO+ZKWNna6bsIPnLs7jOw\""
+      }
+    }
+    responseTime: 0
+[07:53:29] INFO: POST /companies/ec2dc10d-89bb-43a2-9b51-73c6a6f116f9/adapters/claude_local/test-environment 200
+    req: {
+      "id": 11,
+      "method": "POST",
+      "url": "/api/companies/ec2dc10d-89bb-43a2-9b51-73c6a6f116f9/adapters/claude_local/test-environment",
+      "query": {},
+      "params": {},
+      "headers": {
+        "host": "127.0.0.1:3100",
+        "connection": "keep-alive",
+        "content-length": "173",
+        "sec-ch-ua-platform": "\"macOS\"",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"145\", \"Not:A-Brand\";v=\"99\"",
+        "content-type": "application/json",
+        "sec-ch-ua-mobile": "?0",
+        "accept": "*/*",
+        "origin": "http://127.0.0.1:3100",
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "referer": "http://127.0.0.1:3100/",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "en-US,en;q=0.9"
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 62569
+    }
+    res: {
+      "statusCode": 200,
+      "headers": {
+        "x-powered-by": "Express",
+        "content-type": "application/json; charset=utf-8",
+        "content-length": "583",
+        "etag": "W/\"247-p0iGbHtsmutD59y236s2QXdqtCw\""
+      }
+    }
+    responseTime: 6639
+[07:53:31] INFO: POST /companies/ec2dc10d-89bb-43a2-9b51-73c6a6f116f9/agents 201
+    req: {
+      "id": 12,
+      "method": "POST",
+      "url": "/api/companies/ec2dc10d-89bb-43a2-9b51-73c6a6f116f9/agents",
+      "query": {},
+      "params": {},
+      "headers": {
+        "host": "127.0.0.1:3100",
+        "connection": "keep-alive",
+        "content-length": "359",
+        "sec-ch-ua-platform": "\"macOS\"",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"145\", \"Not:A-Brand\";v=\"99\"",
+        "content-type": "application/json",
+        "sec-ch-ua-mobile": "?0",
+        "accept": "*/*",
+        "origin": "http://127.0.0.1:3100",
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "referer": "http://127.0.0.1:3100/",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "en-US,en;q=0.9"
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 62569
+    }
+    res: {
+      "statusCode": 201,
+      "headers": {
+        "x-powered-by": "Express",
+        "content-type": "application/json; charset=utf-8",
+        "content-length": "754",
+        "etag": "W/\"2f2-3EFPpSP2AnAOvz3a+fh1AtGG1U4\""
+      }
+    }
+    responseTime: 11
+[07:55:17] INFO: GET / 304
+    req: {
+      "id": 13,
+      "method": "GET",
+      "url": "/api/companies",
+      "query": {},
+      "params": {},
+      "headers": {
+        "host": "127.0.0.1:3100",
+        "connection": "keep-alive",
+        "sec-ch-ua-platform": "\"macOS\"",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"145\", \"Not:A-Brand\";v=\"99\"",
+        "content-type": "application/json",
+        "sec-ch-ua-mobile": "?0",
+        "accept": "*/*",
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "referer": "http://127.0.0.1:3100/",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "en-US,en;q=0.9",
+        "if-none-match": "W/\"13d-WDm0LI8byDVEwO7EzP8rl2d9XEw\""
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 62681
+    }
+    res: {
+      "statusCode": 304,
+      "headers": {
+        "x-powered-by": "Express",
+        "etag": "W/\"13d-WDm0LI8byDVEwO7EzP8rl2d9XEw\""
+      }
+    }
+    responseTime: 2
+[07:55:17] INFO: GET / 304
+    req: {
+      "id": 14,
+      "method": "GET",
+      "url": "/api/health",
+      "query": {},
+      "params": {},
+      "headers": {
+        "host": "127.0.0.1:3100",
+        "connection": "keep-alive",
+        "sec-ch-ua-platform": "\"macOS\"",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+        "accept": "application/json",
+        "sec-ch-ua": "\"Chromium\";v=\"145\", \"Not:A-Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "referer": "http://127.0.0.1:3100/",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "en-US,en;q=0.9",
+        "if-none-match": "W/\"a5-dQfiqtsgopHXTCmZZlPlGRxxgR0\""
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 62681
+    }
+    res: {
+      "statusCode": 304,
+      "headers": {
+        "x-powered-by": "Express",
+        "etag": "W/\"a5-dQfiqtsgopHXTCmZZlPlGRxxgR0\""
+      }
+    }
+    responseTime: 1
+[07:55:31] INFO: GET /adapters/claude_local/models 304
+    req: {
+      "id": 15,
+      "method": "GET",
+      "url": "/api/adapters/claude_local/models",
+      "query": {},
+      "params": {},
+      "headers": {
+        "host": "127.0.0.1:3100",
+        "connection": "keep-alive",
+        "sec-ch-ua-platform": "\"macOS\"",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"145\", \"Not:A-Brand\";v=\"99\"",
+        "content-type": "application/json",
+        "sec-ch-ua-mobile": "?0",
+        "accept": "*/*",
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "referer": "http://127.0.0.1:3100/",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "en-US,en;q=0.9",
+        "if-none-match": "W/\"b2-9WEyCmzO+ZKWNna6bsIPnLs7jOw\""
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 62688
+    }
+    res: {
+      "statusCode": 304,
+      "headers": {
+        "x-powered-by": "Express",
+        "etag": "W/\"b2-9WEyCmzO+ZKWNna6bsIPnLs7jOw\""
+      }
+    }
+    responseTime: 1
+[07:55:39] INFO: POST /companies/ec2dc10d-89bb-43a2-9b51-73c6a6f116f9/adapters/claude_local/test-environment 200
+    req: {
+      "id": 16,
+      "method": "POST",
+      "url": "/api/companies/ec2dc10d-89bb-43a2-9b51-73c6a6f116f9/adapters/claude_local/test-environment",
+      "query": {},
+      "params": {},
+      "headers": {
+        "host": "127.0.0.1:3100",
+        "connection": "keep-alive",
+        "content-length": "173",
+        "sec-ch-ua-platform": "\"macOS\"",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"145\", \"Not:A-Brand\";v=\"99\"",
+        "content-type": "application/json",
+        "sec-ch-ua-mobile": "?0",
+        "accept": "*/*",
+        "origin": "http://127.0.0.1:3100",
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "referer": "http://127.0.0.1:3100/",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "en-US,en;q=0.9"
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 62688
+    }
+    res: {
+      "statusCode": 200,
+      "headers": {
+        "x-powered-by": "Express",
+        "content-type": "application/json; charset=utf-8",
+        "content-length": "583",
+        "etag": "W/\"247-5s1ygPA6Ybq8w6sffK5y80UX6EY\""
+      }
+    }
+    responseTime: 6156
+[07:55:39] INFO: POST /companies/ec2dc10d-89bb-43a2-9b51-73c6a6f116f9/agents 201
+    req: {
+      "id": 17,
+      "method": "POST",
+      "url": "/api/companies/ec2dc10d-89bb-43a2-9b51-73c6a6f116f9/agents",
+      "query": {},
+      "params": {},
+      "headers": {
+        "host": "127.0.0.1:3100",
+        "connection": "keep-alive",
+        "content-length": "359",
+        "sec-ch-ua-platform": "\"macOS\"",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"145\", \"Not:A-Brand\";v=\"99\"",
+        "content-type": "application/json",
+        "sec-ch-ua-mobile": "?0",
+        "accept": "*/*",
+        "origin": "http://127.0.0.1:3100",
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "referer": "http://127.0.0.1:3100/",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "en-US,en;q=0.9"
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 62688
+    }
+    res: {
+      "statusCode": 201,
+      "headers": {
+        "x-powered-by": "Express",
+        "content-type": "application/json; charset=utf-8",
+        "content-length": "754",
+        "etag": "W/\"2f2-zEuPc1XMzlgFJajpcxoGTIHGd+I\""
+      }
+    }
+    responseTime: 7
+[07:55:46] INFO: Stopping embedded PostgreSQL
+    signal: "SIGINT"
