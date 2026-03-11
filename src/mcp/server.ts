@@ -15,7 +15,7 @@ import { z } from 'zod';
 // ── Mode Detection ───────────────────────────────────────────────────
 
 const CORTEX_API_KEY = process.env.CORTEX_API_KEY || '';
-const CORTEX_HOST_URL = process.env.CORTEX_HOST_URL || 'https://cluude.ai';
+const CORTEX_HOST_URL = process.env.CORTEX_HOST_URL || 'https://clude.io';
 const isLocalMode = process.argv.includes('--local') || process.env.CLUDE_LOCAL === 'true';
 const isHostedMode = !isLocalMode && !!CORTEX_API_KEY;
 

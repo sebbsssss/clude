@@ -14,6 +14,7 @@ import { campaignRoutes } from './campaign-routes';
 import { getVeniceStats } from '../core/venice-client';
 import { createChildLogger } from '../core/logger';
 import { checkInputContent } from '../core/guardrails';
+import { withOwnerWallet } from '../core/owner-context';
 import rateLimit from 'express-rate-limit';
 import { requirePrivyAuth, optionalPrivyAuth } from './privy-auth';
 import { traceMemory, explainMemory } from '../features/memory-trace';
@@ -144,6 +145,19 @@ export function createServer(): express.Application {
         return;
       }
       const maxDepth = Math.min(parseInt(req.query.depth as string) || 3, 5);
+
+      // Only allow tracing bot's own memories (owner_wallet IS NULL), not cortex agent memories
+      const db = getDb();
+      const { data: mem } = await db.from('memories').select('owner_wallet').eq('id', memoryId).single();
+      if (!mem) {
+        res.status(404).json({ error: 'Memory not found' });
+        return;
+      }
+      if (mem.owner_wallet !== null) {
+        res.status(403).json({ error: 'Cannot trace this memory' });
+        return;
+      }
+
       const trace = await traceMemory(memoryId, maxDepth);
       if (!trace) {
         res.status(404).json({ error: 'Memory not found' });
@@ -169,6 +183,15 @@ export function createServer(): express.Application {
         res.status(400).json({ error: 'Missing "question" in request body' });
         return;
       }
+
+      // Only allow explaining bot's own memories
+      const db = getDb();
+      const { data: mem } = await db.from('memories').select('owner_wallet').eq('id', memoryId).single();
+      if (!mem || mem.owner_wallet !== null) {
+        res.status(403).json({ error: 'Cannot explain this memory' });
+        return;
+      }
+
       const result = await explainMemory(memoryId, question);
       if (!result) {
         res.status(404).json({ error: 'Memory not found or explanation failed' });
@@ -581,6 +604,7 @@ export function createServer(): express.Application {
         .from('memories')
         .select('id, solana_signature, summary, content, created_at')
         .eq('id', id)
+        .is('owner_wallet', null)
         .single();
 
       if (!data) { res.status(404).json({ error: 'Memory not found' }); return; }
@@ -606,7 +630,8 @@ export function createServer(): express.Application {
       const { data: memories } = await db
         .from('memories')
         .select('memory_type, importance, decay_factor, solana_signature, related_user, created_at')
-        .gt('decay_factor', 0.01);
+        .gt('decay_factor', 0.01)
+        .is('owner_wallet', null);
 
       const { data: dreams } = await db
         .from('dream_logs')
@@ -677,7 +702,7 @@ export function createServer(): express.Application {
         return;
       }
 
-      const memoryId = await storeMemory({
+      const memoryId = await withOwnerWallet('demo-namespace', async () => storeMemory({
         type: 'episodic',
         content: safeContent,
         summary: safeSummary,
@@ -685,7 +710,7 @@ export function createServer(): express.Application {
         importance: 0.5,
         source: 'demo-maas',
         relatedUser: 'demo-visitor',
-      });
+      }));
 
       // Store content hash as confirmation
       if (memoryId) {
@@ -716,39 +741,39 @@ export function createServer(): express.Application {
       const queryStr = query ? String(query) : undefined;
       
       let memories: any[];
-      if (Array.isArray(memoryTypes)) {
-        // Explicit type filter: single recall
-        memories = await recallMemories({
-          query: queryStr,
-          limit: effectiveLimit,
-          memoryTypes,
-          skipExpansion: true,
-        });
-      } else {
-        // Dual-path: knowledge-typed + general recall in parallel for better coverage
-        const [knowledgeMemories, generalMemories] = await Promise.all([
-          recallMemories({
-            query: queryStr,
-            limit: Math.ceil(effectiveLimit / 2),
-            memoryTypes: ['semantic', 'procedural', 'self_model'] as any,
-            skipExpansion: true,
-          }),
-          recallMemories({
+      memories = await withOwnerWallet('demo-namespace', async () => {
+        if (Array.isArray(memoryTypes)) {
+          return recallMemories({
             query: queryStr,
             limit: effectiveLimit,
+            memoryTypes,
             skipExpansion: true,
-          }),
-        ]);
-        // Merge: knowledge first, then fill with general (deduplicated)
-        const seen = new Set<number>();
-        memories = [];
-        for (const m of knowledgeMemories) {
-          if (!seen.has(m.id)) { memories.push(m); seen.add(m.id); }
+          });
+        } else {
+          const [knowledgeMemories, generalMemories] = await Promise.all([
+            recallMemories({
+              query: queryStr,
+              limit: Math.ceil(effectiveLimit / 2),
+              memoryTypes: ['semantic', 'procedural', 'self_model'] as any,
+              skipExpansion: true,
+            }),
+            recallMemories({
+              query: queryStr,
+              limit: effectiveLimit,
+              skipExpansion: true,
+            }),
+          ]);
+          const seen = new Set<number>();
+          const merged: any[] = [];
+          for (const m of knowledgeMemories) {
+            if (!seen.has(m.id)) { merged.push(m); seen.add(m.id); }
+          }
+          for (const m of generalMemories) {
+            if (!seen.has(m.id) && merged.length < effectiveLimit) { merged.push(m); seen.add(m.id); }
+          }
+          return merged;
         }
-        for (const m of generalMemories) {
-          if (!seen.has(m.id) && memories.length < effectiveLimit) { memories.push(m); seen.add(m.id); }
-        }
-      }
+      });
 
       res.json({
         memories: memories.map(m => ({

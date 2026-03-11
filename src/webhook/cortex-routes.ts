@@ -189,6 +189,9 @@ export function cortexRoutes(): Router {
         return;
       }
 
+      // Sanitize HTML to prevent XSS when rendered in dashboards/explorers
+      const stripHtml = (s: string) => s.replace(/<[^>]*>/g, '').trim();
+
       const memoryType = (type || 'episodic') as MemoryType;
       const validTypes: MemoryType[] = ['episodic', 'semantic', 'procedural', 'self_model', 'introspective' as any];
       if (!validTypes.includes(memoryType)) {
@@ -196,11 +199,14 @@ export function cortexRoutes(): Router {
         return;
       }
 
+      const safeContent = stripHtml(content);
+      const safeSummary = stripHtml(summary);
+
       const result = await withOwnerWallet(cortexReq.ownerWallet!, async () => {
         return storeMemory({
           type: memoryType,
-          content,
-          summary,
+          content: safeContent,
+          summary: safeSummary,
           tags: tags || [],
           concepts: concepts || [],
           importance: importance ?? undefined,
@@ -228,6 +234,11 @@ export function cortexRoutes(): Router {
       const cortexReq = req as CortexRequest;
       const { query, tags, memory_types, limit, min_importance, min_decay } = req.body;
 
+      if (!query && !tags && !memory_types) {
+        res.status(400).json({ error: 'At least one of query, tags, or memory_types is required' });
+        return;
+      }
+
       const memories = await withOwnerWallet(cortexReq.ownerWallet!, async () => {
         return recallMemories({
           query,
@@ -241,7 +252,26 @@ export function cortexRoutes(): Router {
 
       await recordAgentInteraction(cortexReq.agent!.agent_id);
 
-      res.json({ memories, count: memories.length });
+      res.json({
+        memories: memories.map((m: any) => ({
+          id: m.id,
+          type: m.memory_type,
+          memory_type: m.memory_type,
+          summary: m.summary,
+          content: m.content,
+          tags: m.tags,
+          concepts: m.concepts || [],
+          importance: m.importance,
+          decay_factor: m.decay_factor,
+          access_count: m.access_count,
+          emotional_valence: m.emotional_valence,
+          source: m.source,
+          created_at: m.created_at,
+          last_accessed: m.last_accessed,
+          _score: (m as any)._score || null,
+        })),
+        count: memories.length,
+      });
     } catch (err) {
       log.error({ err }, 'Cortex recall error');
       res.status(500).json({ error: 'Failed to recall memories' });
