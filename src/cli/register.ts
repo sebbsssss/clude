@@ -37,7 +37,7 @@ export async function runRegister(): Promise<void> {
     return;
   }
 
-  const url = 'https://cluude.ai';
+  const url = 'https://clude.io';
 
   console.log('');
   process.stdout.write(`  ${c.gray}Registering...${c.reset}`);
@@ -88,7 +88,7 @@ export async function runRegister(): Promise<void> {
     if (isCert) {
       printWarn('SSL certificate error — your network may be intercepting HTTPS traffic');
       printInfo('This is common with corporate firewalls (Fortinet, Zscaler, etc.)');
-      printInfo('Try: switch to a mobile hotspot or VPN, or ask IT to whitelist cluude.ai');
+      printInfo('Try: switch to a mobile hotspot or VPN, or ask IT to whitelist clude.io');
     } else {
       printWarn(`Could not reach ${url} — is the server running?`);
       printInfo(`Error: ${msg}`);

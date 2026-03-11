@@ -12,7 +12,7 @@ export interface CortexConfig {
   hosted?: {
     /** API key from `npx clude-bot register` or POST /api/cortex/register. */
     apiKey: string;
-    /** API base URL. Defaults to 'https://cluude.ai'. */
+    /** API base URL. Defaults to 'https://clude.io'. */
     baseUrl?: string;
   };
 

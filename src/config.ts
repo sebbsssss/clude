@@ -73,7 +73,7 @@ export const config = {
   },
   cortex: {
     apiKey: optional('CORTEX_API_KEY', ''),
-    hostUrl: optional('CORTEX_HOST_URL', 'https://cluude.ai'),
+    hostUrl: optional('CORTEX_HOST_URL', 'https://clude.io'),
   },
   telegram: {
     botToken: optional('TELEGRAM_BOT_TOKEN', ''),

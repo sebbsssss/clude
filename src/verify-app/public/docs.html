@@ -702,7 +702,7 @@ query expansion → vector search → entity matching → graph traversal → sc
       <table class="doc-table">
         <tr><th>Field</th><th>Type</th><th>Description</th></tr>
         <tr><td><code>apiKey</code></td><td class="required">string</td><td>API key from <code>npx clude-bot register</code></td></tr>
-        <tr><td><code>baseUrl</code></td><td class="optional">string</td><td>API base URL. Default: <code>https://cluude.ai</code></td></tr>
+        <tr><td><code>baseUrl</code></td><td class="optional">string</td><td>API base URL. Default: <code>https://clude.io</code></td></tr>
       </table>
 
       <h3>supabase (self-hosted)</h3>
@@ -890,13 +890,13 @@ console.<span class="fn">log</span>(result); <span class="cmt">// { imported: 14
       <p>For hosted users, the Cortex API exposes export/import endpoints:</p>
       <div class="code">
 <span class="cmt"># Export</span>
-<span class="prompt">$</span> <span class="cmd">curl</span> <span class="flag">-X POST</span> https://cluude.ai/api/cortex/packs/export \
+<span class="prompt">$</span> <span class="cmd">curl</span> <span class="flag">-X POST</span> https://clude.io/api/cortex/packs/export \
     <span class="flag">-H</span> <span class="str">"Authorization: Bearer YOUR_API_KEY"</span> \
     <span class="flag">-H</span> <span class="str">"Content-Type: application/json"</span> \
     <span class="flag">-d</span> <span class="str">'{"name":"backup","limit":1000}'</span>
 
 <span class="cmt"># Import</span>
-<span class="prompt">$</span> <span class="cmd">curl</span> <span class="flag">-X POST</span> https://cluude.ai/api/cortex/packs/import \
+<span class="prompt">$</span> <span class="cmd">curl</span> <span class="flag">-X POST</span> https://clude.io/api/cortex/packs/import \
     <span class="flag">-H</span> <span class="str">"Authorization: Bearer YOUR_API_KEY"</span> \
     <span class="flag">-H</span> <span class="str">"Content-Type: application/json"</span> \
     <span class="flag">-d</span> <span class="str">'{"pack": { ... }}'</span>

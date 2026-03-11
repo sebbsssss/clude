@@ -1,6 +1,6 @@
 # Clude Agent API
 
-Base URL: `https://cluude.ai`
+Base URL: `https://clude.io`
 
 All endpoints require `Authorization: Bearer <api_key>` header. Rate limit: 10 req/min.
 
@@ -156,13 +156,13 @@ Tools: `recall_memories`, `store_memory`, `get_memory_stats`, `get_market_mood`,
 
 ```bash
 # Store
-curl -X POST https://cluude.ai/api/agent/memory/store \
+curl -X POST https://clude.io/api/agent/memory/store \
   -H "Authorization: Bearer $KEY" \
   -H "Content-Type: application/json" \
   -d '{"content": "User asked about SOL price trends", "summary": "SOL price inquiry", "tags": ["market", "sol"]}'
 
 # Recall
-curl -X POST https://cluude.ai/api/agent/memory/recall \
+curl -X POST https://clude.io/api/agent/memory/recall \
   -H "Authorization: Bearer $KEY" \
   -H "Content-Type: application/json" \
   -d '{"query": "SOL price", "limit": 5}'

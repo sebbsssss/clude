@@ -102,7 +102,7 @@ function installMcpConfig(target: McpTarget, agentName: string, wallet: string, 
     args: ['clude-bot', 'mcp-serve'],
     env: {
       ...(apiKey ? { CORTEX_API_KEY: apiKey } : {}),
-      CORTEX_HOST_URL: 'https://cluude.ai',
+      CORTEX_HOST_URL: 'https://clude.io',
       ...(wallet ? { CLUDE_WALLET: wallet } : {}),
       ...(agentName ? { CLUDE_AGENT_NAME: agentName } : {}),
     },
@@ -174,7 +174,7 @@ export async function runSetup(): Promise<void> {
     process.stdout.write(`  ${c.gray}Registering on clude.io...${c.reset}`);
 
     try {
-      const res = await fetch('https://cluude.ai/api/cortex/register', {
+      const res = await fetch('https://clude.io/api/cortex/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -219,7 +219,7 @@ export async function runSetup(): Promise<void> {
       if (isCert) {
         printWarn('SSL certificate error — your network may be intercepting HTTPS traffic');
         printInfo('This is common with corporate firewalls (Fortinet, Zscaler, etc.)');
-        printInfo('Try: switch to a mobile hotspot or VPN, or ask IT to whitelist cluude.ai');
+        printInfo('Try: switch to a mobile hotspot or VPN, or ask IT to whitelist clude.io');
       } else {
         printWarn(`Could not reach clude.io: ${msg}`);
       }
@@ -244,7 +244,7 @@ export async function runSetup(): Promise<void> {
     '',
     '# Cortex API (hosted memory)',
     `CORTEX_API_KEY=${apiKey || 'your-api-key'}`,
-    'CORTEX_HOST_URL=https://cluude.ai',
+    'CORTEX_HOST_URL=https://clude.io',
     '',
   ];
 

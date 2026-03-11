@@ -111,7 +111,7 @@ function generateEnvFile(config: InitConfig): string {
   if (config.mode === 'hosted') {
     env += `# Hosted Cortex (memory-as-a-service)\n`;
     env += `CORTEX_API_KEY=${config.cortexApiKey || 'your-api-key-from-register'}\n`;
-    env += `CORTEX_HOST_URL=${config.cortexHostUrl || 'https://cluude.ai'}\n\n`;
+    env += `CORTEX_HOST_URL=${config.cortexHostUrl || 'https://clude.io'}\n\n`;
     env += `# Owner wallet — your Solana public address\n`;
     env += `OWNER_WALLET=${config.ownerWallet || ''}\n\n`;
     return env;
@@ -155,7 +155,7 @@ function generateCodeSnippet(config: InitConfig): string {
     snippet += `const brain = new Cortex({\n`;
     snippet += `  hosted: {\n`;
     snippet += `    apiKey: process.env.CORTEX_API_KEY,\n`;
-    if (config.cortexHostUrl && config.cortexHostUrl !== 'https://cluude.ai') {
+    if (config.cortexHostUrl && config.cortexHostUrl !== 'https://clude.io') {
       snippet += `    baseUrl: process.env.CORTEX_HOST_URL,\n`;
     }
     snippet += `  },\n`;
@@ -277,7 +277,7 @@ export async function runInit(): Promise<void> {
         config.ownerWallet = await ask(rl, 'Solana wallet address (Enter to skip): ');
         console.log('');
 
-        config.cortexHostUrl = 'https://cluude.ai';
+        config.cortexHostUrl = 'https://clude.io';
 
         process.stdout.write(`  ${c.gray}Registering on clude.io...${c.reset}`);
 
@@ -329,7 +329,7 @@ export async function runInit(): Promise<void> {
     }
 
     if (!config.cortexHostUrl) {
-      config.cortexHostUrl = 'https://cluude.ai';
+      config.cortexHostUrl = 'https://clude.io';
     }
 
     // ─── Hosted: Owner Wallet ───────────────────────────────

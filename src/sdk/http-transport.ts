@@ -8,7 +8,7 @@ export class HttpTransport {
 
   constructor(config: { apiKey: string; baseUrl?: string }) {
     this.apiKey = config.apiKey;
-    this.baseUrl = (config.baseUrl || 'https://cluude.ai').replace(/\/$/, '');
+    this.baseUrl = (config.baseUrl || 'https://clude.io').replace(/\/$/, '');
   }
 
   async post<T>(path: string, body: Record<string, unknown> = {}): Promise<T> {
