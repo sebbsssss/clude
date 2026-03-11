@@ -1,6 +1,6 @@
 {
   "name": "clude-bot",
-  "version": "2.7.2",
+  "version": "2.7.3",
   "description": "Persistent memory SDK for AI agents — Stanford Generative Agents architecture on Supabase + pgvector",
   "main": "dist/sdk/index.js",
   "types": "dist/sdk/index.d.ts",
@@ -9,7 +9,15 @@
       "require": "./dist/sdk/index.js",
       "types": "./dist/sdk/index.d.ts"
     },
-    "./schema": "./supabase-schema.sql"
+    "./schema": "./supabase-schema.sql",
+    "./local": {
+      "require": "./dist/mcp/local-store.js",
+      "types": "./dist/mcp/local-store.d.ts"
+    },
+    "./mcp": {
+      "require": "./dist/mcp/server.js",
+      "types": "./dist/mcp/server.d.ts"
+    }
   },
   "bin": {
     "clude-bot": "dist/cli/index.js"
