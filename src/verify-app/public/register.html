@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Register — Get Your Clude API Key</title>
+  <meta name="description" content="Get your Cortex API key in 30 seconds. Store your first memory in under 2 minutes.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f5f5f0;
+      --text: #111;
+      --text-muted: #666;
+      --text-faint: #999;
+      --blue: #455cfa;
+      --mono: 'JetBrains Mono', monospace;
+      --border: #ddd;
+      --card-bg: #fff;
+      --code-bg: #1a1a1a;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: var(--mono); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.7; -webkit-font-smoothing: antialiased; }
+    ::selection { background: var(--text); color: var(--bg); }
+
+    .page {
+      max-width: 580px;
+      margin: 0 auto;
+      padding: 80px 24px 120px;
+    }
+
+    .back-link {
+      display: inline-block;
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-faint);
+      text-decoration: none;
+      margin-bottom: 48px;
+      transition: color 0.2s;
+    }
+    .back-link:hover { color: var(--text); }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      margin-bottom: 12px;
+    }
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-bottom: 48px;
+      line-height: 1.8;
+    }
+
+    /* Form */
+    .form-group { margin-bottom: 24px; }
+    label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    input[type="text"] {
+      width: 100%;
+      font-family: var(--mono);
+      font-size: 14px;
+      padding: 14px 16px;
+      border: 2px solid var(--border);
+      border-radius: 6px;
+      background: var(--card-bg);
+      color: var(--text);
+      transition: border-color 0.2s;
+      outline: none;
+    }
+    input[type="text"]:focus { border-color: var(--blue); }
+    input[type="text"].error { border-color: #e84b3c; }
+
+    .field-hint {
+      font-size: 12px;
+      color: var(--text-faint);
+      margin-top: 6px;
+      line-height: 1.6;
+    }
+    .field-hint a { color: var(--blue); text-decoration: none; }
+    .field-hint a:hover { text-decoration: underline; }
+
+    .field-error {
+      font-size: 12px;
+      color: #e84b3c;
+      margin-top: 6px;
+      display: none;
+    }
+
+    .btn-register {
+      width: 100%;
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 16px 28px;
+      background: var(--blue);
+      color: #fff;
+      border: 2px solid var(--blue);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      margin-top: 8px;
+    }
+    .btn-register:hover { background: #3348d8; border-color: #3348d8; }
+    .btn-register:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Global error */
+    .global-error {
+      background: rgba(232, 75, 60, 0.08);
+      border: 1px solid rgba(232, 75, 60, 0.2);
+      color: #c0392b;
+      padding: 14px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      margin-bottom: 24px;
+      display: none;
+    }
+
+    /* Success state */
+    .success-panel {
+      display: none;
+    }
+    .success-panel.visible {
+      display: block;
+      animation: fadeUp 0.5s ease;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .key-box {
+      background: var(--code-bg);
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin: 20px 0 12px;
+      position: relative;
+    }
+    .key-label {
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #666;
+      margin-bottom: 8px;
+    }
+    .key-value {
+      color: #4ec9b0;
+      font-size: 14px;
+      font-weight: 600;
+      word-break: break-all;
+      line-height: 1.6;
+      cursor: pointer;
+    }
+    .key-copy {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #888;
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 4px;
+      padding: 4px 10px;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    .key-copy:hover { color: #fff; }
+
+    .key-warning {
+      font-size: 12px;
+      color: #e67e22;
+      margin-bottom: 32px;
+      line-height: 1.6;
+    }
+
+    .snippet-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      margin-top: 32px;
+    }
+
+    pre {
+      background: var(--code-bg);
+      color: #e0e0e0;
+      padding: 20px 24px;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin: 8px 0 16px;
+      font-size: 12px;
+      line-height: 1.8;
+      position: relative;
+    }
+    pre .cmt { color: #6a9955; }
+    pre .str { color: #ce9178; }
+    pre .key { color: #7ec8e3; }
+
+    .snippet-copy {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #666;
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 3px;
+      padding: 3px 8px;
+      cursor: pointer;
+    }
+    .snippet-copy:hover { color: #ccc; }
+
+    .docs-link {
+      display: inline-block;
+      margin-top: 24px;
+      font-size: 12px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--blue);
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+      transition: border-color 0.2s;
+    }
+    .docs-link:hover { border-color: var(--blue); }
+
+    @media (max-width: 640px) {
+      .page { padding: 48px 20px 80px; }
+      h1 { font-size: 24px; }
+      pre { font-size: 11px; padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="page">
+  <a href="/" class="back-link">← clude.io</a>
+
+  <div id="registerForm">
+    <h1>Get your API key</h1>
+    <p class="subtitle">Register your agent and start storing memories in under 2 minutes. Free tier included.</p>
+
+    <div class="global-error" id="globalError"></div>
+
+    <div class="form-group">
+      <label for="agentName">Agent Name</label>
+      <input type="text" id="agentName" placeholder="my-agent" autocomplete="off" spellcheck="false">
+      <div class="field-error" id="nameError"></div>
+    </div>
+
+    <div class="form-group">
+      <label for="walletAddress">Solana Wallet Address</label>
+      <input type="text" id="walletAddress" placeholder="Your Solana wallet address" autocomplete="off" spellcheck="false">
+      <div class="field-hint">Don't have a wallet? Any Solana wallet works. Get one at <a href="https://phantom.app" target="_blank">phantom.app</a></div>
+      <div class="field-error" id="walletError"></div>
+    </div>
+
+    <button class="btn-register" id="submitBtn" onclick="handleRegister()">Get API Key</button>
+  </div>
+
+  <div class="success-panel" id="successPanel">
+    <h1>You're in ✓</h1>
+    <p class="subtitle">Your Cortex API key is ready. Copy it now — this is the only time you'll see it.</p>
+
+    <div class="key-box">
+      <div class="key-label">Your API Key</div>
+      <div class="key-value" id="apiKeyDisplay" onclick="copyKey()"></div>
+      <button class="key-copy" id="keyCopyBtn" onclick="copyKey()">Copy</button>
+    </div>
+    <div class="key-warning">⚠️ Save this now — it won't be shown again.</div>
+
+    <div class="snippet-label">Store your first memory</div>
+    <pre id="storeSnippet"></pre>
+
+    <div class="snippet-label">Recall it back</div>
+    <pre id="recallSnippet"></pre>
+
+    <a href="/docs.html" class="docs-link">Full documentation →</a>
+  </div>
+</div>
+
+<script>
+  var BASE58_CHARS = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+
+  function isValidBase58(str) {
+    if (str.length < 32 || str.length > 44) return false;
+    for (var i = 0; i < str.length; i++) {
+      if (BASE58_CHARS.indexOf(str[i]) === -1) return false;
+    }
+    return true;
+  }
+
+  function showError(id, msg) {
+    var el = document.getElementById(id);
+    el.textContent = msg;
+    el.style.display = 'block';
+    el.previousElementSibling.tagName === 'INPUT' && el.previousElementSibling.classList.add('error');
+  }
+
+  function clearErrors() {
+    document.querySelectorAll('.field-error').forEach(function(el) { el.style.display = 'none'; });
+    document.querySelectorAll('input').forEach(function(el) { el.classList.remove('error'); });
+    document.getElementById('globalError').style.display = 'none';
+  }
+
+  function copyToClipboard(text, btn) {
+    navigator.clipboard.writeText(text).then(function() {
+      var orig = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(function() { btn.textContent = orig; }, 1500);
+    });
+  }
+
+  function copyKey() {
+    var key = document.getElementById('apiKeyDisplay').textContent;
+    copyToClipboard(key, document.getElementById('keyCopyBtn'));
+  }
+
+  async function handleRegister() {
+    clearErrors();
+
+    var name = document.getElementById('agentName').value.trim();
+    var wallet = document.getElementById('walletAddress').value.trim();
+    var valid = true;
+
+    if (name.length < 2) {
+      showError('nameError', 'Agent name must be at least 2 characters');
+      document.getElementById('agentName').classList.add('error');
+      valid = false;
+    }
+
+    if (!wallet || !isValidBase58(wallet)) {
+      showError('walletError', 'Enter a valid Solana wallet address (base58, 32-44 chars)');
+      document.getElementById('walletAddress').classList.add('error');
+      valid = false;
+    }
+
+    if (!valid) return;
+
+    var btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.textContent = 'Registering...';
+
+    try {
+      var resp = await fetch('/api/cortex/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentName: name, walletAddress: wallet })
+      });
+
+      var data = await resp.json();
+
+      if (!resp.ok) {
+        var ge = document.getElementById('globalError');
+        if (resp.status === 409) {
+          ge.textContent = 'This wallet is already registered. Use your existing API key.';
+        } else if (resp.status === 429) {
+          ge.textContent = 'Too many requests. Please wait a moment and try again.';
+        } else {
+          ge.textContent = data.error || 'Registration failed. Please try again.';
+        }
+        ge.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Get API Key';
+        return;
+      }
+
+      var apiKey = data.apiKey;
+
+      // Show success
+      document.getElementById('registerForm').style.display = 'none';
+      document.getElementById('apiKeyDisplay').textContent = apiKey;
+
+      // Build snippets
+      var storeSnippet = document.getElementById('storeSnippet');
+      storeSnippet.innerHTML = '<button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button>' +
+        '<span class="cmt"># Store your first memory</span>\n' +
+        'curl -X POST https://clude.io/api/cortex/store \\\n' +
+        '  -H <span class="str">"Content-Type: application/json"</span> \\\n' +
+        '  -H <span class="str">"Authorization: Bearer ' + apiKey + '"</span> \\\n' +
+        '  -d <span class="str">\'{"content": "Hello from my agent!", "type": "episodic", "importance": 0.8}\'</span>';
+      storeSnippet.dataset.raw = 'curl -X POST https://clude.io/api/cortex/store \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer ' + apiKey + '" \\\n  -d \'{"content": "Hello from my agent!", "type": "episodic", "importance": 0.8}\'';
+
+      var recallSnippet = document.getElementById('recallSnippet');
+      recallSnippet.innerHTML = '<button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button>' +
+        '<span class="cmt"># Recall it back</span>\n' +
+        'curl -X POST https://clude.io/api/cortex/recall \\\n' +
+        '  -H <span class="str">"Content-Type: application/json"</span> \\\n' +
+        '  -H <span class="str">"Authorization: Bearer ' + apiKey + '"</span> \\\n' +
+        '  -d <span class="str">\'{"query": "hello"}\'</span>';
+      recallSnippet.dataset.raw = 'curl -X POST https://clude.io/api/cortex/recall \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer ' + apiKey + '" \\\n  -d \'{"query": "hello"}\'';
+
+      var sp = document.getElementById('successPanel');
+      sp.classList.add('visible');
+
+    } catch (err) {
+      var ge = document.getElementById('globalError');
+      ge.textContent = 'Network error. Please check your connection and try again.';
+      ge.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Get API Key';
+    }
+  }
+
+  // Enter key submits
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !document.getElementById('submitBtn').disabled) {
+      handleRegister();
+    }
+  });
+</script>
+</body>
+</html>

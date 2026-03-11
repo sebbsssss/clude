@@ -851,6 +851,12 @@ export function createServer(): express.Application {
     next();
   });
 
+  // Register page — Cortex API key registration
+  app.get('/register', (req: Request, _res: Response, next: express.NextFunction) => {
+    req.url = '/register.html';
+    next();
+  });
+
   // Install page — agent-facing pitch + instructions
   app.get('/install', (req: Request, _res: Response, next: express.NextFunction) => {
     req.url = '/install.html';
