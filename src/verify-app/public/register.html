@@ -242,6 +242,22 @@
     }
     .docs-link:hover { border-color: var(--blue); }
 
+    /* Mode cards */
+    .mode-card {
+      background: var(--card-bg);
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      padding: 20px 24px;
+      cursor: pointer;
+      transition: border-color 0.2s, transform 0.15s;
+    }
+    .mode-card:hover { border-color: var(--blue); transform: translateY(-1px); }
+    .mode-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .mode-name { font-weight: 700; font-size: 15px; }
+    .mode-badge { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; padding: 2px 8px; border-radius: 3px; font-weight: 600; }
+    .mode-desc { font-size: 12px; color: var(--text-muted); line-height: 1.7; margin-bottom: 10px; }
+    .mode-cmd { font-size: 11px; color: var(--text-faint); background: rgba(0,0,0,0.04); padding: 4px 8px; border-radius: 3px; }
+
     @media (max-width: 640px) {
       .page { padding: 48px 20px 80px; }
       h1 { font-size: 24px; }
@@ -254,9 +270,119 @@
 <div class="page">
   <a href="/" class="back-link">← clude.io</a>
 
-  <div id="registerForm">
-    <h1>Get your API key</h1>
-    <p class="subtitle">Register your agent and start storing memories in under 2 minutes. Free tier included.</p>
+  <!-- Mode picker -->
+  <div id="modePicker" style="margin-bottom: 48px;">
+    <h1>Get started with Clude</h1>
+    <p class="subtitle">Choose how you want to run Clude. You can always switch later.</p>
+
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div onclick="selectMode('local')" class="mode-card" id="modeLocal">
+        <div class="mode-header">
+          <span class="mode-name">Local</span>
+          <span class="mode-badge" style="background: #2d8a4e; color: #fff;">Zero config</span>
+        </div>
+        <div class="mode-desc">Runs on your machine. No API keys, no accounts, fully offline. Best for trying Clude or privacy-first use.</div>
+        <code class="mode-cmd">npx clude-bot mcp-serve --local</code>
+      </div>
+
+      <div onclick="selectMode('selfhosted')" class="mode-card" id="modeSelfHosted">
+        <div class="mode-header">
+          <span class="mode-name">Self-hosted</span>
+          <span class="mode-badge" style="background: #666; color: #fff;">Your infra</span>
+        </div>
+        <div class="mode-desc">You bring your own Supabase + Voyage AI keys. Full power, you own the data. No Clude API key needed.</div>
+        <code class="mode-cmd">npm install clude-bot && npx clude-bot setup</code>
+      </div>
+
+      <div onclick="selectMode('cloud')" class="mode-card" id="modeCloud">
+        <div class="mode-header">
+          <span class="mode-name">Cloud</span>
+          <span class="mode-badge" style="background: var(--blue); color: #fff;">Fastest</span>
+        </div>
+        <div class="mode-desc">Use Clude's hosted infrastructure. Register, get an API key, start storing memories in 30 seconds.</div>
+        <code class="mode-cmd">curl -X POST https://clude.io/api/cortex/store ...</code>
+      </div>
+    </div>
+  </div>
+
+  <!-- Local mode panel -->
+  <div id="localPanel" style="display:none;">
+    <h1>Local mode</h1>
+    <p class="subtitle">No API key needed. Everything runs on your machine.</p>
+
+    <div class="snippet-label">For Claude Desktop / Cursor (MCP)</div>
+    <pre><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button><span class="cmt"># One command, done</span>
+npx clude-bot mcp-install --local</pre>
+
+    <div class="snippet-label">Or add manually to Claude Desktop config</div>
+    <pre data-raw='{"mcpServers":{"clude":{"command":"npx","args":["clude-bot","mcp-serve","--local"]}}}'><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button>{
+  <span class="key">"mcpServers"</span>: {
+    <span class="key">"clude"</span>: {
+      <span class="key">"command"</span>: <span class="str">"npx"</span>,
+      <span class="key">"args"</span>: [<span class="str">"clude-bot"</span>, <span class="str">"mcp-serve"</span>, <span class="str">"--local"</span>]
+    }
+  }
+}</pre>
+
+    <div class="snippet-label">For Node.js / TypeScript</div>
+    <pre><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button><span class="cmt"># Install</span>
+npm install clude-bot
+
+<span class="cmt"># Use</span>
+import { Cortex } from 'clude-bot';
+const brain = new Cortex({ local: true });
+await brain.init();
+await brain.store({ content: 'Hello!', type: 'episodic' });
+const memories = await brain.recall({ query: 'hello' });</pre>
+
+    <p style="margin-top: 24px; font-size: 12px; color: var(--text-faint);">Memories stored in <code>~/.clude/memories.json</code>. Embeddings via GTE-Small (~30MB, downloads on first run).</p>
+    <a href="/docs.html" class="docs-link">Full documentation →</a>
+    <br><a href="#" class="docs-link" onclick="showModePicker(); return false;" style="margin-top: 8px;">← Choose a different mode</a>
+  </div>
+
+  <!-- Self-hosted panel -->
+  <div id="selfHostedPanel" style="display:none;">
+    <h1>Self-hosted mode</h1>
+    <p class="subtitle">No Clude API key needed. You connect directly to your own infrastructure.</p>
+
+    <div class="snippet-label">What you need</div>
+    <div style="background: var(--card-bg); border: 2px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 24px; font-size: 13px; line-height: 2;">
+      <strong>Supabase</strong> — memory storage + vector index <span style="color: var(--text-faint);">(free tier works)</span><br>
+      <strong>Voyage AI</strong> — embeddings <span style="color: var(--text-faint);">(voyage-4-large)</span><br>
+      <strong>Anthropic</strong> — dream cycles + reflection <span style="color: var(--text-faint);">(optional)</span>
+    </div>
+
+    <div class="snippet-label">Setup</div>
+    <pre><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button><span class="cmt"># Install and run the setup wizard</span>
+npm install clude-bot
+npx clude-bot setup</pre>
+
+    <div class="snippet-label">Or configure manually</div>
+    <pre><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button>import { Cortex } from 'clude-bot';
+
+const brain = new Cortex({
+  supabase: {
+    url: process.env.SUPABASE_URL,
+    serviceKey: process.env.SUPABASE_KEY,
+  },
+  embedding: {
+    provider: <span class="str">'voyage'</span>,
+    apiKey: process.env.VOYAGE_API_KEY,
+    model: <span class="str">'voyage-4-large'</span>,
+    dimensions: 1024,
+  },
+  agentId: <span class="str">'my-agent'</span>,
+});
+await brain.init();</pre>
+
+    <a href="/docs.html" class="docs-link">Full documentation →</a>
+    <br><a href="#" class="docs-link" onclick="showModePicker(); return false;" style="margin-top: 8px;">← Choose a different mode</a>
+  </div>
+
+  <!-- Cloud mode (registration form) -->
+  <div id="registerForm" style="display:none;">
+    <h1>Cloud mode — Get your API key</h1>
+    <p class="subtitle">Register your agent and start storing memories in 30 seconds. No infra to manage.</p>
 
     <div class="global-error" id="globalError"></div>
 
@@ -363,7 +489,7 @@
       var resp = await fetch('/api/cortex/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agentName: name, walletAddress: wallet })
+        body: JSON.stringify({ name: name, wallet: wallet })
       });
 
       var data = await resp.json();
@@ -396,8 +522,8 @@
         'curl -X POST https://clude.io/api/cortex/store \\\n' +
         '  -H <span class="str">"Content-Type: application/json"</span> \\\n' +
         '  -H <span class="str">"Authorization: Bearer ' + apiKey + '"</span> \\\n' +
-        '  -d <span class="str">\'{"content": "Hello from my agent!", "type": "episodic", "importance": 0.8}\'</span>';
-      storeSnippet.dataset.raw = 'curl -X POST https://clude.io/api/cortex/store \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer ' + apiKey + '" \\\n  -d \'{"content": "Hello from my agent!", "type": "episodic", "importance": 0.8}\'';
+        '  -d <span class="str">\'{"content": "Hello from my agent!", "summary": "First test memory", "type": "episodic", "importance": 0.8}\'</span>';
+      storeSnippet.dataset.raw = 'curl -X POST https://clude.io/api/cortex/store \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer ' + apiKey + '" \\\n  -d \'{"content": "Hello from my agent!", "summary": "First test memory", "type": "episodic", "importance": 0.8}\'';
 
       var recallSnippet = document.getElementById('recallSnippet');
       recallSnippet.innerHTML = '<button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button>' +
@@ -422,10 +548,27 @@
 
   // Enter key submits
   document.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter' && !document.getElementById('submitBtn').disabled) {
+    if (e.key === 'Enter' && !document.getElementById('submitBtn').disabled && document.getElementById('registerForm').style.display !== 'none') {
       handleRegister();
     }
   });
+
+  function selectMode(mode) {
+    document.getElementById('modePicker').style.display = 'none';
+    document.getElementById('localPanel').style.display = 'none';
+    document.getElementById('selfHostedPanel').style.display = 'none';
+    document.getElementById('registerForm').style.display = 'none';
+    if (mode === 'local') document.getElementById('localPanel').style.display = 'block';
+    else if (mode === 'selfhosted') document.getElementById('selfHostedPanel').style.display = 'block';
+    else document.getElementById('registerForm').style.display = 'block';
+  }
+
+  function showModePicker() {
+    document.getElementById('localPanel').style.display = 'none';
+    document.getElementById('selfHostedPanel').style.display = 'none';
+    document.getElementById('registerForm').style.display = 'none';
+    document.getElementById('modePicker').style.display = 'block';
+  }
 </script>
 </body>
 </html>
