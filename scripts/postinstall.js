@@ -128,16 +128,16 @@ function animateBanner() {
     ['░█▀▀', '░█▀▀', '░▀▀▀'],
   ];
 
-  // Build display line by line, letter by letter
+  // Build display line by line, letter by letter (no spaces — ░ IS the separator)
   const display = ['', '', ''];
   for (let li = 0; li < letters.length; li++) {
     for (let row = 0; row < 3; row++) {
-      display[row] += (li > 0 ? ' ' : '') + letters[li][row];
+      display[row] += letters[li][row];
     }
-    // Redraw all 3 lines
+    // Redraw all 3 lines with trailing ░
     if (li > 0) writeTty(up(3));
     for (let row = 0; row < 3; row++) {
-      writeTty(clearLine + `${white}       ${display[row]}${reset}\n`);
+      writeTty(clearLine + `${white}       ${display[row]}░${reset}\n`);
     }
     sleep(80);
   }
@@ -146,7 +146,7 @@ function animateBanner() {
 
   // Phase 4: Tagline slides in
   writeTty(clearLine + '\n');
-  const tagline = 'persistent memory for AI agents';
+  const tagline = 'Persistent Memory For AI Agents';
   const pad = '  ░░░░░  ';
   writeTty(clearLine + `${dim}  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░${reset}\n`);
 
@@ -178,12 +178,12 @@ try {
   const banner = `
 ${dim}────────────────────────────────────────────────────${reset}
 
-${white}       ░█▀▀ ░█░░ ░█░█ ░█▀▄ ░█▀▀${reset}
-${white}       ░█░░ ░█░░ ░█░█ ░█░█ ░█▀▀${reset}
-${white}       ░▀▀▀ ░▀▀▀ ░▀▀▀ ░▀▀░ ░▀▀▀${reset}
+${white}       ░█▀▀░█░░░█░█░█▀▄░█▀▀░${reset}
+${white}       ░█░░░█░░░█░█░█░█░█▀▀░${reset}
+${white}       ░▀▀▀░▀▀▀░▀▀▀░▀▀░░▀▀▀░${reset}
 
 ${dim}  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░${reset}
-${dim}  ░░░░░  ${reset}${bold}persistent memory for AI agents${reset}${dim}  ░░░░░${reset}
+${dim}  ░░░░░  ${reset}${bold}Persistent Memory For AI Agents${reset}${dim}  ░░░░░${reset}
 ${dim}  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░${reset}
 
 ${dim}────────────────────────────────────────────────────${reset}
