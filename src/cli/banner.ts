@@ -14,9 +14,9 @@ export function printBanner(): void {
   console.log(`
 ${dim}────────────────────────────────────────────────────${reset}
 
-${white}       ░█▀▀░█░░░█░█░█▀▄░█▀▀░${reset}
-${white}       ░█░░░█░░░█░█░█░█░█▀▀░${reset}
-${white}       ░▀▀▀░▀▀▀░▀▀▀░▀▀░░▀▀▀░${reset}
+${white}          ░█▀▀░█░░░█░█░█▀▄░█▀▀░${reset}
+${white}          ░█░░░█░░░█░█░█░█░█▀▀░${reset}
+${white}          ░▀▀▀░▀▀▀░▀▀▀░▀▀░░▀▀▀░${reset}
 
 ${dim}  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░${reset}
 ${dim}  ░░░░░  ${reset}${bold}Persistent Memory For AI Agents${reset}${dim}  ░░░░░${reset}

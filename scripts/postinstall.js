@@ -137,7 +137,7 @@ function animateBanner() {
     // Redraw all 3 lines with trailing ░
     if (li > 0) writeTty(up(3));
     for (let row = 0; row < 3; row++) {
-      writeTty(clearLine + `${white}       ${display[row]}░${reset}\n`);
+      writeTty(clearLine + `${white}          ${display[row]}░${reset}\n`);
     }
     sleep(80);
   }
@@ -178,9 +178,9 @@ try {
   const banner = `
 ${dim}────────────────────────────────────────────────────${reset}
 
-${white}       ░█▀▀░█░░░█░█░█▀▄░█▀▀░${reset}
-${white}       ░█░░░█░░░█░█░█░█░█▀▀░${reset}
-${white}       ░▀▀▀░▀▀▀░▀▀▀░▀▀░░▀▀▀░${reset}
+${white}          ░█▀▀░█░░░█░█░█▀▄░█▀▀░${reset}
+${white}          ░█░░░█░░░█░█░█░█░█▀▀░${reset}
+${white}          ░▀▀▀░▀▀▀░▀▀▀░▀▀░░▀▀▀░${reset}
 
 ${dim}  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░${reset}
 ${dim}  ░░░░░  ${reset}${bold}Persistent Memory For AI Agents${reset}${dim}  ░░░░░${reset}
