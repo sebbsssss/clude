@@ -24,7 +24,7 @@ const log = createChildLogger('server');
 
 const apiLimiter = rateLimit({
   windowMs: 60_000,
-  max: 60,
+  max: 200,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many API requests' },

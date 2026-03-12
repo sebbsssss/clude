@@ -111,7 +111,7 @@ export function cortexRoutes(): Router {
 
       // Rate limit registrations: 3 per hour per IP
       const ip = req.ip || req.socket.remoteAddress || 'unknown';
-      const allowed = await checkRateLimit(`cortex:register:${ip}`, 3, 60);
+      const allowed = await checkRateLimit(`cortex:register:${ip}`, 10, 60);
       if (!allowed) {
         res.status(429).json({ error: 'Too many registration attempts. Try again in an hour.' });
         return;
