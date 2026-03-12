@@ -332,7 +332,23 @@ export async function runSetup(): Promise<void> {
   }
   printSuccess('.env created');
   if (mcpChoice !== 'skip') {
-    printSuccess('MCP server configured for your IDE');
+    // Verify MCP installation
+    const toVerify = mcpChoice === 'all' ? targets : targets.filter(t => t.key === mcpChoice);
+    let verified = 0;
+    for (const target of toVerify) {
+      try {
+        const content = require('fs').readFileSync(target.configPath, 'utf-8');
+        if (content.includes('clude')) verified++;
+      } catch {}
+    }
+    if (verified === toVerify.length) {
+      console.log(`\n  ${c.green}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${c.reset}`);
+      console.log(`  ${c.green}✓${c.reset} ${c.bold}Clude MCP server verified!${c.reset}`);
+      console.log(`  ${c.green}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${c.reset}`);
+    } else {
+      printSuccess('MCP server configured for your IDE');
+    }
+    printInfo('Restart your IDE to activate the MCP server.');
   }
 
   console.log(`\n  ${c.bold}Quick start:${c.reset}`);
@@ -402,12 +418,33 @@ export async function runMcpInstall(): Promise<void> {
     }
   }
 
+  // Verify installation by reading back the config files
+  console.log('');
+  let verified = 0;
+  for (const target of toInstall) {
+    try {
+      const content = require('fs').readFileSync(target.configPath, 'utf-8');
+      if (content.includes('clude')) {
+        verified++;
+      }
+    } catch {}
+  }
+
+  if (verified === toInstall.length) {
+    console.log(`  ${c.green}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${c.reset}`);
+    console.log(`  ${c.green}✓${c.reset} ${c.bold}Clude MCP server verified!${c.reset}`);
+    console.log(`  ${c.green}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${c.reset}`);
+  } else {
+    printWarn('Could not verify all installations. Check the paths above.');
+  }
+
   console.log('');
   if (isLocal) {
     printSuccess('Local mode: memories stored on-device, fully offline.');
     printInfo('No API keys needed. ~30MB model downloads on first use.');
   }
   printInfo('Restart your IDE to activate the MCP server.');
+  printInfo(`Run ${c.cyan}npx clude-bot status${c.reset} anytime to check if Clude is active.`);
   printDivider();
   console.log('');
 
