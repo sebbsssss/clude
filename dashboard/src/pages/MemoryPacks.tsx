@@ -2,22 +2,38 @@ import { useState } from 'react';
 import { api } from '../lib/api';
 import { useAuthContext } from '../hooks/AuthContext';
 import { packToMarkdown, downloadMarkdown } from '../lib/export-markdown';
+import {
+  type ExportFormat,
+  FORMAT_LABELS,
+  DATA_FORMATS,
+  PROVIDER_FORMATS,
+  isProviderFormat,
+  formatForProvider,
+  downloadText,
+  copyToClipboard,
+  wordCount,
+  getFileExtension,
+} from '../lib/export-providers';
 
 export function MemoryPacks() {
   const { authMode } = useAuthContext();
   const [exportName, setExportName] = useState('');
   const [exportDesc, setExportDesc] = useState('');
   const [exportTags, setExportTags] = useState('');
-  const [exportFormat, setExportFormat] = useState<'json' | 'md'>('json');
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('json');
   const [exporting, setExporting] = useState(false);
   const [exportResult, setExportResult] = useState<any>(null);
+  const [copied, setCopied] = useState(false);
+  const [lastExportText, setLastExportText] = useState('');
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
-  const [importResult, setImportResult] = useState<string>('');
+  const [importResult, setImportResult] = useState('');
 
   async function handleExport() {
     if (!exportName) return;
     setExporting(true);
+    setCopied(false);
+    setLastExportText('');
     try {
       const pack = await api.exportMemoryPack({
         name: exportName,
@@ -27,14 +43,19 @@ export function MemoryPacks() {
       setExportResult(pack);
 
       const slug = exportName.replace(/\s+/g, '-').toLowerCase();
-      if (exportFormat === 'md') {
-        downloadMarkdown(packToMarkdown(pack), `${slug}.clude-pack.md`);
+
+      if (isProviderFormat(exportFormat)) {
+        const text = formatForProvider(pack.memories, exportFormat);
+        setLastExportText(text);
+        downloadText(text, `${slug}${getFileExtension(exportFormat)}`);
+      } else if (exportFormat === 'md') {
+        downloadMarkdown(packToMarkdown(pack), `${slug}${getFileExtension('md')}`);
       } else {
         const blob = new Blob([JSON.stringify(pack, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${slug}.clude-pack.json`;
+        a.download = `${slug}${getFileExtension('json')}`;
         a.click();
         URL.revokeObjectURL(url);
       }
@@ -42,6 +63,15 @@ export function MemoryPacks() {
       setExportResult({ error: err.message });
     }
     setExporting(false);
+  }
+
+  async function handleCopy() {
+    if (!lastExportText) return;
+    const ok = await copyToClipboard(lastExportText);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   }
 
   async function handleImport() {
@@ -58,6 +88,12 @@ export function MemoryPacks() {
     setImporting(false);
   }
 
+  const providerHint: Record<string, string> = {
+    chatgpt: 'Paste into ChatGPT → Settings → Custom Instructions',
+    claude: 'Paste into Claude → Project → Project Instructions',
+    gemini: 'Paste into Gemini → Create a Gem → Instructions',
+  };
+
   return (
     <div>
       <div style={{ marginBottom: 40 }}>
@@ -68,7 +104,7 @@ export function MemoryPacks() {
           Export & Import
         </h1>
         <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-          Package memories for sharing or transfer between agents.
+          Package memories for sharing, transfer between agents, or use in other AI providers.
         </p>
       </div>
 
@@ -156,51 +192,122 @@ export function MemoryPacks() {
                 }}
               />
             </div>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-              {(['json', 'md'] as const).map((fmt) => (
+
+            {/* Data formats */}
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 9, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--text-faint)', marginBottom: 6 }}>
+                Data Formats
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {DATA_FORMATS.map((fmt) => (
+                  <button
+                    key={fmt}
+                    onClick={() => { setExportFormat(fmt); setLastExportText(''); setCopied(false); }}
+                    style={{
+                      fontFamily: 'var(--mono)',
+                      fontSize: 10,
+                      letterSpacing: 1,
+                      textTransform: 'uppercase',
+                      padding: '6px 14px',
+                      border: `1px solid ${exportFormat === fmt ? 'var(--text)' : 'var(--border-strong)'}`,
+                      background: exportFormat === fmt ? 'var(--text)' : 'transparent',
+                      color: exportFormat === fmt ? 'var(--bg)' : 'var(--text-muted)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {FORMAT_LABELS[fmt]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Provider formats */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 9, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--text-faint)', marginBottom: 6 }}>
+                AI Providers
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {PROVIDER_FORMATS.map((fmt) => (
+                  <button
+                    key={fmt}
+                    onClick={() => { setExportFormat(fmt); setLastExportText(''); setCopied(false); }}
+                    style={{
+                      fontFamily: 'var(--mono)',
+                      fontSize: 10,
+                      letterSpacing: 1,
+                      textTransform: 'uppercase',
+                      padding: '6px 14px',
+                      border: `1px solid ${exportFormat === fmt ? 'var(--text)' : 'var(--border-strong)'}`,
+                      background: exportFormat === fmt ? 'var(--text)' : 'transparent',
+                      color: exportFormat === fmt ? 'var(--bg)' : 'var(--text-muted)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {FORMAT_LABELS[fmt]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Provider hint */}
+            {isProviderFormat(exportFormat) && (
+              <div style={{ marginBottom: 16, padding: '8px 12px', background: 'var(--bg-warm)', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                {providerHint[exportFormat]}
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={handleExport}
+                disabled={!exportName || exporting}
+                style={{
+                  fontFamily: 'var(--mono)',
+                  fontSize: 10,
+                  letterSpacing: 2,
+                  textTransform: 'uppercase',
+                  padding: '10px 20px',
+                  background: exportName ? 'var(--text)' : 'var(--border-strong)',
+                  color: exportName ? 'var(--bg)' : 'var(--text-faint)',
+                  border: 'none',
+                  flex: 1,
+                  cursor: exportName ? 'pointer' : 'not-allowed',
+                }}
+              >
+                {exporting ? 'Exporting...' : 'Export & Download'}
+              </button>
+
+              {isProviderFormat(exportFormat) && lastExportText && (
                 <button
-                  key={fmt}
-                  onClick={() => setExportFormat(fmt)}
+                  onClick={handleCopy}
                   style={{
                     fontFamily: 'var(--mono)',
                     fontSize: 10,
-                    letterSpacing: 1,
+                    letterSpacing: 2,
                     textTransform: 'uppercase',
-                    padding: '6px 14px',
-                    border: `1px solid ${exportFormat === fmt ? 'var(--text)' : 'var(--border-strong)'}`,
-                    background: exportFormat === fmt ? 'var(--text)' : 'transparent',
-                    color: exportFormat === fmt ? 'var(--bg)' : 'var(--text-muted)',
+                    padding: '10px 16px',
+                    background: copied ? 'var(--semantic)' : 'transparent',
+                    color: copied ? 'var(--bg)' : 'var(--text-muted)',
+                    border: `1px solid ${copied ? 'var(--semantic)' : 'var(--border-strong)'}`,
                     cursor: 'pointer',
+                    whiteSpace: 'nowrap',
                   }}
                 >
-                  {fmt === 'json' ? 'JSON (agents)' : 'Markdown (humans)'}
+                  {copied ? 'Copied!' : 'Copy'}
                 </button>
-              ))}
+              )}
             </div>
 
-            <button
-              onClick={handleExport}
-              disabled={!exportName || exporting}
-              style={{
-                fontFamily: 'var(--mono)',
-                fontSize: 10,
-                letterSpacing: 2,
-                textTransform: 'uppercase',
-                padding: '10px 20px',
-                background: exportName ? 'var(--text)' : 'var(--border-strong)',
-                color: exportName ? 'var(--bg)' : 'var(--text-faint)',
-                border: 'none',
-                width: '100%',
-                cursor: exportName ? 'pointer' : 'not-allowed',
-              }}
-            >
-              {exporting ? 'Exporting...' : 'Export & Download'}
-            </button>
-
+            {/* Export result */}
             {exportResult && !exportResult.error && (
               <div style={{ marginTop: 16, fontSize: 11, color: 'var(--semantic)' }}>
                 Exported {exportResult.memory_count || exportResult.memories?.length || 0} memories,{' '}
                 {exportResult.entity_count || exportResult.entities?.length || 0} entities.
+                {lastExportText && (
+                  <span style={{ color: 'var(--text-faint)', marginLeft: 8 }}>
+                    ({wordCount(lastExportText)} words)
+                  </span>
+                )}
               </div>
             )}
             {exportResult?.error && (
