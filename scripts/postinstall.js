@@ -137,7 +137,7 @@ function animateBanner() {
     // Redraw all 3 lines with trailing ░
     if (li > 0) writeTty(up(3));
     for (let row = 0; row < 3; row++) {
-      writeTty(clearLine + `${white}          ${display[row]}░${reset}\n`);
+      writeTty(clearLine + `${white}               ${display[row]}░${reset}\n`);
     }
     sleep(80);
   }
@@ -147,18 +147,18 @@ function animateBanner() {
   // Phase 4: Tagline slides in
   writeTty(clearLine + '\n');
   const tagline = 'Persistent Memory For AI Agents';
-  const pad = '  ░░░░░  ';
-  writeTty(clearLine + `${dim}  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░${reset}\n`);
+  const pad = '    ░░░░░  ';
+  writeTty(clearLine + `${dim}    ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░${reset}\n`);
 
   // Type the tagline
   for (let i = 0; i <= tagline.length; i++) {
     const typed = tagline.slice(0, i);
     const remaining = ' '.repeat(tagline.length - i);
-    writeTty(clearLine + `${dim}${pad}${reset}${bold}${typed}${reset}${remaining}${dim}  ░░░░░${reset}`);
+    writeTty(clearLine + `${dim}${pad}${reset}${bold}${typed}${reset}${remaining}${dim}  ░░░░${reset}`);
     sleep(20);
   }
   writeTty('\n');
-  writeTty(clearLine + `${dim}  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░${reset}\n`);
+  writeTty(clearLine + `${dim}    ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░${reset}\n`);
 
   sleep(100);
 
@@ -178,13 +178,13 @@ try {
   const banner = `
 ${dim}────────────────────────────────────────────────────${reset}
 
-${white}          ░█▀▀░█░░░█░█░█▀▄░█▀▀░${reset}
-${white}          ░█░░░█░░░█░█░█░█░█▀▀░${reset}
-${white}          ░▀▀▀░▀▀▀░▀▀▀░▀▀░░▀▀▀░${reset}
+${white}               ░█▀▀░█░░░█░█░█▀▄░█▀▀░${reset}
+${white}               ░█░░░█░░░█░█░█░█░█▀▀░${reset}
+${white}               ░▀▀▀░▀▀▀░▀▀▀░▀▀░░▀▀▀░${reset}
 
-${dim}  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░${reset}
-${dim}  ░░░░░  ${reset}${bold}Persistent Memory For AI Agents${reset}${dim}  ░░░░░${reset}
-${dim}  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░${reset}
+${dim}    ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░${reset}
+${dim}    ░░░░░  ${reset}${bold}Persistent Memory For AI Agents${reset}${dim}  ░░░░${reset}
+${dim}    ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░${reset}
 
 ${dim}────────────────────────────────────────────────────${reset}
 
