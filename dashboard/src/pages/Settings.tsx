@@ -44,7 +44,7 @@ export function Settings() {
                 API Key: {'*'.repeat(20)}{localStorage.getItem('cortex_api_key')?.slice(-4) || ''}
               </div>
               <div style={{ fontSize: 13, fontFamily: 'var(--mono)', marginBottom: 8 }}>
-                Endpoint: {localStorage.getItem('cortex_endpoint') || 'https://cluude.ai'}
+                Endpoint: {localStorage.getItem('cortex_endpoint') || 'https://clude.io'}
               </div>
             </>
           ) : (

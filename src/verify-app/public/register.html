@@ -393,9 +393,9 @@ await brain.init();</pre>
     </div>
 
     <div class="form-group">
-      <label for="walletAddress">Solana Wallet Address</label>
-      <input type="text" id="walletAddress" placeholder="Your Solana wallet address" autocomplete="off" spellcheck="false">
-      <div class="field-hint">Don't have a wallet? Any Solana wallet works. Get one at <a href="https://phantom.app" target="_blank">phantom.app</a></div>
+      <label for="walletAddress">Solana Wallet Address <span style="font-weight: 400; text-transform: none; letter-spacing: 0;">(optional)</span></label>
+      <input type="text" id="walletAddress" placeholder="Your Solana wallet address (optional)" autocomplete="off" spellcheck="false">
+      <div class="field-hint">Scopes memories to your wallet so only you can access them. Public address only — no private key needed. <a href="https://phantom.app" target="_blank">Get a wallet</a></div>
       <div class="field-error" id="walletError"></div>
     </div>
 
@@ -419,7 +419,18 @@ await brain.init();</pre>
     <div class="snippet-label">Recall it back</div>
     <pre id="recallSnippet"></pre>
 
-    <a href="/docs.html" class="docs-link">Full documentation →</a>
+    <div style="margin-top: 36px; padding: 20px 24px; background: var(--card-bg); border: 2px solid var(--blue); border-radius: 8px;">
+      <div style="font-weight: 700; font-size: 14px; margin-bottom: 8px;">Next: Install MCP Server</div>
+      <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.7;">Give Claude Desktop, Cursor, or Claude Code persistent memory with one command:</div>
+      <pre style="margin: 0 0 12px; font-size: 12px; padding: 14px 18px;"><button class="snippet-copy" onclick="copyToClipboard('npx clude-bot mcp-install', this)">Copy</button>npx clude-bot mcp-install</pre>
+      <div style="font-size: 12px; color: var(--text-faint);">Or use the <a href="/setup" style="color: var(--blue); text-decoration: none;">guided setup wizard</a> for step-by-step installation.</div>
+    </div>
+
+    <div style="margin-top: 20px; display: flex; gap: 16px;">
+      <a href="/setup" class="docs-link">Setup wizard →</a>
+      <a href="/docs" class="docs-link">Documentation →</a>
+      <a href="/explore" class="docs-link">Memory explorer →</a>
+    </div>
   </div>
 </div>
 
@@ -473,8 +484,9 @@ await brain.init();</pre>
       valid = false;
     }
 
-    if (!wallet || !isValidBase58(wallet)) {
-      showError('walletError', 'Enter a valid Solana wallet address (base58, 32-44 chars)');
+    // Wallet is optional — only validate format if provided
+    if (wallet && !isValidBase58(wallet)) {
+      showError('walletError', 'Invalid Solana address format (base58, 32-44 chars). Leave empty to skip.');
       document.getElementById('walletAddress').classList.add('error');
       valid = false;
     }
@@ -489,7 +501,7 @@ await brain.init();</pre>
       var resp = await fetch('/api/cortex/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name, wallet: wallet })
+        body: JSON.stringify({ name: name, wallet: wallet || undefined })
       });
 
       var data = await resp.json();

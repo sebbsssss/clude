@@ -137,7 +137,7 @@ export function Landing() {
             type="text"
             value={endpoint}
             onChange={(e) => setEndpoint(e.target.value)}
-            placeholder="https://cluude.ai (default)"
+            placeholder="https://clude.io (default)"
             onKeyDown={(e) => e.key === 'Enter' && handleApiKeyLogin()}
             style={{
               fontFamily: 'var(--mono)',

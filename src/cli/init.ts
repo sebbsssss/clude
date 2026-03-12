@@ -120,7 +120,7 @@ function generateEnvFile(config: InitConfig): string {
   // Self-hosted mode
   env += `# Supabase (required)\n`;
   env += `SUPABASE_URL=${config.supabaseUrl || 'https://your-project.supabase.co'}\n`;
-  env += `SUPABASE_KEY=${config.supabaseKey || 'your-service-role-key'}\n\n`;
+  env += `SUPABASE_SERVICE_KEY=${config.supabaseKey || 'your-service-role-key'}\n\n`;
 
   env += `# Anthropic (optional — enables dream cycles + LLM importance scoring)\n`;
   env += `ANTHROPIC_API_KEY=${config.anthropicKey || ''}\n\n`;
@@ -179,7 +179,7 @@ function generateCodeSnippet(config: InitConfig): string {
   snippet += `const brain = new Cortex({\n`;
   snippet += `  supabase: {\n`;
   snippet += `    url: process.env.SUPABASE_URL,\n`;
-  snippet += `    serviceKey: process.env.SUPABASE_KEY,\n`;
+  snippet += `    serviceKey: process.env.SUPABASE_SERVICE_KEY,\n`;
   snippet += `  },\n`;
 
   if (config.anthropicKey) {
@@ -274,6 +274,8 @@ export async function runInit(): Promise<void> {
       if (!agentName || agentName.length < 2) {
         printWarn('Name must be at least 2 characters — skipping registration');
       } else {
+        printInfo('Optional: link a Solana wallet to prove ownership of your memories.');
+        printInfo('Public address only — no private key needed.\n');
         config.ownerWallet = await ask(rl, 'Solana wallet address (Enter to skip): ');
         console.log('');
 
@@ -287,7 +289,7 @@ export async function runInit(): Promise<void> {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               name: agentName,
-              wallet: config.ownerWallet || 'pending',
+              wallet: config.ownerWallet || undefined,
             }),
           });
 
@@ -335,10 +337,11 @@ export async function runInit(): Promise<void> {
     // ─── Hosted: Owner Wallet ───────────────────────────────
     if (!config.ownerWallet) {
       printStep(3, 4, 'Owner Wallet');
-      printInfo('Your Solana wallet address proves you own this agent\'s memories.');
-      printInfo('This is your PUBLIC address only — no private key needed here.\n');
+      printInfo('Optional: link a Solana wallet to prove ownership of your memories.');
+      printInfo('Scopes all memories to your wallet so only you can access them.');
+      printInfo('This is your PUBLIC address only — no private key needed.\n');
 
-      config.ownerWallet = await ask(rl, 'Your Solana wallet address (Enter to skip): ');
+      config.ownerWallet = await ask(rl, 'Solana wallet address (Enter to skip): ');
       console.log('');
     }
 
@@ -397,7 +400,7 @@ export async function runInit(): Promise<void> {
       }
     } else {
       console.log('');
-      printInfo('Skipped — add SUPABASE_URL and SUPABASE_KEY to .env later');
+      printInfo('Skipped — add SUPABASE_URL and SUPABASE_SERVICE_KEY to .env later');
       printInfo('Schema: paste node_modules/clude-bot/supabase-schema.sql into SQL Editor');
     }
 
@@ -417,11 +420,12 @@ export async function runInit(): Promise<void> {
 
     // ─── Self-hosted: Owner Wallet ──────────────────────────
     printStep(4, 6, 'Owner Wallet');
-    printInfo('Your Solana wallet address proves you own this agent\'s memories.');
+    printInfo('Optional: link a Solana wallet to prove ownership of your memories.');
+    printInfo('Scopes all memories to your wallet so only you can access them.');
     printInfo('Connect this same wallet on the CLUDE dashboard to manage your brain.');
-    printInfo('This is your PUBLIC address only — no private key needed here.\n');
+    printInfo('This is your PUBLIC address only — no private key needed.\n');
 
-    config.ownerWallet = await ask(rl, 'Your Solana wallet address (Enter to skip): ');
+    config.ownerWallet = await ask(rl, 'Solana wallet address (Enter to skip): ');
     console.log('');
 
     if (config.ownerWallet) {

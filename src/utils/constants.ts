@@ -22,10 +22,11 @@ export const MEMORY_MAX_SUMMARY_LENGTH = 500;
 // Type-specific decay rates (per 24h cycle)
 // Episodic events fade fastest; identity/knowledge persists longest.
 export const DECAY_RATES: Record<string, number> = {
-  episodic:   0.93,   // Individual events fade quickly
-  semantic:   0.98,   // Learned knowledge persists
-  procedural: 0.97,   // Behavioral patterns are stable
-  self_model:  0.99,  // Identity is nearly permanent
+  episodic:      0.93,   // Individual events fade quickly
+  semantic:      0.98,   // Learned knowledge persists
+  procedural:    0.97,   // Behavioral patterns are stable
+  self_model:    0.99,   // Identity is nearly permanent
+  introspective: 0.98,   // Journal entries persist like knowledge
 };
 
 // Memory retrieval — additive scoring (Park et al. 2023, Generative Agents)

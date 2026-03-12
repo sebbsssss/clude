@@ -799,8 +799,8 @@
 
         <div class="form-section anim-4">
           <div class="form-label">Wallet Address <span class="label-optional">optional</span></div>
-          <input type="text" class="form-input" id="walletAddr" placeholder="Your Solana address" autocomplete="off" spellcheck="false">
-          <div class="form-hint">Proves ownership of your agent's memories.</div>
+          <input type="text" class="form-input" id="walletAddr" placeholder="Your Solana public address" autocomplete="off" spellcheck="false">
+          <div class="form-hint">Scopes memories to your wallet so only you can access them. Public address only — no private key needed. <a href="https://phantom.app" target="_blank" style="color: var(--blue);">Get a wallet</a></div>
         </div>
 
         <div class="anim-5">
@@ -1090,7 +1090,7 @@ async function register() {
     const res = await fetch('https://clude.io/api/cortex/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, wallet: wallet || 'pending' }),
+      body: JSON.stringify({ name, wallet: wallet || undefined }),
     });
 
     const data = await res.json();

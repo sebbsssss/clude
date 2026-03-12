@@ -167,6 +167,8 @@ export async function runSetup(): Promise<void> {
       printInfo(`Using directory name: ${agentName}`);
     }
 
+    printInfo('Optional: link a Solana wallet to prove ownership of your memories.');
+    printInfo('Public address only — no private key needed.\n');
     wallet = await ask(rl, 'Solana wallet address (Enter to skip): ');
     console.log('');
 
@@ -179,7 +181,7 @@ export async function runSetup(): Promise<void> {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: agentName,
-          wallet: wallet || 'pending',
+          wallet: wallet || undefined,
         }),
       });
 
@@ -230,6 +232,8 @@ export async function runSetup(): Promise<void> {
     printSuccess('Using existing API key');
     agentName = await ask(rl, 'Agent name (for MCP config, Enter to use folder name): ');
     if (!agentName) agentName = path.basename(process.cwd());
+    printInfo('Optional: link a Solana wallet to prove ownership of your memories.');
+    printInfo('Public address only — no private key needed.\n');
     wallet = await ask(rl, 'Solana wallet address (Enter to skip): ');
   }
 
@@ -304,7 +308,8 @@ export async function runSetup(): Promise<void> {
     const toInstall = mcpChoice === 'all' ? targets : targets.filter(t => t.key === mcpChoice);
 
     for (const target of toInstall) {
-      const result = installMcpConfig(target, agentName, wallet, apiKey);
+      const isLocal = process.argv.includes('--local');
+      const result = installMcpConfig(target, agentName, wallet, apiKey, isLocal);
       if (result.ok) {
         printSuccess(`Added clude-memory to ${target.label}`);
         printInfo(`  ${c.dim}${target.configPath}${c.reset}`);

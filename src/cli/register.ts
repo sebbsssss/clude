@@ -30,11 +30,12 @@ export async function runRegister(): Promise<void> {
     return;
   }
 
-  const wallet = await ask(rl, 'Your Solana wallet address: ');
-  if (!wallet || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet)) {
-    printWarn('Invalid Solana address');
-    rl.close();
-    return;
+  printInfo('Optional: link a Solana wallet to prove ownership of your memories.');
+  printInfo('This is your PUBLIC address only — no private key needed.\n');
+  const wallet = await ask(rl, 'Solana wallet address (Enter to skip): ');
+  const validWallet = wallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet) ? wallet : undefined;
+  if (wallet && !validWallet) {
+    printWarn('Invalid Solana address format — skipping wallet');
   }
 
   const url = 'https://clude.io';
@@ -46,7 +47,7 @@ export async function runRegister(): Promise<void> {
     const res = await fetch(`${url}/api/cortex/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, wallet }),
+      body: JSON.stringify({ name, wallet: validWallet }),
     });
 
     process.stdout.clearLine(0);
@@ -66,18 +67,22 @@ export async function runRegister(): Promise<void> {
 
     console.log(`  ${c.bold}API Key:${c.reset}  ${c.green}${data.apiKey}${c.reset}`);
     console.log(`  ${c.bold}Agent ID:${c.reset} ${data.agentId}`);
-    console.log(`  ${c.bold}Wallet:${c.reset}   ${wallet}\n`);
+    if (validWallet) console.log(`  ${c.bold}Wallet:${c.reset}   ${validWallet}`);
+    console.log('');
 
     printWarn('Save this API key — it will not be shown again.\n');
 
     printInfo('Add to your .env:');
     console.log(`    CORTEX_API_KEY=${data.apiKey}`);
-    console.log(`    OWNER_WALLET=${wallet}\n`);
+    if (validWallet) console.log(`    OWNER_WALLET=${validWallet}`);
+    console.log('');
 
-    printInfo('Then in your code:');
+    printInfo('Install MCP for your IDE:');
+    console.log(`    npx clude-bot mcp-install\n`);
+
+    printInfo('Or use in code:');
     console.log(`    const brain = new Cortex({`);
     console.log(`      hosted: { apiKey: process.env.CORTEX_API_KEY },`);
-    console.log(`      ownerWallet: process.env.OWNER_WALLET,`);
     console.log(`    });\n`);
 
   } catch (err) {

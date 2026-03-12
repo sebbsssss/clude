@@ -804,10 +804,15 @@ export function createServer(): express.Application {
     }
   });
 
-  // Aliases: /api/memory/* → /api/demo/* (docs use /api/memory/)
-  app.post('/api/memory/store', (req, res, next) => { req.url = '/api/demo/store'; next(); });
-  app.post('/api/memory/recall', (req, res, next) => { req.url = '/api/demo/recall'; next(); });
-  app.get('/api/memory/stats', (req, res, next) => { req.url = '/api/demo/stats'; next(); });
+  // Aliases: /api/memory/* → re-route through Express stack to /api/demo/*
+  const reRoute = (target: string) => (req: Request, res: Response) => {
+    req.url = target;
+    req.originalUrl = target;
+    app(req, res);
+  };
+  app.post('/api/memory/store', reRoute('/api/demo/store'));
+  app.post('/api/memory/recall', reRoute('/api/demo/recall'));
+  app.get('/api/memory/stats', reRoute('/api/demo/stats'));
 
   // Main website + wallet verification
   // Resolve public dir relative to project root (works in both dev and prod)
@@ -919,6 +924,18 @@ export function createServer(): express.Application {
       log.error({ err }, 'Journal API error');
       res.status(500).json({ error: 'Failed to fetch journal entries' });
     }
+  });
+
+  // Brain visualization at /brain
+  app.get('/brain', (req: Request, _res: Response, next: express.NextFunction) => {
+    req.url = '/brain.html';
+    next();
+  });
+
+  // Documentation at /docs
+  app.get('/docs', (req: Request, _res: Response, next: express.NextFunction) => {
+    req.url = '/docs.html';
+    next();
   });
 
   // Memory explorer at /explore

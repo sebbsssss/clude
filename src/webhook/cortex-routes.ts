@@ -106,10 +106,8 @@ export function cortexRoutes(): Router {
         res.status(400).json({ error: 'name is required (2+ characters)' });
         return;
       }
-      if (!wallet || typeof wallet !== 'string' || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet)) {
-        res.status(400).json({ error: 'Valid Solana wallet address required' });
-        return;
-      }
+      // Wallet is optional — validate format only if provided
+      const validWallet = wallet && typeof wallet === 'string' && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet) ? wallet : null;
 
       // Rate limit registrations: 3 per hour per IP
       const ip = req.ip || req.socket.remoteAddress || 'unknown';
@@ -119,49 +117,54 @@ export function cortexRoutes(): Router {
         return;
       }
 
-      // Check if wallet already registered
       const db = getDb();
-      const { data: existing } = await db
-        .from('agent_keys')
-        .select('id')
-        .eq('owner_wallet', wallet)
-        .limit(1);
 
-      if (existing && existing.length > 0) {
-        res.status(409).json({ error: 'Wallet already registered. Contact support for key recovery.' });
-        return;
+      // Check if wallet already registered (only if wallet provided)
+      if (validWallet) {
+        const { data: existing } = await db
+          .from('agent_keys')
+          .select('id')
+          .eq('owner_wallet', validWallet)
+          .limit(1);
+
+        if (existing && existing.length > 0) {
+          res.status(409).json({ error: 'Wallet already registered. Contact support for key recovery.' });
+          return;
+        }
       }
 
       // Register using existing agent system
       const { agentId, apiKey } = await registerAgent(name, 'AGENT_VERIFIED');
 
-      // Set owner_wallet on the agent_keys row
-      const { error: updateError } = await db
-        .from('agent_keys')
-        .update({ owner_wallet: wallet })
-        .eq('agent_id', agentId);
+      // Set owner_wallet on the agent_keys row (if provided)
+      if (validWallet) {
+        const { error: updateError } = await db
+          .from('agent_keys')
+          .update({ owner_wallet: validWallet })
+          .eq('agent_id', agentId);
 
-      if (updateError) {
-        // Roll back: deactivate the key so it can't be used without a wallet
-        await db.from('agent_keys').update({ is_active: false }).eq('agent_id', agentId);
+        if (updateError) {
+          // Roll back: deactivate the key so it can't be used without a wallet
+          await db.from('agent_keys').update({ is_active: false }).eq('agent_id', agentId);
 
-        // Unique constraint violation = wallet was just claimed by another request
-        if (updateError.code === '23505') {
+          // Unique constraint violation = wallet was just claimed by another request
+          if (updateError.code === '23505') {
           res.status(409).json({ error: 'Wallet already registered. Contact support for key recovery.' });
           return;
         }
 
-        log.error({ err: updateError, agentId }, 'Failed to set owner_wallet');
-        res.status(500).json({ error: 'Registration failed — could not link wallet' });
-        return;
+          log.error({ err: updateError, agentId }, 'Failed to set owner_wallet');
+          res.status(500).json({ error: 'Registration failed — could not link wallet' });
+          return;
+        }
       }
 
-      log.info({ agentId, wallet: wallet.slice(0, 8) + '...' }, 'Cortex user registered');
+      log.info({ agentId, wallet: validWallet ? validWallet.slice(0, 8) + '...' : 'none' }, 'Cortex user registered');
 
       res.json({
         apiKey,
         agentId,
-        wallet,
+        wallet: validWallet,
         message: 'Save this API key — it will not be shown again.',
       });
     } catch (err) {
@@ -232,7 +235,7 @@ export function cortexRoutes(): Router {
   router.post('/recall', async (req: Request, res: Response) => {
     try {
       const cortexReq = req as CortexRequest;
-      const { query, tags, memory_types, limit, min_importance, min_decay } = req.body;
+      const { query, tags, memory_types, limit, min_importance, min_decay, related_user, related_wallet, track_access, skip_expansion } = req.body;
 
       if (!query && !tags && !memory_types) {
         res.status(400).json({ error: 'At least one of query, tags, or memory_types is required' });
@@ -247,6 +250,10 @@ export function cortexRoutes(): Router {
           limit: Math.min(limit || 10, 50),
           minImportance: min_importance,
           minDecay: min_decay,
+          relatedUser: related_user,
+          relatedWallet: related_wallet,
+          trackAccess: track_access,
+          skipExpansion: skip_expansion,
         });
       });
 
@@ -434,7 +441,7 @@ export function cortexRoutes(): Router {
         return;
       }
 
-      const validTypes = ['supports', 'contradicts', 'elaborates', 'causes', 'follows', 'relates', 'resolves'];
+      const validTypes = ['supports', 'contradicts', 'elaborates', 'causes', 'follows', 'relates', 'resolves', 'happens_before', 'happens_after', 'concurrent_with'];
       if (!validTypes.includes(link_type)) {
         res.status(400).json({ error: `link_type must be one of: ${validTypes.join(', ')}` });
         return;

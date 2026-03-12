@@ -3,6 +3,7 @@
   "include": [
     "src/sdk/**/*",
     "src/cli/**/*",
+    "src/mcp/**/*",
     "src/core/memory.ts",
     "src/core/memory-graph.ts",
     "src/core/database.ts",
@@ -12,10 +13,13 @@
     "src/core/inference.ts",
     "src/core/solana-client.ts",
     "src/core/logger.ts",
+    "src/core/owner-context.ts",
     "src/utils/**/*",
     "src/types/**/*",
     "src/config.ts",
     "src/events/event-bus.ts",
-    "src/features/dream-cycle.ts"
+    "src/features/dream-cycle.ts",
+    "src/features/clinamen.ts",
+    "src/features/active-reflection.ts"
   ]
 }

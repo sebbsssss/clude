@@ -3,9 +3,8 @@
  * Zero dependencies. No API keys. Stores memories in ~/.clude/memories.json
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from 'fs';
 import { join } from 'path';
-import { createHash } from 'crypto';
 
 const CLUDE_DIR = join(process.env.HOME || process.env.USERPROFILE || '.', '.clude');
 const MEMORIES_FILE = join(CLUDE_DIR, 'memories.json');
@@ -50,15 +49,33 @@ function loadStore(): Store {
     return { version: 1, next_id: 1, memories: [] };
   }
   try {
-    return JSON.parse(readFileSync(MEMORIES_FILE, 'utf-8'));
-  } catch {
+    const raw = readFileSync(MEMORIES_FILE, 'utf-8');
+    const data = JSON.parse(raw);
+    if (!data || !Array.isArray(data.memories)) {
+      console.error('[clude-local] Warning: memories.json has invalid structure, starting fresh. Backup saved.');
+      // Save backup before overwriting
+      try { writeFileSync(MEMORIES_FILE + '.bak', raw); } catch {}
+      return { version: 1, next_id: 1, memories: [] };
+    }
+    return data;
+  } catch (err: any) {
+    console.error('[clude-local] Warning: failed to parse memories.json:', err.message);
+    // Try to preserve the corrupted file as backup
+    try {
+      const raw = readFileSync(MEMORIES_FILE, 'utf-8');
+      writeFileSync(MEMORIES_FILE + '.bak', raw);
+      console.error('[clude-local] Backup saved to memories.json.bak');
+    } catch {}
     return { version: 1, next_id: 1, memories: [] };
   }
 }
 
+/** Atomic save: write to tmp file then rename (prevents corruption on crash) */
 function saveStore(store: Store): void {
   ensureDir();
-  writeFileSync(MEMORIES_FILE, JSON.stringify(store, null, 2));
+  const tmpFile = MEMORIES_FILE + '.tmp';
+  writeFileSync(tmpFile, JSON.stringify(store, null, 2));
+  renameSync(tmpFile, MEMORIES_FILE);
 }
 
 /** Simple keyword-based relevance scoring */
@@ -75,8 +92,8 @@ function scoreRelevance(query: string, memory: LocalMemory): number {
 
   const termScore = queryTerms.length > 0 ? matches / queryTerms.length : 0;
 
-  // Factor in importance and decay
-  const recency = Math.max(0, 1 - (Date.now() - new Date(memory.last_accessed).getTime()) / (30 * 86400000));
+  // Factor in importance, decay, and recency (based on created_at, not last_accessed)
+  const recency = Math.max(0, 1 - (Date.now() - new Date(memory.created_at).getTime()) / (30 * 86400000));
   const score = (termScore * 0.6) + (memory.importance * 0.2) + (memory.decay_factor * 0.1) + (recency * 0.1);
 
   return Math.min(1, score);
@@ -89,6 +106,8 @@ export function localRecall(opts: {
   limit?: number;
   min_importance?: number;
   min_decay?: number;
+  related_user?: string;
+  related_wallet?: string;
 }): LocalMemory[] {
   const store = loadStore();
   let results = store.memories;
@@ -113,6 +132,16 @@ export function localRecall(opts: {
     results = results.filter(m => m.decay_factor >= opts.min_decay!);
   }
 
+  // Filter by related user
+  if (opts.related_user) {
+    results = results.filter(m => m.related_user === opts.related_user);
+  }
+
+  // Filter by related wallet
+  if (opts.related_wallet) {
+    results = results.filter(m => m.related_wallet === opts.related_wallet);
+  }
+
   // Score and sort
   if (opts.query) {
     results = results
@@ -127,10 +156,9 @@ export function localRecall(opts: {
   const limit = opts.limit || 5;
   const returned = results.slice(0, limit);
 
-  // Update access counts
-  const store2 = loadStore();
+  // Update access counts (single load, no race condition)
   for (const r of returned) {
-    const mem = store2.memories.find(m => m.id === r.id);
+    const mem = store.memories.find(m => m.id === r.id);
     if (mem) {
       mem.access_count++;
       mem.last_accessed = new Date().toISOString();
@@ -138,7 +166,7 @@ export function localRecall(opts: {
       mem.importance = Math.min(1, mem.importance + 0.01);
     }
   }
-  saveStore(store2);
+  saveStore(store);
 
   return returned;
 }
@@ -191,13 +219,27 @@ export function localStats(): object {
 
   const byType: Record<string, number> = {};
   let totalImportance = 0;
+  let totalDecay = 0;
   const tagCounts: Record<string, number> = {};
+  const sourceCounts: Record<string, number> = {};
+  let oldest = '';
+  let newest = '';
+  let mostAccessed: { summary: string; access_count: number } | null = null;
 
   for (const m of memories) {
     byType[m.memory_type] = (byType[m.memory_type] || 0) + 1;
     totalImportance += m.importance;
+    totalDecay += m.decay_factor;
     for (const t of m.tags) {
       tagCounts[t] = (tagCounts[t] || 0) + 1;
+    }
+    if (m.source) {
+      sourceCounts[m.source] = (sourceCounts[m.source] || 0) + 1;
+    }
+    if (!oldest || m.created_at < oldest) oldest = m.created_at;
+    if (!newest || m.created_at > newest) newest = m.created_at;
+    if (!mostAccessed || m.access_count > mostAccessed.access_count) {
+      mostAccessed = { summary: m.summary, access_count: m.access_count };
     }
   }
 
@@ -207,12 +249,18 @@ export function localStats(): object {
     .map(([tag, count]) => ({ tag, count }));
 
   return {
+    status: 'active',
     mode: 'local',
     storage: MEMORIES_FILE,
     total_memories: memories.length,
     by_type: byType,
     avg_importance: memories.length > 0 ? +(totalImportance / memories.length).toFixed(3) : 0,
+    avg_decay: memories.length > 0 ? +(totalDecay / memories.length).toFixed(3) : 0,
     top_tags: topTags,
+    sources: sourceCounts,
+    oldest_memory: oldest || null,
+    newest_memory: newest || null,
+    most_accessed: mostAccessed,
   };
 }
 
@@ -220,13 +268,19 @@ export function localClinamen(opts: {
   context: string;
   limit?: number;
   min_importance?: number;
+  max_relevance?: number;
+  memory_types?: MemoryType[];
 }): LocalMemory[] {
   const store = loadStore();
   const minImp = opts.min_importance ?? 0.6;
+  const maxRel = opts.max_relevance ?? 0.35;
   const limit = opts.limit ?? 3;
 
-  // Get high-importance memories
-  const candidates = store.memories.filter(m => m.importance >= minImp);
+  // Get high-importance memories, optionally filtered by type
+  let candidates = store.memories.filter(m => m.importance >= minImp);
+  if (opts.memory_types?.length) {
+    candidates = candidates.filter(m => opts.memory_types!.includes(m.memory_type));
+  }
 
   // Score by divergence: high importance + low relevance to context
   const contextTerms = opts.context.toLowerCase().split(/\s+/).filter(t => t.length > 2);
@@ -243,7 +297,7 @@ export function localClinamen(opts: {
   });
 
   return scored
-    .filter(m => m._relevanceSim < 0.35)
+    .filter(m => m._relevanceSim < maxRel)
     .sort((a, b) => b._divergence - a._divergence)
     .slice(0, limit);
 }

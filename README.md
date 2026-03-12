@@ -214,7 +214,7 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 const brain = new Cortex({
   hosted: {
     apiKey: string,      // From `npx clude-bot register`
-    baseUrl?: string,    // Default: 'https://cluude.ai'
+    baseUrl?: string,    // Default: 'https://clude.io'
   },
 });
 ```

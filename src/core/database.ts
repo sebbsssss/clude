@@ -72,7 +72,7 @@ export async function initDatabase(): Promise<void> {
 
         CREATE TABLE IF NOT EXISTS memories (
           id BIGSERIAL PRIMARY KEY,
-          memory_type TEXT NOT NULL CHECK (memory_type IN ('episodic', 'semantic', 'procedural', 'self_model')),
+          memory_type TEXT NOT NULL CHECK (memory_type IN ('episodic', 'semantic', 'procedural', 'self_model', 'introspective')),
           content TEXT NOT NULL,
           summary TEXT NOT NULL,
           tags TEXT[] DEFAULT '{}',
@@ -171,7 +171,8 @@ export async function initDatabase(): Promise<void> {
           source_id BIGINT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
           target_id BIGINT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
           link_type TEXT NOT NULL CHECK (link_type IN (
-            'supports', 'contradicts', 'elaborates', 'causes', 'follows', 'relates', 'resolves'
+            'supports', 'contradicts', 'elaborates', 'causes', 'follows', 'relates', 'resolves',
+            'happens_before', 'happens_after', 'concurrent_with'
           )),
           strength REAL DEFAULT 0.5,
           created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -246,16 +247,22 @@ export async function initDatabase(): Promise<void> {
         ALTER TABLE dream_logs ADD CONSTRAINT dream_logs_session_type_check
           CHECK (session_type IN ('consolidation', 'reflection', 'emergence', 'compaction', 'decay', 'contradiction_resolution'));
 
-        -- Migration: add 'resolves' link type for contradiction resolution
+        -- Migration: add 'resolves' + temporal link types
         ALTER TABLE memory_links DROP CONSTRAINT IF EXISTS memory_links_link_type_check;
         ALTER TABLE memory_links ADD CONSTRAINT memory_links_link_type_check
           CHECK (link_type IN (
-            'supports', 'contradicts', 'elaborates', 'causes', 'follows', 'relates', 'resolves'
+            'supports', 'contradicts', 'elaborates', 'causes', 'follows', 'relates', 'resolves',
+            'happens_before', 'happens_after', 'concurrent_with'
           ));
 
         -- Migration: client-side encryption support
         ALTER TABLE memories ADD COLUMN IF NOT EXISTS encrypted BOOLEAN DEFAULT FALSE;
         ALTER TABLE memories ADD COLUMN IF NOT EXISTS encryption_pubkey TEXT;
+
+        -- Migration: add 'introspective' memory type
+        ALTER TABLE memories DROP CONSTRAINT IF EXISTS memories_memory_type_check;
+        ALTER TABLE memories ADD CONSTRAINT memories_memory_type_check
+          CHECK (memory_type IN ('episodic', 'semantic', 'procedural', 'self_model', 'introspective'));
 
         -- Migration: owner wallet for memory ownership
         ALTER TABLE memories ADD COLUMN IF NOT EXISTS owner_wallet TEXT;

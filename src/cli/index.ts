@@ -33,6 +33,12 @@ if (command === 'setup') {
     console.error('Ship failed:', err.message);
     process.exit(1);
   });
+} else if (command === 'status') {
+  const { runStatus } = require('./status');
+  runStatus().catch((err: Error) => {
+    console.error('Status check failed:', err.message);
+    process.exit(1);
+  });
 } else if (command === 'export') {
   const { runExport } = require('./export');
   runExport().catch((err: Error) => {
@@ -69,6 +75,7 @@ if (command === 'setup') {
   console.log(`    ${c.dim}Register + create .env + install MCP in ~30 seconds${c.reset}\n`);
   console.log(`  ${c.bold}Commands:${c.reset}\n`);
   console.log(`    ${c.cyan}npx clude-bot setup${c.reset}         Guided setup (register + config + MCP)`);
+  console.log(`    ${c.cyan}npx clude-bot status${c.reset}        Check if Clude is active + memory stats`);
   console.log(`    ${c.cyan}npx clude-bot init${c.reset}          Advanced setup (self-hosted options)`);
   console.log(`    ${c.cyan}npx clude-bot register${c.reset}      Get an API key only`);
   console.log(`    ${c.cyan}npx clude-bot mcp-install${c.reset}   Install MCP server for your IDE`);

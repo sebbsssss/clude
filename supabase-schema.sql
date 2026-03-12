@@ -55,7 +55,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TABLE IF NOT EXISTS memories (
   id BIGSERIAL PRIMARY KEY,
-  memory_type TEXT NOT NULL CHECK (memory_type IN ('episodic', 'semantic', 'procedural', 'self_model')),
+  memory_type TEXT NOT NULL CHECK (memory_type IN ('episodic', 'semantic', 'procedural', 'self_model', 'introspective')),
   content TEXT NOT NULL,
   summary TEXT NOT NULL,
   tags TEXT[] DEFAULT '{}',
@@ -168,13 +168,16 @@ CREATE TABLE IF NOT EXISTS memory_links (
   source_id BIGINT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
   target_id BIGINT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
   link_type TEXT NOT NULL CHECK (link_type IN (
-    'supports',     -- evidence-backed
-    'contradicts',  -- conflicting information
-    'elaborates',   -- adds detail to existing memory
-    'causes',       -- causal chain
-    'follows',      -- temporal sequence
-    'relates',      -- general semantic association
-    'resolves'      -- contradiction resolution outcome
+    'supports',        -- evidence-backed
+    'contradicts',     -- conflicting information
+    'elaborates',      -- adds detail to existing memory
+    'causes',          -- causal chain
+    'follows',         -- temporal sequence
+    'relates',         -- general semantic association
+    'resolves',        -- contradiction resolution outcome
+    'happens_before',  -- temporal ordering
+    'happens_after',   -- temporal ordering
+    'concurrent_with'  -- temporal co-occurrence
   )),
   strength REAL DEFAULT 0.5,
   created_at TIMESTAMPTZ DEFAULT NOW(),

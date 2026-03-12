@@ -140,6 +140,8 @@ export class Cortex {
           source: opts.source,
           source_id: opts.sourceId,
           metadata: opts.metadata,
+          related_user: opts.relatedUser,
+          related_wallet: opts.relatedWallet,
         },
       );
       return result.memory_id;
@@ -161,6 +163,10 @@ export class Cortex {
           limit: opts.limit,
           min_importance: opts.minImportance,
           min_decay: opts.minDecay,
+          track_access: opts.trackAccess,
+          skip_expansion: opts.skipExpansion,
+          related_user: opts.relatedUser,
+          related_wallet: opts.relatedWallet,
         },
       );
       return result.memories;
@@ -312,6 +318,7 @@ export class Cortex {
 
   /** Run a single active reflection (meditation) session. Self-hosted only. */
   async reflect(opts?: { onReflection?: (journal: any) => Promise<void> }): Promise<any> {
+    this.guard();
     this.requireSelfHosted('reflect');
     if (!this.config.anthropic?.apiKey) {
       throw new Error('Cortex.reflect() requires anthropic config');
@@ -352,6 +359,7 @@ export class Cortex {
 
   /** Score memory importance using LLM. Self-hosted only. */
   async scoreImportance(description: string): Promise<number> {
+    this.guard();
     this.requireSelfHosted('scoreImportance');
     const { scoreImportanceWithLLM } = require('../core/memory');
     return scoreImportanceWithLLM(description);
@@ -397,6 +405,7 @@ export class Cortex {
   destroy(): void {
     if (!this.hostedMode) {
       this.stopDreamSchedule();
+      this.stopReflectionSchedule();
       const { eventBus } = require('../events/event-bus');
       eventBus.removeAllListeners();
     }

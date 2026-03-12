@@ -128,6 +128,8 @@ server.tool(
           limit: args.limit,
           min_importance: args.min_importance,
           min_decay: args.min_decay,
+          related_user: args.related_user,
+          related_wallet: args.related_wallet,
         }) as any;
       } else if (isHostedMode) {
         const result = await cortexFetch<{ memories: MemoryResult[] }>('POST', '/api/cortex/recall', {
@@ -139,6 +141,8 @@ server.tool(
           limit: args.limit,
           min_importance: args.min_importance,
           min_decay: args.min_decay,
+          track_access: args.track_access,
+          skip_expansion: args.skip_expansion,
         });
         memories = result.memories;
       } else {
@@ -261,12 +265,22 @@ server.tool(
         });
       }
 
+      // Include memory count so Claude can inform the user
+      let totalMemories: number | undefined;
+      if (isLocalMode && memoryId !== null) {
+        try {
+          const { localStats: ls } = require('./local-store');
+          totalMemories = (ls() as any).total_memories;
+        } catch {}
+      }
+
       return {
         content: [{
           type: 'text' as const,
           text: JSON.stringify({
             stored: memoryId !== null,
             memory_id: memoryId,
+            ...(totalMemories !== undefined ? { total_memories: totalMemories } : {}),
           }),
         }],
       };
@@ -283,7 +297,7 @@ server.tool(
 // --- Tool: get_memory_stats ---
 server.tool(
   'get_memory_stats',
-  'Get statistics about the memory system: counts by type, average importance/decay, dream sessions, top tags.',
+  'Get statistics about the memory system: counts by type, average importance/decay, top tags. Use this to check if the memory system is active and what has been stored.',
   {},
   async () => {
     try {
@@ -336,6 +350,8 @@ server.tool(
           context: args.context,
           limit: args.limit,
           min_importance: args.min_importance,
+          max_relevance: args.max_relevance,
+          memory_types: args.memory_types,
         });
       } else if (isHostedMode) {
         const result = await cortexFetch<{ memories: any[] }>('POST', '/api/cortex/clinamen', {
@@ -347,6 +363,7 @@ server.tool(
         });
         memories = result.memories;
       } else {
+        loadSelfHosted();
         const { findClinamen } = require('../features/clinamen');
         memories = await findClinamen({
           context: args.context,
@@ -400,6 +417,24 @@ async function main() {
     if (!hasSupabase) {
       console.error('[clude-mcp] Warning: No CORTEX_API_KEY or Supabase config found. Tools will fail.');
       console.error('[clude-mcp] Set CORTEX_API_KEY for hosted mode, or SUPABASE_URL + SUPABASE_SERVICE_KEY for self-hosted.');
+    } else {
+      // Initialize database schema and set owner wallet scope
+      try {
+        const { initDatabase } = require('../core/database');
+        await initDatabase();
+        console.error('[clude-mcp] Database initialized');
+      } catch (err: any) {
+        console.error('[clude-mcp] Database init warning:', err.message);
+      }
+      if (process.env.OWNER_WALLET) {
+        try {
+          const { _setOwnerWallet } = require('../core/memory');
+          _setOwnerWallet(process.env.OWNER_WALLET);
+          console.error('[clude-mcp] Owner wallet scoped to:', process.env.OWNER_WALLET.slice(0, 8) + '...');
+        } catch (err: any) {
+          console.error('[clude-mcp] Owner wallet setup warning:', err.message);
+        }
+      }
     }
     console.error('[clude-mcp] Self-hosted mode — direct database access');
   }
