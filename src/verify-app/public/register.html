@@ -311,7 +311,7 @@
     <p class="subtitle">No API key needed. Everything runs on your machine.</p>
 
     <div class="snippet-label">For Claude Desktop / Cursor (MCP)</div>
-    <pre><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button><span class="cmt"># One command, done</span>
+    <pre data-raw="npx clude-bot mcp-install --local"><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button><span class="cmt"># One command, done</span>
 npx clude-bot mcp-install --local</pre>
 
     <div class="snippet-label">Or add manually to Claude Desktop config</div>
@@ -325,7 +325,13 @@ npx clude-bot mcp-install --local</pre>
 }</pre>
 
     <div class="snippet-label">For Node.js / TypeScript</div>
-    <pre><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button><span class="cmt"># Install</span>
+    <pre data-raw="npm install clude-bot
+
+import { Cortex } from 'clude-bot';
+const brain = new Cortex({ local: true });
+await brain.init();
+await brain.store({ content: 'Hello!', type: 'episodic' });
+const memories = await brain.recall({ query: 'hello' });"><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button><span class="cmt"># Install</span>
 npm install clude-bot
 
 <span class="cmt"># Use</span>
@@ -353,12 +359,28 @@ const memories = await brain.recall({ query: 'hello' });</pre>
     </div>
 
     <div class="snippet-label">Setup</div>
-    <pre><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button><span class="cmt"># Install and run the setup wizard</span>
+    <pre data-raw="npm install clude-bot
+npx clude-bot setup"><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button><span class="cmt"># Install and run the setup wizard</span>
 npm install clude-bot
 npx clude-bot setup</pre>
 
     <div class="snippet-label">Or configure manually</div>
-    <pre><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button>import { Cortex } from 'clude-bot';
+    <pre data-raw="import { Cortex } from 'clude-bot';
+
+const brain = new Cortex({
+  supabase: {
+    url: process.env.SUPABASE_URL,
+    serviceKey: process.env.SUPABASE_KEY,
+  },
+  embedding: {
+    provider: 'voyage',
+    apiKey: process.env.VOYAGE_API_KEY,
+    model: 'voyage-4-large',
+    dimensions: 1024,
+  },
+  agentId: 'my-agent',
+});
+await brain.init();"><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button>import { Cortex } from 'clude-bot';
 
 const brain = new Cortex({
   supabase: {
