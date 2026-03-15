@@ -340,7 +340,7 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
 
 async function commitMemoryToChain(memoryId: number, opts: StoreMemoryOptions): Promise<void> {
   // Skip mainnet commits for demo memories (they use devnet instead)
-  if (opts.source === 'demo' || opts.source === 'demo-maas') return;
+  if (opts.source === 'demo' || opts.source === 'demo-maas' || opts.source === 'locomo-benchmark' || opts.source === 'longmemeval-benchmark') return;
 
   const contentHashBuf = createHash('sha256').update(opts.content).digest();
   let signature: string | null = null;
@@ -552,6 +552,7 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
                 filter_user: opts.relatedUser || null,
                 min_decay: minDecay,
                 filter_owner: getOwnerWallet() || null,
+                filter_tags: opts.tags && opts.tags.length > 0 ? opts.tags : null,
               })).then(r => r.data || []),
             ];
             // Only search fragments when not in fast mode
@@ -661,6 +662,9 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
         if (opts.memoryTypes && opts.memoryTypes.length > 0) {
           textQuery = textQuery.in('memory_type', opts.memoryTypes);
         }
+        if (opts.tags && opts.tags.length > 0) {
+          textQuery = textQuery.overlaps('tags', opts.tags);
+        }
         const { data: textData } = await textQuery;
         return textData || [];
       } catch {
@@ -753,6 +757,10 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
         // Respect memoryTypes filter even for vector-matched results
         if (opts.memoryTypes && opts.memoryTypes.length > 0) {
           vectorQuery = vectorQuery.in('memory_type', opts.memoryTypes);
+        }
+        // Respect tag filter — vector candidates from wrong sessions shouldn't enter the pool
+        if (opts.tags && opts.tags.length > 0) {
+          vectorQuery = vectorQuery.overlaps('tags', opts.tags);
         }
         const { data: vectorOnly } = await vectorQuery;
         if (vectorOnly) candidates = [...candidates, ...decryptMemoryBatch(vectorOnly)];
@@ -1056,17 +1064,27 @@ export function scoreMemory(mem: Memory, opts: RecallOptions): number {
   // Vector similarity component (0 if not available)
   const vectorSim = opts._vectorScores?.get(mem.id) || 0;
 
-  // Additive formula, normalized so vector vs non-vector scores are comparable
+  // Base score: always normalized by the same denominator so keyword signal isn't diluted
+  const baseDenom = RETRIEVAL_WEIGHT_RECENCY + RETRIEVAL_WEIGHT_RELEVANCE + RETRIEVAL_WEIGHT_IMPORTANCE;
   let rawScore =
-    RETRIEVAL_WEIGHT_RECENCY * recency +
-    RETRIEVAL_WEIGHT_RELEVANCE * relevance +
-    RETRIEVAL_WEIGHT_IMPORTANCE * mem.importance;
+    (RETRIEVAL_WEIGHT_RECENCY * recency +
+     RETRIEVAL_WEIGHT_RELEVANCE * relevance +
+     RETRIEVAL_WEIGHT_IMPORTANCE * mem.importance) / baseDenom;
 
+  // Vector is an additive bonus — rewards agreement between semantic and keyword signals
+  // Memories with both high keyword match AND high vector similarity rank highest
   if (vectorSim > 0) {
-    rawScore += RETRIEVAL_WEIGHT_VECTOR * vectorSim;
-    rawScore /= (RETRIEVAL_WEIGHT_RECENCY + RETRIEVAL_WEIGHT_RELEVANCE + RETRIEVAL_WEIGHT_IMPORTANCE + RETRIEVAL_WEIGHT_VECTOR);
-  } else {
-    rawScore /= (RETRIEVAL_WEIGHT_RECENCY + RETRIEVAL_WEIGHT_RELEVANCE + RETRIEVAL_WEIGHT_IMPORTANCE);
+    // Scale: vectorSim ∈ [0,1], bonus ∈ [0, ~0.35] — meaningful but doesn't overwhelm base score
+    const vectorBonus = 0.35 * vectorSim;
+    // Extra bonus when keyword relevance agrees with vector (hybrid agreement signal)
+    const agreementBonus = textScore > 0.6 ? 0.15 * vectorSim : 0;
+    rawScore += vectorBonus + agreementBonus;
+  }
+
+  // Penalize vector-only candidates: high vector similarity but zero keyword overlap
+  // These are typically semantically similar but factually wrong (e.g., same speaker, different facts)
+  if (vectorSim > 0 && textScore <= 0.3 && tagScore <= 0.5) {
+    rawScore *= 0.6; // dampen — vector alone isn't enough to rank high
   }
 
   // Knowledge type boost: semantic/procedural/self_model rank above raw episodic
