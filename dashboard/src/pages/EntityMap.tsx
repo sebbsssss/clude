@@ -46,19 +46,28 @@ export function EntityMap() {
   const mouseRef = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
-    if (authMode === 'cortex') {
-      setLoading(false);
-      return;
+    function load() {
+      if (authMode === 'cortex') {
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      Promise.all([
+        api.getKnowledgeGraph({ includeMemories, minMentions: 1 }),
+        api.getGraphStats(),
+      ]).then(([g, s]) => {
+        setGraph(g);
+        setGraphStats(s);
+        setLoading(false);
+      }).catch(() => setLoading(false));
     }
-    setLoading(true);
-    Promise.all([
-      api.getKnowledgeGraph({ includeMemories, minMentions: 1 }),
-      api.getGraphStats(),
-    ]).then(([g, s]) => {
-      setGraph(g);
-      setGraphStats(s);
-      setLoading(false);
-    }).catch(() => setLoading(false));
+    load();
+    const unsubscribe = api.onRefresh(() => {
+      setGraph(null);
+      setGraphStats(null);
+      load();
+    });
+    return () => { unsubscribe(); };
   }, [includeMemories, authMode]);
 
   // ── Force-directed graph on canvas ──

@@ -9,6 +9,7 @@ export function useAuth(): AuthState {
   const [cortexAuth, setCortexAuth] = useState(false);
   const [cortexReady, setCortexReady] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>(null);
+  const [tokenReady, setTokenReady] = useState(false);
 
   // Extract wallet address from connected wallets (prefer Solana)
   const walletAddress = useMemo(() => {
@@ -34,6 +35,9 @@ export function useAuth(): AuthState {
         if (valid) {
           setCortexAuth(true);
           setAuthMode('cortex');
+          setTokenReady(true);
+          // Refresh data with the validated key
+          api.emitRefresh();
         } else {
           localStorage.removeItem('cortex_api_key');
           localStorage.removeItem('cortex_endpoint');
@@ -46,13 +50,18 @@ export function useAuth(): AuthState {
     }
   }, []);
 
-  // Privy auth sets legacy mode
+  // Privy auth: set token then signal refresh
   useEffect(() => {
     if (privyAuth && !cortexAuth) {
       setAuthMode('privy');
       api.setMode('legacy');
       getAccessToken().then(token => {
-        if (token) api.setToken(token);
+        if (token) {
+          api.setToken(token);
+          setTokenReady(true);
+          // Token is set — now safe to fetch scoped data
+          api.emitRefresh();
+        }
       });
     }
   }, [privyAuth, cortexAuth, getAccessToken]);
@@ -67,6 +76,9 @@ export function useAuth(): AuthState {
       if (endpoint) localStorage.setItem('cortex_endpoint', endpoint);
       setCortexAuth(true);
       setAuthMode('cortex');
+      setTokenReady(true);
+      // Clear stale data and re-fetch with new key
+      api.emitRefresh();
     } else {
       api.setMode('legacy');
     }
@@ -78,6 +90,7 @@ export function useAuth(): AuthState {
   }, [login]);
 
   const handleLogout = useCallback(() => {
+    setTokenReady(false);
     if (authMode === 'cortex') {
       localStorage.removeItem('cortex_api_key');
       localStorage.removeItem('cortex_endpoint');
@@ -89,11 +102,15 @@ export function useAuth(): AuthState {
       api.setToken('');
       logout();
     }
+    api.emitRefresh();
   }, [authMode, logout]);
 
+  const isAuthenticated = privyAuth || cortexAuth;
+
   return {
-    authenticated: privyAuth || cortexAuth,
-    ready: (ready && cortexReady) || cortexAuth,
+    authenticated: isAuthenticated,
+    // Ready when: (1) not authenticated and Privy+cortex init done, or (2) authenticated and token is set
+    ready: isAuthenticated ? (tokenReady && cortexReady) : (ready && cortexReady),
     walletAddress,
     userId: user?.id || null,
     email,

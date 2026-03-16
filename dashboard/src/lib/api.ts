@@ -3,11 +3,13 @@ import type { Memory, MemoryStats, KnowledgeGraph, MemoryPack, Agent } from '../
 const API_BASE = import.meta.env.VITE_API_BASE || '';
 
 type ApiMode = 'legacy' | 'cortex';
+type RefreshListener = () => void;
 
 class CludeAPI {
   private token: string | null = null;
   private agentEndpoint: string = API_BASE;
   private mode: ApiMode = 'legacy';
+  private refreshListeners: Set<RefreshListener> = new Set();
 
   setToken(token: string) {
     this.token = token;
@@ -23,6 +25,17 @@ class CludeAPI {
 
   getMode(): ApiMode {
     return this.mode;
+  }
+
+  /** Register a listener that fires when auth changes and data should be re-fetched. */
+  onRefresh(listener: RefreshListener): () => void {
+    this.refreshListeners.add(listener);
+    return () => { this.refreshListeners.delete(listener); };
+  }
+
+  /** Signal all components to clear cached data and re-fetch. */
+  emitRefresh() {
+    this.refreshListeners.forEach(fn => fn());
   }
 
   private async fetch<T>(path: string, opts?: RequestInit): Promise<T> {
@@ -55,8 +68,20 @@ class CludeAPI {
     }
   }
 
+  /**
+   * Verify that the API response is scoped to the current user.
+   * Returns true if scoped_to is present (data is user-specific),
+   * or if we're in cortex mode (always scoped by API key).
+   * Returns false if data is unscoped (global).
+   */
+  verifyScope(response: any): boolean {
+    if (this.mode === 'cortex') return true;
+    if (!this.token) return false;
+    return response?.scoped_to != null;
+  }
+
   // Memory Stats
-  async getStats(): Promise<MemoryStats> {
+  async getStats(): Promise<MemoryStats & { scoped_to?: string | null }> {
     if (this.mode === 'cortex') {
       return this.fetch('/api/cortex/stats');
     }
@@ -64,17 +89,19 @@ class CludeAPI {
   }
 
   // Recent Memories
-  async getMemories(opts?: { hours?: number; limit?: number }): Promise<Memory[]> {
+  async getMemories(opts?: { hours?: number; limit?: number }): Promise<{ memories: Memory[]; scoped_to?: string | null }> {
     const params = new URLSearchParams();
     if (opts?.hours) params.set('hours', String(opts.hours));
     if (opts?.limit) params.set('limit', String(opts.limit));
 
     if (this.mode === 'cortex') {
       const result = await this.fetch<any>(`/api/cortex/recent?${params}`);
-      return Array.isArray(result) ? result : (result?.memories || []);
+      const memories = Array.isArray(result) ? result : (result?.memories || []);
+      return { memories, scoped_to: 'cortex' };
     }
     const result = await this.fetch<any>(`/api/memories?${params}`);
-    return Array.isArray(result) ? result : (result?.memories || []);
+    const memories = Array.isArray(result) ? result : (result?.memories || []);
+    return { memories, scoped_to: result?.scoped_to ?? null };
   }
 
   // Brain / Consciousness

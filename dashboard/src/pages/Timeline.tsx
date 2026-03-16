@@ -25,14 +25,28 @@ export function Timeline() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    setLoading(true);
-    api.getMemories({ hours, limit: 50 }).then((data) => {
-      setMemories(Array.isArray(data) ? data : []);
-      setLoading(false);
-    }).catch(() => {
+    function load() {
+      setLoading(true);
+      api.getMemories({ hours, limit: 50 }).then((data) => {
+        const result = data as any;
+        const mems = result?.memories || (Array.isArray(data) ? data : []);
+        if (api.verifyScope(result)) {
+          setMemories(mems);
+        } else {
+          setMemories([]);
+        }
+        setLoading(false);
+      }).catch(() => {
+        setMemories([]);
+        setLoading(false);
+      });
+    }
+    load();
+    const unsubscribe = api.onRefresh(() => {
       setMemories([]);
-      setLoading(false);
+      load();
     });
+    return () => { unsubscribe(); };
   }, [hours]);
 
   const filtered = (memories || [])

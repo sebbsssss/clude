@@ -23,16 +23,25 @@ export function BrainView() {
   const { selectedAgent } = useAgentContext();
 
   useEffect(() => {
-    setLoading(true);
-    api.getBrain().then((d) => {
-      const mems = d?.memories || [];
-      setMemories(Array.isArray(mems) ? mems : []);
-      setConsciousness(d?.consciousness || null);
-      setLoading(false);
-    }).catch(() => {
+    function load() {
+      setLoading(true);
+      api.getBrain().then((d) => {
+        const mems = d?.memories || [];
+        setMemories(Array.isArray(mems) ? mems : []);
+        setConsciousness(d?.consciousness || null);
+        setLoading(false);
+      }).catch(() => {
+        setMemories([]);
+        setLoading(false);
+      });
+    }
+    load();
+    const unsubscribe = api.onRefresh(() => {
       setMemories([]);
-      setLoading(false);
+      setConsciousness(null);
+      load();
     });
+    return () => { unsubscribe(); };
   }, []);
 
   // Filter by agent

@@ -123,8 +123,9 @@ export function createServer(): express.Application {
   // Memory stats API (for frontend cortex visualization)
   app.get('/api/memory-stats', async (req: Request, res: Response) => {
     try {
+      const owner = getRequestOwner(req);
       const stats = await withRequestScope(req, () => getMemoryStats());
-      res.json(stats);
+      res.json({ ...stats, scoped_to: owner || null });
     } catch (err) {
       log.error({ err }, 'Memory stats endpoint error');
       res.status(500).json({ error: 'Failed to fetch memory stats' });
@@ -136,6 +137,7 @@ export function createServer(): express.Application {
     try {
       const hours = Math.min(parseInt(req.query.hours as string) || 168, 720); // Default 1 week, max 30 days
       const limit = Math.min(parseInt(req.query.limit as string) || 30, 50);
+      const owner = getRequestOwner(req);
       const memories = await withRequestScope(req, () => getRecentMemories(hours, undefined, limit));
       res.json({
         memories: memories.map(m => ({
@@ -153,6 +155,7 @@ export function createServer(): express.Application {
           solana_signature: m.solana_signature || null,
         })),
         count: memories.length,
+        scoped_to: owner || null,
         lastUpdate: new Date().toISOString(),
       });
     } catch (err) {

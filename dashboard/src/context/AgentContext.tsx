@@ -26,13 +26,22 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.listAgents().then((list) => {
-      setAgents(Array.isArray(list) ? list : []);
-      setLoading(false);
-    }).catch(() => {
+    function load() {
+      setLoading(true);
+      api.listAgents().then((list) => {
+        setAgents(Array.isArray(list) ? list : []);
+        setLoading(false);
+      }).catch(() => {
+        setAgents([]);
+        setLoading(false);
+      });
+    }
+    load();
+    const unsubscribe = api.onRefresh(() => {
       setAgents([]);
-      setLoading(false);
+      load();
     });
+    return () => { unsubscribe(); };
   }, []);
 
   const selectedAgent = agents.find((a) => a.id === selectedId) || null;
