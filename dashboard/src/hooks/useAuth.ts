@@ -66,6 +66,7 @@ export function useAuth(): AuthState {
       getAccessTokenRef.current().then(token => {
         if (token) {
           api.setToken(token);
+          api.setWalletAddress(walletAddress);
           setTokenReady(true);
           if (!hasRefreshed.current) {
             hasRefreshed.current = true;
@@ -74,7 +75,20 @@ export function useAuth(): AuthState {
         }
       });
     }
-  }, [privyAuth, cortexAuth, tokenReady]);
+  }, [privyAuth, cortexAuth, tokenReady, walletAddress]);
+
+  // Update wallet on API when it changes (Privy wallets load async)
+  useEffect(() => {
+    if (authMode === 'privy' && walletAddress) {
+      const prev = api.getMode() === 'legacy';
+      api.setWalletAddress(walletAddress);
+      // If wallet just became available after initial auth, re-fetch with proper scoping
+      if (prev && tokenReady && !hasRefreshed.current) {
+        hasRefreshed.current = true;
+        api.emitRefresh();
+      }
+    }
+  }, [walletAddress, authMode, tokenReady]);
 
   const loginWithApiKey = useCallback(async (apiKey: string, endpoint?: string): Promise<boolean> => {
     api.setToken(apiKey);
@@ -102,6 +116,7 @@ export function useAuth(): AuthState {
   const handleLogout = useCallback(() => {
     setTokenReady(false);
     hasRefreshed.current = false;
+    api.setWalletAddress(null);
     if (authMode === 'cortex') {
       localStorage.removeItem('cortex_api_key');
       localStorage.removeItem('cortex_endpoint');
