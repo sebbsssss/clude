@@ -285,7 +285,6 @@ export function BrainVisualization({ memories, onSelectMemory, selectedMemoryId,
       }
 
       // Update pathway curves with current node positions
-      const types: MemoryType[] = ['episodic', 'semantic', 'procedural', 'self_model'];
       for (let ci = 0; ci < curves.length; ci++) {
         const typeNodes = nodes.filter((n) => n.type === curves[ci].type);
         if (typeNodes.length >= 2) {

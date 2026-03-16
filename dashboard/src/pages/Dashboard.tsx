@@ -770,7 +770,7 @@ export function Dashboard() {
         }}>
           <CardHeader>Recent Events</CardHeader>
           <div style={{ flex: 1, overflow: 'auto', maxHeight: 200 }}>
-            {(agentMemories.length > 0 ? agentMemories : recentMemories).slice(0, 8).map((m, i) => (
+            {(agentMemories.length > 0 ? agentMemories : recentMemories).slice(0, 8).map((m) => (
               <div key={m.id} style={{
                 padding: '6px 16px',
                 borderBottom: '1px solid var(--border)',

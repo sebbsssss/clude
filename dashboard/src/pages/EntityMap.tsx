@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { api } from '../lib/api';
 import { useAuthContext } from '../hooks/AuthContext';
 import type { KnowledgeGraph } from '../types/memory';
@@ -38,7 +38,6 @@ export function EntityMap() {
   const [loading, setLoading] = useState(true);
   const [includeMemories, setIncludeMemories] = useState(false);
   const [selectedNode, setSelectedNode] = useState<LayoutNode | null>(null);
-  const [hoveredNode, setHoveredNode] = useState<LayoutNode | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'graph' | 'table'>('graph');
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -533,7 +532,7 @@ export function EntityMap() {
                 ref={canvasRef}
                 style={{
                   width: '100%', height: 560, display: 'block',
-                  cursor: hoveredNode ? 'pointer' : 'default',
+                  cursor: 'default',
                 }}
               />
             )}
@@ -640,7 +639,7 @@ export function EntityMap() {
                   {searchQuery ? 'No entities match your search' : 'No entities found'}
                 </div>
               )}
-              {filteredEntities.map((e: any, i: number) => {
+              {filteredEntities.map((e: any) => {
                 const ec = ENTITY_COLORS[e.type] || { color: '#6b7280', label: e.type };
                 const maxMentions = filteredEntities[0]?.mentions || 1;
                 const barPct = (e.mentions / maxMentions) * 100;
