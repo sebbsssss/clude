@@ -265,21 +265,16 @@ export function Dashboard() {
       api.getVeniceStats().catch(() => null),
       api.getMemories({ hours: 48, limit: 50 }).catch(() => ({ memories: [], scoped_to: null })),
     ]).then(([s, v, m]) => {
-      // Verify stats are scoped to this user
-      if (s && api.verifyScope(s)) {
+      // Only display data that's verified as scoped to this user
+      const memResult = m as { memories: Memory[]; scoped_to?: string | null };
+      if (api.verifyScope(s || memResult)) {
         setStats(s);
+        setRecentMemories(memResult.memories || []);
       } else {
-        setStats(s); // Still show stats — they may be empty for new users
-      }
-      setVeniceStats(v);
-      // Verify memories are scoped before displaying
-      const result = m as { memories: Memory[]; scoped_to?: string | null };
-      if (api.verifyScope(result)) {
-        setRecentMemories(result.memories || []);
-      } else {
-        // Unscoped data — don't display other users' memories
+        setStats(null);
         setRecentMemories([]);
       }
+      setVeniceStats(v);
       setLoading(false);
     });
   }, []);
@@ -287,14 +282,11 @@ export function Dashboard() {
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 30000);
-    // Subscribe to auth refresh events (login/logout/key change)
     const unsubscribe = api.onRefresh(() => {
-      // Clear stale data immediately
       setStats(null);
       setRecentMemories([]);
       setVeniceStats(null);
       setLoading(true);
-      // Re-fetch with new credentials
       fetchData();
     });
     return () => {

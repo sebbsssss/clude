@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { api } from '../lib/api';
 import type { AuthState, AuthMode } from './AuthContext';
@@ -10,6 +10,12 @@ export function useAuth(): AuthState {
   const [cortexReady, setCortexReady] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>(null);
   const [tokenReady, setTokenReady] = useState(false);
+
+  // Ref to prevent emitRefresh from firing more than once per auth session
+  const hasRefreshed = useRef(false);
+  // Ref to hold getAccessToken so the effect doesn't re-fire on every render
+  const getAccessTokenRef = useRef(getAccessToken);
+  getAccessTokenRef.current = getAccessToken;
 
   // Extract wallet address from connected wallets (prefer Solana)
   const walletAddress = useMemo(() => {
@@ -36,8 +42,10 @@ export function useAuth(): AuthState {
           setCortexAuth(true);
           setAuthMode('cortex');
           setTokenReady(true);
-          // Refresh data with the validated key
-          api.emitRefresh();
+          if (!hasRefreshed.current) {
+            hasRefreshed.current = true;
+            api.emitRefresh();
+          }
         } else {
           localStorage.removeItem('cortex_api_key');
           localStorage.removeItem('cortex_endpoint');
@@ -50,21 +58,23 @@ export function useAuth(): AuthState {
     }
   }, []);
 
-  // Privy auth: set token then signal refresh
+  // Privy auth: set token once, then signal refresh once
   useEffect(() => {
-    if (privyAuth && !cortexAuth) {
+    if (privyAuth && !cortexAuth && !tokenReady) {
       setAuthMode('privy');
       api.setMode('legacy');
-      getAccessToken().then(token => {
+      getAccessTokenRef.current().then(token => {
         if (token) {
           api.setToken(token);
           setTokenReady(true);
-          // Token is set — now safe to fetch scoped data
-          api.emitRefresh();
+          if (!hasRefreshed.current) {
+            hasRefreshed.current = true;
+            api.emitRefresh();
+          }
         }
       });
     }
-  }, [privyAuth, cortexAuth, getAccessToken]);
+  }, [privyAuth, cortexAuth, tokenReady]);
 
   const loginWithApiKey = useCallback(async (apiKey: string, endpoint?: string): Promise<boolean> => {
     api.setToken(apiKey);
@@ -77,7 +87,7 @@ export function useAuth(): AuthState {
       setCortexAuth(true);
       setAuthMode('cortex');
       setTokenReady(true);
-      // Clear stale data and re-fetch with new key
+      hasRefreshed.current = true;
       api.emitRefresh();
     } else {
       api.setMode('legacy');
@@ -91,6 +101,7 @@ export function useAuth(): AuthState {
 
   const handleLogout = useCallback(() => {
     setTokenReady(false);
+    hasRefreshed.current = false;
     if (authMode === 'cortex') {
       localStorage.removeItem('cortex_api_key');
       localStorage.removeItem('cortex_endpoint');
