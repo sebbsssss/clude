@@ -50,6 +50,16 @@ export function createServer(): express.Application {
     next();
   });
 
+  // Security headers
+  app.use((_req, res, next) => {
+    res.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    res.header('X-Content-Type-Options', 'nosniff');
+    res.header('X-Frame-Options', 'SAMEORIGIN');
+    res.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    next();
+  });
+
   // Health check — always return 200 so Railway marks the deploy healthy.
   // DB status is informational only.
   app.get('/health', async (_req: Request, res: Response) => {
