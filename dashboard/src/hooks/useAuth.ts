@@ -46,17 +46,16 @@ export function useAuth(): AuthState {
     }
   }, []);
 
-  // Privy auth sets legacy mode + wallet scoping
+  // Privy auth sets legacy mode
   useEffect(() => {
     if (privyAuth && !cortexAuth) {
       setAuthMode('privy');
       api.setMode('legacy');
-      api.setWalletAddress(walletAddress);
       getAccessToken().then(token => {
         if (token) api.setToken(token);
       });
     }
-  }, [privyAuth, cortexAuth, getAccessToken, walletAddress]);
+  }, [privyAuth, cortexAuth, getAccessToken]);
 
   const loginWithApiKey = useCallback(async (apiKey: string, endpoint?: string): Promise<boolean> => {
     api.setToken(apiKey);
@@ -79,7 +78,6 @@ export function useAuth(): AuthState {
   }, [login]);
 
   const handleLogout = useCallback(() => {
-    api.setWalletAddress(null);
     if (authMode === 'cortex') {
       localStorage.removeItem('cortex_api_key');
       localStorage.removeItem('cortex_endpoint');

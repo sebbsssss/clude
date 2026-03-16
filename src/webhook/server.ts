@@ -22,6 +22,23 @@ import { dashboardRoutes, autoRegisterClude } from './dashboard-routes';
 
 const log = createChildLogger('server');
 
+/**
+ * Resolve owner scope from request: ?wallet= param, or Privy user ID.
+ * Returns null if no scoping should be applied (unauthenticated public view).
+ */
+function getRequestOwner(req: Request): string | null {
+  const wallet = req.query.wallet as string | undefined;
+  if (wallet) return wallet;
+  if (req.privyUser?.userId) return req.privyUser.userId;
+  return null;
+}
+
+/** Run a function scoped to the request owner, or unscoped if no owner. */
+async function withRequestScope<T>(req: Request, fn: () => Promise<T>): Promise<T> {
+  const owner = getRequestOwner(req);
+  return owner ? withOwnerWallet(owner, fn) : fn();
+}
+
 const apiLimiter = rateLimit({
   windowMs: 60_000,
   max: 200,
@@ -106,9 +123,7 @@ export function createServer(): express.Application {
   // Memory stats API (for frontend cortex visualization)
   app.get('/api/memory-stats', async (req: Request, res: Response) => {
     try {
-      const wallet = req.query.wallet as string | undefined;
-      const run = () => getMemoryStats();
-      const stats = wallet ? await withOwnerWallet(wallet, run) : await run();
+      const stats = await withRequestScope(req, () => getMemoryStats());
       res.json(stats);
     } catch (err) {
       log.error({ err }, 'Memory stats endpoint error');
@@ -121,9 +136,7 @@ export function createServer(): express.Application {
     try {
       const hours = Math.min(parseInt(req.query.hours as string) || 168, 720); // Default 1 week, max 30 days
       const limit = Math.min(parseInt(req.query.limit as string) || 30, 50);
-      const wallet = req.query.wallet as string | undefined;
-      const run = () => getRecentMemories(hours, undefined, limit);
-      const memories = wallet ? await withOwnerWallet(wallet, run) : await run();
+      const memories = await withRequestScope(req, () => getRecentMemories(hours, undefined, limit));
       res.json({
         memories: memories.map(m => ({
           id: m.id,
@@ -278,8 +291,9 @@ export function createServer(): express.Application {
   app.get('/api/brain', async (req: Request, res: Response) => {
     try {
       const limit = Math.min(parseInt(req.query.limit as string) || 300, 500);
-      const memories = await getRecentMemories(8760, undefined, limit); // 1 year window
-      const stats = await getMemoryStats();
+      const [memories, stats] = await withRequestScope(req, () =>
+        Promise.all([getRecentMemories(8760, undefined, limit), getMemoryStats()])
+      );
       res.json({
         nodes: memories.map(m => ({
           id: m.id,
@@ -308,13 +322,15 @@ export function createServer(): express.Application {
   // Consciousness stream API (self-model, emergence, procedural insights)
   app.get('/api/brain/consciousness', async (req: Request, res: Response) => {
     try {
-      const [selfModel, emergence, procedural, recentEpisodic, stats] = await Promise.all([
-        getRecentMemories(8760, ['self_model'], 10),
-        getRecentMemories(8760, ['self_model'], 20),
-        getRecentMemories(8760, ['procedural'], 10),
-        getRecentMemories(24, ['episodic'], 5),
-        getMemoryStats(),
-      ]);
+      const [selfModel, emergence, procedural, recentEpisodic, stats] = await withRequestScope(req, () =>
+        Promise.all([
+          getRecentMemories(8760, ['self_model'], 10),
+          getRecentMemories(8760, ['self_model'], 20),
+          getRecentMemories(8760, ['procedural'], 10),
+          getRecentMemories(24, ['episodic'], 5),
+          getMemoryStats(),
+        ])
+      );
 
       // Separate emergence thoughts (source: 'emergence') from reflections (source: 'reflection')
       const emergenceThoughts = emergence
