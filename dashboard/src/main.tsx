@@ -23,8 +23,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           theme: 'light',
           accentColor: '#2244ff',
           walletList: ['phantom', 'solflare', 'backpack', 'detected_wallets'],
+          walletChainType: 'solana-only',
         },
         loginMethods: ['wallet', 'email'],
+        defaultChain: { name: 'mainnet-beta' } as any,
         solanaClusters: [
           { name: 'mainnet-beta', rpcUrl: 'https://api.mainnet-beta.solana.com' },
         ],
