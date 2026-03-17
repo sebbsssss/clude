@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { NeuralCanvas } from '../components/NeuralCanvas';
+import { useAgentContext } from '../context/AgentContext';
 import type { Memory, MemoryType } from '../types/memory';
 
 const TYPE_COLORS: Record<MemoryType, string> = {
@@ -17,12 +18,22 @@ const TYPE_LABELS: Record<MemoryType, string> = {
   self_model: 'Self-Model',
 };
 
+function filterByAgent(memories: Memory[], agentId: string | null, agentName: string | null): Memory[] {
+  if (!agentId) return memories;
+  return memories.filter((m) =>
+    m.related_user === agentId ||
+    (agentName && m.source?.includes(agentName)) ||
+    (agentName && (m.metadata as any)?.agentName === agentName),
+  );
+}
+
 export function Timeline() {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<MemoryType | 'all'>('all');
   const [hours, setHours] = useState(168);
   const [search, setSearch] = useState('');
+  const { selectedAgent } = useAgentContext();
 
   useEffect(() => {
     function load() {
@@ -49,7 +60,8 @@ export function Timeline() {
     return () => { unsubscribe(); };
   }, [hours]);
 
-  const filtered = (memories || [])
+  const agentMemories = filterByAgent(memories || [], selectedAgent?.id || null, selectedAgent?.name || null);
+  const filtered = agentMemories
     .filter((m) => filter === 'all' || m.memory_type === filter)
     .filter((m) => {
       if (!search) return true;

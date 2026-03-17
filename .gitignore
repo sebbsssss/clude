@@ -7,3 +7,4 @@ dist/
 .persona-backup/
 .claude/
 clude-memory-skill/
+scripts/.longmemeval-cache/

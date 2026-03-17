@@ -45,9 +45,9 @@ declare global {
  * If Privy is not configured (no PRIVY_APP_ID), passes through without auth.
  */
 export function requirePrivyAuth(req: Request, res: Response, next: NextFunction): void {
-  // Skip auth if Privy is not configured
+  // Block if Privy is not configured — don't silently bypass auth
   if (!config.privy.appId || !config.privy.jwksUrl) {
-    next();
+    res.status(503).json({ error: 'Authentication not configured' });
     return;
   }
 

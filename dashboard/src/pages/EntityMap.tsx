@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { api } from '../lib/api';
 import { useAuthContext } from '../hooks/AuthContext';
+import { useAgentContext } from '../context/AgentContext';
 import type { KnowledgeGraph } from '../types/memory';
 
 const ENTITY_COLORS: Record<string, { color: string; label: string }> = {
@@ -33,6 +34,7 @@ const SECTION_HEADER: React.CSSProperties = {
 
 export function EntityMap() {
   const { authMode } = useAuthContext();
+  const { selectedAgent } = useAgentContext();
   const [graph, setGraph] = useState<KnowledgeGraph | null>(null);
   const [graphStats, setGraphStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -395,6 +397,22 @@ export function EntityMap() {
       )}
 
       {authMode !== 'cortex' && <>
+
+        {/* Agent awareness notice */}
+        {selectedAgent && (
+          <div style={{
+            padding: '8px 14px',
+            marginBottom: 12,
+            background: 'rgba(34, 68, 255, 0.04)',
+            border: '1px solid rgba(34, 68, 255, 0.08)',
+            borderRadius: 2,
+            fontSize: 10,
+            color: 'var(--text-muted)',
+            letterSpacing: 0.3,
+          }}>
+            Entity map shows data across all agents. Agent filtering is not applied here.
+          </div>
+        )}
 
         {/* ── Controls Bar ── */}
         <div style={{

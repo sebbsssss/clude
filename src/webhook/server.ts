@@ -128,7 +128,7 @@ export function createServer(): express.Application {
     next();
   });
 
-  // Venice integration stats (privacy dashboard)
+  // Venice integration stats (privacy dashboard) — intentionally unscoped/global
   app.get('/api/venice-stats', async (_req: Request, res: Response) => {
     try {
       const veniceStats = await getVeniceStats();
@@ -292,6 +292,13 @@ export function createServer(): express.Application {
         return;
       }
 
+      // Only allow verifying bot's own (public) memories or the requester's own
+      const requestWallet = req.query.wallet as string;
+      if (mem.owner_wallet !== null && mem.owner_wallet !== requestWallet) {
+        res.status(404).json({ error: 'Memory not found' });
+        return;
+      }
+
       if (!mem.onchain_tx) {
         res.json({
           id: mem.id,
@@ -337,12 +344,12 @@ export function createServer(): express.Application {
         Promise.all([getRecentMemories(8760, undefined, limit), getMemoryStats()])
       );
       if (!result) {
-        res.json({ nodes: [], total: 0, timestamp: new Date().toISOString() });
+        res.json({ memories: [], total: 0, timestamp: new Date().toISOString() });
         return;
       }
       const [memories, stats] = result;
       res.json({
-        nodes: memories.map(m => ({
+        memories: memories.map(m => ({
           id: m.id,
           type: m.memory_type,
           summary: m.summary,
@@ -1031,42 +1038,39 @@ export function createServer(): express.Application {
   });
 
   // Journal API — fetch introspective + self_model + emergence memories
-  app.get('/api/journal', async (_req: Request, res: Response) => {
+  app.get('/api/journal', async (req: Request, res: Response) => {
     try {
-      const db = getDb();
-      const { getOwnerWallet: getWallet } = require('../core/memory');
-      const ownerWallet = getWallet();
+      const result = await withRequestScope(req, async () => {
+        const db = getDb();
 
-      // Fetch journal-worthy memories: introspective, self_model (reflections), emergence
-      let query = db
-        .from('memories')
-        .select('id, memory_type, content, summary, tags, importance, decay_factor, created_at, source')
-        .in('source', ['active_reflection', 'reflection', 'emergence', 'consolidation'])
-        .gte('decay_factor', 0.05)
-        .order('created_at', { ascending: false })
-        .limit(50);
+        // Fetch journal-worthy memories: introspective, self_model (reflections), emergence
+        const { data, error } = await db
+          .from('memories')
+          .select('id, memory_type, content, summary, tags, importance, decay_factor, created_at, source')
+          .in('source', ['active_reflection', 'reflection', 'emergence', 'consolidation'])
+          .gte('decay_factor', 0.05)
+          .order('created_at', { ascending: false })
+          .limit(50);
 
-      if (ownerWallet) query = query.eq('owner_wallet', ownerWallet);
+        if (error) throw error;
+        return data || [];
+      });
 
-      const { data, error } = await query;
-      if (error) {
-        res.status(500).json({ error: error.message });
-        return;
-      }
+      const entries = result || [];
 
       // Count total reflection sessions (unique dates with reflection entries)
       const sessionDates = new Set(
-        (data || []).map(m => new Date(m.created_at).toISOString().slice(0, 10))
+        entries.map((m: any) => new Date(m.created_at).toISOString().slice(0, 10))
       );
 
       res.json({
-        entries: data || [],
+        entries,
         sessionCount: sessionDates.size,
-        total: (data || []).length,
+        total: entries.length,
       });
     } catch (err: any) {
       log.error({ err }, 'Journal API error');
-      res.status(500).json({ error: 'Failed to fetch journal entries' });
+      res.json({ entries: [], sessionCount: 0, total: 0 });
     }
   });
 

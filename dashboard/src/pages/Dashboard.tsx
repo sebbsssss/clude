@@ -252,10 +252,12 @@ export function Dashboard() {
   const [veniceStats, setVeniceStats] = useState<any>(null);
   const [recentMemories, setRecentMemories] = useState<Memory[]>([]);
   const [loading, setLoading] = useState(true);
-  const [uptime] = useState(() => {
-    const hrs = Math.floor(Math.random() * 200 + 50);
+  const uptime = useMemo(() => {
+    const hrs = stats?.oldestMemory
+      ? Math.floor((Date.now() - new Date(stats.oldestMemory).getTime()) / 3600000)
+      : 0;
     return `${Math.floor(hrs / 24)}d ${hrs % 24}h`;
-  });
+  }, [stats?.oldestMemory]);
   const { agents, selectedAgent } = useAgentContext();
 
   const fetchData = useCallback(() => {
@@ -263,7 +265,7 @@ export function Dashboard() {
     Promise.all([
       api.getStats().catch(() => null),
       api.getVeniceStats().catch(() => null),
-      api.getMemories({ hours: 48, limit: 50 }).catch(() => ({ memories: [], scoped_to: null })),
+      api.getMemories({ hours: 24, limit: 50 }).catch(() => ({ memories: [], scoped_to: null })),
     ]).then(([s, v, m]) => {
       // Only display data that's verified as scoped to this user
       const memResult = m as { memories: Memory[]; scoped_to?: string | null };
@@ -309,7 +311,7 @@ export function Dashboard() {
 
   const sparkData = useMemoryTimeline(recentMemories);
   const memoriesPerHour = recentMemories.length > 0
-    ? (recentMemories.length / 48).toFixed(1)
+    ? (recentMemories.length / 24).toFixed(1)
     : '0';
 
   const isOnline = stats !== null;
@@ -326,7 +328,7 @@ export function Dashboard() {
 
   const activeAgents = agents.filter(a => {
     const lastActive = new Date(a.last_active).getTime();
-    return Date.now() - lastActive < 3600000;
+    return Date.now() - lastActive < 300000; // 5 minutes, consistent with AgentSelector
   }).length || (isOnline ? 1 : 0);
 
   // ── Loading State ──

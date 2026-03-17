@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { useAgentContext } from '../context/AgentContext';
 import type { Memory, MemoryType } from '../types/memory';
 
 const TYPE_COLORS: Record<MemoryType, string> = {
@@ -9,10 +10,20 @@ const TYPE_COLORS: Record<MemoryType, string> = {
   self_model: '#8b5cf6',
 };
 
+function filterByAgent(memories: Memory[], agentId: string | null, agentName: string | null): Memory[] {
+  if (!agentId) return memories;
+  return memories.filter((m) =>
+    m.related_user === agentId ||
+    (agentName && m.source?.includes(agentName)) ||
+    (agentName && (m.metadata as any)?.agentName === agentName),
+  );
+}
+
 export function DecayHeatmap() {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<'decay' | 'importance' | 'age'>('decay');
+  const { selectedAgent } = useAgentContext();
 
   useEffect(() => {
     function load() {
@@ -39,14 +50,15 @@ export function DecayHeatmap() {
     return () => { unsubscribe(); };
   }, []);
 
-  const sorted = [...memories].sort((a, b) => {
+  const agentMemories = filterByAgent(memories, selectedAgent?.id || null, selectedAgent?.name || null);
+  const sorted = [...agentMemories].sort((a, b) => {
     if (sortBy === 'decay') return a.decay_factor - b.decay_factor;
     if (sortBy === 'importance') return b.importance - a.importance;
     return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
   });
 
   // Group by type for summary
-  const typeGroups = memories.reduce((acc, m) => {
+  const typeGroups = agentMemories.reduce((acc, m) => {
     if (!acc[m.memory_type]) acc[m.memory_type] = [];
     acc[m.memory_type].push(m);
     return acc;

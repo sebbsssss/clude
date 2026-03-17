@@ -1,13 +1,28 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { getDb } from '../core/database';
 import { createChildLogger } from '../core/logger';
 import { requirePrivyAuth } from './privy-auth';
 import { executeTaskManually, AGENT_TYPE_CONFIGS } from '../agents';
+import { config } from '../config';
 
 const log = createChildLogger('dashboard');
 
 const CLUDE_AGENT_NAME = 'Clude';
-const OWNER_WALLET = '5vK6WRCq5V6BCte8cQvaNeNv2KzErCfGzeBDwtBGGv2r';
+const OWNER_WALLET = config.owner.wallet || '5vK6WRCq5V6BCte8cQvaNeNv2KzErCfGzeBDwtBGGv2r';
+
+/**
+ * Middleware that checks if the requesting wallet is the bot owner.
+ * Applied to all mutation routes (POST, PUT, DELETE, PATCH).
+ * Requires requirePrivyAuth to have run first.
+ */
+function requireOwner(req: Request, res: Response, next: NextFunction): void {
+  const wallet = req.query.wallet as string;
+  if (!wallet || wallet !== OWNER_WALLET) {
+    res.status(403).json({ error: 'Owner wallet required for mutations' });
+    return;
+  }
+  next();
+}
 
 /**
  * Auto-register the Clude bot as the first dashboard agent if not present.
@@ -86,8 +101,8 @@ export function dashboardRoutes(): Router {
     }
   });
 
-  // POST /agents — register new agent
-  router.post('/agents', async (req: Request, res: Response) => {
+  // POST /agents — register new agent (owner only)
+  router.post('/agents', requireOwner, async (req: Request, res: Response) => {
     try {
       const { name, type, description, config, heartbeat_url, heartbeat_interval_ms, budget_monthly_usd } = req.body;
       if (!name || typeof name !== 'string') {
@@ -147,8 +162,8 @@ export function dashboardRoutes(): Router {
     }
   });
 
-  // PUT /agents/:id — update agent config
-  router.put('/agents/:id', async (req: Request, res: Response) => {
+  // PUT /agents/:id — update agent config (owner only)
+  router.put('/agents/:id', requireOwner, async (req: Request, res: Response) => {
     try {
       const { name, type, description, config, heartbeat_url, heartbeat_interval_ms, budget_monthly_usd } = req.body;
       const updates: Record<string, any> = { updated_at: new Date().toISOString() };
@@ -187,8 +202,8 @@ export function dashboardRoutes(): Router {
     }
   });
 
-  // DELETE /agents/:id — remove agent
-  router.delete('/agents/:id', async (req: Request, res: Response) => {
+  // DELETE /agents/:id — remove agent (owner only)
+  router.delete('/agents/:id', requireOwner, async (req: Request, res: Response) => {
     try {
       const db = getDb();
 
@@ -276,7 +291,7 @@ export function dashboardRoutes(): Router {
   });
 
   // PATCH /agents/:id/status — manually set status
-  router.patch('/agents/:id/status', async (req: Request, res: Response) => {
+  router.patch('/agents/:id/status', requireOwner, async (req: Request, res: Response) => {
     try {
       const { status } = req.body;
       if (!status || !['online', 'offline', 'paused', 'error'].includes(status)) {
@@ -337,8 +352,8 @@ export function dashboardRoutes(): Router {
     }
   });
 
-  // POST /tasks — create task
-  router.post('/tasks', async (req: Request, res: Response) => {
+  // POST /tasks — create task (owner only)
+  router.post('/tasks', requireOwner, async (req: Request, res: Response) => {
     try {
       const { title, description, agent_id, priority, parent_task_id, metadata } = req.body;
       if (!title || typeof title !== 'string') {
@@ -375,8 +390,8 @@ export function dashboardRoutes(): Router {
     }
   });
 
-  // PUT /tasks/:id — update task
-  router.put('/tasks/:id', async (req: Request, res: Response) => {
+  // PUT /tasks/:id — update task (owner only)
+  router.put('/tasks/:id', requireOwner, async (req: Request, res: Response) => {
     try {
       const { title, description, status, priority, agent_id, metadata } = req.body;
       const updates: Record<string, any> = { updated_at: new Date().toISOString() };
@@ -422,8 +437,8 @@ export function dashboardRoutes(): Router {
     }
   });
 
-  // DELETE /tasks/:id — delete task
-  router.delete('/tasks/:id', async (req: Request, res: Response) => {
+  // DELETE /tasks/:id — delete task (owner only)
+  router.delete('/tasks/:id', requireOwner, async (req: Request, res: Response) => {
     try {
       const db = getDb();
       const { error } = await db
@@ -439,8 +454,8 @@ export function dashboardRoutes(): Router {
     }
   });
 
-  // POST /tasks/:id/execute — manually trigger task execution
-  router.post('/tasks/:id/execute', async (req: Request, res: Response) => {
+  // POST /tasks/:id/execute — manually trigger task execution (owner only)
+  router.post('/tasks/:id/execute', requireOwner, async (req: Request, res: Response) => {
     try {
       const result = await executeTaskManually(req.params.id);
       if (!result.ok) {
@@ -454,8 +469,8 @@ export function dashboardRoutes(): Router {
     }
   });
 
-  // POST /tasks/:id/retry — retry a failed task
-  router.post('/tasks/:id/retry', async (req: Request, res: Response) => {
+  // POST /tasks/:id/retry — retry a failed task (owner only)
+  router.post('/tasks/:id/retry', requireOwner, async (req: Request, res: Response) => {
     try {
       const db = getDb();
       // Reset to pending first, then execute
