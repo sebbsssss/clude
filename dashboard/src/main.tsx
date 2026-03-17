@@ -26,7 +26,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           walletChainType: 'solana-only',
         },
         loginMethods: ['wallet', 'email'],
-        supportedChains: [],
         solanaClusters: [
           { name: 'mainnet-beta', rpcUrl: 'https://api.mainnet-beta.solana.com' },
         ],
