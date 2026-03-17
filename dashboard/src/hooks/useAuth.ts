@@ -20,9 +20,25 @@ export function useAuth(): AuthState {
   // Extract wallet address from connected wallets (prefer Solana)
   const walletAddress = useMemo(() => {
     if (!wallets || wallets.length === 0) return null;
-    const solanaWallet = wallets.find(w => w.walletClientType === 'solana' || (w as any).chainType === 'solana');
+    // Debug: log all wallets to understand what Privy returns
+    console.log('[useAuth] wallets:', wallets.map(w => ({
+      address: w.address?.slice(0, 8) + '...',
+      clientType: w.walletClientType,
+      chainType: (w as any).chainType,
+      connectorType: (w as any).connectorType,
+      type: (w as any).type,
+    })));
+    // Solana addresses are base58 (32-44 chars, no 0x prefix)
+    const solanaWallet = wallets.find(w =>
+      w.walletClientType === 'solana' ||
+      (w as any).chainType === 'solana' ||
+      (w.address && !w.address.startsWith('0x') && w.address.length >= 32 && w.address.length <= 44)
+    );
     if (solanaWallet) return solanaWallet.address;
-    return wallets[0]?.address || null;
+    // Fallback: skip EVM addresses (0x...), return null instead
+    const nonEvm = wallets.find(w => w.address && !w.address.startsWith('0x'));
+    if (nonEvm) return nonEvm.address;
+    return null;
   }, [wallets]);
 
   const email = useMemo(() => {

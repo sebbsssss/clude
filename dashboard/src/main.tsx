@@ -31,7 +31,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           { name: 'mainnet-beta', rpcUrl: 'https://api.mainnet-beta.solana.com' },
         ],
         embeddedWallets: {
-          createOnLogin: 'users-without-wallets',
+          createOnLogin: 'off',
         },
         externalWallets: {
           solana: { connectors: solanaConnectors },
