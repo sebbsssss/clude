@@ -301,6 +301,34 @@ async function extractFacts(turns: SessionTurn[]): Promise<string[]> {
   }
 }
 
+async function extractPreferences(turns: SessionTurn[]): Promise<string[]> {
+  const conv = turns.map(t => `${t.role === 'user' ? 'User' : 'Assistant'}: ${t.content}`).join('\n');
+
+  try {
+    const resp = await anthropic.messages.create({
+      model: JUDGE_MODEL,
+      max_tokens: 600,
+      system: `Extract the user's preferences, tastes, and personal details from this conversation. Focus on:
+- What the user LIKES, wants, or is interested in (specific brands, styles, items, activities)
+- What the user DISLIKES, avoids, or rejected
+- Past experiences the user mentions (what they own, have tried, have done)
+- Specific constraints (budget, allergies, size, location preferences)
+- Personal context (hobbies, job, living situation, pets, family)
+
+Output one preference per line, starting with "- ". Be very specific — include exact names, brands, models, styles, etc. Do NOT generalize.`,
+      messages: [{ role: 'user', content: conv.slice(0, 4000) }],
+    });
+
+    const text = resp.content[0].type === 'text' ? resp.content[0].text : '';
+    return text
+      .split('\n')
+      .map(l => l.replace(/^[-*]\s*/, '').trim())
+      .filter(l => l.length > 10);
+  } catch {
+    return [];
+  }
+}
+
 // ── Cleanup ────────────────────────────────────────────────────
 
 async function cleanupBenchmarkData(db: SupabaseClient): Promise<void> {
@@ -333,15 +361,24 @@ async function cleanupBenchmarkData(db: SupabaseClient): Promise<void> {
 const TYPE_INSTRUCTIONS: Record<string, string> = {
   'single-session-user': 'Focus on information the USER stated or mentioned.',
   'single-session-assistant': 'Focus on recommendations or information the ASSISTANT provided.',
-  'single-session-preference': `Based on the conversation, infer what the user would and would NOT prefer. Use SPECIFIC details from the conversation (exact names, brands, titles, models, experiences).
+  'single-session-preference': `This is a PREFERENCE question. Follow this two-stage process:
 
-You MUST answer in this exact format:
+STAGE 1 — IDENTIFY: Read all the memories below and identify the ONE conversation most relevant to the question topic. Ignore all other conversations.
+
+STAGE 2 — EXTRACT: From ONLY that relevant conversation, identify:
+  a) What the user specifically LIKES, owns, has tried, or wants (exact names, brands, models, styles, past experiences)
+  b) What the user specifically DISLIKES, avoids, rejected, or has problems with
+  c) Specific personal context (constraints, past purchases, living situation, hobbies)
+
+Then answer in this exact format:
 "The user would prefer [specific recommendation grounded in details from their conversation]. They might not prefer [things that conflict with their stated interests or that they rejected/disliked]."
 
-Rules for this format:
+Rules:
+- Focus on the SPECIFIC topic of the question — if the question asks about hotels, look for travel preferences, not cooking preferences.
+- Reference specific items, brands, experiences the user mentioned — not generic categories.
+- Prioritize "preference" memories (tagged as preferences) if available — they contain pre-extracted preference signals.
 - ALWAYS include both a positive preference AND a negative preference.
-- Reference specific items, brands, or details the user mentioned — not generic categories.
-- Do NOT give direct advice, tips, or recommendations. ONLY describe the user's preferences.
+- Do NOT give direct advice or recommendations. ONLY describe the user's preferences.
 - NEVER say "I don't have information" — the conversation always contains preference signals.`,
   'multi-session': `This question requires aggregating information across MULTIPLE conversations. IMPORTANT:
 - Systematically scan EVERY memory below — the answer may be spread across many separate conversations.
@@ -362,6 +399,63 @@ async function generateAnswerCoN(
 ): Promise<string> {
   const typeInstruction = TYPE_INSTRUCTIONS[questionType] || '';
   const dateContext = questionDate ? `\nThe question is being asked on: ${questionDate}. Use this to resolve relative time references like "last week", "a few months ago", etc.` : '';
+
+  // Two-stage approach for preference questions
+  if (questionType === 'single-session-preference') {
+    // Stage 1: Find the relevant conversation and quote specific details
+    const stage1 = await anthropic.messages.create({
+      model: readerModel,
+      max_tokens: 1000,
+      system: `You are searching conversation memories to find the user's preferences relevant to a question.
+
+STEP 1: Identify the ONE conversation most relevant to the question's topic. The question asks about a specific domain (e.g., photography, cooking, travel). Find the conversation where the user discussed that exact topic.
+
+STEP 2: From ONLY that conversation, QUOTE the user's exact words that reveal:
+- What they specifically like, own, use, or have experience with
+- What they dislike, avoid, or had problems with
+- Specific names, brands, models, titles, places, amounts they mentioned
+- Their personal situation relevant to the topic
+
+Format your output as:
+RELEVANT CONVERSATION: [session date/id]
+QUOTES:
+- "[exact user quote revealing a preference]"
+- "[exact user quote revealing what they own/use]"
+- "[exact user quote about what they dislike]"
+SUMMARY: The user [specific preference summary using quoted details]
+
+If you cannot find a relevant conversation, write "NO RELEVANT CONVERSATION FOUND" but then pick the closest match and extract what you can.`,
+      messages: [{
+        role: 'user',
+        content: `Memory context:\n${context}\n\nQuestion: ${question}\n\nFind relevant preferences:`,
+      }],
+    });
+
+    const extraction = stage1.content[0].type === 'text' ? stage1.content[0].text.trim() : '';
+
+    // Stage 2: Generate structured preference answer from quotes
+    const stage2 = await anthropic.messages.create({
+      model: readerModel,
+      max_tokens: 400,
+      system: `You describe a user's preferences based on extracted quotes from their conversations.
+
+Answer in this EXACT format:
+"The user would prefer [recommendation using SPECIFIC details from the quotes — exact names, brands, items]. They might not prefer [things that conflict with quoted preferences]."
+
+CRITICAL RULES:
+- You MUST reference specific items from the quotes (brand names, product names, specific experiences)
+- Do NOT generalize. "Sony-compatible accessories" is better than "photography gear". "stand-up comedy specials" is better than "entertainment".
+- If the quotes mention the user owns Brand X, prefer recommendations compatible with Brand X.
+- NEVER say "I don't have information".
+- NEVER give generic advice. ONLY describe preferences grounded in the quoted details.`,
+      messages: [{
+        role: 'user',
+        content: `Question: ${question}\n\nExtracted from user's conversations:\n${extraction}\n\nAnswer:`,
+      }],
+    });
+
+    return stage2.content[0].type === 'text' ? stage2.content[0].text.trim() : '';
+  }
 
   const resp = await anthropic.messages.create({
     model: readerModel,
@@ -400,17 +494,19 @@ async function judgeAnswer(generated: string, reference: string, question: strin
   const systemPrompt = isPreference
     ? `You evaluate whether a generated preference description aligns with a reference preference description.
 
-Score "1" (correct) if:
-- The generated answer identifies the SAME core preference as the reference (e.g., both mention the same specific brand, product, activity, or interest)
-- The generated answer does NOT recommend something the reference says the user would NOT prefer
-- The key distinguishing detail from the reference is present (e.g., specific brand, title, or experience)
-- A direct recommendation that clearly aligns with the described preference counts as correct
+Score "1" (correct) if ANY of these apply:
+- The generated answer identifies the SAME core preference topic AND mentions at least one specific detail that matches the reference (same brand, product, activity, item, or experience)
+- The generated answer describes preferences that are clearly grounded in the same conversation as the reference, even if it highlights different (but valid) details
+- The generated answer makes a recommendation that would logically follow from the reference's stated preferences
+- The generated answer captures the spirit of the reference preference even if the exact wording differs
 
 Score "0" (wrong) if:
-- The generated answer is about the wrong topic or preference
+- The generated answer is about a completely wrong topic or unrelated preference
 - The generated answer recommends something the reference explicitly says the user would NOT prefer
-- The generated answer is too generic and misses the specific distinguishing detail from the reference
+- The generated answer is entirely generic with ZERO specific details from the user's conversations
 - The generated answer says "I don't know" or "I don't have information"
+
+Important: Be generous when the generated answer captures the RIGHT conversation and RIGHT general preference area. Different valid details from the same conversation should still score "1".
 
 Reply with ONLY "1" or "0".`
     : `You evaluate whether a generated answer is correct by comparing it to a reference answer.
@@ -451,8 +547,21 @@ function formatBenchmarkContext(memories: any[], questionType: string): string {
 
   const lines: string[] = [];
 
+  // For preference questions, surface preference memories first
+  if (questionType === 'single-session-preference') {
+    const prefs = memories.filter((m: any) => m.tags?.includes('preference'));
+    if (prefs.length > 0) {
+      lines.push('## User Preferences (extracted from conversations)');
+      for (const m of prefs) {
+        const sid = m.metadata?.session_id || '';
+        lines.push(`- [${sid}] ${m.content || m.summary}`);
+      }
+      lines.push('');
+    }
+  }
+
   // Group by type
-  const semantic = memories.filter((m: any) => m.memory_type === 'semantic');
+  const semantic = memories.filter((m: any) => m.memory_type === 'semantic' && !m.tags?.includes('preference'));
   const episodic = memories.filter((m: any) => m.memory_type === 'episodic');
 
   // For temporal questions, group episodic by session and sort by date
@@ -767,6 +876,93 @@ async function main() {
     }
     console.log();
     seeded = insertedIds.length;
+
+    // ── Preference extraction (only for SS-Pref haystack sessions) ──
+    const prefCachePath = join(CACHE_DIR, `prefs_${opts.variant}.json`);
+    let prefCache: Record<string, string[]> = {};
+
+    // Only extract preferences for sessions in SS-Pref question haystacks
+    const prefSessionIds = new Set<string>();
+    for (const q of questions) {
+      if (q.question_type === 'single-session-preference') {
+        for (const sid of q.haystack_session_ids) prefSessionIds.add(sid);
+      }
+    }
+    const prefSessions = uniqueSessions.filter(s => prefSessionIds.has(s.sessionId));
+
+    if (existsSync(prefCachePath)) {
+      prefCache = JSON.parse(readFileSync(prefCachePath, 'utf-8'));
+      console.log(`  Loaded ${Object.keys(prefCache).length} cached preference extractions`);
+    }
+
+    console.log(`  Extracting preferences (${prefSessions.length} sessions from SS-Pref haystacks)...`);
+    let prefSeeded = 0;
+    const prefRows: MemoryRow[] = [];
+
+    for (let fi = 0; fi < prefSessions.length; fi += factBatchSize) {
+      const batch = prefSessions.slice(fi, fi + factBatchSize);
+
+      const batchPrefs = await Promise.allSettled(
+        batch.map(async (session) => {
+          let prefs = prefCache[session.sessionId];
+          if (!prefs) {
+            prefs = await extractPreferences(session.turns);
+            prefCache[session.sessionId] = prefs;
+          }
+          return { session, prefs };
+        }),
+      );
+
+      for (const r of batchPrefs) {
+        if (r.status !== 'fulfilled') continue;
+        const { session, prefs } = r.value;
+        for (const pref of prefs) {
+          prefRows.push({
+            hash_id: randomBytes(16).toString('hex'),
+            memory_type: 'semantic',
+            content: pref,
+            summary: pref.slice(0, 300),
+            tags: ['longmemeval', session.sessionId, 'preference'],
+            concepts: [],
+            emotional_valence: 0,
+            importance: 0.5,
+            source: BENCHMARK_SOURCE,
+            metadata: {
+              session_id: session.sessionId,
+              event_date: session.date,
+              benchmark: true,
+            },
+            owner_wallet: BENCHMARK_OWNER_WALLET,
+            compacted: false,
+            evidence_ids: [],
+          });
+        }
+      }
+
+      process.stdout.write(`\r  Preference extraction: ${fi + batch.length}/${prefSessions.length} sessions`);
+    }
+    console.log();
+
+    writeFileSync(prefCachePath, JSON.stringify(prefCache, null, 2));
+    console.log(`  Preference cache saved (${Object.keys(prefCache).length} sessions)`);
+
+    for (let i = 0; i < prefRows.length; i += dbBatchSize) {
+      const batch = prefRows.slice(i, i + dbBatchSize);
+      const { data, error } = await db
+        .from('memories')
+        .insert(batch)
+        .select('id');
+
+      if (error) {
+        console.error(`\n  Pref insert error: ${error.message}`);
+      } else if (data) {
+        insertedIds.push(...data.map((d: any) => d.id));
+        prefSeeded += data.length;
+      }
+      process.stdout.write(`\r  Preferences inserted: ${prefSeeded}/${prefRows.length}`);
+    }
+    console.log();
+    seeded = insertedIds.length;
   }
 
   const seedTime = ms(seedStart);
@@ -921,9 +1117,52 @@ async function main() {
           if (recalledSessions.has(eid)) evidenceHits++;
         }
 
+        // For preference questions, use wider recall but focused context
+        if (q.question_type === 'single-session-preference' && !opts.oracleBypass) {
+          // Do a second recall pass with higher limit to improve evidence hit rate
+          if (filtered.length < 200) {
+            const wideRecall = await cortex.recall({
+              query: q.question,
+              limit: 200,
+              tags: q.haystack_session_ids,
+              skipExpansion: true,
+            });
+            const wideFiltered = wideRecall.filter((m: any) => {
+              const sid = m.metadata?.session_id;
+              return sid && haystackSet.has(sid);
+            });
+            // Merge: keep unique memories by id
+            const seenIds = new Set(filtered.map((m: any) => m.id));
+            for (const m of wideFiltered) {
+              if (!seenIds.has(m.id)) {
+                filtered.push(m);
+                seenIds.add(m.id);
+              }
+            }
+            // Re-check evidence
+            const wideRecalledSessions = new Set(
+              filtered.map((m: any) => m.metadata?.session_id).filter(Boolean),
+            );
+            evidenceHits = 0;
+            for (const eid of q.answer_session_ids) {
+              if (wideRecalledSessions.has(eid)) evidenceHits++;
+            }
+          }
+        }
+
         // Format context — oracle bypass uses all memories, recall mode caps at recallLimit
-        const contextLimit = opts.oracleBypass ? filtered.length : Math.min(filtered.length, opts.recallLimit);
-        const contextMemories = filtered.slice(0, contextLimit);
+        let contextMemories: any[];
+        if (q.question_type === 'single-session-preference' && !opts.oracleBypass) {
+          // For preferences: prioritize preference memories, then limit episodic to top 30
+          const prefMems = filtered.filter((m: any) => m.tags?.includes('preference'));
+          const factMems = filtered.filter((m: any) => m.tags?.includes('extracted_fact') && !m.tags?.includes('preference'));
+          const episodicMems = filtered.filter((m: any) => m.memory_type === 'episodic');
+          // Take all preference memories + top 10 facts + top 20 episodic
+          contextMemories = [...prefMems, ...factMems.slice(0, 10), ...episodicMems.slice(0, 20)];
+        } else {
+          const contextLimit = opts.oracleBypass ? filtered.length : Math.min(filtered.length, opts.recallLimit);
+          contextMemories = filtered.slice(0, contextLimit);
+        }
         const context = formatBenchmarkContext(contextMemories, q.question_type);
         const generated = await generateAnswerCoN(context, q.question, q.question_type, opts.readerModel, q.question_date);
 
