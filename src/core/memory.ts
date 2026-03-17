@@ -76,8 +76,14 @@ export function getOwnerWallet(): string | null {
  * When an owner wallet is set, filters to only that wallet's memories.
  * When null, no filter is applied (backward-compatible).
  */
+/** Sentinel value: scope to memories where owner_wallet IS NULL (bot's own). */
+export const SCOPE_BOT_OWN = '__BOT_OWN__';
+
 export function scopeToOwner<T>(query: T): T {
   const wallet = getOwnerWallet();
+  if (wallet === SCOPE_BOT_OWN) {
+    return (query as any).is('owner_wallet', null);
+  }
   if (wallet) {
     return (query as any).eq('owner_wallet', wallet);
   }

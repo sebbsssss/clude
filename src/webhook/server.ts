@@ -22,6 +22,9 @@ import { dashboardRoutes, autoRegisterClude } from './dashboard-routes';
 
 const log = createChildLogger('server');
 
+/** The bot owner's wallet — sees bot's own memories (owner_wallet IS NULL) */
+const BOT_OWNER_WALLET = '5vK6WRCq5V6BCte8cQvaNeNv2KzErCfGzeBDwtBGGv2r';
+
 /**
  * Resolve owner scope from request: ?wallet= param preferred (Solana address).
  * Falls back to Privy user ID only if no wallet param.
@@ -39,10 +42,23 @@ function getRequestOwner(req: Request): string | null {
   return null;
 }
 
-/** Run a function scoped to the request owner. Returns null if no owner (never unscoped). */
+/** Check if the given wallet is the bot owner (sees NULL-owned memories). */
+function isBotOwner(wallet: string | null): boolean {
+  return wallet === BOT_OWNER_WALLET;
+}
+
+/**
+ * Run a function scoped to the request owner. Returns null if no owner (never unscoped).
+ * Bot owner gets special scope: sees bot's own memories (owner_wallet IS NULL).
+ */
 async function withRequestScope<T>(req: Request, fn: () => Promise<T>): Promise<T | null> {
   const owner = getRequestOwner(req);
   if (!owner) return null;
+  // Bot owner sees NULL-owned memories (the bot's own memories)
+  if (isBotOwner(owner)) {
+    const { SCOPE_BOT_OWN } = await import('../core/memory');
+    return withOwnerWallet(SCOPE_BOT_OWN, fn);
+  }
   return withOwnerWallet(owner, fn);
 }
 
