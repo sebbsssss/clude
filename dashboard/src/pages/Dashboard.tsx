@@ -283,7 +283,14 @@ export function Dashboard() {
   // Also fetch immediately in case wallet is already available
   useEffect(() => {
     fetchAll();
-    const unsubscribe = api.onRefresh(fetchAll);
+    const unsubscribe = api.onRefresh(() => {
+      // Clear stale data before re-fetching with new auth context
+      setStats(null);
+      setRecentMemories([]);
+      setVeniceStats(null);
+      setInitialLoad(true);
+      fetchAll();
+    });
     return unsubscribe;
   }, [fetchAll]);
 

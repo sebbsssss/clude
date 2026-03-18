@@ -26,9 +26,12 @@ export default function App() {
     );
   }
 
+  // Key changes when auth identity changes — forces full remount, wiping stale state
+  const sessionKey = `${auth.authMode}-${auth.walletAddress || 'cortex'}`;
+
   return (
     <AuthContext.Provider value={auth}>
-      <AgentProvider>
+      <AgentProvider key={sessionKey}>
         <Layout>
           <Routes>
             <Route path="/" element={<Dashboard />} />
