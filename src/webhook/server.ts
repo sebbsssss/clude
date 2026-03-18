@@ -982,10 +982,23 @@ export function createServer(): express.Application {
     next();
   });
 
-  // Agent dashboard at /dashboard
-  app.get('/dashboard', (req: Request, _res: Response, next: express.NextFunction) => {
-    req.url = '/dashboard.html';
-    next();
+  // React dashboard at /dashboard (SPA with client-side routing)
+  const dashboardDir = path.join(publicDir, 'dashboard');
+  const distDashboardDir = path.join(distPublicDir, 'dashboard');
+  app.use('/dashboard', express.static(dashboardDir));
+  app.use('/dashboard', express.static(distDashboardDir));
+  app.get('/dashboard/*', (_req: Request, res: Response) => {
+    const indexPath = path.join(dashboardDir, 'index.html');
+    const distIndexPath = path.join(distDashboardDir, 'index.html');
+    if (require('fs').existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      res.sendFile(distIndexPath);
+    }
+  });
+  // Redirect bare /dashboard to /dashboard/
+  app.get('/dashboard', (_req: Request, res: Response) => {
+    res.redirect('/dashboard/');
   });
 
   // Register page — Cortex API key registration
@@ -1085,19 +1098,9 @@ export function createServer(): express.Application {
     next();
   });
 
-  // New React dashboard at /dashboard-new (SPA with client-side routing)
-  const dashboardNewDir = path.join(publicDir, 'dashboard-new');
-  const distDashboardNewDir = path.join(distPublicDir, 'dashboard-new');
-  app.use('/dashboard-new', express.static(dashboardNewDir));
-  app.use('/dashboard-new', express.static(distDashboardNewDir));
-  app.get('/dashboard-new/*', (_req: Request, res: Response) => {
-    const indexPath = path.join(dashboardNewDir, 'index.html');
-    const distIndexPath = path.join(distDashboardNewDir, 'index.html');
-    if (require('fs').existsSync(indexPath)) {
-      res.sendFile(indexPath);
-    } else {
-      res.sendFile(distIndexPath);
-    }
+  // Redirect old /dashboard-new to /dashboard
+  app.get('/dashboard-new*', (_req: Request, res: Response) => {
+    res.redirect('/dashboard/');
   });
 
   // Sample memory packs

@@ -6,8 +6,6 @@ import { ActivityFeed } from '../components/ActivityFeed';
 import { useAgentContext } from '../context/AgentContext';
 import type { Memory, MemoryStats } from '../types/memory';
 
-const API_BASE = import.meta.env.VITE_API_BASE || '';
-
 // ── Helpers ──────────────────────────────────────
 
 function useCounter(target: number, ms = 1400) {
@@ -655,7 +653,7 @@ export function Dashboard() {
           </CardHeader>
           <div style={{ flex: 1, position: 'relative', minHeight: 240 }}>
             <iframe
-              src={`${API_BASE}/brain.html?embedded=1`}
+              src="/brain.html?embedded=1"
               style={{
                 width: '100%', height: '100%',
                 border: 'none', display: 'block',

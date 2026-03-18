@@ -37,7 +37,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         },
       }}
     >
-      <BrowserRouter>
+      <BrowserRouter basename="/dashboard">
         <App />
       </BrowserRouter>
     </PrivyProvider>

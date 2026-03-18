@@ -11,7 +11,7 @@ export default defineConfig({
       globals: { Buffer: true },
     }),
   ],
-  base: '/dashboard-new/',
+  base: '/dashboard/',
   define: {
     'global': 'globalThis',
   },
@@ -19,7 +19,7 @@ export default defineConfig({
     include: ['buffer', '@privy-io/react-auth'],
   },
   build: {
-    outDir: '../src/verify-app/public/dashboard-new',
+    outDir: '../src/verify-app/public/dashboard',
     emptyOutDir: true,
     commonjsOptions: {
       include: [/node_modules/],
