@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { NeuralCanvas } from '../components/NeuralCanvas';
 import { ActivityFeed } from '../components/ActivityFeed';
 import { useAgentContext } from '../context/AgentContext';
+import { useAuthContext } from '../hooks/AuthContext';
 import type { Memory, MemoryStats } from '../types/memory';
 
 // ── Helpers ──────────────────────────────────────
@@ -246,6 +247,7 @@ function CardHeader({ children, right, noBorder }: {
 // ── Main Dashboard ───────────────────────────────
 
 export function Dashboard() {
+  const { authMode, walletAddress } = useAuthContext();
   const [stats, setStats] = useState<MemoryStats | null>(null);
   const [veniceStats, setVeniceStats] = useState<any>(null);
   const [recentMemories, setRecentMemories] = useState<Memory[]>([]);
@@ -262,8 +264,20 @@ export function Dashboard() {
   }, [stats?.newestMemory]);
   const { agents, selectedAgent } = useAgentContext();
 
-  // Fetch all data (used for initial load and auth refresh)
+  // Fetch all data — re-runs when authMode or wallet changes
   const fetchAll = useCallback(() => {
+    // Ensure api mode matches current auth context
+    if (authMode === 'cortex') {
+      const savedKey = localStorage.getItem('cortex_api_key');
+      if (savedKey) {
+        api.setMode('cortex');
+        api.setToken(savedKey);
+      }
+    } else if (authMode === 'privy' && walletAddress) {
+      api.setMode('legacy');
+      api.setWalletAddress(walletAddress);
+    }
+
     Promise.all([
       api.getStats().catch(() => null),
       api.getVeniceStats().catch(() => null),
@@ -277,14 +291,16 @@ export function Dashboard() {
       setVeniceStats(v);
       setInitialLoad(false);
     });
-  }, []);
+  }, [authMode, walletAddress]);
 
-  // Initial load — triggered by onRefresh (fires when wallet is ready)
-  // Also fetch immediately in case wallet is already available
+  // Clear and re-fetch on mount, auth changes, and refresh signals
   useEffect(() => {
+    setStats(null);
+    setRecentMemories([]);
+    setVeniceStats(null);
+    setInitialLoad(true);
     fetchAll();
     const unsubscribe = api.onRefresh(() => {
-      // Clear stale data before re-fetching with new auth context
       setStats(null);
       setRecentMemories([]);
       setVeniceStats(null);
