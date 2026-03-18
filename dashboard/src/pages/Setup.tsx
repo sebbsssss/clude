@@ -182,15 +182,15 @@ export function Setup() {
                   {registering ? '...' : 'Create'}
                 </button>
               </div>
-              {error && (
-                <div style={{
-                  fontSize: 11, color: '#ef4444', marginTop: 12,
-                  padding: '10px 14px', background: 'rgba(239, 68, 68, 0.06)',
-                  border: '1px solid rgba(239, 68, 68, 0.15)', lineHeight: 1.6,
-                }}>
-                  {error}
-                </div>
-              )}
+            </div>
+          )}
+          {error && (
+            <div style={{
+              fontSize: 11, color: '#ef4444', marginTop: 12,
+              padding: '10px 14px', background: 'rgba(239, 68, 68, 0.06)',
+              border: '1px solid rgba(239, 68, 68, 0.15)', lineHeight: 1.6,
+            }}>
+              {error}
             </div>
           )}
         </div>
