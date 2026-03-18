@@ -1702,8 +1702,12 @@ window.addEventListener('message', (e) => {
 /* ============= DATA FETCH ============= */
 let initialLoadDone = false;
 
+// Pass wallet param if provided in URL, otherwise use default bot owner
+const _urlParams = new URLSearchParams(window.location.search);
+const _walletParam = _urlParams.get('wallet') || '5vK6WRCq5V6BCte8cQvaNeNv2KzErCfGzeBDwtBGGv2r';
+
 function fetchBrain() {
-  fetch('/api/brain?limit=500').then(r => r.json()).then(data => {
+  fetch('/api/brain?limit=500&wallet=' + encodeURIComponent(_walletParam)).then(r => r.json()).then(data => {
     if (!data.nodes?.length) {
       if (!initialLoadDone) {
         document.querySelector('.loading-text').textContent = 'NO MEMORIES FOUND';
@@ -1892,7 +1896,7 @@ function renderPsyche(data) {
 }
 
 function fetchConsciousness() {
-  fetch('/api/brain/consciousness').then(r => r.json()).then(data => {
+  fetch('/api/brain/consciousness?wallet=' + encodeURIComponent(_walletParam)).then(r => r.json()).then(data => {
     renderPsyche(data);
   }).catch(err => {
     console.warn('Psyche fetch failed:', err);
