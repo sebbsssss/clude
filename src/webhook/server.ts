@@ -536,7 +536,8 @@ export function createServer(): express.Application {
 
       const hours = 8760; // 1 year
       const limit = 200;
-      let memories = await getRecentMemories(hours, types || undefined, limit);
+      const result = await withRequestScope(req, () => getRecentMemories(hours, types || undefined, limit));
+      let memories = result || [];
 
       // Filter by tags if provided
       if (tags && tags.length > 0) {
