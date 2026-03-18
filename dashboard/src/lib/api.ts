@@ -262,10 +262,11 @@ class CludeAPI {
     return this.fetch('/api/memory-packs');
   }
 
-  // List agents
+  // List agents (scoped to current user's wallet or API key)
   async listAgents(): Promise<Agent[]> {
     try {
-      const result = await this.fetch<any>('/api/dashboard/agents');
+      const url = this.appendWallet('/api/dashboard/agents');
+      const result = await this.fetch<any>(url);
       return Array.isArray(result) ? result : (result?.agents || []);
     } catch {
       return [];

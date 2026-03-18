@@ -84,17 +84,64 @@ export function dashboardRoutes(): Router {
 
   // ── AGENTS ──────────────────────────────────────────────
 
-  // GET /agents — list all agents
-  router.get('/agents', async (_req: Request, res: Response) => {
+  // GET /agents — list agents scoped to the current user
+  router.get('/agents', async (req: Request, res: Response) => {
     try {
       const db = getDb();
-      const { data, error } = await db
-        .from('dashboard_agents')
-        .select('*')
-        .order('created_at', { ascending: true });
+      const wallet = req.query.wallet as string | undefined;
 
-      if (error) throw error;
-      res.json(data || []);
+      // If a wallet is provided, show only agents owned by that wallet
+      if (wallet) {
+        const { data, error } = await db
+          .from('agent_keys')
+          .select('agent_id, agent_name, owner_wallet, registered_at, last_used, is_active')
+          .eq('owner_wallet', wallet)
+          .eq('is_active', true)
+          .order('registered_at', { ascending: true });
+
+        if (error) throw error;
+
+        // Map to the Agent shape the dashboard expects
+        res.json((data || []).map(a => ({
+          id: a.agent_id,
+          name: a.agent_name,
+          wallet_address: a.owner_wallet,
+          created_at: a.registered_at,
+          last_active: a.last_used || a.registered_at,
+          memory_count: 0,
+        })));
+        return;
+      }
+
+      // Check for cortex Bearer auth — scope to that agent's wallet
+      const authHeader = req.headers['authorization'];
+      if (authHeader?.startsWith('Bearer clk_')) {
+        const apiKey = authHeader.slice(7);
+        const { authenticateAgent } = require('../features/agent-tier');
+        const agent = await authenticateAgent(apiKey);
+        if (agent?.owner_wallet) {
+          const { data, error } = await db
+            .from('agent_keys')
+            .select('agent_id, agent_name, owner_wallet, registered_at, last_used, is_active')
+            .eq('owner_wallet', agent.owner_wallet)
+            .eq('is_active', true)
+            .order('registered_at', { ascending: true });
+
+          if (error) throw error;
+          res.json((data || []).map(a => ({
+            id: a.agent_id,
+            name: a.agent_name,
+            wallet_address: a.owner_wallet,
+            created_at: a.registered_at,
+            last_active: a.last_used || a.registered_at,
+            memory_count: 0,
+          })));
+          return;
+        }
+      }
+
+      // Fallback: empty (no scope = no agents)
+      res.json([]);
     } catch (err) {
       log.error({ err }, 'List agents error');
       res.status(500).json({ error: 'Failed to list agents' });
