@@ -13,6 +13,26 @@ import { MemoryPacks } from './pages/MemoryPacks';
 import { Settings } from './pages/Settings';
 import { Setup } from './pages/Setup';
 
+function AuthenticatedApp() {
+  return (
+    <AgentProvider>
+      <Layout>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/timeline" element={<Timeline />} />
+          <Route path="/entities" element={<EntityMap />} />
+          <Route path="/brain" element={<BrainView />} />
+          <Route path="/decay" element={<DecayHeatmap />} />
+          <Route path="/packs" element={<MemoryPacks />} />
+          <Route path="/setup" element={<Setup />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Layout>
+    </AgentProvider>
+  );
+}
+
 export default function App() {
   const auth = useAuth();
 
@@ -26,26 +46,15 @@ export default function App() {
     );
   }
 
-  // Key changes when auth identity changes — forces full remount, wiping stale state
-  const sessionKey = `${auth.authMode}-${auth.walletAddress || 'cortex'}`;
+  // Unique key per auth session — forces full unmount/remount of all children
+  // when switching between wallet and API key login
+  const identity = auth.authMode === 'cortex'
+    ? `cortex-${localStorage.getItem('cortex_api_key')?.slice(-8) || ''}`
+    : `privy-${auth.walletAddress || ''}`;
 
   return (
-    <AuthContext.Provider value={auth}>
-      <AgentProvider key={sessionKey}>
-        <Layout>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/timeline" element={<Timeline />} />
-            <Route path="/entities" element={<EntityMap />} />
-            <Route path="/brain" element={<BrainView />} />
-            <Route path="/decay" element={<DecayHeatmap />} />
-            <Route path="/packs" element={<MemoryPacks />} />
-            <Route path="/setup" element={<Setup />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Layout>
-      </AgentProvider>
+    <AuthContext.Provider value={auth} key={identity}>
+      <AuthenticatedApp />
     </AuthContext.Provider>
   );
 }
