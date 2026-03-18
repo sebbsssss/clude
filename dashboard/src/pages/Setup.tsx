@@ -70,7 +70,19 @@ export function Setup() {
         body: JSON.stringify({ name }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || 'Registration failed'); setRegistering(false); return; }
+      if (!res.ok) {
+        const msg = data.error || 'Registration failed';
+        // Make common errors more user-friendly
+        if (res.status === 409) {
+          setError('This name or wallet is already registered. Try a different name, or use your existing API key in Settings.');
+        } else if (res.status === 429) {
+          setError('Too many attempts. Please wait a minute and try again.');
+        } else {
+          setError(msg);
+        }
+        setRegistering(false);
+        return;
+      }
       if (!data.apiKey) { setError('Unexpected response'); setRegistering(false); return; }
       setApiKey(data.apiKey);
     } catch { setError('Network error'); }
@@ -170,7 +182,15 @@ export function Setup() {
                   {registering ? '...' : 'Create'}
                 </button>
               </div>
-              {error && <div style={{ fontSize: 11, color: '#ef4444', marginTop: 8 }}>{error}</div>}
+              {error && (
+                <div style={{
+                  fontSize: 11, color: '#ef4444', marginTop: 12,
+                  padding: '10px 14px', background: 'rgba(239, 68, 68, 0.06)',
+                  border: '1px solid rgba(239, 68, 68, 0.15)', lineHeight: 1.6,
+                }}>
+                  {error}
+                </div>
+              )}
             </div>
           )}
         </div>

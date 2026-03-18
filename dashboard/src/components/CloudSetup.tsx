@@ -121,7 +121,13 @@ export function CloudSetup({ onBack }: { onBack: () => void }) {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || 'Registration failed');
+        if (res.status === 409) {
+          setError('This name or wallet is already registered. Try a different name, or sign in with your existing API key.');
+        } else if (res.status === 429) {
+          setError('Too many attempts. Please wait a minute and try again.');
+        } else {
+          setError(data.error || 'Registration failed');
+        }
         setLoading(false);
         return;
       }
