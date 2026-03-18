@@ -881,7 +881,7 @@ export function EntityMap() {
                 WebkitBackdropFilter: 'blur(20px) saturate(180%)',
                 border: '1px solid rgba(255, 255, 255, 0.4)',
                 borderRadius: 8,
-                padding: '20px 22px', width: 240,
+                padding: '20px 22px', width: 240, overflow: 'hidden',
                 boxShadow: '0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04)',
                 animation: 'panelSlideIn 0.3s ease-out',
               }}>
@@ -892,13 +892,16 @@ export function EntityMap() {
                   background: `linear-gradient(90deg, ${ENTITY_COLORS[selectedNode.type]?.color || '#666'}, ${ENTITY_COLORS[selectedNode.type]?.color || '#666'}66)`,
                 }} />
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, marginTop: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, marginTop: 4, minWidth: 0 }}>
                   <div style={{
-                    width: 10, height: 10, borderRadius: '50%',
+                    width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
                     background: ENTITY_COLORS[selectedNode.type]?.color || '#666',
                     boxShadow: `0 0 8px ${ENTITY_COLORS[selectedNode.type]?.color || '#666'}50`,
                   }} />
-                  <span style={{ fontWeight: 700, fontSize: 14, letterSpacing: -0.3 }}>
+                  <span style={{
+                    fontWeight: 700, fontSize: 14, letterSpacing: -0.3,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
                     {selectedNode.label}
                   </span>
                 </div>
