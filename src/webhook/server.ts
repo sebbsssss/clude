@@ -535,7 +535,7 @@ export function createServer(): express.Application {
       if (!name) { res.status(400).json({ error: 'name is required' }); return; }
 
       const hours = 8760; // 1 year
-      const limit = 200;
+      const limit = parseInt(req.query.limit as string) || 5000;
       const result = await withRequestScope(req, () => getRecentMemories(hours, types || undefined, limit));
       let memories = result || [];
 

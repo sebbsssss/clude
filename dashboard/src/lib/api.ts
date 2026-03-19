@@ -242,7 +242,7 @@ class CludeAPI {
           description: opts.description,
           memory_ids: opts.memoryIds,
           types: opts.types,
-          limit: 200,
+          limit: 5000,
         }),
       });
       // Normalize cortex response to MemoryPack shape

@@ -54,35 +54,35 @@ export function formatChatGPT(memories: Memory[]): string {
     '',
   ];
 
-  const semantic = sortByImportance(byType['semantic'] || []).slice(0, 40);
+  const semantic = sortByImportance(byType['semantic'] || []);
   if (semantic.length) {
     lines.push('## Key Facts (semantic memories)');
     for (const m of semantic) lines.push(`- ${memText(m)}`);
     lines.push('');
   }
 
-  const procedural = sortByImportance(byType['procedural'] || []).slice(0, 30);
+  const procedural = sortByImportance(byType['procedural'] || []);
   if (procedural.length) {
     lines.push('## Learned Behaviors (procedural memories)');
     for (const m of procedural) lines.push(`- ${memText(m)}`);
     lines.push('');
   }
 
-  const selfModel = sortByImportance(byType['self_model'] || []).slice(0, 10);
+  const selfModel = sortByImportance(byType['self_model'] || []);
   if (selfModel.length) {
     lines.push('## Self Model');
     for (const m of selfModel) lines.push(`- ${memText(m)}`);
     lines.push('');
   }
 
-  const episodic = sortByRecent(byType['episodic'] || []).slice(0, 20);
+  const episodic = sortByRecent(byType['episodic'] || []);
   if (episodic.length) {
     lines.push('## Personal Context (episodic memories, most recent)');
     for (const m of episodic) lines.push(`- ${datedMemText(m)}`);
     lines.push('');
   }
 
-  return truncateToWords(lines.join('\n'), 1500);
+  return lines.join('\n');
 }
 
 // ─── Gemini Format ────────────────────────────────────────
@@ -96,35 +96,35 @@ export function formatGemini(memories: Memory[]): string {
     '',
   ];
 
-  const semantic = sortByImportance(byType['semantic'] || []).slice(0, 40);
+  const semantic = sortByImportance(byType['semantic'] || []);
   if (semantic.length) {
     lines.push('## What I Know');
     for (const m of semantic) lines.push(`• ${memText(m)}`);
     lines.push('');
   }
 
-  const procedural = sortByImportance(byType['procedural'] || []).slice(0, 30);
+  const procedural = sortByImportance(byType['procedural'] || []);
   if (procedural.length) {
     lines.push('## How I Work');
     for (const m of procedural) lines.push(`• ${memText(m)}`);
     lines.push('');
   }
 
-  const selfModel = sortByImportance(byType['self_model'] || []).slice(0, 10);
+  const selfModel = sortByImportance(byType['self_model'] || []);
   if (selfModel.length) {
     lines.push('## About Myself');
     for (const m of selfModel) lines.push(`• ${memText(m)}`);
     lines.push('');
   }
 
-  const episodic = sortByRecent(byType['episodic'] || []).slice(0, 20);
+  const episodic = sortByRecent(byType['episodic'] || []);
   if (episodic.length) {
     lines.push('## Recent History');
     for (const m of episodic) lines.push(`• ${datedMemText(m)}`);
     lines.push('');
   }
 
-  return truncateToWords(lines.join('\n'), 1500);
+  return lines.join('\n');
 }
 
 // ─── Claude Format ────────────────────────────────────────
@@ -138,7 +138,7 @@ export function formatClaude(memories: Memory[]): string {
     '',
   ];
 
-  const semantic = sortByImportance(byType['semantic'] || []).slice(0, 40);
+  const semantic = sortByImportance(byType['semantic'] || []);
   if (semantic.length) {
     lines.push('<knowledge>');
     for (const m of semantic) lines.push(`- ${memText(m)}`);
@@ -146,7 +146,7 @@ export function formatClaude(memories: Memory[]): string {
     lines.push('');
   }
 
-  const procedural = sortByImportance(byType['procedural'] || []).slice(0, 30);
+  const procedural = sortByImportance(byType['procedural'] || []);
   if (procedural.length) {
     lines.push('<behaviors>');
     for (const m of procedural) lines.push(`- ${memText(m)}`);
@@ -154,7 +154,7 @@ export function formatClaude(memories: Memory[]): string {
     lines.push('');
   }
 
-  const selfModel = sortByImportance(byType['self_model'] || []).slice(0, 10);
+  const selfModel = sortByImportance(byType['self_model'] || []);
   if (selfModel.length) {
     lines.push('<self_model>');
     for (const m of selfModel) lines.push(`- ${memText(m)}`);
@@ -162,7 +162,7 @@ export function formatClaude(memories: Memory[]): string {
     lines.push('');
   }
 
-  const episodic = sortByRecent(byType['episodic'] || []).slice(0, 20);
+  const episodic = sortByRecent(byType['episodic'] || []);
   if (episodic.length) {
     lines.push('<recent_history>');
     for (const m of episodic) lines.push(`- ${datedMemText(m)}`);
@@ -170,7 +170,15 @@ export function formatClaude(memories: Memory[]): string {
     lines.push('');
   }
 
-  return truncateToWords(lines.join('\n'), 2000);
+  const introspective = sortByRecent(byType['introspective'] || []);
+  if (introspective.length) {
+    lines.push('<introspection>');
+    for (const m of introspective) lines.push(`- ${datedMemText(m)}`);
+    lines.push('</introspection>');
+    lines.push('');
+  }
+
+  return lines.join('\n');
 }
 
 // ─── Download & Clipboard ─────────────────────────────────

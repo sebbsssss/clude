@@ -529,7 +529,7 @@ export function cortexRoutes(): Router {
           return recallMemories({
             query,
             memoryTypes: types,
-            limit: limit || 50,
+            limit: Math.min(limit || 5000, 10000),
           });
         }
       });
