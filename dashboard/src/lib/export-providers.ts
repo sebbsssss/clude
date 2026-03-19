@@ -131,9 +131,11 @@ export function formatGemini(memories: Memory[]): string {
 
 export function formatClaude(memories: Memory[]): string {
   const byType = groupByType(memories);
+  const typeCounts = Object.entries(byType).map(([t, arr]) => `${t}: ${arr.length}`).join(', ');
   const lines: string[] = [
     '<context>',
-    'You have persistent memory from a system called Clude. Use this context to maintain continuity across conversations.',
+    `You have persistent memory from a system called Clude (${memories.length} memories: ${typeCounts}).`,
+    'Use this context to maintain continuity across conversations.',
     '</context>',
     '',
   ];

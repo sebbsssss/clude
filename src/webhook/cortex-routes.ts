@@ -522,17 +522,38 @@ export function cortexRoutes(): Router {
         return;
       }
 
-      const memories = await withOwnerWallet(cortexReq.ownerWallet!, async () => {
-        if (memory_ids && Array.isArray(memory_ids)) {
+      let memories: any[];
+      if (memory_ids && Array.isArray(memory_ids)) {
+        memories = await withOwnerWallet(cortexReq.ownerWallet!, async () => {
           return hydrateMemories(memory_ids);
-        } else {
-          return recallMemories({
-            query,
-            memoryTypes: types,
-            limit: Math.min(limit || 5000, 10000),
-          });
+        });
+      } else {
+        // Paginate through all memories (Supabase caps at 1000/query)
+        const db = getDb();
+        memories = [];
+        const PAGE = 1000;
+        let offset = 0;
+        while (true) {
+          let query = db.from('memories')
+            .select('id, memory_type, content, summary, tags, concepts, importance, decay_factor, emotional_valence, access_count, source, created_at')
+            .eq('owner_wallet', cortexReq.ownerWallet!)
+            .order('importance', { ascending: false })
+            .range(offset, offset + PAGE - 1);
+
+          if (types && types.length > 0) {
+            query = query.in('memory_type', types);
+          }
+
+          const { data, error: dbErr } = await query;
+          if (dbErr) { log.error({ err: dbErr }, 'Export pagination error'); break; }
+          if (!data || data.length === 0) break;
+
+          memories = memories.concat(data);
+          offset += data.length;
+          if (memories.length >= 50000) break;
+          if (data.length < PAGE) break;
         }
-      });
+      }
 
       const pack = {
         id: randomUUID(),

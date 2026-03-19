@@ -528,25 +528,52 @@ export function createServer(): express.Application {
     }
   });
 
-  // Export memory pack
+  // Export memory pack (paginated — handles 25K+ memories)
   app.post('/api/memory-packs/export', requirePrivyAuth, async (req: Request, res: Response) => {
     try {
       const { name, description, tags, types } = req.body;
       if (!name) { res.status(400).json({ error: 'name is required' }); return; }
 
-      const hours = 8760; // 1 year
-      const limit = parseInt(req.query.limit as string) || 5000;
-      const result = await withRequestScope(req, () => getRecentMemories(hours, types || undefined, limit));
-      let memories = result || [];
+      const owner = getRequestOwner(req);
+      if (!owner) { res.json({ memories: [], memory_count: 0 }); return; }
+
+      // Paginate through all memories (Supabase caps at 1000/query)
+      const db = getDb();
+      let allMemories: any[] = [];
+      const PAGE = 1000;
+      let offset = 0;
+      while (true) {
+        let query = db.from('memories')
+          .select('id, memory_type, content, summary, tags, concepts, importance, decay_factor, emotional_valence, access_count, source, source_id, created_at, last_accessed, solana_signature, evidence_ids')
+          .eq('owner_wallet', owner)
+          .order('importance', { ascending: false })
+          .range(offset, offset + PAGE - 1);
+
+        if (types && types.length > 0) {
+          query = query.in('memory_type', types);
+        }
+
+        const { data, error } = await query;
+        if (error) { log.error({ err: error }, 'Export pagination error'); break; }
+        if (!data || data.length === 0) break;
+
+        allMemories = allMemories.concat(data);
+        offset += data.length;
+
+        // Safety cap at 50K to prevent OOM
+        if (allMemories.length >= 50000) break;
+        if (data.length < PAGE) break;
+      }
+
+      let memories = allMemories;
 
       // Filter by tags if provided
       if (tags && tags.length > 0) {
         memories = memories.filter(m => m.tags.some((t: string) => tags.includes(t)));
       }
 
-      // Build entities list
-      const db = getDb();
-      const memoryIds = memories.map(m => m.id);
+      // Build entities list (use first 1000 IDs to avoid query size limits)
+      const memoryIds = memories.slice(0, 1000).map(m => m.id);
       let entities: any[] = [];
       let links: any[] = [];
 

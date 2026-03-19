@@ -234,7 +234,7 @@ class CludeAPI {
     types?: string[];
   }): Promise<MemoryPack> {
     if (this.mode === 'cortex') {
-      // Use cortex pack export endpoint
+      // Use cortex pack export endpoint — no limit, server paginates
       const result = await this.fetch<any>('/api/cortex/packs/export', {
         method: 'POST',
         body: JSON.stringify({
@@ -242,7 +242,6 @@ class CludeAPI {
           description: opts.description,
           memory_ids: opts.memoryIds,
           types: opts.types,
-          limit: 5000,
         }),
       });
       // Normalize cortex response to MemoryPack shape
