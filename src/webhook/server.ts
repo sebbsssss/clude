@@ -193,7 +193,7 @@ export function createServer(): express.Application {
   // ── Memory Provenance API ──────────────────────────────────────────
 
   // Trace a memory's full ancestry, descendants, and related memories
-  app.get('/api/memory/:id/trace', async (req: Request, res: Response) => {
+  app.get('/api/memory/:id/trace', optionalPrivyAuth, async (req: Request, res: Response) => {
     try {
       const memoryId = parseInt(req.params.id);
       if (isNaN(memoryId)) {
@@ -202,14 +202,19 @@ export function createServer(): express.Application {
       }
       const maxDepth = Math.min(parseInt(req.query.depth as string) || 3, 5);
 
-      // Only allow tracing bot's own memories (owner_wallet IS NULL), not cortex agent memories
+      // Verify the requesting user owns this memory
+      const owner = getRequestOwner(req);
+      if (!owner) {
+        res.status(401).json({ error: 'Authentication required' });
+        return;
+      }
       const db = getDb();
       const { data: mem } = await db.from('memories').select('owner_wallet').eq('id', memoryId).single();
       if (!mem) {
         res.status(404).json({ error: 'Memory not found' });
         return;
       }
-      if (mem.owner_wallet !== null) {
+      if (mem.owner_wallet !== owner) {
         res.status(403).json({ error: 'Cannot trace this memory' });
         return;
       }
@@ -227,7 +232,7 @@ export function createServer(): express.Application {
   });
 
   // Explain a memory — "why did you think this?"
-  app.post('/api/memory/:id/explain', async (req: Request, res: Response) => {
+  app.post('/api/memory/:id/explain', optionalPrivyAuth, async (req: Request, res: Response) => {
     try {
       const memoryId = parseInt(req.params.id);
       if (isNaN(memoryId)) {
@@ -240,10 +245,15 @@ export function createServer(): express.Application {
         return;
       }
 
-      // Only allow explaining bot's own memories
+      // Verify the requesting user owns this memory
+      const owner = getRequestOwner(req);
+      if (!owner) {
+        res.status(401).json({ error: 'Authentication required' });
+        return;
+      }
       const db = getDb();
       const { data: mem } = await db.from('memories').select('owner_wallet').eq('id', memoryId).single();
-      if (!mem || mem.owner_wallet !== null) {
+      if (!mem || mem.owner_wallet !== owner) {
         res.status(403).json({ error: 'Cannot explain this memory' });
         return;
       }
@@ -279,10 +289,10 @@ export function createServer(): express.Application {
         return;
       }
 
-      // Only allow verifying bot's own (public) memories or the requester's own
+      // Only allow verifying memories owned by the requester
       const requestWallet = req.query.wallet as string;
-      if (mem.owner_wallet !== null && mem.owner_wallet !== requestWallet) {
-        res.status(404).json({ error: 'Memory not found' });
+      if (!requestWallet || mem.owner_wallet !== requestWallet) {
+        res.status(403).json({ error: 'Not authorized to verify this memory' });
         return;
       }
 
@@ -497,10 +507,11 @@ export function createServer(): express.Application {
       }
 
       const limit = Math.min(parseInt(req.query.limit as string) || 300, 500);
-      const memories = await getRecentMemories(8760, undefined, limit);
-      // Filter to wallet-owned memories
-      const walletMemories = memories.filter(m => (m as any).owner_wallet === wallet);
-      const stats = await getMemoryStats();
+      // Use withOwnerWallet to scope query to the requested wallet
+      const result = await withOwnerWallet(wallet, async () => {
+        return Promise.all([getRecentMemories(8760, undefined, limit), getMemoryStats()]);
+      });
+      const [walletMemories, stats] = result;
 
       res.json({
         nodes: walletMemories.map(m => ({

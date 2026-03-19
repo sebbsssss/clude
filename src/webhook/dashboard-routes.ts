@@ -188,8 +188,8 @@ export function dashboardRoutes(): Router {
     }
   });
 
-  // GET /agents/:id — get agent details
-  router.get('/agents/:id', async (req: Request, res: Response) => {
+  // GET /agents/:id — get agent details (owner only)
+  router.get('/agents/:id', requireOwner, async (req: Request, res: Response) => {
     try {
       const db = getDb();
       const { data, error } = await db
@@ -284,7 +284,7 @@ export function dashboardRoutes(): Router {
   });
 
   // POST /agents/:id/heartbeat — agent heartbeat check-in
-  router.post('/agents/:id/heartbeat', async (req: Request, res: Response) => {
+  router.post('/agents/:id/heartbeat', requireOwner, async (req: Request, res: Response) => {
     try {
       const { status, metadata, cost_usd } = req.body;
       const now = new Date().toISOString();
@@ -374,8 +374,8 @@ export function dashboardRoutes(): Router {
 
   // ── TASKS ──────────────────────────────────────────────
 
-  // GET /tasks — list tasks (filterable)
-  router.get('/tasks', async (req: Request, res: Response) => {
+  // GET /tasks — list tasks (owner only)
+  router.get('/tasks', requireOwner, async (req: Request, res: Response) => {
     try {
       const db = getDb();
       let query = db
@@ -554,8 +554,8 @@ export function dashboardRoutes(): Router {
 
   // ── ACTIVITY ──────────────────────────────────────────
 
-  // GET /activity — activity log (paginated)
-  router.get('/activity', async (req: Request, res: Response) => {
+  // GET /activity — activity log (owner only)
+  router.get('/activity', requireOwner, async (req: Request, res: Response) => {
     try {
       const db = getDb();
       const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
@@ -581,8 +581,8 @@ export function dashboardRoutes(): Router {
 
   // ── STATS ──────────────────────────────────────────────
 
-  // GET /stats — aggregate dashboard stats
-  router.get('/stats', async (req: Request, res: Response) => {
+  // GET /stats — aggregate dashboard stats (owner only)
+  router.get('/stats', requireOwner, async (req: Request, res: Response) => {
     try {
       const db = getDb();
 
