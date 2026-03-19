@@ -12,6 +12,8 @@
   --border: rgba(0, 0, 0, 0.06);
   --border-strong: rgba(0, 0, 0, 0.12);
   --mono: 'JetBrains Mono', monospace;
+  --hover-bg: rgba(0, 0, 0, 0.04);
+  --hover-bg-strong: rgba(0, 0, 0, 0.06);
 
   /* Memory type colors */
   --episodic: #2244ff;
@@ -26,6 +28,26 @@
   --bond-contradicts: #f59e0b;
   --bond-relates: #6b7280;
   --bond-follows: #a3a3a3;
+}
+
+html.dark {
+  --bg: #0a0a0f;
+  --bg-warm: #111118;
+  --bg-card: #16161e;
+  --text: #e8e8e8;
+  --text-muted: #9a9a9a;
+  --text-faint: #555;
+  --blue: #4466ff;
+  --blue-light: rgba(68, 102, 255, 0.12);
+  --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --hover-bg: rgba(255, 255, 255, 0.04);
+  --hover-bg-strong: rgba(255, 255, 255, 0.06);
+
+  --episodic: #4466ff;
+  --semantic: #34d399;
+  --procedural: #fbbf24;
+  --self-model: #a78bfa;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }

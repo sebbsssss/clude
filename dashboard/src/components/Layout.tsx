@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuthContext } from '../hooks/AuthContext';
 import { AgentSelector } from './AgentSelector';
+import { useTheme } from '../hooks/useTheme';
 import styles from './Layout.module.css';
 
 const NAV_ITEMS = [
@@ -16,6 +17,7 @@ const NAV_ITEMS = [
 export function Layout({ children }: { children: React.ReactNode }) {
   const { walletAddress, email, logout } = useAuthContext();
   const navigate = useNavigate();
+  const { isDark, toggle } = useTheme();
   const displayName = email
     ? email
     : walletAddress
@@ -73,9 +75,28 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className={styles.sidebarFooter}>
-          <div className={styles.wallet}>
-            <span className={styles.walletDot} />
-            {displayName}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div className={styles.wallet} style={{ marginBottom: 0 }}>
+              <span className={styles.walletDot} />
+              {displayName}
+            </div>
+            <button
+              onClick={toggle}
+              title={isDark ? 'Light mode' : 'Dark mode'}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: 14,
+                padding: '2px 4px',
+                color: 'var(--text-faint)',
+                transition: 'color 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-faint)'; }}
+            >
+              {isDark ? '☀' : '◑'}
+            </button>
           </div>
           <button onClick={logout} className={styles.logoutBtn}>
             Sign Out

@@ -67,13 +67,13 @@
 
 .navItem:hover {
   color: var(--text);
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--hover-bg);
   text-decoration: none;
 }
 
 .navItemActive {
   color: var(--text);
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--hover-bg-strong);
   font-weight: 600;
   border-left: 2px solid var(--blue);
   padding-left: 10px;
