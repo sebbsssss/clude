@@ -642,12 +642,15 @@ export function cortexRoutes(): Router {
   router.post('/packs/smart-export', async (req: Request, res: Response) => {
     try {
       const cortexReq = req as CortexRequest;
-      const { name } = req.body;
+      const { name, provider } = req.body;
 
       if (!name) {
         res.status(400).json({ error: 'name is required' });
         return;
       }
+
+      const validProviders = ['chatgpt', 'claude', 'gemini'];
+      const targetProvider = validProviders.includes(provider) ? provider : 'claude';
 
       const veniceApiKey = process.env.VENICE_API_KEY;
       if (!veniceApiKey) {
@@ -702,9 +705,26 @@ export function cortexRoutes(): Router {
       const memoryDump = sections.join('\n');
       const typeCounts = Object.entries(byType).map(([t, arr]) => `${t}: ${arr.length}`).join(', ');
 
+      // Provider-specific formatting instructions
+      const providerFormats: Record<string, string> = {
+        claude: `Format the output using XML tags that Claude understands well:
+<user_profile>, <projects>, <decisions>, <knowledge>, <style>, <relationships>, <timeline>
+Wrap the entire output in <context> tags.`,
+        chatgpt: `Format the output using Markdown headers (##) and bullet points.
+Start with "# Memory Context" as the title.
+Use clear section breaks. ChatGPT works best with structured Markdown.
+At the top, add: "You are continuing a conversation with a user. Below is everything you know about them from previous interactions."`,
+        gemini: `Format the output using Markdown with clear ## headers.
+Start with "# Memory Context" as the title.
+Use bullet points and bold for emphasis.
+At the top, add: "You have persistent memory about this user from a system called Clude. Use this context naturally in your responses."`,
+      };
+
+      const formatInstruction = providerFormats[targetProvider] || providerFormats.claude;
+
       // Synthesize with Claude Sonnet via Venice
       const synthesisPrompt = `You are analyzing a user's AI memory corpus to create a rich context document.
-The document will be used to give another AI assistant full context about this user across conversations.
+The document will be used to give ${targetProvider === 'claude' ? 'Claude' : targetProvider === 'chatgpt' ? 'ChatGPT' : 'Gemini'} full context about this user across conversations.
 
 The user has ${allMemories.length} memories (${typeCounts}).
 
@@ -717,6 +737,8 @@ Create a comprehensive context document with these sections:
 6. **Important Relationships** — People, teams, partners, collaborators
 7. **Recent Timeline** — What's happened in the last 2 weeks, chronologically
 
+${formatInstruction}
+
 Rules:
 - Write in third person ("The user..." or use their name if found)
 - Be specific — include names, dates, numbers, URLs when available
@@ -724,7 +746,6 @@ Rules:
 - Don't just list facts — explain relationships between them
 - If memories are mostly one type (e.g., all episodic), extract implicit knowledge from the events
 - Keep it under 3000 words
-- Use XML tags for sections (<user_profile>, <projects>, <decisions>, <knowledge>, <style>, <relationships>, <timeline>)
 
 Here are the memories:
 ${memoryDump}`;
@@ -761,13 +782,9 @@ ${memoryDump}`;
         return;
       }
 
-      const contextBrief = `<context>
-You are continuing a relationship with a user. This context was synthesized from ${allMemories.length} memories by Clude (persistent memory for AI agents).
-Generated: ${new Date().toISOString().slice(0, 10)}
-Export name: ${name}
-
-${synthesis}
-</context>`;
+      const contextBrief = targetProvider === 'claude'
+        ? `<context>\nSynthesized from ${allMemories.length} memories by Clude. Generated: ${new Date().toISOString().slice(0, 10)}\n\n${synthesis}\n</context>`
+        : `${synthesis}\n\n---\nSynthesized from ${allMemories.length} memories by Clude. Generated: ${new Date().toISOString().slice(0, 10)}`;
 
       res.json({
         name,

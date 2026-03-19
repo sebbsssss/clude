@@ -671,8 +671,11 @@ export function createServer(): express.Application {
   // Smart export (AI-synthesized context brief)
   app.post('/api/memory-packs/smart-export', requirePrivyAuth, async (req: Request, res: Response) => {
     try {
-      const { name } = req.body;
+      const { name, provider } = req.body;
       if (!name) { res.status(400).json({ error: 'name is required' }); return; }
+
+      const validProviders = ['chatgpt', 'claude', 'gemini'];
+      const targetProvider = validProviders.includes(provider) ? provider : 'claude';
 
       const owner = getRequestOwner(req);
       if (!owner) { res.status(401).json({ error: 'Authentication required' }); return; }
@@ -721,6 +724,14 @@ export function createServer(): express.Application {
 
       const typeCounts = Object.entries(byType).map(([t, arr]) => `${t}: ${arr.length}`).join(', ');
 
+      const providerFormats: Record<string, string> = {
+        claude: 'Format using XML tags: <user_profile>, <projects>, <decisions>, <knowledge>, <style>, <relationships>, <timeline>. Wrap in <context> tags.',
+        chatgpt: 'Format using Markdown ## headers and bullets. Start with "# Memory Context". Add intro: "You are continuing a conversation with a user. Below is everything you know about them."',
+        gemini: 'Format using Markdown ## headers and bullets. Start with "# Memory Context". Add intro: "You have persistent memory about this user from Clude. Use this context naturally."',
+      };
+
+      const targetName = targetProvider === 'chatgpt' ? 'ChatGPT' : targetProvider === 'gemini' ? 'Gemini' : 'Claude';
+
       const veniceRes = await fetch('https://api.venice.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -731,7 +742,7 @@ export function createServer(): express.Application {
           model: 'claude-sonnet-4-6',
           messages: [
             { role: 'system', content: 'You are an expert at synthesizing information into structured context documents.' },
-            { role: 'user', content: `Analyze this user's ${allMemories.length} memories (${typeCounts}) and create a comprehensive context document.
+            { role: 'user', content: `Analyze this user's ${allMemories.length} memories (${typeCounts}) and create a comprehensive context document optimized for ${targetName}.
 
 Sections needed:
 1. **User Profile** — Who they are, role, background, expertise
@@ -742,7 +753,9 @@ Sections needed:
 6. **Important Relationships** — People, teams, partners
 7. **Recent Timeline** — Last 2 weeks chronologically
 
-Rules: Third person, be specific (names, dates, numbers), explain relationships between facts, under 3000 words, use XML tags for sections.
+${providerFormats[targetProvider] || providerFormats.claude}
+
+Rules: Third person, be specific (names, dates, numbers), explain relationships between facts, under 3000 words.
 
 Memories:
 ${sections.join('\n')}` },
@@ -767,7 +780,9 @@ ${sections.join('\n')}` },
         format: 'smart',
         memory_count: allMemories.length,
         type_breakdown: Object.fromEntries(Object.entries(byType).map(([t, arr]) => [t, arr.length])),
-        content: `<context>\nSynthesized from ${allMemories.length} memories by Clude.\nGenerated: ${new Date().toISOString().slice(0, 10)}\n\n${synthesis}\n</context>`,
+        content: targetProvider === 'claude'
+          ? `<context>\nSynthesized from ${allMemories.length} memories by Clude. Generated: ${new Date().toISOString().slice(0, 10)}\n\n${synthesis}\n</context>`
+          : `${synthesis}\n\n---\nSynthesized from ${allMemories.length} memories by Clude. Generated: ${new Date().toISOString().slice(0, 10)}`,
         generated_at: new Date().toISOString(),
       });
     } catch (err) {

@@ -271,18 +271,18 @@ class CludeAPI {
     });
   }
 
-  // Smart export — AI-synthesized context brief
-  async smartExport(name: string): Promise<{ content: string; memory_count: number; type_breakdown: Record<string, number> }> {
+  // Smart export — AI-synthesized context brief for a specific provider
+  async smartExport(name: string, provider: 'chatgpt' | 'claude' | 'gemini' = 'claude'): Promise<{ content: string; memory_count: number; type_breakdown: Record<string, number> }> {
     if (this.mode === 'cortex') {
       return this.fetch('/api/cortex/packs/smart-export', {
         method: 'POST',
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, provider }),
       });
     }
     const url = this.appendWallet('/api/memory-packs/smart-export');
     return this.fetch(url, {
       method: 'POST',
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, provider }),
     });
   }
 
