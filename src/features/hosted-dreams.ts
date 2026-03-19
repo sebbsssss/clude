@@ -69,22 +69,14 @@ async function dreamForAgent(ownerWallet: string, agentName: string): Promise<{ 
 
     try {
       const consolidationResponse = await generateVeniceResponse({
+        systemPrompt: 'You extract factual insights from data. Always respond with ONLY a JSON array of strings. No explanation, no markdown, no thinking process.',
         messages: [{
           role: 'user',
-          content: `You are analyzing an AI agent's recent episodic memories to extract lasting knowledge.
-
-Here are the agent "${agentName}"'s recent memories:
-${episodicSummaries}
-
-Extract 3-5 key SEMANTIC insights — things that are true facts, patterns, or learned knowledge (not just events). Each should be a standalone statement that would be useful context in future conversations.
-
-Format: Return ONLY a JSON array of strings, each being one insight. Example:
-["User prefers TypeScript over JavaScript", "Project deadline is March 30"]`,
+          content: `Extract 5-8 key factual insights from these agent memories. Facts, patterns, learned knowledge — not events.\n\n${episodicSummaries}`,
         }],
-        model: 'qwen3-5-9b',
+        model: 'llama-3.3-70b',
         maxTokens: 1000,
-        temperature: 0.3,
-        cognitiveFunction: 'dream',
+        temperature: 0.2,
       });
 
       // Parse insights
@@ -117,22 +109,14 @@ Format: Return ONLY a JSON array of strings, each being one insight. Example:
     // Extract behavioral patterns / rules from episodes
     try {
       const proceduralResponse = await generateVeniceResponse({
+        systemPrompt: 'You extract actionable rules from data. Always respond with ONLY a JSON array of strings. No explanation.',
         messages: [{
           role: 'user',
-          content: `You are analyzing an AI agent's recent episodic memories to extract behavioral rules.
-
-Here are the agent "${agentName}"'s recent memories:
-${episodicSummaries}
-
-Extract 1-3 PROCEDURAL rules — things the agent should DO or AVOID based on patterns in these memories. These are actionable behaviors, not facts.
-
-Format: Return ONLY a JSON array of strings. Example:
-["Always confirm pricing before quoting", "Avoid discussing competitor features"]`,
+          content: `Extract 3-4 actionable rules/behaviors from these agent memories. Things to DO or AVOID.\n\n${episodicSummaries}`,
         }],
-        model: 'qwen3-5-9b',
+        model: 'llama-3.3-70b',
         maxTokens: 500,
-        temperature: 0.3,
-        cognitiveFunction: 'dream',
+        temperature: 0.2,
       });
 
       const jsonMatch = proceduralResponse.match(/\[[\s\S]*\]/);
