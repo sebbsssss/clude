@@ -421,6 +421,31 @@ export async function initDatabase(): Promise<void> {
         CREATE INDEX IF NOT EXISTS idx_dashboard_activity_agent ON dashboard_activity(agent_id);
         CREATE INDEX IF NOT EXISTS idx_dashboard_activity_action ON dashboard_activity(action);
         CREATE INDEX IF NOT EXISTS idx_dashboard_activity_created ON dashboard_activity(created_at DESC);
+
+        -- Chat: conversations and messages for memory-augmented chat
+        CREATE TABLE IF NOT EXISTS chat_conversations (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          owner_wallet TEXT NOT NULL,
+          title TEXT,
+          model TEXT NOT NULL DEFAULT 'qwen3-5-9b',
+          message_count INTEGER DEFAULT 0,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_chat_conv_owner ON chat_conversations(owner_wallet);
+
+        CREATE TABLE IF NOT EXISTS chat_messages (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          conversation_id UUID NOT NULL REFERENCES chat_conversations(id) ON DELETE CASCADE,
+          role TEXT NOT NULL,
+          content TEXT NOT NULL,
+          model TEXT,
+          tokens_prompt INTEGER,
+          tokens_completion INTEGER,
+          memory_ids INTEGER[],
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_chat_msg_conv ON chat_messages(conversation_id, created_at);
       `
     });
 

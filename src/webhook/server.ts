@@ -11,6 +11,7 @@ import { agentRoutes } from './agent-routes';
 import { cortexRoutes } from './cortex-routes';
 import { graphRoutes } from './graph-routes';
 import { campaignRoutes } from './campaign-routes';
+import { chatRoutes } from './chat-routes';
 import { getVeniceStats } from '../core/venice-client';
 import { createChildLogger } from '../core/logger';
 import { checkInputContent } from '../core/guardrails';
@@ -460,6 +461,9 @@ export function createServer(): express.Application {
 
   // Agent Dashboard (orchestration & monitoring)
   app.use('/api/dashboard', dashboardRoutes());
+
+  // Chat API (memory-augmented chat with Venice AI inference)
+  app.use('/api/chat', chatRoutes());
 
   // Campaign: 10 Days of Growing a Blockchain Brain
   app.use('/api/campaign', apiLimiter, campaignRoutes());
