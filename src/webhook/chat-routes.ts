@@ -21,20 +21,20 @@ const log = createChildLogger('chat-api');
 
 export const CHAT_MODELS = [
   // Private (Venice infra, zero data retention)
-  { id: 'qwen3-5-9b', name: 'Qwen 3.5 9B', veniceId: 'qwen3-5-9b', privacy: 'private', context: 256000, default: true },
-  { id: 'qwen3-next-80b', name: 'Qwen 3 Next 80B', veniceId: 'qwen3-next-80b', privacy: 'private', context: 256000 },
-  { id: 'llama-3.3-70b', name: 'Llama 3.3 70B', veniceId: 'llama-3.3-70b', privacy: 'private', context: 128000 },
-  { id: 'deepseek-v3.2', name: 'DeepSeek V3.2', veniceId: 'deepseek-v3.2', privacy: 'private', context: 160000 },
-  { id: 'mistral-31-24b', name: 'Mistral 31 24B', veniceId: 'mistral-31-24b', privacy: 'private', context: 128000 },
-  { id: 'venice-uncensored', name: 'Venice Uncensored', veniceId: 'venice-uncensored', privacy: 'private', context: 32000 },
-  { id: 'kimi-k2-thinking', name: 'Kimi K2 Thinking', veniceId: 'kimi-k2-thinking', privacy: 'private', context: 256000 },
-  { id: 'openai-gpt-oss-120b', name: 'GPT OSS 120B', veniceId: 'openai-gpt-oss-120b', privacy: 'private', context: 128000 },
+  { id: 'qwen3-5-9b', name: 'Qwen 3.5 9B', veniceId: 'qwen3-5-9b', privacy: 'private', context: 256000, default: true, tier: 'free' as const, cost: { input: 0, output: 0 } },
+  { id: 'qwen3-next-80b', name: 'Qwen 3 Next 80B', veniceId: 'qwen3-next-80b', privacy: 'private', context: 256000, tier: 'pro' as const, cost: { input: 0.35, output: 0.35 } },
+  { id: 'llama-3.3-70b', name: 'Llama 3.3 70B', veniceId: 'llama-3.3-70b', privacy: 'private', context: 128000, tier: 'pro' as const, cost: { input: 0.20, output: 0.20 } },
+  { id: 'deepseek-v3.2', name: 'DeepSeek V3.2', veniceId: 'deepseek-v3.2', privacy: 'private', context: 160000, tier: 'pro' as const, cost: { input: 0.20, output: 0.20 } },
+  { id: 'mistral-31-24b', name: 'Mistral 31 24B', veniceId: 'mistral-31-24b', privacy: 'private', context: 128000, tier: 'pro' as const, cost: { input: 0.15, output: 0.15 } },
+  { id: 'venice-uncensored', name: 'Venice Uncensored', veniceId: 'venice-uncensored', privacy: 'private', context: 32000, tier: 'pro' as const, cost: { input: 0.15, output: 0.15 } },
+  { id: 'kimi-k2-thinking', name: 'Kimi K2 Thinking', veniceId: 'kimi-k2-thinking', privacy: 'private', context: 256000, tier: 'pro' as const, cost: { input: 0.40, output: 0.40 } },
+  { id: 'openai-gpt-oss-120b', name: 'GPT OSS 120B', veniceId: 'openai-gpt-oss-120b', privacy: 'private', context: 128000, tier: 'pro' as const, cost: { input: 0.50, output: 0.50 } },
   // Anonymized (third-party providers via Venice, no user identity but provider sees prompt)
-  { id: 'claude-sonnet-4.6', name: 'Claude Sonnet 4.6', veniceId: 'claude-sonnet-4-6', privacy: 'anonymized', context: 1000000 },
-  { id: 'claude-opus-4.6', name: 'Claude Opus 4.6', veniceId: 'claude-opus-4-6', privacy: 'anonymized', context: 1000000 },
-  { id: 'gpt-5.4', name: 'GPT-5.4', veniceId: 'openai-gpt-54', privacy: 'anonymized', context: 1000000 },
-  { id: 'grok-4.1-fast', name: 'Grok 4.1 Fast', veniceId: 'grok-41-fast', privacy: 'anonymized', context: 1000000 },
-  { id: 'gemini-3-pro', name: 'Gemini 3 Pro', veniceId: 'gemini-3-pro-preview', privacy: 'anonymized', context: 198000 },
+  { id: 'claude-sonnet-4.6', name: 'Claude Sonnet 4.6', veniceId: 'claude-sonnet-4-6', privacy: 'anonymized', context: 1000000, tier: 'pro' as const, cost: { input: 3.00, output: 15.00 } },
+  { id: 'claude-opus-4.6', name: 'Claude Opus 4.6', veniceId: 'claude-opus-4-6', privacy: 'anonymized', context: 1000000, tier: 'pro' as const, cost: { input: 15.00, output: 75.00 } },
+  { id: 'gpt-5.4', name: 'GPT-5.4', veniceId: 'openai-gpt-54', privacy: 'anonymized', context: 1000000, tier: 'pro' as const, cost: { input: 2.00, output: 8.00 } },
+  { id: 'grok-4.1-fast', name: 'Grok 4.1 Fast', veniceId: 'grok-41-fast', privacy: 'anonymized', context: 1000000, tier: 'pro' as const, cost: { input: 3.00, output: 15.00 } },
+  { id: 'gemini-3-pro', name: 'Gemini 3 Pro', veniceId: 'gemini-3-pro-preview', privacy: 'anonymized', context: 198000, tier: 'pro' as const, cost: { input: 1.25, output: 5.00 } },
 ];
 
 const DEFAULT_MODEL = CHAT_MODELS.find(m => (m as any).default)?.id || 'qwen3-5-9b';
