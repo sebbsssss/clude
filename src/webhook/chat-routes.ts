@@ -623,6 +623,7 @@ export function chatRoutes(): Router {
         message_id: assistantMsgId,
         model: modelId,
         memories_used: memoryIds.length,
+        memory_ids: memoryIds,
       })}\n\n`);
       res.end();
 
