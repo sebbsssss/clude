@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useAuthContext } from '../hooks/AuthContext';
-import { CloudSetup } from '../components/CloudSetup';
 
 export function Landing() {
   const { login, loginWithApiKey } = useAuthContext();
@@ -8,7 +7,6 @@ export function Landing() {
   const [endpoint, setEndpoint] = useState('');
   const [error, setError] = useState('');
   const [connecting, setConnecting] = useState(false);
-  const [showCloudSetup, setShowCloudSetup] = useState(false);
 
   async function handleApiKeyLogin() {
     if (!apiKey.trim()) return;
@@ -19,10 +17,6 @@ export function Landing() {
       setError('Invalid API key or endpoint unreachable');
     }
     setConnecting(false);
-  }
-
-  if (showCloudSetup) {
-    return <CloudSetup onBack={() => setShowCloudSetup(false)} />;
   }
 
   return (
@@ -72,52 +66,7 @@ export function Landing() {
           across agents.
         </p>
 
-        {/* Primary CTA — One-click cloud setup */}
-        <button
-          onClick={() => setShowCloudSetup(true)}
-          style={{
-            fontFamily: 'var(--mono)',
-            fontSize: 11,
-            letterSpacing: 2,
-            textTransform: 'uppercase' as const,
-            padding: '14px 32px',
-            background: 'var(--text)',
-            color: 'var(--bg)',
-            border: '2px solid var(--text)',
-            cursor: 'pointer',
-            transition: 'all 0.25s',
-            width: '100%',
-            maxWidth: 320,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'transparent';
-            e.currentTarget.style.color = 'var(--text)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'var(--text)';
-            e.currentTarget.style.color = 'var(--bg)';
-          }}
-        >
-          Get Started Free
-        </button>
-        <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 8, maxWidth: 320, margin: '8px auto 0' }}>
-          Create an agent in 10 seconds. No credit card, no infra.
-        </div>
-
-        {/* Divider */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 16,
-          margin: '32px auto',
-          maxWidth: 320,
-        }}>
-          <div style={{ flex: 1, height: 1, background: 'var(--border-strong)' }} />
-          <span style={{ fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--text-faint)' }}>or sign in</span>
-          <div style={{ flex: 1, height: 1, background: 'var(--border-strong)' }} />
-        </div>
-
-        {/* Existing auth options */}
+        {/* Auth options */}
         <div style={{
           display: 'flex',
           gap: 12,
