@@ -7,7 +7,8 @@
  */
 import { Router, Request, Response, NextFunction } from 'express';
 import { createHash } from 'crypto';
-import { authenticateAgent, type AgentRegistration } from '../features/agent-tier';
+import { authenticateAgent, type AgentRegistration, findOrCreateAgentForWallet } from '../features/agent-tier';
+import { requirePrivyAuth } from './privy-auth';
 import { withOwnerWallet } from '../core/owner-context';
 import { recallMemories } from '../core/memory';
 import { checkInputContent } from '../core/guardrails';
@@ -272,6 +273,34 @@ export function chatRoutes(): Router {
         res.write(`data: ${JSON.stringify({ error: 'Stream interrupted' })}\n\n`);
         res.end();
       }
+    }
+  });
+
+  // Auto-register: create or retrieve Cortex key for a Privy-authenticated wallet
+  router.post('/auto-register', requirePrivyAuth, async (req: Request, res: Response) => {
+    try {
+      const { wallet } = req.body;
+
+      if (!wallet || typeof wallet !== 'string') {
+        return res.status(400).json({ error: 'wallet is required' });
+      }
+
+      // Validate Solana address format
+      if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet)) {
+        return res.status(400).json({ error: 'Invalid Solana wallet address' });
+      }
+
+      const { apiKey, agentId, isNew } = await findOrCreateAgentForWallet(wallet);
+
+      res.json({
+        api_key: apiKey,
+        agent_id: agentId,
+        wallet,
+        created: isNew,
+      });
+    } catch (err: any) {
+      log.error({ err }, 'Auto-register failed');
+      res.status(500).json({ error: 'Registration failed' });
     }
   });
 
