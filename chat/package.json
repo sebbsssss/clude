@@ -13,6 +13,7 @@
     "@privy-io/react-auth": "^3.18.0",
     "@radix-ui/react-select": "latest",
     "@radix-ui/react-slot": "1.1.1",
+    "@solana-program/memo": "^0.10.0",
     "@types/three": "^0.183.1",
     "buffer": "^6.0.3",
     "class-variance-authority": "^0.7.1",
