@@ -22,6 +22,7 @@ COPY scripts/ ./scripts/
 RUN npm ci
 
 COPY --from=builder /app/dist/ ./dist/
+# Cache bust: 2026-03-21
 COPY src/verify-app/public/ ./dist/verify-app/public/
 
 ENV NODE_ENV=production
