@@ -10,15 +10,21 @@
   },
   "dependencies": {
     "@paper-design/shaders-react": "latest",
+    "@privy-io/react-auth": "^3.18.0",
     "@radix-ui/react-select": "latest",
     "@radix-ui/react-slot": "1.1.1",
+    "@types/three": "^0.183.1",
+    "buffer": "^6.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "latest",
     "lucide-react": "^0.454.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "tailwind-merge": "^2.5.5"
+    "react-router-dom": "^7.13.1",
+    "tailwind-merge": "^2.5.5",
+    "three": "^0.183.2",
+    "vite-plugin-node-polyfills": "^0.25.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.9",
