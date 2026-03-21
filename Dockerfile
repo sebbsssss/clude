@@ -22,7 +22,10 @@ COPY scripts/ ./scripts/
 RUN npm ci
 
 COPY --from=builder /app/dist/ ./dist/
-# Cache bust: 2026-03-21
+
+# Copy static assets LAST — overwrites any stale files from builder
+# Timestamp forces cache invalidation: 2026-03-21T14:50
+ARG CACHEBUST=1
 COPY src/verify-app/public/ ./dist/verify-app/public/
 
 ENV NODE_ENV=production
