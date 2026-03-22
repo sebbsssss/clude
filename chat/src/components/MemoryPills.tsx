@@ -25,7 +25,7 @@ interface MemoryDetail {
 }
 
 interface Props {
-  memoryIds: number[];
+  memoryIds?: number[];
   visible: boolean;
 }
 
@@ -34,7 +34,7 @@ export function MemoryPills({ memoryIds, visible }: Props) {
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
   useEffect(() => {
-    if (!visible || memoryIds.length === 0) return;
+    if (!visible || !memoryIds || memoryIds.length === 0) return;
     setMemories(memoryIds.map((id) => ({
       id,
       memory_type: 'semantic' as MemoryType,
@@ -44,7 +44,7 @@ export function MemoryPills({ memoryIds, visible }: Props) {
     })));
   }, [memoryIds, visible]);
 
-  if (!visible || memoryIds.length === 0) return null;
+  if (!visible || !memoryIds || memoryIds.length === 0) return null;
 
   return (
     <AnimatePresence>

@@ -10,7 +10,7 @@ import { createHash } from 'crypto';
 import { authenticateAgent, type AgentRegistration, findOrCreateAgentForWallet } from '../features/agent-tier';
 import { requirePrivyAuth } from './privy-auth';
 import { withOwnerWallet } from '../core/owner-context';
-import { recallMemories } from '../core/memory';
+import { recallMemories, storeMemory } from '../core/memory';
 import { checkInputContent } from '../core/guardrails';
 import { checkRateLimit, getDb } from '../core/database';
 import { createChildLogger } from '../core/logger';
@@ -877,6 +877,22 @@ export function chatRoutes(): Router {
       autoGenerateTitle(conversationId, content, veniceApiKey).catch(err =>
         log.warn({ err, conversationId }, 'Auto-title generation failed')
       );
+
+      // 15. Store conversation turn as memory (fire-and-forget)
+      if (content.length > 10) {
+        withOwnerWallet(chatReq.ownerWallet!, () =>
+          storeMemory({
+            type: 'episodic',
+            content: `User said: ${content}\n\nAssistant replied: ${fullContent.slice(0, 500)}`,
+            summary: content.slice(0, 200),
+            tags: ['chat', 'conversation'],
+            importance: 0.4,
+            source: 'chat',
+            sourceId: `chat:${assistantMsgId}`,
+            relatedWallet: chatReq.ownerWallet,
+          })
+        ).catch(err => log.debug({ err }, 'Chat memory store failed (non-critical)'));
+      }
 
     } catch (err: any) {
       if (err.name === 'AbortError') return;
