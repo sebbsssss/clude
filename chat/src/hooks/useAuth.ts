@@ -89,6 +89,7 @@ export function useAuth(): AuthState {
     api.setKey(null);
     localStorage.removeItem(STORAGE_KEYS.cortexKey);
     localStorage.removeItem(STORAGE_KEYS.wallet);
+    localStorage.removeItem('chat_selected_model');
     if (privyAuth) {
       privyLogout();
     }

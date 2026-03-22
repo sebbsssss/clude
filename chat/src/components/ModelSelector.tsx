@@ -19,6 +19,17 @@ export function ModelSelector({ selectedModel, onModelChange }: Props) {
     api.getModels().then(setModels).catch(console.error);
   }, []);
 
+  // Force reset to free model if user logs out while a pro model is selected
+  useEffect(() => {
+    if (!authenticated && models.length > 0) {
+      const selected = models.find((m) => m.id === selectedModel);
+      if (selected && selected.tier === 'pro') {
+        const freeModel = models.find((m) => m.tier === 'free') || models[0];
+        onModelChange(freeModel.id);
+      }
+    }
+  }, [authenticated, models, selectedModel, onModelChange]);
+
   const current = models.find((m) => m.id === selectedModel) || models.find((m) => m.default);
 
   const handleSelect = (model: ChatModel) => {

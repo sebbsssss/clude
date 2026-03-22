@@ -41,6 +41,15 @@ export function ChatInterface() {
     scrollToBottom()
   }, [messages])
 
+  // Clear state on logout — reset messages, model, greeting flag
+  useEffect(() => {
+    if (!authenticated) {
+      clearMessages()
+      greetedRef.current = false
+      setSelectedModel("qwen3-5-9b")
+    }
+  }, [authenticated, clearMessages])
+
   // Fetch personalized greeting when user authenticates
   useEffect(() => {
     if (authenticated && !greetedRef.current && messages.length === 0) {
