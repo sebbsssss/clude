@@ -201,7 +201,7 @@ export function ChatInterface() {
                         <div className="flex flex-col gap-1 max-w-[80%]">
                           <div className="bg-zinc-900/80 border border-blue-500/20 rounded-xl rounded-tl-sm px-3 py-2">
                             <p className="text-white/90 text-[13px] leading-relaxed whitespace-pre-wrap">
-                              {message.content || (message.streaming ? "" : "Response interrupted")}
+                              {message.content || (message.streaming ? "" : "Failed to get response")}
                             </p>
                             {message.streaming && !message.content && (
                               <div className="flex gap-1">

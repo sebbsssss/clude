@@ -85,10 +85,11 @@ export function useChat() {
           prev.map((m) => m.id === assistantId ? { ...m, streaming: false } : m)
         );
       } else {
-        setError(err.message || 'Something went wrong');
+        const errorMsg = err.message || 'Something went wrong';
+        setError(errorMsg);
         setMessages((prev) =>
           prev.map((m) => m.id === assistantId
-            ? { ...m, content: m.content || 'Response interrupted', streaming: false }
+            ? { ...m, content: m.content || errorMsg, streaming: false }
             : m)
         );
       }
