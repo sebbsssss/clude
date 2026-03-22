@@ -25,6 +25,7 @@ if (require.main === module) {
   const { startActiveReflection, stopActiveReflection } = require('./features/active-reflection');
   const { startCampaignTracker, stopCampaignTracker } = require('./features/campaign-tracker');
   const { startTaskExecutor, stopTaskExecutor } = require('./agents');
+  const { startCompound, stopCompound } = require('./features/compound');
   const { startServer } = require('./webhook/server');
   const { getBotWallet } = require('./core/solana-client');
   const { createChildLogger } = require('./core/logger');
@@ -131,6 +132,10 @@ if (require.main === module) {
       log.info('X sentiment monitor started — broadcasting to Telegram');
     }
 
+    // Start Compound — prediction market intelligence engine
+    startCompound();
+    log.info('Compound started — prediction market analysis active');
+
     // Start task executor — picks up dashboard tasks and runs agents
     startTaskExecutor();
     log.info('Task executor started — dashboard agents active');
@@ -148,6 +153,7 @@ if (require.main === module) {
       stopActiveReflection();
       stopCampaignTracker();
       stopTaskExecutor();
+      stopCompound();
       if (config.features.telegramEnabled) {
         const { stopXSentimentMonitor } = require('./features/x-sentiment-monitor');
         stopXSentimentMonitor();
