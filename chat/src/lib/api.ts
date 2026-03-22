@@ -204,10 +204,14 @@ class ChatAPI {
         if (raw === '[DONE]') { onDone(); return; }
         try {
           const data = JSON.parse(raw);
+          if (data.error) throw new Error(data.error);
           if (data.done) { onDone(data); return; }
           if (data.content) onChunk(data.content);
           if (data.chunk) onChunk(data.chunk);
-        } catch { /* skip malformed */ }
+        } catch (e) {
+          if (e instanceof Error && e.message) throw e;
+          /* skip malformed */
+        }
       }
     }
     onDone();

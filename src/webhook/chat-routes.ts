@@ -194,24 +194,41 @@ export function chatRoutes(): Router {
       const abortController = new AbortController();
       req.on('close', () => abortController.abort());
 
-      const veniceRes = await fetch('https://api.venice.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${veniceApiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'qwen3-5-9b',
-          messages: allMessages,
-          max_tokens: 2048,
-          temperature: 0.7,
-          stream: true,
-        }),
-        signal: abortController.signal,
-      });
+      // Try models in order — fall back if primary is overloaded
+      const guestModels = ['qwen3-5-9b', 'qwen3-4b', 'mistral-31-24b'];
+      let veniceRes: globalThis.Response | null = null;
+      let usedModel = guestModels[0];
 
-      if (!veniceRes.ok) {
-        res.write(`data: ${JSON.stringify({ error: 'Model inference failed' })}\n\n`);
+      for (const model of guestModels) {
+        const attempt = await fetch('https://api.venice.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${veniceApiKey}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages: allMessages,
+            max_tokens: 2048,
+            temperature: 0.7,
+            stream: true,
+          }),
+          signal: abortController.signal,
+        });
+
+        if (attempt.ok) {
+          veniceRes = attempt;
+          usedModel = model;
+          break;
+        }
+
+        const errBody = await attempt.text().catch(() => 'Unknown error');
+        log.warn({ status: attempt.status, body: errBody, model }, 'Venice guest model unavailable, trying fallback');
+      }
+
+      if (!veniceRes) {
+        log.error('All guest chat models failed');
+        res.write(`data: ${JSON.stringify({ error: 'All models are currently unavailable. Please try again later.' })}\n\n`);
         res.end();
         return;
       }
@@ -262,7 +279,7 @@ export function chatRoutes(): Router {
       const usedCount = (rlRow && rlRow.window_start >= windowCutoff) ? rlRow.count : 1;
       const remaining = Math.max(0, 10 - usedCount);
 
-      res.write(`data: ${JSON.stringify({ done: true, model: 'qwen3-5-9b', guest: true, remaining })}\n\n`);
+      res.write(`data: ${JSON.stringify({ done: true, model: usedModel, guest: true, remaining })}\n\n`);
       res.end();
     } catch (err: any) {
       if (err.name === 'AbortError') return;
@@ -580,8 +597,12 @@ export function chatRoutes(): Router {
 
       if (!veniceRes.ok) {
         const errBody = await veniceRes.text().catch(() => 'Unknown error');
-        log.error({ status: veniceRes.status, body: errBody }, 'Venice API error');
-        res.write(`data: ${JSON.stringify({ error: 'Model inference failed', status: veniceRes.status })}\n\n`);
+        log.error({ status: veniceRes.status, body: errBody, model: veniceModelId }, 'Venice API error');
+        const isOverloaded = errBody.includes('overloaded') || veniceRes.status === 503;
+        const userMsg = isOverloaded
+          ? `${modelId} is currently overloaded. Try a different model.`
+          : 'Model inference failed';
+        res.write(`data: ${JSON.stringify({ error: userMsg, status: veniceRes.status })}\n\n`);
         res.end();
         return;
       }
