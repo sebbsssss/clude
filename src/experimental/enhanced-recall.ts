@@ -94,8 +94,10 @@ export async function enhancedRecallMemories(
   }
 
   // Step 3: Cross-encoder reranking (Exp 3)
-  // Prefers Voyage rerank-2.5 (same account as embeddings) with Cohere fallback
-  if (config.reranking && opts.query && memories.length > 1) {
+  // Skip reranking for preference-style queries — cross-encoders trained on factual Q&A
+  // downrank soft preference signals ("I like", "I prefer"), causing SS-Pref regression.
+  const isPreferenceQuery = opts.query && /prefer|favorite|like|opinion|recommend|dislike/i.test(opts.query);
+  if (config.reranking && opts.query && memories.length > 1 && !isPreferenceQuery) {
     const useVoyage = config.rerankProvider === 'voyage' && config.voyageApiKey;
     const useCohere = config.rerankProvider === 'cohere' && config.cohereApiKey;
 
@@ -113,6 +115,8 @@ export async function enhancedRecallMemories(
         topN: opts.limit || 10,
       }) as (Memory & { _score: number })[];
     }
+  } else if (isPreferenceQuery && config.reranking) {
+    log.info({ query: opts.query?.slice(0, 80) }, 'Skipped reranking for preference-style query');
   }
 
   // Step 4: Filter low-confidence memories (pre-gate cleanup)

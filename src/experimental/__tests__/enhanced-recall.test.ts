@@ -215,6 +215,59 @@ describe('enhanced-recall', () => {
       expect(rerankWithVoyage).toHaveBeenCalled();
     });
 
+    it('skips reranking for preference-style queries', async () => {
+      (getExperimentalConfig as ReturnType<typeof vi.fn>).mockReturnValue({
+        temporalBonds: true,
+        reranking: true,
+        confidenceGate: false,
+        rrfMerge: false,
+        bm25Search: false,
+        ircot: false,
+        rerankProvider: 'voyage',
+        cohereApiKey: '',
+        voyageApiKey: 'voyage-key',
+        confidenceThreshold: 0.4,
+        ircotMaxSteps: 3,
+      });
+
+      // Preference keywords should bypass reranking
+      for (const query of [
+        'What does the user prefer for dinner?',
+        'What is their favorite restaurant?',
+        'Do they like Italian food?',
+        'Any recommendations they mentioned?',
+      ]) {
+        vi.clearAllMocks();
+        (recallMemories as ReturnType<typeof vi.fn>).mockResolvedValue([
+          makeMemory(1, 0.9),
+          makeMemory(2, 0.8),
+        ]);
+        const result = await enhancedRecallMemories({ query });
+        expect(result.activeExperiments).not.toContain('reranking-voyage');
+        expect(rerankWithVoyage).not.toHaveBeenCalled();
+      }
+    });
+
+    it('still reranks non-preference queries when reranking enabled', async () => {
+      (getExperimentalConfig as ReturnType<typeof vi.fn>).mockReturnValue({
+        temporalBonds: true,
+        reranking: true,
+        confidenceGate: false,
+        rrfMerge: false,
+        bm25Search: false,
+        ircot: false,
+        rerankProvider: 'voyage',
+        cohereApiKey: '',
+        voyageApiKey: 'voyage-key',
+        confidenceThreshold: 0.4,
+        ircotMaxSteps: 3,
+      });
+
+      const result = await enhancedRecallMemories({ query: 'When did Alice visit Paris?' });
+      expect(result.activeExperiments).toContain('reranking-voyage');
+      expect(rerankWithVoyage).toHaveBeenCalled();
+    });
+
     it('returns empty activeExperiments when no experiments enabled', async () => {
       (getExperimentalConfig as ReturnType<typeof vi.fn>).mockReturnValue({
         temporalBonds: false,
