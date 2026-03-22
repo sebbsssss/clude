@@ -10,7 +10,7 @@ import { createHash } from 'crypto';
 import { authenticateAgent, type AgentRegistration, findOrCreateAgentForWallet } from '../features/agent-tier';
 import { requirePrivyAuth } from './privy-auth';
 import { withOwnerWallet } from '../core/owner-context';
-import { recallMemories, storeMemory } from '../core/memory';
+import { recallMemories } from '../core/memory';
 import { checkInputContent } from '../core/guardrails';
 import { checkRateLimit, getDb } from '../core/database';
 import { createChildLogger } from '../core/logger';
@@ -878,20 +878,25 @@ export function chatRoutes(): Router {
         log.warn({ err, conversationId }, 'Auto-title generation failed')
       );
 
-      // 15. Store conversation turn as memory (fire-and-forget)
+      // 15. Store conversation turn as memory (direct DB insert — no AsyncLocalStorage dependency)
       if (content.length > 10) {
-        withOwnerWallet(chatReq.ownerWallet!, () =>
-          storeMemory({
-            type: 'episodic',
+        db.from('memories')
+          .insert({
+            memory_type: 'episodic',
             content: `User said: ${content}\n\nAssistant replied: ${fullContent.slice(0, 500)}`,
             summary: content.slice(0, 200),
             tags: ['chat', 'conversation'],
             importance: 0.4,
             source: 'chat',
-            sourceId: `chat:${assistantMsgId}`,
-            relatedWallet: chatReq.ownerWallet,
+            source_id: `chat:${assistantMsgId}`,
+            owner_wallet: chatReq.ownerWallet,
+            related_wallet: chatReq.ownerWallet,
+            metadata: { conversation_id: conversationId, model: modelId },
           })
-        ).catch(err => log.debug({ err }, 'Chat memory store failed (non-critical)'));
+          .then(({ error: memErr }) => {
+            if (memErr) log.warn({ err: memErr.message }, 'Chat memory insert failed');
+            else log.debug({ wallet: chatReq.ownerWallet?.slice(0, 8) }, 'Chat memory stored');
+          });
       }
 
     } catch (err: any) {
