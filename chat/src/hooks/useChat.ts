@@ -46,7 +46,7 @@ export function useChat() {
         (data) => {
           setMessages((prev) =>
             prev.map((m) => m.id === greetingId
-              ? { ...m, streaming: false, cost: data?.cost }
+              ? { ...m, content: m.content || 'Hey! How can I help you today?', streaming: false, cost: data?.cost }
               : m)
           );
         },

@@ -352,16 +352,27 @@ export function chatRoutes(): Router {
 
       const db = getDb();
 
-      // Recall recent memories broadly and get total count
-      const [memories, countResult] = await Promise.all([
-        withOwnerWallet(chatReq.ownerWallet!, () =>
-          recallMemories({ query: 'recent activity summary overview', limit: 15, skipExpansion: true })
-        ),
-        db.from('memories')
+      // Recall recent memories with timeout (5s max) + get total count
+      let memories: any[] = [];
+      let totalMemoryCount = 0;
+      try {
+        const timeoutMs = 5000;
+        const recallPromise = withOwnerWallet(chatReq.ownerWallet!, () =>
+          recallMemories({ query: 'recent activity summary overview', limit: 10, skipExpansion: true })
+        );
+        const countPromise = db.from('memories')
           .select('id', { count: 'exact', head: true })
-          .eq('owner_wallet', chatReq.ownerWallet!),
-      ]);
-      const totalMemoryCount = countResult.count || 0;
+          .eq('owner_wallet', chatReq.ownerWallet!);
+
+        const [recallResult, countResult] = await Promise.all([
+          Promise.race([recallPromise, new Promise<any[]>((resolve) => setTimeout(() => resolve([]), timeoutMs))]),
+          Promise.race([countPromise, new Promise<any>((resolve) => setTimeout(() => resolve({ count: 0 }), timeoutMs))]),
+        ]);
+        memories = recallResult || [];
+        totalMemoryCount = countResult.count || 0;
+      } catch (err) {
+        log.warn({ err }, 'Greeting memory recall failed, continuing without memories');
+      }
 
       const systemPrompt = buildSystemPrompt(memories, { totalMemoryCount, isGreeting: true });
 
@@ -377,8 +388,8 @@ export function chatRoutes(): Router {
       const abortController = new AbortController();
       req.on('close', () => abortController.abort());
 
-      // Try models with fallback
-      const greetModels = ['qwen3-5-9b', 'qwen3-4b', 'mistral-31-24b'];
+      // Use non-thinking model for greeting (faster, no <think> token issues)
+      const greetModels = ['llama-3.3-70b', 'mistral-31-24b', 'qwen3-4b'];
       let veniceRes: globalThis.Response | null = null;
 
       for (const model of greetModels) {
@@ -394,7 +405,7 @@ export function chatRoutes(): Router {
               { role: 'system', content: systemPrompt },
               { role: 'user', content: 'greet me' },
             ],
-            max_tokens: 512,
+            max_tokens: 300,
             temperature: 0.8,
             stream: true,
           }),
