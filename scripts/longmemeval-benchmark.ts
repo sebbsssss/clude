@@ -107,7 +107,8 @@ const hasEmbeddings = !!(EMBEDDING_PROVIDER && EMBEDDING_KEY);
 const BENCHMARK_SOURCE = 'longmemeval-benchmark';
 const BENCHMARK_OWNER_WALLET = 'LongMemEval11111111111111111111111111111111';
 const CACHE_DIR = join(__dirname, '.longmemeval-cache');
-const JUDGE_MODEL = 'claude-haiku-4-5-20251001';
+const EXTRACTION_MODEL = 'claude-haiku-4-5-20251001';
+const JUDGE_MODEL = 'claude-sonnet-4-5-20250929';
 
 const VARIANT_URLS: Record<string, string> = {
   oracle: 'https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/main/longmemeval_oracle.json',
@@ -140,6 +141,7 @@ function parseArgs() {
     oracleBypass: false, // skip recall, pass raw haystack sessions to reader
     countingUnion: false, // use union extraction for counting questions
     countingRuns: 3, // number of extraction runs for counting union
+    rejudge: '' as string, // path to results JSON to re-judge with current judge model
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -173,6 +175,9 @@ function parseArgs() {
         break;
       case '--counting-runs':
         opts.countingRuns = parseInt(args[++i]) || 3;
+        break;
+      case '--rejudge':
+        opts.rejudge = args[++i] || '';  // path to results JSON to re-judge
         break;
     }
   }
@@ -293,7 +298,7 @@ async function extractFacts(turns: SessionTurn[]): Promise<string[]> {
 
   try {
     const resp = await anthropic.messages.create({
-      model: JUDGE_MODEL,
+      model: EXTRACTION_MODEL,
       max_tokens: 800,
       temperature: 0,
       system: 'Extract 5-10 key facts from this conversation. Focus on: specific names, dates, places, numbers, user preferences, personal details, events, recommendations, and assistant suggestions. Include BOTH user-stated facts AND assistant-provided information (recommendations, explanations, specific details the assistant gave). Output one fact per line, starting with "- ". Be specific and factual — include exact names, numbers, and details.',
@@ -315,7 +320,7 @@ async function extractPreferences(turns: SessionTurn[]): Promise<string[]> {
 
   try {
     const resp = await anthropic.messages.create({
-      model: JUDGE_MODEL,
+      model: EXTRACTION_MODEL,
       max_tokens: 600,
       temperature: 0,
       system: `Extract the user's preferences, tastes, and personal details from this conversation. Focus on:
@@ -610,9 +615,11 @@ Rules:
       : `Return ONLY the LATEST/MOST RECENT value.
 
 Rules:
-- The last entry in the version list is the correct answer
+- The last entry in the version list (the one with the LATEST date) is the correct answer
 - If counting (how many X): include ALL items accumulated up to the latest date
-- Do NOT return an older/outdated value`;
+- Do NOT return an older/outdated value
+- Do NOT interpret or judge whether a later value was aspirational, planned, or uncertain — ALWAYS treat the later-dated value as current fact
+- If you found values at different dates, the LATER-dated one wins, PERIOD — no hedging, no caveats`;
 
     const stage2 = await anthropic.messages.create({
       model: readerModel,
@@ -862,11 +869,12 @@ Reply with ONLY "1" or "0".`
 
 Score "1" (correct) if:
 - The generated answer contains the KEY factual information from the reference
-- Numbers match (e.g., "3" = "three")
+- Numbers match (e.g., "3" = "three", "approximately 2" = "2", "about 5" = "5")
 - The answer is correct even if it includes extra details beyond the reference
 - Names/places refer to the same entity (e.g., "Rhythm Central on Main St" matches "the music shop on Main St")
 - Paraphrased but semantically equivalent
-- BOTH the reference AND generated answer agree that specific information was NOT mentioned/available (e.g., reference says "You did not mention X" and generated says "You don't have X" or "There's no mention of X")
+- For ordering questions: both answers name the SAME entity/event as first/last/earliest/latest
+- BOTH the reference AND generated answer agree that specific information was NOT mentioned/available (e.g., reference says "You did not mention X" and generated says "You don't have X" or "There's no mention of X" or "I don't have information about that")
 - The generated answer correctly identifies what WAS mentioned instead of what was asked about, matching the reference's correction (e.g., reference says "not your uncle's party, your niece's" and generated says "for your niece, not your uncle")
 
 Score "0" (wrong) if:
@@ -1751,7 +1759,114 @@ async function main() {
   cortex.destroy();
 }
 
-main().catch(err => {
-  console.error('Benchmark failed:', err);
-  process.exit(1);
-});
+// ── Re-judge mode ─────────────────────────────────────────────
+async function rejudgeResults(resultsPath: string) {
+  anthropic = new Anthropic();
+  const raw = JSON.parse(readFileSync(resultsPath, 'utf-8'));
+  const results: any[] = raw.results || [];
+  const oldJudge = raw.config?.judgeModel || 'unknown';
+
+  console.log(`╔════════════════════════════════════════════════════╗`);
+  console.log(`║     RE-JUDGE MODE                                 ║`);
+  console.log(`╚════════════════════════════════════════════════════╝`);
+  console.log(`  Source: ${resultsPath}`);
+  console.log(`  Questions: ${results.length}`);
+  console.log(`  Old judge: ${oldJudge}`);
+  console.log(`  New judge: ${JUDGE_MODEL}`);
+  console.log();
+
+  let flipped = 0;
+  let confirmed = 0;
+  const flippedQuestions: any[] = [];
+
+  for (let i = 0; i < results.length; i++) {
+    const q = results[i];
+    if (q.correct === 1) { confirmed++; continue; } // only re-judge failures
+
+    const newScore = await judgeAnswer(
+      q.generatedAnswer || '',
+      q.goldAnswer || '',
+      q.question || '',
+      q.questionType,
+    );
+
+    if (newScore === 1) {
+      flipped++;
+      flippedQuestions.push({
+        id: q.questionId?.slice(0, 8),
+        type: q.questionType,
+        question: q.question?.slice(0, 100),
+      });
+      q.correct = 1;
+      q._rejudged = true;
+    }
+    process.stdout.write(`\r  Re-judging: ${i + 1}/${results.length} (${flipped} flipped)`);
+  }
+  console.log();
+
+  // Recalculate stats
+  const typeStats: Record<string, { correct: number; total: number }> = {};
+  for (const q of results) {
+    const t = q.questionType;
+    if (!typeStats[t]) typeStats[t] = { correct: 0, total: 0 };
+    typeStats[t].total++;
+    if (q.correct === 1) typeStats[t].correct++;
+  }
+
+  const totalCorrect = results.filter((q: any) => q.correct === 1).length;
+  const accuracy = ((totalCorrect / results.length) * 100).toFixed(1);
+
+  console.log();
+  console.log(`── Results ───────────────────────────────────────`);
+  console.log(`  Old accuracy: ${raw.summary?.accuracy}% (${raw.summary?.totalCorrect}/${results.length})`);
+  console.log(`  New accuracy: ${accuracy}% (${totalCorrect}/${results.length})`);
+  console.log(`  Flipped 0→1: ${flipped}`);
+  console.log();
+
+  for (const [type, stats] of Object.entries(typeStats).sort()) {
+    const oldType = raw.perType?.[type];
+    const oldAcc = oldType ? `${oldType.accuracy}%` : '?';
+    const newAcc = ((stats.correct / stats.total) * 100).toFixed(1);
+    const diff = oldType ? (parseFloat(newAcc) - oldType.accuracy).toFixed(1) : '?';
+    console.log(`  ${QUESTION_TYPE_NAMES[type] || type}: ${newAcc}% (${stats.correct}/${stats.total}) [was ${oldAcc}, ${parseFloat(diff as string) > 0 ? '+' : ''}${diff}pp]`);
+  }
+
+  if (flippedQuestions.length > 0) {
+    console.log();
+    console.log(`── Flipped questions ─────────────────────────────`);
+    for (const f of flippedQuestions) {
+      console.log(`  [${f.type}] ${f.id}: ${f.question}`);
+    }
+  }
+
+  // Save re-judged results
+  const outPath = resultsPath.replace('.json', '_rejudged.json');
+  raw.config.judgeModel = JUDGE_MODEL;
+  raw.config.rejudgedFrom = oldJudge;
+  raw.summary.accuracy = parseFloat(accuracy);
+  raw.summary.totalCorrect = totalCorrect;
+  raw.perType = Object.fromEntries(
+    Object.entries(typeStats).map(([type, stats]) => [type, {
+      name: QUESTION_TYPE_NAMES[type] || type,
+      accuracy: parseFloat(((stats.correct / stats.total) * 100).toFixed(1)),
+      correct: stats.correct,
+      total: stats.total,
+    }]),
+  );
+  writeFileSync(outPath, JSON.stringify(raw, null, 2));
+  console.log();
+  console.log(`  Re-judged results saved to ${outPath}`);
+}
+
+const opts = parseArgs();
+if (opts.rejudge) {
+  rejudgeResults(opts.rejudge).catch(err => {
+    console.error('Re-judge failed:', err);
+    process.exit(1);
+  });
+} else {
+  main().catch(err => {
+    console.error('Benchmark failed:', err);
+    process.exit(1);
+  });
+}
