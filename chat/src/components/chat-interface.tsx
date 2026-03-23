@@ -5,7 +5,7 @@ import { LiquidMetal, PulsingBorder } from "@paper-design/shaders-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useAuthContext } from "../hooks/AuthContext"
-import { useChat, type ChatMessage, type MessageTokens } from "../hooks/useChat"
+import { useChat, type ChatMessage, type MessageTokens, type GreetingMeta } from "../hooks/useChat"
 import { useConversations } from "../hooks/useConversations"
 import { useMemory } from "../hooks/useMemory"
 import { Sidebar } from "./Sidebar"
@@ -18,11 +18,46 @@ import { Markdown } from "./Markdown"
 
 const MODEL_STORAGE_KEY = "chat_selected_model"
 
+function GreetingMetaBar({ meta }: { meta: GreetingMeta }) {
+  const spanLabel = meta.temporal_span
+    ? meta.temporal_span.weeks <= 1
+      ? 'this week'
+      : meta.temporal_span.weeks < 52
+        ? `${meta.temporal_span.weeks}w`
+        : `since ${meta.temporal_span.since_label}`
+    : null
+
+  return (
+    <div className="flex flex-wrap gap-1.5 mt-1">
+      {/* Memory count */}
+      <span className="inline-flex items-center gap-1 text-[10px] text-blue-400/70 bg-blue-500/8 border border-blue-500/15 rounded-full px-2 py-0.5">
+        <span className="text-blue-300/50">◆</span>
+        {meta.total_memories.toLocaleString()} memories
+        {spanLabel && <span className="text-blue-400/40">· {spanLabel}</span>}
+      </span>
+      {/* Topics */}
+      {meta.topics.slice(0, 4).map((topic) => (
+        <span
+          key={topic}
+          className="inline-flex items-center text-[10px] text-zinc-400/60 bg-zinc-800/60 border border-zinc-700/40 rounded-full px-2 py-0.5"
+        >
+          {topic}
+        </span>
+      ))}
+      {/* Cost savings */}
+      <span className="inline-flex items-center gap-1 text-[10px] text-green-400/60 bg-green-500/5 border border-green-500/15 rounded-full px-2 py-0.5">
+        <span className="text-green-400/40">$0</span>
+        <span className="text-zinc-600">· GPT-4o ~$0.05</span>
+      </span>
+    </div>
+  )
+}
+
 export function ChatInterface() {
   const { authenticated } = useAuthContext()
-  const { messages, streaming, guestRemaining, error, sendMessage, stopStreaming, clearMessages, loadMessages, fetchGreeting } = useChat()
+  const { messages, streaming, guestRemaining, error, sendMessage, stopStreaming, clearMessages, loadMessages, prependMessages, fetchGreeting } = useChat()
   const greetedRef = useRef(false)
-  const { conversations, activeId, createConversation, selectConversation, deleteConversation, refreshTitle, setActiveId } = useConversations()
+  const { conversations, activeId, hasMoreMessages, createConversation, selectConversation, loadMoreMessages, deleteConversation, refreshTitle, setActiveId } = useConversations()
   const { stats, recent, importPack } = useMemory()
 
   const [isFocused, setIsFocused] = useState(false)
@@ -30,7 +65,9 @@ export function ChatInterface() {
   const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem(MODEL_STORAGE_KEY) || "qwen3-5-9b")
   const [showMemoryPills, setShowMemoryPills] = useState(false)
   const [showCostModal, setShowCostModal] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
   const isFirstResponseRef = useRef(false)
   const pendingConvIdRef = useRef<string | null>(null)
 
@@ -67,6 +104,31 @@ export function ChatInterface() {
       pendingConvIdRef.current = null
     }
   }, [streaming, refreshTitle])
+
+  // Scroll-up to load older messages
+  useEffect(() => {
+    const container = messagesContainerRef.current
+    if (!container) return
+    const handleScroll = async () => {
+      if (container.scrollTop > 0 || !hasMoreMessages || loadingMore || !activeId) return
+      setLoadingMore(true)
+      const prevScrollHeight = container.scrollHeight
+      try {
+        const older = await loadMoreMessages(activeId)
+        if (older.length > 0) {
+          prependMessages(older)
+          // Restore scroll position so the view doesn't jump to top
+          requestAnimationFrame(() => {
+            container.scrollTop = container.scrollHeight - prevScrollHeight
+          })
+        }
+      } finally {
+        setLoadingMore(false)
+      }
+    }
+    container.addEventListener('scroll', handleScroll)
+    return () => container.removeEventListener('scroll', handleScroll)
+  }, [hasMoreMessages, loadingMore, activeId, loadMoreMessages, prependMessages])
 
   const handleModelChange = useCallback((model: string) => {
     setSelectedModel(model)
@@ -202,10 +264,18 @@ export function ChatInterface() {
           <AnimatePresence>
             {hasMessages && (
               <motion.div
+                ref={messagesContainerRef}
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 className="overflow-y-auto mb-3 space-y-3 max-h-[60vh] pb-2"
               >
+                {(hasMoreMessages || loadingMore) && (
+                  <div className="flex justify-center py-1">
+                    <span className="text-[10px] text-zinc-600">
+                      {loadingMore ? 'Loading…' : 'Scroll up for older messages'}
+                    </span>
+                  </div>
+                )}
                 {messages.map((message: ChatMessage) => (
                   <motion.div
                     key={message.id}
@@ -245,6 +315,9 @@ export function ChatInterface() {
                             )}
                           </div>
                           <MemoryPills memoryIds={message.memoryIds} visible={showMemoryPills} />
+                          {!message.streaming && message.isGreeting && message.greetingMeta && message.greetingMeta.total_memories > 0 && (
+                            <GreetingMetaBar meta={message.greetingMeta} />
+                          )}
                           {!message.streaming && message.content && message.cost !== undefined && (
                             <div className="relative group mt-0.5">
                               <button

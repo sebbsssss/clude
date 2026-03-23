@@ -37,6 +37,15 @@ const PROVIDERS: Record<string, ProviderConfig> = {
     defaultModel: 'text-embedding-3-small',
     authHeader: (key) => `Bearer ${key}`,
   },
+  // Ollama local embedding provider — zero API cost, fully offline.
+  // Uses OpenAI-compatible /v1/embeddings endpoint.
+  // Set EMBEDDING_PROVIDER=ollama, EMBEDDING_MODEL=nomic-embed-text (or mxbai-embed-large).
+  // OLLAMA_URL defaults to http://localhost:11434 — set EMBEDDING_API_KEY to any non-empty string.
+  ollama: {
+    url: `${process.env.OLLAMA_URL ?? 'http://localhost:11434'}/v1/embeddings`,
+    defaultModel: 'nomic-embed-text',
+    authHeader: () => 'Bearer ollama',
+  },
 };
 
 let _enabled: boolean | null = null;
@@ -82,7 +91,9 @@ function getEmbeddingConfig() {
 export function isEmbeddingEnabled(): boolean {
   if (_enabled !== null) return _enabled;
   const cfg = getEmbeddingConfig();
-  _enabled = !!cfg.provider && !!cfg.apiKey && cfg.provider in PROVIDERS;
+  // Ollama doesn't require a real API key — allow empty/placeholder values
+  const apiKeyOk = !!cfg.apiKey || cfg.provider === 'ollama';
+  _enabled = !!cfg.provider && apiKeyOk && cfg.provider in PROVIDERS;
   if (_enabled) {
     log.info({ provider: cfg.provider }, 'Embedding system enabled');
   }

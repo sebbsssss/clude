@@ -1,13 +1,15 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useAuthContext } from './AuthContext';
 import { api } from '../lib/api';
-import type { Conversation } from '../lib/types';
+import type { Conversation, Message } from '../lib/types';
 
 export function useConversations() {
   const { authenticated } = useAuthContext();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [oldestMessageTs, setOldestMessageTs] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authenticated) {
@@ -31,9 +33,25 @@ export function useConversations() {
 
   const selectConversation = useCallback(async (id: string) => {
     setActiveId(id);
+    setHasMoreMessages(false);
+    setOldestMessageTs(null);
     const data = await api.getConversation(id);
+    setHasMoreMessages(data.hasMore ?? false);
+    if (data.messages.length > 0) {
+      setOldestMessageTs(data.messages[0].created_at);
+    }
     return data.messages;
   }, []);
+
+  const loadMoreMessages = useCallback(async (id: string): Promise<Message[]> => {
+    if (!oldestMessageTs) return [];
+    const data = await api.getConversation(id, oldestMessageTs);
+    setHasMoreMessages(data.hasMore ?? false);
+    if (data.messages.length > 0) {
+      setOldestMessageTs(data.messages[0].created_at);
+    }
+    return data.messages;
+  }, [oldestMessageTs]);
 
   const deleteConversation = useCallback(async (id: string) => {
     await api.deleteConversation(id);
@@ -54,8 +72,10 @@ export function useConversations() {
     conversations,
     activeId,
     loading,
+    hasMoreMessages,
     createConversation,
     selectConversation,
+    loadMoreMessages,
     deleteConversation,
     refreshTitle,
     setActiveId,

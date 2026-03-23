@@ -5,6 +5,18 @@ import { useAuthContext } from '../hooks/AuthContext';
 import { api } from '../lib/api';
 import type { ChatModel } from '../lib/types';
 
+// Fetch once per session — deduplicates concurrent mount calls
+let _modelsPromise: Promise<ChatModel[]> | null = null;
+function fetchModelsOnce(): Promise<ChatModel[]> {
+  if (!_modelsPromise) {
+    _modelsPromise = api.getModels().catch((err) => {
+      _modelsPromise = null; // allow retry on error
+      throw err;
+    });
+  }
+  return _modelsPromise;
+}
+
 interface Props {
   selectedModel: string;
   onModelChange: (modelId: string) => void;
@@ -29,7 +41,7 @@ export function ModelSelector({ selectedModel, onModelChange }: Props) {
   }, [open]);
 
   useEffect(() => {
-    api.getModels().then(setModels).catch(console.error);
+    fetchModelsOnce().then(setModels).catch(console.error);
   }, []);
 
   // Force reset to free model if user logs out while a pro model is selected

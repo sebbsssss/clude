@@ -14,6 +14,14 @@ export interface MessageTokens {
   completion: number;
 }
 
+export interface GreetingMeta {
+  total_memories: number;
+  memories_recalled: number;
+  temporal_span: { weeks: number; since_label: string } | null;
+  topics: string[];
+  greeting_cost: number;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -24,6 +32,7 @@ export interface ChatMessage {
   cost?: MessageCost;
   tokens?: MessageTokens;
   isGreeting?: boolean;
+  greetingMeta?: GreetingMeta;
 }
 
 export function useChat() {
@@ -50,9 +59,16 @@ export function useChat() {
           );
         },
         (data) => {
+          const meta: GreetingMeta | undefined = data?.total_memories != null ? {
+            total_memories: data.total_memories,
+            memories_recalled: data.memories_recalled ?? 0,
+            temporal_span: data.temporal_span ?? null,
+            topics: data.topics ?? [],
+            greeting_cost: data.greeting_cost ?? 0,
+          } : undefined;
           setMessages((prev) =>
             prev.map((m) => m.id === greetingId
-              ? { ...m, content: (m.content || 'Hey! How can I help you today?').trimStart(), streaming: false, cost: data?.cost, tokens: data?.tokens }
+              ? { ...m, content: (m.content || 'Hey! How can I help you today?').trimStart(), streaming: false, cost: data?.cost, tokens: data?.tokens, greetingMeta: meta }
               : m)
           );
         },
@@ -178,6 +194,18 @@ export function useChat() {
     })));
   }, []);
 
+  const prependMessages = useCallback((msgs: Message[]) => {
+    setMessages((prev) => [
+      ...msgs.map((m) => ({
+        id: m.id,
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+        memoryIds: m.memory_ids,
+      })),
+      ...prev,
+    ]);
+  }, []);
+
   return {
     messages,
     streaming,
@@ -187,6 +215,7 @@ export function useChat() {
     stopStreaming,
     clearMessages,
     loadMessages,
+    prependMessages,
     fetchGreeting,
   };
 }

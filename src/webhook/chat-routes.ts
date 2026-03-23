@@ -10,11 +10,13 @@ import { createHash } from 'crypto';
 import { authenticateAgent, type AgentRegistration, findOrCreateAgentForWallet } from '../features/agent-tier';
 import { requirePrivyAuth } from './privy-auth';
 import { withOwnerWallet } from '../core/owner-context';
-import { recallMemories } from '../core/memory';
+import { recallMemories, storeMemory } from '../core/memory';
 import { checkInputContent } from '../core/guardrails';
 import { checkRateLimit, getDb } from '../core/database';
 import { createChildLogger } from '../core/logger';
 import { config } from '../config';
+import { detectTemporalConstraints, matchMemoriesTemporal } from '../experimental/temporal-bonds';
+import { generateQueryEmbedding, isEmbeddingEnabled } from '../core/embeddings';
 
 const log = createChildLogger('chat-api');
 
@@ -98,6 +100,7 @@ async function chatAuth(req: Request, res: Response, next: NextFunction): Promis
 // ---- Helpers ---- //
 
 function buildSystemPrompt(memories: any[], opts?: { totalMemoryCount?: number; isGreeting?: boolean }): string {
+  const currentDate = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
   const semantic = memories.filter(m => m.memory_type === 'semantic');
   const procedural = memories.filter(m => m.memory_type === 'procedural');
   const selfModel = memories.filter(m => m.memory_type === 'self_model');
@@ -132,6 +135,7 @@ function buildSystemPrompt(memories: any[], opts?: { totalMemoryCount?: number; 
 
   if (opts?.isGreeting) {
     return `You are Clude — an AI with persistent, long-term memory. You remember everything users tell you across conversations.
+Today's date is ${currentDate}.
 
 This user just signed in. Greet them warmly and personally. If you have their memories, give a brief recap of what you remember about them and what they were last working on. Be conversational, not robotic. Don't list memories mechanically — weave them into a natural greeting. Keep it to 2-3 sentences.
 
@@ -139,6 +143,7 @@ Never mention Venice, infrastructure, or technical details about how you work. Y
   }
 
   return `You are Clude — an AI with persistent, long-term memory. You remember everything users tell you across conversations.
+Today's date is ${currentDate}.
 
 Use your memories naturally in conversation. Don't say "according to my records" or "I recall from my database" — just reference what you know like a person would. If a user asks about their memories, you can describe what you remember.
 
@@ -211,13 +216,15 @@ export function chatRoutes(): Router {
       req.on('close', () => abortController.abort());
       const veniceTimeout = setTimeout(() => abortController.abort(), 30000); // 30s max
 
-      // Try models in order — fall back if primary is overloaded
+      // Try all models in parallel — first successful response wins
       const guestModels = ['qwen3-5-9b', 'qwen3-4b', 'mistral-31-24b'];
-      let veniceRes: globalThis.Response | null = null;
-      let usedModel = guestModels[0];
+      const modelControllers = guestModels.map(() => new AbortController());
+      abortController.signal.addEventListener('abort', () => {
+        modelControllers.forEach(c => c.abort());
+      });
 
-      for (const model of guestModels) {
-        const attempt = await fetch('https://api.venice.ai/api/v1/chat/completions', {
+      const attempts = guestModels.map((model, i) =>
+        fetch('https://api.venice.ai/api/v1/chat/completions', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -230,25 +237,31 @@ export function chatRoutes(): Router {
             temperature: 0.7,
             stream: true,
           }),
-          signal: abortController.signal,
-        });
+          signal: modelControllers[i].signal,
+        }).then(attempt => {
+          if (!attempt.ok) {
+            attempt.text().then(body => log.warn({ status: attempt.status, body, model }, 'Venice guest model unavailable')).catch(() => {});
+            throw new Error(`${model}: ${attempt.status}`);
+          }
+          return { response: attempt, model, idx: i };
+        })
+      );
 
-        if (attempt.ok) {
-          veniceRes = attempt;
-          usedModel = model;
-          break;
-        }
-
-        const errBody = await attempt.text().catch(() => 'Unknown error');
-        log.warn({ status: attempt.status, body: errBody, model }, 'Venice guest model unavailable, trying fallback');
-      }
-
-      if (!veniceRes) {
+      let winner: { response: globalThis.Response; model: string; idx: number };
+      try {
+        winner = await Promise.any(attempts);
+      } catch {
         log.error('All guest chat models failed');
         res.write(`data: ${JSON.stringify({ error: 'All models are currently unavailable. Please try again later.' })}\n\n`);
         res.end();
         return;
       }
+
+      // Abort the losing requests to avoid wasting Venice credits
+      modelControllers.forEach((c, i) => { if (i !== winner.idx) c.abort(); });
+
+      const veniceRes = winner.response;
+      const usedModel = winner.model;
 
       const reader = veniceRes.body?.getReader();
       if (!reader) { res.end(); return; }
@@ -356,46 +369,86 @@ export function chatRoutes(): Router {
       // Fast parallel DB queries — no recall pipeline, no LLM
       let recentSummaries: string[] = [];
       let totalMemoryCount = 0;
+      let temporalSpan: { weeks: number; since_label: string } | null = null;
+      let topics: string[] = [];
       try {
-        const [recentResult, countResult] = await Promise.all([
-          // Fetch episodic + semantic memories (skip dream reflections/self_model)
+        const [importantResult, countResult, oldestResult] = await Promise.all([
+          // Importance-weighted sampling — best memories, not just most recent
           db.from('memories')
-            .select('summary, memory_type')
+            .select('summary, memory_type, tags, importance')
             .eq('owner_wallet', chatReq.ownerWallet!)
             .in('memory_type', ['episodic', 'semantic'])
             .not('source', 'in', '("consolidation","compaction","reflection","emergence","contradiction_resolution","active_reflection")')
+            .order('importance', { ascending: false })
             .order('created_at', { ascending: false })
-            .limit(10),
+            .limit(20),
           db.from('memories')
             .select('id', { count: 'exact', head: true })
             .eq('owner_wallet', chatReq.ownerWallet!),
+          // Earliest memory for temporal breadth
+          db.from('memories')
+            .select('created_at')
+            .eq('owner_wallet', chatReq.ownerWallet!)
+            .order('created_at', { ascending: true })
+            .limit(1),
         ]);
-        // Pick up to 3 distinct, meaningful summaries
+
+        // Pick up to 3 distinct, meaningful summaries from importance-weighted results
         const seen = new Set<string>();
-        for (const m of recentResult.data || []) {
+        const tagFreq: Record<string, number> = {};
+        for (const m of importantResult.data || []) {
           const s = (m.summary || '').trim();
           if (s && !seen.has(s) && recentSummaries.length < 3) {
             seen.add(s);
             recentSummaries.push(s);
           }
+          // Accumulate tag frequency for topic diversity
+          for (const tag of (m.tags as string[] | null) || []) {
+            if (tag && tag.length > 2) {
+              tagFreq[tag] = (tagFreq[tag] || 0) + 1;
+            }
+          }
         }
+
+        // Extract top 5 topics by frequency
+        const SKIP_TAGS = new Set(['benchmark', 'research', 'completed', 'in-progress', 'results', 'heartbeat', 'delegation', 'episodic', 'semantic']);
+        topics = Object.entries(tagFreq)
+          .filter(([tag]) => !SKIP_TAGS.has(tag))
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([tag]) => tag);
+
         totalMemoryCount = countResult.count || 0;
+
+        // Compute temporal span
+        if (oldestResult.data?.[0]?.created_at && totalMemoryCount > 0) {
+          const oldest = new Date(oldestResult.data[0].created_at);
+          const now = new Date();
+          const diffMs = now.getTime() - oldest.getTime();
+          const diffWeeks = Math.round(diffMs / (1000 * 60 * 60 * 24 * 7));
+          const since = oldest.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+          temporalSpan = { weeks: diffWeeks, since_label: since };
+        }
       } catch (err) {
         log.warn({ err }, 'Greeting query failed');
       }
 
-      // Build greeting from data — instant, no LLM needed
+      // Build greeting text from data — instant, no LLM needed
       let greeting: string;
       if (totalMemoryCount === 0) {
         greeting = "Welcome to Clude! I'm your AI with persistent memory — everything we talk about, I'll remember for next time. What's on your mind?";
       } else if (recentSummaries.length > 0) {
         const recapItems = recentSummaries.map(s => {
-          // Truncate at last whole word before 100 chars
           if (s.length <= 100) return s;
           const cut = s.lastIndexOf(' ', 100);
           return s.slice(0, cut > 60 ? cut : 100) + '…';
         });
-        greeting = `Hey, welcome back! I've got ${totalMemoryCount.toLocaleString()} memories loaded. Here's what I remember recently:\n\n${recapItems.map(s => `• ${s}`).join('\n')}\n\nWhat would you like to work on?`;
+        const spanNote = temporalSpan
+          ? temporalSpan.weeks <= 1
+            ? ' from this week'
+            : ` spanning ${temporalSpan.weeks} weeks`
+          : '';
+        greeting = `Hey, welcome back! I've got ${totalMemoryCount.toLocaleString()} memories loaded${spanNote}. Here's what I remember:\n\n${recapItems.map(s => `• ${s}`).join('\n')}\n\nWhat would you like to work on?`;
       } else {
         greeting = `Welcome back! I've got ${totalMemoryCount.toLocaleString()} memories loaded and ready. How can I help?`;
       }
@@ -403,7 +456,14 @@ export function chatRoutes(): Router {
       // Send stats + greeting as SSE (instant — no streaming needed)
       res.write(`data: ${JSON.stringify({ memories_recalled: recentSummaries.length, total_memories: totalMemoryCount })}\n\n`);
       res.write(`data: ${JSON.stringify({ content: greeting })}\n\n`);
-      res.write(`data: ${JSON.stringify({ done: true, memories_recalled: recentSummaries.length, total_memories: totalMemoryCount })}\n\n`);
+      res.write(`data: ${JSON.stringify({
+        done: true,
+        memories_recalled: recentSummaries.length,
+        total_memories: totalMemoryCount,
+        temporal_span: temporalSpan,
+        topics,
+        greeting_cost: 0,
+      })}\n\n`);
       res.end();
     } catch (err: any) {
       log.error({ err }, 'Greeting error');
@@ -502,13 +562,22 @@ export function chatRoutes(): Router {
         return;
       }
 
-      // Fetch last 50 messages
-      const { data: messages, error: msgError } = await db
+      // Fetch messages — default last 20, supports ?before=<iso_timestamp> for pagination
+      const limit = 20;
+      const before = req.query.before as string | undefined;
+
+      let msgQuery = db
         .from('chat_messages')
         .select('*')
         .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true })
-        .limit(50);
+        .order('created_at', { ascending: false })
+        .limit(limit + 1); // +1 to detect whether more exist
+
+      if (before) {
+        msgQuery = msgQuery.lt('created_at', before);
+      }
+
+      const { data: msgRaw, error: msgError } = await msgQuery;
 
       if (msgError) {
         log.error({ err: msgError }, 'Failed to fetch messages');
@@ -516,7 +585,10 @@ export function chatRoutes(): Router {
         return;
       }
 
-      res.json({ ...conversation, messages: messages || [] });
+      const hasMore = (msgRaw?.length ?? 0) > limit;
+      const messages = (msgRaw ?? []).slice(0, limit).reverse(); // chronological order
+
+      res.json({ ...conversation, messages, hasMore });
     } catch (err) {
       log.error({ err }, 'Get conversation error');
       res.status(500).json({ error: 'Failed to get conversation' });
@@ -625,22 +697,67 @@ export function chatRoutes(): Router {
         return;
       }
 
-      // 5. Recall memories + get total count
+      // 5. Recall memories + get total count (with temporal awareness)
       let memories: any[] = [];
       let memoryIds: number[] = [];
       let totalMemoryCount = 0;
+      const temporalConstraints = detectTemporalConstraints(content);
+      if (temporalConstraints) {
+        log.debug({ startDate: temporalConstraints.startDate, endDate: temporalConstraints.endDate }, 'Temporal query detected');
+      }
       try {
-        const [recalled, countResult] = await Promise.all([
-          withOwnerWallet(chatReq.ownerWallet!, () =>
-            recallMemories({ query: content, limit: 10, skipExpansion: true })
-          ),
-          db.from('memories')
-            .select('id', { count: 'exact', head: true })
-            .eq('owner_wallet', chatReq.ownerWallet!),
+        // Run recall, count, and optional temporal search in parallel
+        const recallPromise = withOwnerWallet(chatReq.ownerWallet!, () =>
+          recallMemories({ query: content, limit: 25 })
+        );
+        const countPromise = db.from('memories')
+          .select('id', { count: 'exact', head: true })
+          .eq('owner_wallet', chatReq.ownerWallet!);
+
+        // If temporal query detected AND embeddings available, also run temporal RPC
+        const temporalPromise = (temporalConstraints && isEmbeddingEnabled())
+          ? generateQueryEmbedding(content).then(async (embedding) => {
+              if (!embedding) return [];
+              return matchMemoriesTemporal({
+                queryEmbedding: embedding,
+                matchThreshold: 0.3,
+                matchCount: 25,
+                startDate: temporalConstraints.startDate,
+                endDate: temporalConstraints.endDate,
+                filterOwner: chatReq.ownerWallet || null,
+              });
+            })
+          : Promise.resolve([]);
+
+        const [recalled, countResult, temporalResults] = await Promise.all([
+          recallPromise, countPromise, temporalPromise,
         ]);
+
         memories = recalled;
-        memoryIds = memories.map(m => m.id);
         totalMemoryCount = countResult.count || 0;
+
+        // Merge temporal results: fetch full records for any IDs not already in recall set
+        if (temporalResults.length > 0) {
+          const recalledIds = new Set(memories.map(m => m.id));
+          const missingIds = temporalResults
+            .map(r => r.id)
+            .filter(id => !recalledIds.has(id));
+
+          if (missingIds.length > 0) {
+            const { data: temporalMemories } = await db
+              .from('memories')
+              .select('*')
+              .in('id', missingIds)
+              .eq('owner_wallet', chatReq.ownerWallet!);
+
+            if (temporalMemories) {
+              memories = [...memories, ...temporalMemories];
+              log.debug({ added: temporalMemories.length }, 'Merged temporal memories into recall set');
+            }
+          }
+        }
+
+        memoryIds = memories.map(m => m.id);
       } catch (err) {
         log.warn({ err }, 'Memory recall failed, continuing without memories');
       }
@@ -817,25 +934,33 @@ export function chatRoutes(): Router {
         log.warn({ err, conversationId }, 'Auto-title generation failed')
       );
 
-      // 15. Store conversation turn as memory (direct DB insert — no AsyncLocalStorage dependency)
+      // 15. Store conversation turn as full-fidelity memory (embeddings, entities, temporal)
       if (content.length > 10) {
-        db.from('memories')
-          .insert({
-            memory_type: 'episodic',
-            content: `User said: ${content}\n\nAssistant replied: ${fullContent.slice(0, 500)}`,
-            summary: content.slice(0, 200),
-            tags: ['chat', 'conversation'],
-            importance: 0.4,
-            source: 'chat',
-            source_id: `chat:${assistantMsgId}`,
-            owner_wallet: chatReq.ownerWallet,
-            related_wallet: chatReq.ownerWallet,
-            metadata: { conversation_id: conversationId, model: modelId },
-          })
-          .then(({ error: memErr }) => {
-            if (memErr) log.warn({ err: memErr.message }, 'Chat memory insert failed');
-            else log.debug({ wallet: chatReq.ownerWallet?.slice(0, 8) }, 'Chat memory stored');
-          });
+        const memoryContent = `User said: ${content}\n\nAssistant replied: ${fullContent}`;
+        const totalLen = content.length + fullContent.length;
+        // Dynamic importance: substantive conversations score higher than small talk
+        const importance = Math.min(0.8, 0.5 + (totalLen > 200 ? 0.1 : 0) + (totalLen > 600 ? 0.1 : 0));
+        const tags = ['chat', 'conversation', `model:${modelId}`];
+
+        Promise.resolve(
+          withOwnerWallet(chatReq.ownerWallet || null, () =>
+            storeMemory({
+              type: 'episodic',
+              content: memoryContent,
+              summary: content.slice(0, 200),
+              tags,
+              importance,
+              source: 'chat',
+              sourceId: `chat:${assistantMsgId}`,
+              relatedWallet: chatReq.ownerWallet,
+              metadata: { conversation_id: conversationId, model: modelId },
+            })
+          )
+        ).then(memId => {
+          if (memId) log.debug({ memId, wallet: chatReq.ownerWallet?.slice(0, 8) }, 'Chat memory stored (full pipeline)');
+        }).catch(err => {
+          log.warn({ err }, 'Chat memory store failed');
+        });
       }
 
     } catch (err: any) {

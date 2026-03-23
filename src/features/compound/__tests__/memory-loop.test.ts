@@ -20,6 +20,20 @@ vi.mock('../../../core/memory', () => ({
   createMemoryLink: (...args: any[]) => mockCreateMemoryLink(...args),
 }));
 
+const mockDbQuery = vi.fn();
+
+vi.mock('../../../core/database', () => ({
+  getDb: () => ({
+    from: (_table: string) => ({
+      select: (cols: string) => ({
+        contains: (_col: string, tags: string[]) => ({
+          limit: (_n: number) => mockDbQuery(cols, tags),
+        }),
+      }),
+    }),
+  }),
+}));
+
 import { storePrediction, storeResolution, getAccuracyStats } from '../memory-loop';
 
 function makeMarket(overrides: Partial<Market> = {}): Market {
@@ -228,16 +242,25 @@ describe('getAccuracyStats', () => {
   });
 
   it('computes accuracy from resolution memories', async () => {
-    // First call: resolutions
-    mockRecallMemories.mockResolvedValueOnce([
-      { metadata: { correct: true, brier_score: 0.04, category: 'tech' } },
-      { metadata: { correct: true, brier_score: 0.09, category: 'tech' } },
-      { metadata: { correct: false, brier_score: 0.64, category: 'politics' } },
-    ]);
-    // Second call: predictions
-    mockRecallMemories.mockResolvedValueOnce([
-      {}, {}, {}, {}, // 4 total predictions
-    ]);
+    // getAccuracyStats uses direct DB queries (not recallMemories)
+    // mockDbQuery differentiates by tags: resolution vs prediction
+    mockDbQuery.mockImplementation((_cols: string, tags: string[]) => {
+      if (tags.includes('resolution')) {
+        return Promise.resolve({
+          data: [
+            { metadata: { correct: true, brier_score: 0.04, category: 'tech' } },
+            { metadata: { correct: true, brier_score: 0.09, category: 'tech' } },
+            { metadata: { correct: false, brier_score: 0.64, category: 'politics' } },
+          ],
+          error: null,
+        });
+      }
+      // prediction query
+      return Promise.resolve({
+        data: [{}, {}, {}, {}], // 4 total predictions
+        error: null,
+      });
+    });
 
     const stats = await getAccuracyStats();
 
@@ -251,8 +274,7 @@ describe('getAccuracyStats', () => {
   });
 
   it('handles zero resolutions', async () => {
-    mockRecallMemories.mockResolvedValueOnce([]);
-    mockRecallMemories.mockResolvedValueOnce([]);
+    mockDbQuery.mockResolvedValue({ data: [], error: null });
 
     const stats = await getAccuracyStats();
     expect(stats.accuracy).toBe(0);

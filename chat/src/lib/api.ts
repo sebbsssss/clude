@@ -65,10 +65,11 @@ class ChatAPI {
     return res.json();
   }
 
-  async getConversation(id: string): Promise<Conversation & { messages: Message[] }> {
-    const res = await fetch(`${API_BASE}/api/chat/conversations/${id}`, {
-      headers: this.headers(),
-    });
+  async getConversation(id: string, before?: string): Promise<Conversation & { messages: Message[]; hasMore: boolean }> {
+    const url = before
+      ? `${API_BASE}/api/chat/conversations/${id}?before=${encodeURIComponent(before)}`
+      : `${API_BASE}/api/chat/conversations/${id}`;
+    const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to get conversation');
     return res.json();
   }
