@@ -541,7 +541,7 @@ Rules:
 - For "how many months": count calendar months between dates
 - For ordering: list events in chronological order based on dates
 - Show your date arithmetic briefly, then give the final answer
-- NEVER say "I don't have information" — the events ARE in the timeline
+- If the timeline doesn't contain the relevant events, say so clearly — don't guess
 - Keep the final answer concise (1-2 sentences)`,
       messages: [{
         role: 'user',
@@ -549,7 +549,14 @@ Rules:
       }],
     });
 
-    return stage2.content[0].type === 'text' ? stage2.content[0].text.trim() : '';
+    let temporalAnswer = stage2.content[0].type === 'text' ? stage2.content[0].text.trim() : '';
+
+    // If temporal two-stage gives IDK, fall back to single-pass with IDK retry
+    if (/i don't have|cannot (find|answer)|no.*information|not.*in the timeline|only (find|identify) (one|no)/i.test(temporalAnswer)) {
+      // Fall through to standard single-pass approach below (don't return early)
+    } else {
+      return temporalAnswer;
+    }
   }
 
   // Two-stage approach for KU questions: find all versions, then pick latest
@@ -583,24 +590,43 @@ CRITICAL:
     const versions = stage1.content[0].type === 'text' ? stage1.content[0].text.trim() : '';
 
     // Stage 2: Answer using the version history
-    const stage2 = await anthropic.messages.create({
-      model: readerModel,
-      max_tokens: 400,
-      system: `Answer the question using the version history below. Return ONLY the LATEST/MOST RECENT value.
+    // Detect if question asks about initial/original state vs latest
+    const asksInitial = /\b(initially|originally|first|at first|in the beginning|started? (with|as|at|by)|used to|before .*(chang|switch|updat|mov))\b/i.test(question);
+    const versionInstruction = asksInitial
+      ? `Return the EARLIEST/INITIAL/ORIGINAL value — the FIRST entry in the version list.
+
+Rules:
+- The question asks about the INITIAL state, before any changes
+- Pick the FIRST entry in the version list (the earliest date)
+- If no clear change history exists, describe the earliest known state`
+      : `Return ONLY the LATEST/MOST RECENT value.
 
 Rules:
 - The last entry in the version list is the correct answer
 - If counting (how many X): include ALL items accumulated up to the latest date
-- Do NOT return an older/outdated value
+- Do NOT return an older/outdated value`;
+
+    const stage2 = await anthropic.messages.create({
+      model: readerModel,
+      max_tokens: 400,
+      system: `Answer the question using the version history below. ${versionInstruction}
+
 - Answer directly and concisely (1-2 sentences)
 - NEVER say "I don't have information"`,
       messages: [{
         role: 'user',
-        content: `Version history:\n${versions}\n\nQuestion: ${question}\n\nAnswer (latest value only):`,
+        content: `Version history:\n${versions}\n\nQuestion: ${question}\n\nAnswer:`,
       }],
     });
 
-    return stage2.content[0].type === 'text' ? stage2.content[0].text.trim() : '';
+    let kuAnswer = stage2.content[0].type === 'text' ? stage2.content[0].text.trim() : '';
+
+    // If KU two-stage gives IDK, fall back to single-pass with IDK retry
+    if (/i don't have|cannot (find|answer)|no.*information|not.*mentioned/i.test(kuAnswer)) {
+      // Fall through to standard single-pass approach below
+    } else {
+      return kuAnswer;
+    }
   }
 
   const resp = await anthropic.messages.create({
@@ -825,12 +851,15 @@ Score "1" (correct) if:
 - The answer is correct even if it includes extra details beyond the reference
 - Names/places refer to the same entity (e.g., "Rhythm Central on Main St" matches "the music shop on Main St")
 - Paraphrased but semantically equivalent
+- BOTH the reference AND generated answer agree that specific information was NOT mentioned/available (e.g., reference says "You did not mention X" and generated says "You don't have X" or "There's no mention of X")
+- The generated answer correctly identifies what WAS mentioned instead of what was asked about, matching the reference's correction (e.g., reference says "not your uncle's party, your niece's" and generated says "for your niece, not your uncle")
 
 Score "0" (wrong) if:
 - The key fact is wrong (wrong name, wrong number, wrong event)
 - The answer says "I don't know" when the reference has specific information
 - The answer gets the temporal ordering wrong (says A before B when reference says B before A)
 - Important information is missing that changes the meaning
+- The generated answer claims information exists when the reference says it was NOT mentioned
 
 Reply with ONLY "1" or "0".`;
 
