@@ -5,7 +5,7 @@ import { LiquidMetal, PulsingBorder } from "@paper-design/shaders-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useAuthContext } from "../hooks/AuthContext"
-import { useChat, type ChatMessage } from "../hooks/useChat"
+import { useChat, type ChatMessage, type MessageTokens } from "../hooks/useChat"
 import { useConversations } from "../hooks/useConversations"
 import { useMemory } from "../hooks/useMemory"
 import { Sidebar } from "./Sidebar"
@@ -203,7 +203,7 @@ export function ChatInterface() {
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
-                className="overflow-y-auto mb-3 space-y-3 max-h-[50vh]"
+                className="overflow-y-auto mb-3 space-y-3 max-h-[60vh] pb-2"
               >
                 {messages.map((message: ChatMessage) => (
                   <motion.div
@@ -243,18 +243,47 @@ export function ChatInterface() {
                           </div>
                           <MemoryPills memoryIds={message.memoryIds} visible={showMemoryPills} />
                           {!message.streaming && message.content && message.cost !== undefined && (
-                            <button
-                              onClick={() => setShowCostModal(true)}
-                              className="flex items-center gap-1 mt-0.5 group"
-                              title="Compare costs"
-                            >
-                              <span className="text-[10px] text-white/25 group-hover:text-white/40 transition-colors whitespace-nowrap">
-                                {message.cost.total === 0
-                                  ? '◆ Free · $0.05 on Opus'
-                                  : `◆ $${message.cost.total < 0.001 ? message.cost.total.toFixed(5) : message.cost.total.toFixed(4)} · ${Math.round(0.045 / Math.max(message.cost.total, 0.0001))}x cheaper`}
-                              </span>
-                              <HelpCircle className="w-2.5 h-2.5 text-white/15 group-hover:text-white/40 transition-colors shrink-0" />
-                            </button>
+                            <div className="relative group mt-0.5">
+                              <button
+                                onClick={() => setShowCostModal(true)}
+                                className="flex items-center gap-1"
+                              >
+                                <span className="text-[10px] text-white/25 group-hover:text-white/40 transition-colors whitespace-nowrap">
+                                  {message.cost.total === 0
+                                    ? '◆ Free · $0.05 on Opus'
+                                    : `◆ $${message.cost.total < 0.001 ? message.cost.total.toFixed(5) : message.cost.total.toFixed(4)} · ${Math.round(0.045 / Math.max(message.cost.total, 0.0001))}x cheaper`}
+                                </span>
+                                <HelpCircle className="w-2.5 h-2.5 text-white/15 group-hover:text-white/40 transition-colors shrink-0" />
+                              </button>
+                              <div className="absolute left-0 bottom-full mb-1.5 hidden group-hover:block z-50">
+                                <div className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 shadow-xl text-[10px] whitespace-nowrap space-y-1">
+                                  {message.tokens && (
+                                    <>
+                                      <div className="text-zinc-400">
+                                        <span className="text-zinc-500">In:</span> {message.tokens.prompt.toLocaleString()} tokens
+                                        <span className="text-zinc-600 mx-1">·</span>
+                                        <span className="text-zinc-500">Out:</span> {message.tokens.completion.toLocaleString()} tokens
+                                      </div>
+                                    </>
+                                  )}
+                                  <div className="text-zinc-400">
+                                    <span className="text-zinc-500">Clude:</span>{' '}
+                                    <span className="text-green-400">{message.cost.total === 0 ? 'Free' : `$${message.cost.total < 0.001 ? message.cost.total.toFixed(5) : message.cost.total.toFixed(4)}`}</span>
+                                    {message.cost.input !== undefined && message.cost.output !== undefined && message.cost.total > 0 && (
+                                      <span className="text-zinc-600"> (in ${message.cost.input < 0.001 ? message.cost.input.toFixed(5) : message.cost.input.toFixed(4)} + out ${message.cost.output < 0.001 ? message.cost.output.toFixed(5) : message.cost.output.toFixed(4)})</span>
+                                    )}
+                                  </div>
+                                  {message.tokens && (
+                                    <div className="text-zinc-500">
+                                      <span>Opus 4.6:</span>{' '}
+                                      <span className="text-red-400/80">${((message.tokens.prompt / 1_000_000) * 15 + (message.tokens.completion / 1_000_000) * 75).toFixed(4)}</span>
+                                      <span className="text-zinc-600"> ($15/$75 per M)</span>
+                                    </div>
+                                  )}
+                                  <div className="text-zinc-600 text-[9px] pt-0.5">Click for full comparison</div>
+                                </div>
+                              </div>
+                            </div>
                           )}
                         </div>
                       </div>

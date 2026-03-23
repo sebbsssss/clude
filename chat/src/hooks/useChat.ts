@@ -9,6 +9,11 @@ export interface MessageCost {
   output?: number;
 }
 
+export interface MessageTokens {
+  prompt: number;
+  completion: number;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -17,6 +22,7 @@ export interface ChatMessage {
   streaming?: boolean;
   model?: string;
   cost?: MessageCost;
+  tokens?: MessageTokens;
   isGreeting?: boolean;
 }
 
@@ -40,13 +46,13 @@ export function useChat() {
       await api.greet(
         (chunk) => {
           setMessages((prev) =>
-            prev.map((m) => m.id === greetingId ? { ...m, content: m.content + chunk } : m)
+            prev.map((m) => m.id === greetingId ? { ...m, content: (m.content + chunk).trimStart() } : m)
           );
         },
         (data) => {
           setMessages((prev) =>
             prev.map((m) => m.id === greetingId
-              ? { ...m, content: m.content || 'Hey! How can I help you today?', streaming: false, cost: data?.cost }
+              ? { ...m, content: (m.content || 'Hey! How can I help you today?').trimStart(), streaming: false, cost: data?.cost, tokens: data?.tokens }
               : m)
           );
         },
@@ -126,6 +132,7 @@ export function useChat() {
                     memoryIds: data?.memory_ids,
                     model: data?.model,
                     cost: data?.cost,
+                    tokens: data?.tokens,
                   }
                 : m)
             );
