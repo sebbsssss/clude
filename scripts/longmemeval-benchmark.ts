@@ -762,18 +762,20 @@ Read ALL the context and find EVERY mention of the topic asked about. List ALL v
 
 Output format:
 VERSIONS (oldest to newest):
-1. [DATE] VALUE/STATUS: description
-2. [DATE] VALUE/STATUS: description (UPDATED from #1)
+1. [DATE] VALUE/STATUS: description (from Conversation N)
+2. [DATE] VALUE/STATUS: description (UPDATED from #1, from Conversation N)
 ...
 LATEST VALUE: the most recent value
+ENTITY CHECK: Does the question ask about the EXACT entity mentioned in the memories? (e.g., if question asks about "Dr. Johnson" but memories mention "Dr. Smith", note the mismatch)
 
 CRITICAL:
-- Search ALL conversations and key facts for mentions of this topic
-- Include EVERY version, even if a value was mentioned briefly
+- Search ALL conversations AND key facts for mentions of this topic — scan EVERY sentence
+- Include EVERY version, even if a value was mentioned briefly or in passing
 - Note what changed between versions
 - The LATEST entry (highest date) is ALWAYS the correct current answer
-- Look for update signals: "now", "updated", "changed to", "switched to", "new", "replaced", "increased to"
-- For counting (how many X): track acquisitions AND disposals to get the current count`,
+- Look for update signals: "now", "updated", "changed to", "switched to", "new", "replaced", "increased to", "went up to", "added"
+- For counting (how many X): track EACH acquisition AND disposal individually to get the current count
+- If the question mentions a specific entity (person, game, activity) but the memories mention a DIFFERENT but similar entity, note this MISMATCH explicitly`,
       messages: [{
         role: 'user',
         content: `Memory context:\n${context}\n\nQuestion: ${question}\n\nFind all versions of this information:`,
@@ -799,7 +801,9 @@ Rules:
 - If counting (how many X): include ALL items accumulated up to the latest date
 - Do NOT return an older/outdated value
 - Do NOT interpret or judge whether a later value was aspirational, planned, or uncertain — ALWAYS treat the later-dated value as current fact
-- If you found values at different dates, the LATER-dated one wins, PERIOD — no hedging, no caveats`;
+- If you found values at different dates, the LATER-dated one wins, PERIOD — no hedging, no caveats
+- If the ENTITY CHECK notes a mismatch (question asks about X but memories mention Y), say "The information provided is not enough" — do NOT answer about the wrong entity
+- If the version history shows the topic was mentioned but never conclusively resolved, provide the LATEST known value anyway`;
 
     const stage2 = await anthropic.messages.create({
       model: readerModel,
@@ -811,7 +815,7 @@ Rules:
 - NEVER say "I don't have information"`,
       messages: [{
         role: 'user',
-        content: `Version history:\n${versions}\n\nQuestion: ${question}\n\nAnswer:`,
+        content: `Version history:\n${versions}\n\nOriginal memory context:\n${context}\n\nQuestion: ${question}\n\nAnswer:`,
       }],
     });
 
@@ -907,8 +911,8 @@ async function generateCountingUnionAnswer(
 ): Promise<string> {
   const dateContext = questionDate ? `\nThe question is being asked on: ${questionDate}.` : '';
 
-  // Check if this is a counting question
-  const isCountingQ = /\bhow many\b|\bhow much total\b|\bhow much .* spent\b|\btotal (number|amount|cost)\b/i.test(question);
+  // Check if this is a counting/aggregation question
+  const isCountingQ = /\bhow many\b|\bhow much total\b|\bhow much .* (spend|spent|raise|raised|earn|earned|pay|paid|cost|save|saved)\b|\btotal (number|amount|cost|distance|money)\b|\bwhat is the (total|average|minimum|maximum)\b|\bhow much (did|will|would|do) I\b|\bhow much money\b|\bpage count\b|\bspend the most\b|\bapproximate (increase|decrease)\b/i.test(question);
   if (!isCountingQ) {
     // Fall back to standard answer for non-counting questions
     return generateAnswerCoN(context, question, _questionType, readerModel, questionDate);
@@ -1005,26 +1009,37 @@ CRITICAL RULES:
     }
   }
 
-  // Generate final answer using the merged item list
+  // Generate final answer using the merged item list with LLM synthesis
   const itemList = Array.from(allItems.values());
-  const isMoney = /how much|total.*\$|\$.*total|spent|cost|expense/i.test(question);
 
-  if (isMoney) {
-    // For money questions, try to extract amounts and sum
-    const amounts: number[] = [];
-    for (const item of itemList) {
-      const amountMatch = item.match(/\$(\d+(?:\.\d{2})?)/);
-      if (amountMatch) amounts.push(parseFloat(amountMatch[1]));
-    }
-    if (amounts.length > 0) {
-      const total = amounts.reduce((a, b) => a + b, 0);
-      return `$${total}. Individual expenses: ${itemList.join('; ')}`;
-    }
+  if (itemList.length === 0) {
+    // No items found across all runs — fall back to standard two-stage
+    return generateAnswerCoN(context, question, _questionType, readerModel, questionDate);
   }
 
-  // For count questions, return count + list
-  const count = itemList.length;
-  return `${count}. ${itemList.join('; ')}`;
+  const synthesisResp = await anthropic.messages.create({
+    model: readerModel,
+    max_tokens: 600,
+    temperature: 0,
+    system: `You answer a question using extracted data items from a user's conversation history.${dateContext}
+
+You have been given a comprehensive list of items found across multiple extraction passes. Use ALL of them.
+
+Rules:
+- For "how many" questions: count ALL items in the list, then answer with the total count and list each item
+- For "how much total/spent" questions: extract dollar amounts from each item, sum them, show the breakdown
+- For "average" questions: extract all values, sum them, divide by count
+- For comparison (most, least, first, last): compare all items
+- Answer concisely (1-3 sentences) with the specific count/amount
+- Include the specific count or sum — do NOT be vague
+- Do NOT say "I don't have information" — you have the extracted data`,
+    messages: [{
+      role: 'user',
+      content: `Extracted items (${itemList.length} found):\n${itemList.map((item, i) => `${i + 1}. ${item}`).join('\n')}\n\nQuestion: ${question}\n\nAnswer:`,
+    }],
+  });
+
+  return synthesisResp.content[0].type === 'text' ? synthesisResp.content[0].text.trim() : `${itemList.length}. ${itemList.join('; ')}`;
 }
 
 async function judgeAnswer(generated: string, reference: string, question: string, questionType?: string): Promise<number> {
@@ -1910,7 +1925,7 @@ async function main() {
         }
         const context = formatBenchmarkContext(contextMemories, q.question_type);
         let generated: string;
-        if (opts.countingUnion && q.question_type === 'multi-session') {
+        if (q.question_type === 'multi-session') {
           generated = await generateCountingUnionAnswer(context, q.question, q.question_type, opts.readerModel, q.question_date, opts.countingRuns);
         } else {
           const answerFn = (globalThis as any).__generateAnswerOverride || generateAnswerCoN;
