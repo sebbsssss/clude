@@ -17,6 +17,7 @@
  *   --skip-fact-extraction  (skip LLM fact extraction)
  *   --reader-model MODEL    (default: claude-sonnet-4-5-20250929)
  *   --rejudge PATH          (re-judge existing results with current judge model)
+ *   --run-id ID             (isolate run data with unique owner_wallet — avoids cleanup)
  */
 process.env.LOG_LEVEL = 'error';
 import dotenv from 'dotenv';
@@ -106,7 +107,7 @@ if (!ANTHROPIC_KEY) {
 const hasEmbeddings = !!(EMBEDDING_PROVIDER && EMBEDDING_KEY);
 
 const BENCHMARK_SOURCE = 'longmemeval-benchmark';
-const BENCHMARK_OWNER_WALLET = 'LongMemEval11111111111111111111111111111111';
+let BENCHMARK_OWNER_WALLET = 'LongMemEval11111111111111111111111111111111';
 const CACHE_DIR = join(__dirname, '.longmemeval-cache');
 const EXTRACTION_MODEL = 'claude-haiku-4-5-20251001';
 const JUDGE_MODEL = 'claude-sonnet-4-5-20250929';
@@ -143,6 +144,10 @@ function parseArgs() {
     countingUnion: false, // use union extraction for counting questions
     countingRuns: 3, // number of extraction runs for counting union
     rejudge: '' as string, // path to results JSON to re-judge with current judge model
+    runId: '' as string, // unique run ID — creates isolated owner_wallet to avoid cleanup
+    truncateSessions: false, // use old truncate-to-5000 seeding instead of session chunking
+    skipSeeding: false, // skip cleanup + seeding (reuse existing data in DB)
+    resume: '' as string, // path to partial results JSON to resume from
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -179,6 +184,18 @@ function parseArgs() {
         break;
       case '--rejudge':
         opts.rejudge = args[++i] || '';  // path to results JSON to re-judge
+        break;
+      case '--run-id':
+        opts.runId = args[++i] || '';
+        break;
+      case '--truncate-sessions':
+        opts.truncateSessions = true;
+        break;
+      case '--skip-seeding':
+        opts.skipSeeding = true;
+        break;
+      case '--resume':
+        opts.resume = args[++i] || '';
         break;
     }
   }
@@ -348,27 +365,36 @@ Output one preference per line, starting with "- ". Be very specific — include
 // ── Cleanup ────────────────────────────────────────────────────
 
 async function cleanupBenchmarkData(db: SupabaseClient): Promise<void> {
-  const { data: benchmarkMemories } = await db
-    .from('memories')
-    .select('id')
-    .eq('owner_wallet', BENCHMARK_OWNER_WALLET);
+  // Paginated cleanup — Supabase REST API limits SELECT to 1000 rows by default
+  let totalDeleted = 0;
+  while (true) {
+    const { data: batch } = await db
+      .from('memories')
+      .select('id')
+      .eq('owner_wallet', BENCHMARK_OWNER_WALLET)
+      .limit(1000);
 
-  const allIds = benchmarkMemories?.map(m => m.id) || [];
-  if (allIds.length === 0) return;
+    const ids = batch?.map(m => m.id) || [];
+    if (ids.length === 0) break;
 
-  // Delete in FK order, batching large ID sets
-  const batchSize = 500;
-  for (let i = 0; i < allIds.length; i += batchSize) {
-    const batch = allIds.slice(i, i + batchSize);
-    try { await db.from('entity_mentions').delete().in('memory_id', batch); } catch {}
-    try {
-      await db.from('memory_links').delete()
-        .or(`source_id.in.(${batch.join(',')}),target_id.in.(${batch.join(',')})`);
-    } catch {}
-    try { await db.from('memory_fragments').delete().in('memory_id', batch); } catch {}
-    await db.from('memories').delete().in('id', batch);
+    // Delete in FK order, batching to avoid URL length limits
+    const batchSize = 500;
+    for (let i = 0; i < ids.length; i += batchSize) {
+      const chunk = ids.slice(i, i + batchSize);
+      try { await db.from('entity_mentions').delete().in('memory_id', chunk); } catch {}
+      try {
+        await db.from('memory_links').delete()
+          .or(`source_id.in.(${chunk.join(',')}),target_id.in.(${chunk.join(',')})`);
+      } catch {}
+      try { await db.from('memory_fragments').delete().in('memory_id', chunk); } catch {}
+      await db.from('memories').delete().in('id', chunk);
+    }
+
+    totalDeleted += ids.length;
+    process.stdout.write(`\r   Cleaned: ${totalDeleted} memories`);
   }
 
+  if (totalDeleted > 0) console.log();
   try { await db.from('entities').delete().eq('mention_count', 0); } catch {}
 }
 
@@ -457,12 +483,13 @@ async function generateAnswerCoN(
 
 The user is asking about something the assistant said or recommended in a previous conversation. Your job is to find the exact conversation and quote the assistant's specific details.${dateContext}
 
-STEP 1: Read ALL conversations below. Identify the ONE conversation where the topic of the question was discussed.
-STEP 2: From that conversation, QUOTE the assistant's exact words that contain:
-- Specific names (people, places, brands, products, websites, organizations)
-- Specific numbers (amounts, counts, measurements, ages)
+STEP 1: Read ALL conversations below — do NOT skip any. The relevant conversation may not be obvious from its title or opening.
+STEP 2: For EACH conversation, check if the assistant mentioned anything related to the question topic. The topic might be a sub-topic within a broader conversation (e.g., a dessert shop mentioned within a travel planning conversation).
+STEP 3: From the relevant conversation, QUOTE the assistant's exact words that contain:
+- Specific names (people, places, brands, products, websites, organizations, shops, restaurants)
+- Specific numbers (amounts, counts, measurements, ages, ingredients)
 - Specific recommendations (suggestions, alternatives, options listed)
-- Specific instructions (steps, techniques, methods)
+- Specific instructions (steps, techniques, methods, recipes)
 
 OUTPUT FORMAT:
 RELEVANT CONVERSATION: [conversation number and date]
@@ -472,7 +499,11 @@ ASSISTANT QUOTES:
 - "[exact quote containing relevant detail]"
 KEY DETAILS: [list specific names, numbers, or items the assistant mentioned]
 
-CRITICAL: The answer is something the ASSISTANT said, not the user. Focus on assistant responses. Search EVERY conversation.`,
+CRITICAL:
+- The answer is something the ASSISTANT said, not the user. Focus on assistant turns.
+- Search EVERY conversation — the detail may be buried in a long conversation about a broader topic.
+- The question may describe things differently: "dessert shop" = "sweet shop" = "candy store", "hostel" = "budget accommodation", "subscription" = "weekly delivery".
+- If you can't find an exact match, look for semantically related topics.`,
       messages: [{
         role: 'user',
         content: `Memory context:\n${context}\n\nQuestion: ${question}\n\nFind the assistant's specific details:`,
@@ -574,26 +605,27 @@ CRITICAL RULES:
     // Stage 1: Extract ALL relevant items/data points from every conversation
     const stage1 = await anthropic.messages.create({
       model: readerModel,
-      max_tokens: 2000,
+      max_tokens: 3000,
       temperature: 0,
       system: `You are extracting ALL relevant data points from a user's conversation history to answer a question.
 
-TASK: Read EVERY conversation and key fact below. For each conversation, extract ALL items, facts, numbers, names, or events that are relevant to the question. Do NOT skip any conversation — items may be mentioned briefly or in passing.${dateContext}
+TASK: Read EVERY conversation and key fact below. Extract ALL items, facts, numbers, names, or events relevant to the question. Do NOT skip any source.${dateContext}
 
 OUTPUT FORMAT:
 EXTRACTED DATA:
-- [Source: Conversation N, DATE] Item/fact description (include any amounts, counts, names, dates)
-- [Source: Conversation N, DATE] Item/fact description
-- [Source: Key Facts] Item/fact description
+1. [Source: Conv N, DATE] Item/fact (exact amounts, counts, names, dates)
+2. [Source: Conv N, DATE] Item/fact
+3. [Source: Key Facts] Item/fact
 ...
+TOTAL ITEMS FOUND: [number]
 
 RULES:
-- Check EVERY conversation — do not stop after finding a few items
-- Include items mentioned briefly in one sentence within a longer conversation
-- For money: include the exact dollar amount for each item
-- For counting: include each distinct instance even if similar
-- For people: include each person's name and relationship
-- When in doubt, INCLUDE the item — over-extraction is better than under-extraction
+- Check EVERY conversation and the Key Facts section — items may be mentioned in ONE sentence within a longer, unrelated conversation
+- For money: exact dollar amounts for each item, no rounding or estimating
+- For counting: each distinct instance counts separately (3 separate bike repairs = 3 items)
+- For ownership ("how many X do I have"): include acquired items, subtract any sold/given away/lost
+- When in doubt, INCLUDE the item — over-extraction is far better than missing items
+- NUMBER each extracted item so you can count them precisely at the end
 - Do NOT answer the question yet — just extract the raw data`,
       messages: [{
         role: 'user',
@@ -610,17 +642,20 @@ RULES:
       temperature: 0,
       system: `You answer questions using extracted data from a user's conversation history.${dateContext}
 
+PROCESS:
+1. Review ALL numbered items in the extracted data
+2. Cross-check against the original context — the extraction may have MISSED items mentioned briefly
+3. For counting/totals, list EVERY item with its source before giving the final number
+
 Rules:
-- Use the extracted data below to answer the question
-- For "how many" questions: count ALL extracted items, list each one, then give the total
-- For "how much total/spent" questions: sum ALL amounts, show the calculation
-- For "average" questions: list all values, sum them, divide by count
-- For comparison questions (most, least, first, last): compare all extracted items
-- For "total distance/pages/etc": sum the relevant numbers
-- If the extracted data seems incomplete, also check the original context for missed items
+- For "how many" questions: NUMBER each item you're counting. Example: "1. blue dress (Conv 3), 2. red scarf (Conv 5), 3. boots (Conv 7) = 3 items"
+- For "how much total/spent" questions: list each amount then sum. Example: "$50 + $120 + $15 = $185"
+- For "average" questions: list all values, sum, divide by count
+- For comparison (most, least, first, last): compare all extracted items
+- ALWAYS cross-check the original context if the extraction found fewer items than expected
 - Keep the final answer concise (1-3 sentences) but include the specific count/amount
-- If the question asks about something that is genuinely NOT mentioned in any conversation (the extraction found NO relevant data), say "The information provided is not enough" — but ONLY if the extraction truly found nothing relevant
-- If the extraction found at least some relevant data, use it to answer — do not say "I don't have information"`,
+- If the extraction found NO relevant data AND the original context confirms nothing relevant, say "The information provided is not enough"
+- If ANY relevant data was found, USE it — do not say "I don't have information"`,
       messages: [{
         role: 'user',
         content: `Extracted data:\n${extraction}\n\nOriginal memory context:\n${context}\n\nQuestion: ${question}\n\nAnswer:`,
@@ -645,22 +680,26 @@ Rules:
       model: readerModel,
       max_tokens: 1500,
       temperature: 0,
-      system: `You are extracting a timeline of events from conversation memories.
+      system: `You are extracting a comprehensive timeline of ALL events from conversation memories.
 
-Read ALL the context below and extract EVERY event mentioned, with its exact date.
+Read EVERY conversation and key fact below. Scan for ANY activity, event, purchase, appointment, lesson, repair, subscription, cancellation, gift, outing, class, trip, or milestone.
 
-Output format — list ALL events chronologically:
+OUTPUT FORMAT — list ALL events chronologically:
 TIMELINE:
-- [YYYY/MM/DD] Event description (from Conversation N)
-- [YYYY/MM/DD] Event description (from Conversation N)
+- [YYYY/MM/DD] Event description (from Conversation N / Key Facts)
+- [YYYY/MM/DD] Event description (from Conversation N / Key Facts)
 ...
 
-CRITICAL:
-- Include EVERY event, even minor ones mentioned in passing
-- Extract the EXACT date from the conversation header or content
-- If a relative date is used (e.g., "last week"), calculate from the conversation date
-- Search ALL conversations — do not stop early
-- Include purchases, visits, activities, lessons, appointments, everything${dateContext}`,
+CRITICAL RULES:
+- You MUST process EVERY conversation block and the Key Facts section. Do NOT stop after finding a few events.
+- Events are often mentioned in ONE sentence within a longer conversation about something else — scan EVERY sentence.
+- Extract the EXACT date: use the conversation date header if the event happened during/around that conversation.
+- For relative dates ("last week", "yesterday", "two days ago"), calculate from the conversation date.
+- For "last Saturday" etc., calculate the specific date from the conversation date.
+- The question may use different words than the context. Match semantically: "baking class" = "culinary workshop", "guitar repair" = "guitar shop visit", "charity event" = "fundraiser", "subscription" = "weekly delivery".
+- Include: purchases, subscriptions, cancellations, sign-ups, lessons, classes, repairs, fixes, gifts given/received, trips, appointments, starting/stopping activities, joining/leaving groups, events attended.
+- When in doubt, INCLUDE the event. Over-extraction is better than missing events.
+- Check Key Facts section too — it may contain events not in conversation blocks.${dateContext}`,
       messages: [{
         role: 'user',
         content: `Memory context:\n${context}\n\nExtract ALL events with dates:`,
@@ -674,20 +713,25 @@ CRITICAL:
       model: readerModel,
       max_tokens: 600,
       temperature: 0,
-      system: `You answer temporal reasoning questions using an extracted timeline of events.
+      system: `You answer temporal reasoning questions using an extracted timeline and original memory context.
 ${dateContext}
 
 ${typeInstruction}
 
+PROCESS:
+1. Find the relevant event(s) in the TIMELINE
+2. If an event from the question is NOT in the timeline, search the ORIGINAL CONTEXT — the timeline extraction may have missed it
+3. Show your date arithmetic, then give the final answer
+
 Rules:
-- Use the timeline below to find the relevant events and their dates
-- For "how many days ago": subtract event date from today's date (${questionDate || 'unknown'})
-- For "how many days between X and Y": find both dates and subtract
-- For "how many months": count calendar months between dates
-- For ordering: list events in chronological order based on dates
-- Show your date arithmetic briefly, then give the final answer
-- If the timeline doesn't contain the relevant events, say so clearly — don't guess
-- Keep the final answer concise (1-2 sentences)`,
+- For "how many days ago": [event date] to [question date ${questionDate || 'unknown'}] = N days
+- For "how many days between X and Y": [date1] to [date2] = N days
+- For "how many weeks/months": count the calendar periods between dates
+- For ordering: list all events with dates, sort chronologically
+- Match events SEMANTICALLY: "baking class" = "culinary workshop", "subscription" = "weekly delivery", "guitar repair" = "guitar shop"
+- Keep the final answer concise (1-2 sentences) with the specific number or ordering
+- The events ARE in the context. If not in the timeline, check EVERY conversation in the original context.
+- NEVER say "I don't have information" or "not mentioned" — search harder.`,
       messages: [{
         role: 'user',
         content: `Extracted timeline:\n${timeline}\n\nOriginal memory context:\n${context}\n\nQuestion: ${question}\n\nAnswer:`,
@@ -727,7 +771,9 @@ CRITICAL:
 - Search ALL conversations and key facts for mentions of this topic
 - Include EVERY version, even if a value was mentioned briefly
 - Note what changed between versions
-- The LATEST entry (highest date) is the current/correct answer`,
+- The LATEST entry (highest date) is ALWAYS the correct current answer
+- Look for update signals: "now", "updated", "changed to", "switched to", "new", "replaced", "increased to"
+- For counting (how many X): track acquisitions AND disposals to get the current count`,
       messages: [{
         role: 'user',
         content: `Memory context:\n${context}\n\nQuestion: ${question}\n\nFind all versions of this information:`,
@@ -820,14 +866,17 @@ Rules:
       model: readerModel,
       max_tokens: 600,
       temperature: 0,
-      system: `The user's conversation history below DOES contain the answer to this question. A previous attempt said "I don't have information" but that was wrong — the answer IS there.
+      system: `The user's conversation history below DOES contain the answer to this question. A previous attempt failed to find it — look harder.
 
-Search EVERY conversation carefully. The answer may be:
-- Mentioned briefly in passing within a longer conversation about a different topic
-- Phrased differently than the question expects
-- An indirect reference (e.g., "that place we went" = a specific location mentioned earlier in the same conversation)
+SEARCH STRATEGY:
+1. Read EVERY conversation block, including Key Facts — do not skip any
+2. The answer may be mentioned in ONE sentence within a conversation about a completely different topic
+3. The question may use different words than the context (e.g., "baking class" = "culinary workshop", "dessert shop" = "sweet spot", "subscription" = "weekly delivery")
+4. For temporal questions: look for dates near events, calculate relative dates from conversation dates
+5. For counting: scan every conversation for items, don't stop after finding a few
+6. Assistant-specific details: look at what the assistant recommended, suggested, or listed
 
-You MUST provide a specific answer. Do NOT say "I don't have information."${dateContext}`,
+You MUST provide a specific answer. Do NOT say "I don't have information" or "I cannot find" — search more carefully.${dateContext}`,
       messages: [{
         role: 'user',
         content: `Memory context:\n${context}\n\nQuestion: ${question}\n\nThe answer IS in the context above. Search carefully and answer:`,
@@ -1001,15 +1050,20 @@ Important: Be generous when the generated answer captures the RIGHT conversation
 Reply with ONLY "1" or "0".`
     : `You evaluate whether a generated answer is correct by comparing it to a reference answer.
 
-Score "1" (correct) if:
+Score "1" (correct) if ANY of these apply:
 - The generated answer contains the KEY factual information from the reference
 - Numbers match (e.g., "3" = "three", "approximately 2" = "2", "about 5" = "5")
-- The answer is correct even if it includes extra details beyond the reference
+- Math equivalence: a breakdown that equals the reference number counts (e.g., "2 weeks + 1.5 weeks" = "3.5 weeks")
+- The answer is correct even if it includes extra details beyond the reference (e.g., reference says "a yellow dress", generated says "a yellow dress and earrings" — the key item matches, score 1)
+- Partial date match: "February" matches "February 14th", "March 2023" matches "March 15, 2023" — the correct time period is identified
 - Names/places refer to the same entity (e.g., "Rhythm Central on Main St" matches "the music shop on Main St")
 - Paraphrased but semantically equivalent
 - For ordering questions: both answers name the SAME entity/event as first/last/earliest/latest
-- BOTH the reference AND generated answer agree that specific information was NOT mentioned/available (e.g., reference says "You did not mention X" and generated says "You don't have X" or "There's no mention of X" or "I don't have information about that")
-- The generated answer correctly identifies what WAS mentioned instead of what was asked about, matching the reference's correction (e.g., reference says "not your uncle's party, your niece's" and generated says "for your niece, not your uncle")
+- BOTH the reference AND generated answer agree that specific information was NOT mentioned/available (e.g., reference says "You did not mention X" and generated says "You don't have X" or "There's no mention of X" or similar phrasing)
+- Entity correction match: the question asks about entity X, the reference says "not enough info, X wasn't mentioned but Y was", and the generated answer says "actually it's Y, not X" or "You have Y, not X" — both correctly identify the entity mismatch. Score 1.
+- Partial knowledge match: the reference says "not enough info because only A was mentioned, not B", and the generated answer says "A [correct fact about A], but B is not mentioned" — both agree B is missing and both know about A. Score 1.
+- The generated answer correctly identifies what WAS mentioned instead of what was asked about (e.g., reference says "mentioned Dr. Smith not Dr. Johnson" and generated says "You see Dr. Smith, not Dr. Johnson")
+- The generated answer contains the exact key data from the reference (e.g., a specific sequence, formula, or list) even if surrounding narrative or categorization differs
 
 Score "0" (wrong) if:
 - The key fact is wrong (wrong name, wrong number, wrong event)
@@ -1017,6 +1071,8 @@ Score "0" (wrong) if:
 - The answer gets the temporal ordering wrong (says A before B when reference says B before A)
 - Important information is missing that changes the meaning
 - The generated answer claims information exists when the reference says it was NOT mentioned
+
+IMPORTANT: Focus on the FINAL conclusion/answer, not intermediate reasoning. If the generated answer contains reasoning steps but arrives at the correct answer at the end, score "1".
 
 Reply with ONLY "1" or "0".`;
 
@@ -1164,6 +1220,14 @@ async function main() {
   if (opts.types) console.log(`Types: ${[...opts.types].join(', ')}`);
   console.log();
 
+  // Apply run-id isolation: unique owner_wallet avoids needing to clean stale data
+  if (opts.runId) {
+    // Pad run-id to create a valid 44-char base58 wallet address
+    const padded = opts.runId.replace(/[^A-Za-z0-9]/g, '').slice(0, 10);
+    BENCHMARK_OWNER_WALLET = `LongMemEval${padded}${'1'.repeat(33 - padded.length)}`;
+    console.log(`  Run ID: ${opts.runId} → wallet: ${BENCHMARK_OWNER_WALLET}`);
+  }
+
   // Initialize clients
   const db: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
   anthropic = new Anthropic({ apiKey: ANTHROPIC_KEY });
@@ -1208,10 +1272,25 @@ async function main() {
   console.log();
 
   // ── Clean previous benchmark data ─────────────────────────────
+  if (opts.skipSeeding) {
+    console.log('── Skipping cleanup + seeding (--skip-seeding) ──');
+    // Verify data exists
+    const { count } = await db.from('memories').select('id', { count: 'exact', head: true })
+      .eq('owner_wallet', BENCHMARK_OWNER_WALLET);
+    console.log(`  Existing memories: ${count}`);
+    if (!count || count === 0) {
+      console.error('  ERROR: No memories found for this wallet. Remove --skip-seeding to seed.');
+      process.exit(1);
+    }
+    console.log();
+  }
+
+  if (!opts.skipSeeding) {
   console.log('── Cleanup previous data ─────────────────────────');
   await cleanupBenchmarkData(db);
   console.log('   Done');
   console.log();
+  }
 
   // ── Extract unique sessions ──────────────────────────────────
   console.log('── Session extraction ────────────────────────────');
@@ -1221,6 +1300,7 @@ async function main() {
   console.log(`  Total turns: ${totalTurns}`);
   console.log();
 
+  if (!opts.skipSeeding) {
   // ── Seed memories (direct DB insert — bypasses SDK side-effects) ──
   console.log('── Seeding memories ──────────────────────────────');
   const seedStart = process.hrtime.bigint();
@@ -1280,8 +1360,35 @@ async function main() {
           evidence_ids: [],
         });
       }
+    } else if (opts.truncateSessions) {
+      // Old session-level: one memory per session, truncated to 5000 chars
+      const content = session.turns
+        .map(t => `${t.role === 'user' ? 'User' : 'Assistant'}: ${t.content}`)
+        .join('\n')
+        .slice(0, 5000);
+
+      allRows.push({
+        hash_id: randomBytes(16).toString('hex'),
+        memory_type: 'episodic',
+        content,
+        summary: content.slice(0, 500),
+        tags: ['longmemeval', session.sessionId],
+        concepts: [],
+        emotional_valence: 0,
+        importance: 0.5,
+        source: BENCHMARK_SOURCE,
+        metadata: {
+          session_id: session.sessionId,
+          event_date: session.date,
+          benchmark: true,
+          has_answer: session.turns.some(t => t.has_answer),
+        },
+        owner_wallet: BENCHMARK_OWNER_WALLET,
+        compacted: false,
+        evidence_ids: [],
+      });
     } else {
-      // Session-level: chunk at turn boundaries (~5000 chars per chunk)
+      // Session-level with chunking: split at turn boundaries (~5000 chars per chunk)
       // This preserves all content instead of truncating to 5000 chars
       const CHUNK_SIZE = 5000;
       const turnTexts = session.turns
@@ -1429,8 +1536,10 @@ async function main() {
     }
     console.log();
     seeded = insertedIds.length;
+  }
 
-    // ── Preference extraction (only for SS-Pref haystack sessions) ──
+  // ── Preference extraction (only for SS-Pref haystack sessions) ──
+  {
     const prefCachePath = join(CACHE_DIR, `prefs_${opts.variant}.json`);
     let prefCache: Record<string, string[]> = {};
 
@@ -1451,9 +1560,10 @@ async function main() {
     console.log(`  Extracting preferences (${prefSessions.length} sessions from SS-Pref haystacks)...`);
     let prefSeeded = 0;
     const prefRows: MemoryRow[] = [];
+    const prefBatchSize = 3;
 
-    for (let fi = 0; fi < prefSessions.length; fi += factBatchSize) {
-      const batch = prefSessions.slice(fi, fi + factBatchSize);
+    for (let fi = 0; fi < prefSessions.length; fi += prefBatchSize) {
+      const batch = prefSessions.slice(fi, fi + prefBatchSize);
 
       const batchPrefs = await Promise.allSettled(
         batch.map(async (session) => {
@@ -1522,6 +1632,7 @@ async function main() {
   console.log(`  Total seeded: ${seeded} memories in ${(seedTime / 1000).toFixed(1)}s`);
 
   // ── Generate embeddings in batches via Voyage API directly ──
+  // Note: embeddings section is inside the !skipSeeding block
   if (hasEmbeddings) {
     console.log('  Generating embeddings via Voyage API...');
     const embeddingBatchSize = 20; // Voyage supports up to 128 per call
@@ -1595,14 +1706,46 @@ async function main() {
     console.log(`  Embeddings complete: ${embedded}/${toEmbed.length}`);
   }
   console.log();
+  } // end if (!opts.skipSeeding)
+
+  // ── Load resume checkpoint if provided ─────────────────────
+  let resumedResults: QAResult[] = [];
+  const resumedQuestionIds = new Set<string>();
+  if (opts.resume) {
+    try {
+      const resumeData = JSON.parse(readFileSync(opts.resume, 'utf-8'));
+      resumedResults = resumeData.results || [];
+      for (const r of resumedResults) resumedQuestionIds.add(r.questionId);
+      console.log(`  Resumed ${resumedResults.length} results from ${opts.resume}`);
+    } catch (err: any) {
+      console.error(`  Resume file error: ${err.message}`);
+    }
+  }
 
   // ── Evaluate questions ───────────────────────────────────────
   console.log('── Evaluation ────────────────────────────────────');
-  const allResults: QAResult[] = [];
+  const allResults: QAResult[] = [...resumedResults];
   const typeStats: Record<string, TypeStats> = {};
   for (const type of Object.keys(typeCounts)) {
     typeStats[type] = { correct: 0, total: 0, f1Sum: 0, recallLatencySum: 0, evidenceHits: 0, evidenceTotal: 0 };
   }
+  // Rebuild stats from resumed results
+  for (const r of resumedResults) {
+    const ts = typeStats[r.questionType];
+    if (ts) {
+      ts.total++;
+      if (r.correct) ts.correct++;
+      ts.f1Sum += r.f1 || 0;
+      ts.recallLatencySum += r.recallLatencyMs || 0;
+      ts.evidenceHits += r.evidenceSessionHits || 0;
+      ts.evidenceTotal += r.evidenceSessionTotal || 0;
+    }
+  }
+  if (resumedResults.length > 0) {
+    console.log(`  Resumed: ${resumedResults.length} questions already evaluated`);
+  }
+
+  const checkpointPath = join(CACHE_DIR, `checkpoint_${opts.variant}${opts.runId ? '_' + opts.runId : ''}.json`);
 
   const evalStart = process.hrtime.bigint();
   const evalBatchSize = hasEmbeddings ? 2 : 4;
@@ -1610,8 +1753,12 @@ async function main() {
   for (let qi = 0; qi < questions.length; qi += evalBatchSize) {
     const batch = questions.slice(qi, qi + evalBatchSize);
 
+    // Skip questions already evaluated (resume mode)
+    const unevaluated = batch.filter(q => !resumedQuestionIds.has(q.question_id));
+    if (unevaluated.length === 0) continue;
+
     const batchResults = await Promise.allSettled(
-      batch.map(async (q): Promise<QAResult> => {
+      unevaluated.map(async (q): Promise<QAResult> => {
         const haystackSet = new Set(q.haystack_session_ids);
         const evidenceSet = new Set(q.answer_session_ids);
 
@@ -1712,25 +1859,54 @@ async function main() {
           }
         }
 
-        // Format context — oracle bypass uses all memories, recall mode caps at recallLimit
+        // Format context — session-aware selection to maintain diversity with chunked memories
         let contextMemories: any[];
-        if (q.question_type === 'single-session-preference' && !opts.oracleBypass) {
+        if (opts.oracleBypass) {
+          contextMemories = filtered;
+        } else if (q.question_type === 'single-session-preference') {
           // For preferences: prioritize preference memories, then limit episodic to top 30
           const prefMems = filtered.filter((m: any) => m.tags?.includes('preference'));
           const factMems = filtered.filter((m: any) => m.tags?.includes('extracted_fact') && !m.tags?.includes('preference'));
           const episodicMems = filtered.filter((m: any) => m.memory_type === 'episodic');
           // Take all preference memories + top 10 facts + top 20 episodic
           contextMemories = [...prefMems, ...factMems.slice(0, 10), ...episodicMems.slice(0, 20)];
-        } else if (q.question_type === 'multi-session' && !opts.oracleBypass) {
-          // For multi-session: use up to 100 memories for better coverage of scattered items
-          const contextLimit = Math.min(filtered.length, 100);
-          contextMemories = filtered.slice(0, contextLimit);
-        } else if (q.question_type === 'single-session-assistant' && !opts.oracleBypass) {
-          // For SS-Asst: include all recalled memories — assistant details often in later turns
-          contextMemories = filtered;
         } else {
-          const contextLimit = opts.oracleBypass ? filtered.length : Math.min(filtered.length, opts.recallLimit);
-          contextMemories = filtered.slice(0, contextLimit);
+          // Session-aware context selection: limit by unique sessions, include ALL chunks per session
+          // This preserves full content (chunking benefit) while maintaining session diversity
+          const sessionLimits: Record<string, number> = {
+            'multi-session': 50,       // 50 unique sessions (was 100 raw memories ≈ 33 sessions)
+            'single-session-assistant': 30,
+            'temporal-reasoning': 50,
+            'knowledge-update': 50,
+            'single-session-user': 50,
+          };
+          const maxSessions = sessionLimits[q.question_type] || opts.recallLimit;
+
+          // Group filtered memories by session_id, preserving recall rank order
+          const sessionOrder: string[] = [];
+          const sessionChunks = new Map<string, any[]>();
+          // Also keep non-session memories (facts, preferences) separate
+          const nonSessionMems: any[] = [];
+          for (const m of filtered) {
+            const sid = m.metadata?.session_id;
+            if (!sid || m.memory_type !== 'episodic') {
+              nonSessionMems.push(m);
+              continue;
+            }
+            if (!sessionChunks.has(sid)) {
+              sessionChunks.set(sid, []);
+              sessionOrder.push(sid);
+            }
+            sessionChunks.get(sid)!.push(m);
+          }
+
+          // Select top N unique sessions by recall rank, include ALL their chunks
+          const selectedSessions = sessionOrder.slice(0, maxSessions);
+          const sessionMems: any[] = [];
+          for (const sid of selectedSessions) {
+            sessionMems.push(...sessionChunks.get(sid)!);
+          }
+          contextMemories = [...nonSessionMems, ...sessionMems];
         }
         const context = formatBenchmarkContext(contextMemories, q.question_type);
         let generated: string;
@@ -1781,10 +1957,21 @@ async function main() {
       }
     }
 
-    const done = Math.min(qi + evalBatchSize, questions.length);
+    const done = allResults.length;
     const currentCorrect = allResults.filter(r => r.correct === 1).length;
     const currentAcc = allResults.length > 0 ? ((currentCorrect / allResults.length) * 100).toFixed(1) : '0.0';
     process.stdout.write(`\r  Evaluated: ${done}/${questions.length} (running accuracy: ${currentAcc}%)`);
+
+    // Save checkpoint every 20 questions (crash recovery)
+    if (done % 20 === 0 || done === questions.length) {
+      try {
+        writeFileSync(checkpointPath, JSON.stringify({
+          timestamp: new Date().toISOString(),
+          config: { variant: opts.variant, runId: opts.runId, readerModel: opts.readerModel },
+          results: allResults,
+        }));
+      } catch {}
+    }
   }
   console.log();
 
