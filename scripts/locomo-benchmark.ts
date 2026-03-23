@@ -23,6 +23,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { Cortex } from '../src/sdk';
 import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
+import { runIRCoT, type LLMCallFn } from '../src/experimental/ircot';
 
 // Suppress uncaught rejections from fire-and-forget operations
 process.on('unhandledRejection', (err: any) => {
@@ -124,6 +125,15 @@ function parseArgs() {
     qaLimit: Infinity,
     skipCleanup: false,
     recallLimit: 25,
+    ircot: false,
+    queryExpansion: false,
+    bm25: false,
+    rerank: false,
+    answerModel: '',
+    noDialogTurns: false,
+    hyde: false,
+    fullContext: false,
+    extractFacts: false,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -142,6 +152,33 @@ function parseArgs() {
         break;
       case '--recall-limit':
         opts.recallLimit = parseInt(args[++i]) || 15;
+        break;
+      case '--ircot':
+        opts.ircot = true;
+        break;
+      case '--query-expansion':
+        opts.queryExpansion = true;
+        break;
+      case '--bm25':
+        opts.bm25 = true;
+        break;
+      case '--rerank':
+        opts.rerank = true;
+        break;
+      case '--answer-model':
+        opts.answerModel = args[++i] || '';
+        break;
+      case '--no-dialog-turns':
+        opts.noDialogTurns = true;
+        break;
+      case '--hyde':
+        opts.hyde = true;
+        break;
+      case '--full-context':
+        opts.fullContext = true;
+        break;
+      case '--extract-facts':
+        opts.extractFacts = true;
         break;
     }
   }
@@ -302,20 +339,65 @@ async function cleanupBenchmarkData(db: SupabaseClient): Promise<void> {
 // ── LLM Calls ─────────────────────────────────────────────────
 
 let anthropic: Anthropic;
+let ANSWER_MODEL: string;
+
+/** Rerank memories by relevance to the question using an LLM */
+async function rerankMemories(memories: any[], question: string, topK: number = 20): Promise<any[]> {
+  if (memories.length <= topK) return memories;
+
+  // Build numbered list of memory snippets for the LLM
+  const snippets = memories.map((m: any, i: number) => {
+    const content = (m.content || m.summary || '').slice(0, 200);
+    return `[${i}] ${content}`;
+  }).join('\n');
+
+  const resp = await anthropic.messages.create({
+    model: JUDGE_MODEL,
+    max_tokens: 200,
+    system: `You are a relevance ranker. Given a question and a numbered list of memory snippets, select the ${topK} most relevant snippets that would help answer the question. Output ONLY the indices as comma-separated numbers, most relevant first. Example: 3,7,0,12,5`,
+    messages: [{
+      role: 'user',
+      content: `Question: ${question}\n\nMemory snippets:\n${snippets}\n\nTop ${topK} most relevant indices:`,
+    }],
+  });
+
+  const text = resp.content[0].type === 'text' ? resp.content[0].text.trim() : '';
+  const indices = text.match(/\d+/g)?.map(Number).filter(i => i >= 0 && i < memories.length) || [];
+
+  // Deduplicate while preserving order
+  const seen = new Set<number>();
+  const uniqueIndices: number[] = [];
+  for (const idx of indices) {
+    if (!seen.has(idx)) {
+      seen.add(idx);
+      uniqueIndices.push(idx);
+    }
+  }
+
+  // If LLM didn't return enough, pad with remaining memories in original order
+  if (uniqueIndices.length < topK) {
+    for (let i = 0; i < memories.length && uniqueIndices.length < topK; i++) {
+      if (!seen.has(i)) uniqueIndices.push(i);
+    }
+  }
+
+  return uniqueIndices.slice(0, topK).map(i => memories[i]);
+}
 
 async function generateAnswer(context: string, question: string): Promise<string> {
   const resp = await anthropic.messages.create({
-    model: JUDGE_MODEL,
+    model: ANSWER_MODEL,
     max_tokens: 300,
-    system: `You are answering questions about conversations between people based on memory context.
+    system: `You are answering questions about conversations between two people based on memory context.
 
 Rules:
-- Use the provided context to answer the question.
+- Carefully read ALL the provided context before answering.
 - Extract specific details: names, dates, places, numbers, preferences, opinions.
-- If the context contains partial information, provide what you can infer from it.
+- If the context contains partial information, provide what you can reasonably infer.
 - If the context discusses something related, use reasoning to connect the dots.
-- Answer directly with the specific information requested. Do NOT add qualifiers like "Based on the context" or "According to the memories".
-- Only say "I don't know" if the context contains absolutely nothing related to the question.
+- For temporal questions (when/how long ago), calculate dates from session timestamps and relative time references (e.g., "last week", "yesterday").
+- Answer directly with the specific information requested.
+- NEVER say "I don't know" — always provide your best answer from the available context, even if uncertain.
 - Keep answers concise (1-3 sentences).`,
     messages: [{
       role: 'user',
@@ -341,43 +423,183 @@ async function judgeAnswer(generated: string, reference: string, question: strin
   return text.startsWith('1') ? 1 : 0;
 }
 
-/** Build context optimized for benchmark QA — uses full content, not just summary. */
+/** LLM call function for IRCoT reasoning */
+function makeLLMCallFn(): LLMCallFn {
+  return async (systemPrompt: string, userMessage: string): Promise<string> => {
+    const resp = await anthropic.messages.create({
+      model: JUDGE_MODEL,
+      max_tokens: 300,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMessage }],
+    });
+    return resp.content[0].type === 'text' ? resp.content[0].text.trim() : '';
+  };
+}
+
+/** Expand a question into alternative search queries for multi-query retrieval.
+ * Designed for keyword-only search — focuses on vocabulary diversity, not semantic similarity. */
+async function expandQuery(question: string): Promise<string[]> {
+  const resp = await anthropic.messages.create({
+    model: JUDGE_MODEL,
+    max_tokens: 300,
+    system: `You help search a conversation memory database using keyword matching. Given a question, generate 4 alternative search queries that use DIFFERENT keywords to maximize recall.
+
+Rules:
+1. Extract ALL named entities (people, places, companies, products) from the question
+2. Generate queries using synonyms, related terms, and likely conversational vocabulary
+3. For temporal questions, include date-related terms and time expressions
+4. For preference questions, include opinion words (love, hate, favorite, prefer, enjoy, dislike)
+5. Each query should use DIFFERENT keywords from the others — avoid repeating the same words
+
+Output ONLY the 4 queries, one per line. No numbering, no explanation.`,
+    messages: [{ role: 'user', content: question }],
+  });
+  const text = resp.content[0].type === 'text' ? resp.content[0].text.trim() : '';
+  return text.split('\n').map(l => l.trim()).filter(l => l.length > 2);
+}
+
+/** Reciprocal Rank Fusion: merge multiple ranked lists into a single ranking.
+ * RRF(d) = Σ 1/(k + rank_i(d)) for each list i that contains document d.
+ * k=60 is the standard constant from the RRF paper. */
+function reciprocalRankFusion(rankedLists: any[][], k: number = 60): any[] {
+  const scores = new Map<number, { score: number; memory: any }>();
+
+  for (const list of rankedLists) {
+    for (let rank = 0; rank < list.length; rank++) {
+      const mem = list[rank];
+      const id = mem.id;
+      const rrfScore = 1.0 / (k + rank + 1); // rank is 0-indexed, RRF uses 1-indexed
+      if (scores.has(id)) {
+        scores.get(id)!.score += rrfScore;
+      } else {
+        scores.set(id, { score: rrfScore, memory: mem });
+      }
+    }
+  }
+
+  // Sort by RRF score descending
+  return Array.from(scores.values())
+    .sort((a, b) => b.score - a.score)
+    .map(entry => entry.memory);
+}
+
+/** Extract structured facts from a batch of dialog turns using LLM.
+ * Each fact is a self-contained statement with rich vocabulary for keyword search. */
+async function extractFactsFromDialog(
+  turns: DialogTurn[],
+  sessionNum: number,
+  dateTime: string | null,
+): Promise<string[]> {
+  if (turns.length === 0) return [];
+
+  const dialog = turns.map(t => `[${t.speaker}] ${t.text}`).join('\n');
+
+  const resp = await anthropic.messages.create({
+    model: JUDGE_MODEL,
+    max_tokens: 1000,
+    system: `Extract key facts, events, preferences, and relationships from this conversation excerpt.
+
+Rules:
+- Each fact must be a COMPLETE, self-contained sentence (understandable without the dialog)
+- Include WHO said/did what (use full names, not pronouns)
+- Include WHEN if dates or temporal references are mentioned
+- Include WHERE if locations are mentioned
+- Extract preferences: "X likes/loves/hates/prefers Y"
+- Extract events: "X did/went/started/finished Y"
+- Extract relationships: "X is Y's friend/colleague/partner"
+- Extract opinions: "X thinks/believes/feels Y"
+- Use rich vocabulary — include synonyms of key concepts
+- One fact per line
+- Output ONLY the facts, nothing else
+
+Example input: [Alice] I just got a new puppy! A golden retriever named Max.
+Example output: Alice got a new pet dog, a golden retriever puppy named Max.`,
+    messages: [{ role: 'user', content: dialog }],
+  });
+
+  const text = resp.content[0].type === 'text' ? resp.content[0].text.trim() : '';
+  return text.split('\n').map(l => l.trim()).filter(l => l.length > 10);
+}
+
+/** HyDE: Generate hypothetical answer vocabulary to augment the search query */
+async function hydeAugment(question: string): Promise<string> {
+  const resp = await anthropic.messages.create({
+    model: JUDGE_MODEL,
+    max_tokens: 100,
+    system: `Given a question about a conversation between two people, generate a short hypothetical answer that contains likely vocabulary from the actual conversation. Include names, specific terms, and likely answer words. Output ONLY the hypothetical answer snippet, no explanation.`,
+    messages: [{ role: 'user', content: question }],
+  });
+  const hypo = resp.content[0].type === 'text' ? resp.content[0].text.trim() : '';
+  // Combine question + hypothetical answer for broader keyword matching
+  return `${question} ${hypo}`;
+}
+
+/** Build context optimized for benchmark QA — chronologically ordered, structured by type. */
 function formatBenchmarkContext(memories: any[]): string {
   if (memories.length === 0) return 'No relevant memories found.';
 
+  // Sort all memories chronologically by session number, then by created_at
+  const sorted = [...memories].sort((a: any, b: any) => {
+    const sessionA = a.metadata?.session || 0;
+    const sessionB = b.metadata?.session || 0;
+    if (sessionA !== sessionB) return sessionA - sessionB;
+    return (new Date(a.created_at || 0).getTime()) - (new Date(b.created_at || 0).getTime());
+  });
+
   const lines: string[] = [];
 
-  // Separate by type for structured context
-  const semantic = memories.filter((m: any) => m.memory_type === 'semantic');
-  const episodic = memories.filter((m: any) => m.memory_type === 'episodic');
-  const other = memories.filter((m: any) => m.memory_type !== 'semantic' && m.memory_type !== 'episodic');
-
-  if (semantic.length > 0) {
-    lines.push('## Key Facts & Summaries');
-    for (const m of semantic) {
-      const content = m.content || m.summary;
-      const date = m.metadata?.event_date || '';
-      lines.push(`- ${date ? `[${date}] ` : ''}${content}`);
+  // Group by session for chronological context
+  const bySession = new Map<number, any[]>();
+  const noSession: any[] = [];
+  for (const m of sorted) {
+    const session = m.metadata?.session;
+    if (session) {
+      if (!bySession.has(session)) bySession.set(session, []);
+      bySession.get(session)!.push(m);
+    } else {
+      noSession.push(m);
     }
-    lines.push('');
   }
 
-  if (episodic.length > 0) {
-    lines.push('## Conversation History');
-    for (const m of episodic) {
-      const content = m.content || m.summary;
-      const date = m.metadata?.event_date || '';
-      const session = m.metadata?.session ? `Session ${m.metadata.session}` : '';
-      const prefix = [date, session].filter(Boolean).join(', ');
-      lines.push(`- ${prefix ? `[${prefix}] ` : ''}${content}`);
-    }
-    lines.push('');
-  }
+  // Output chronologically by session
+  const sessionNums = Array.from(bySession.keys()).sort((a, b) => a - b);
+  for (const sessionNum of sessionNums) {
+    const sessionMems = bySession.get(sessionNum)!;
+    const date = sessionMems.find((m: any) => m.metadata?.event_date)?.metadata?.event_date || '';
+    lines.push(`## Session ${sessionNum}${date ? ` (${date})` : ''}`);
 
-  if (other.length > 0) {
-    lines.push('## Additional Context');
-    for (const m of other) {
+    // Within a session, show observations/facts first, then dialog
+    const observations = sessionMems.filter((m: any) =>
+      m.memory_type === 'semantic' && (m.tags?.includes('observation') || m.tags?.includes('event'))
+    );
+    const summaries = sessionMems.filter((m: any) =>
+      m.memory_type === 'semantic' && m.tags?.includes('session_summary')
+    );
+    const dialog = sessionMems.filter((m: any) => m.memory_type === 'episodic');
+    const rest = sessionMems.filter((m: any) =>
+      !observations.includes(m) && !summaries.includes(m) && !dialog.includes(m)
+    );
+
+    for (const m of summaries) {
+      lines.push(`Summary: ${m.content || m.summary}`);
+    }
+    for (const m of observations) {
       lines.push(`- ${m.content || m.summary}`);
+    }
+    for (const m of dialog) {
+      lines.push(`- ${m.content || m.summary}`);
+    }
+    for (const m of rest) {
+      lines.push(`- ${m.content || m.summary}`);
+    }
+    lines.push('');
+  }
+
+  if (noSession.length > 0) {
+    lines.push('## General Context');
+    for (const m of noSession) {
+      const date = m.metadata?.event_date || '';
+      lines.push(`- ${date ? `[${date}] ` : ''}${m.content || m.summary}`);
     }
     lines.push('');
   }
@@ -396,9 +618,13 @@ async function main() {
 ╚════════════════════════════════════════════╝
 `);
 
-  console.log(`Config: embeddings ${hasEmbeddings ? '✓' : '✗'}  anthropic ✓  judge: ${JUDGE_MODEL}`);
-  console.log(`Options: conversations=${opts.maxConversations}  categories=[${[...opts.categories].join(',')}]  recall_limit=${opts.recallLimit}`);
+  ANSWER_MODEL = opts.answerModel || JUDGE_MODEL;
+  console.log(`Config: embeddings ${hasEmbeddings ? '✓' : '✗'}  anthropic ✓  judge: ${JUDGE_MODEL}  answer: ${ANSWER_MODEL}`);
+  console.log(`Options: conversations=${opts.maxConversations}  categories=[${[...opts.categories].join(',')}]  recall_limit=${opts.recallLimit}  ircot=${opts.ircot}  query_expansion=${opts.queryExpansion}  bm25=${opts.bm25}  rerank=${opts.rerank}  no_dialog=${opts.noDialogTurns}  hyde=${opts.hyde}`);
   console.log();
+
+  // Enable BM25 experiment flag if CLI flag set
+  if (opts.bm25) process.env.EXP_BM25_SEARCH = 'true';
 
   // Initialize clients
   const db: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -468,6 +694,7 @@ async function main() {
     const storeBatchSize = hasEmbeddings ? 5 : 10;
     const storeBatchDelay = hasEmbeddings ? 800 : 0;
 
+    if (!opts.noDialogTurns) {
     for (const session of sessions) {
       for (let i = 0; i < session.turns.length; i += storeBatchSize) {
         const batch = session.turns.slice(i, i + storeBatchSize);
@@ -500,9 +727,10 @@ async function main() {
         if (storeBatchDelay > 0) await sleep(storeBatchDelay);
       }
     }
+    } // end if (!opts.noDialogTurns)
 
     const seedTime = ms(seedStart);
-    console.log(`   Seeded: ${seeded}/${totalTurns} memories in ${(seedTime / 1000).toFixed(1)}s`);
+    console.log(`   Seeded: ${seeded}/${opts.noDialogTurns ? 0 : totalTurns} dialog turns in ${(seedTime / 1000).toFixed(1)}s`);
 
     // ── Seed session summaries as semantic memories ──
     if (conv.session_summary) {
@@ -528,32 +756,129 @@ async function main() {
     }
 
     // ── Seed observations as semantic memories ──
+    // Structure: { session_N_observation: { SpeakerName: [[text, dia_id], ...] } }
     if (conv.observation) {
-      for (const [sessionKey, observations] of Object.entries(conv.observation)) {
-        if (!Array.isArray(observations)) continue;
+      for (const [sessionKey, speakerObs] of Object.entries(conv.observation)) {
         const sessionNum = sessionKey.match(/session_(\d+)/)?.[1] || sessionKey;
         const session = sessions.find(s => s.sessionNum === parseInt(sessionNum));
-        for (const obs of observations) {
-          if (!obs || obs.length < 10) continue;
-          await cortex.store({
-            type: 'semantic',
-            content: obs,
-            summary: obs.slice(0, 300),
-            source: BENCHMARK_SOURCE,
-            tags: ['locomo', `session_${sessionNum}`, 'observation'],
-            importance: 0.7,
-            metadata: {
-              session: parseInt(sessionNum),
-              benchmark: true,
-              ...(session?.dateTime ? { event_date: session.dateTime } : {}),
-            },
-          });
-          seeded++;
+        // speakerObs is an object keyed by speaker name, each value is an array of [text, dia_id] tuples
+        if (typeof speakerObs !== 'object' || speakerObs === null) continue;
+        for (const [speaker, obsList] of Object.entries(speakerObs as Record<string, any>)) {
+          if (!Array.isArray(obsList)) continue;
+          for (const obs of obsList) {
+            // Each observation is a [text, dia_id] tuple
+            const obsText = Array.isArray(obs) ? obs[0] : obs;
+            const obsDiaId = Array.isArray(obs) ? obs[1] : undefined;
+            if (!obsText || String(obsText).length < 10) continue;
+            await cortex.store({
+              type: 'semantic',
+              content: String(obsText),
+              summary: String(obsText).slice(0, 300),
+              source: BENCHMARK_SOURCE,
+              tags: ['locomo', `session_${sessionNum}`, 'observation', speaker.toLowerCase()],
+              importance: 0.7,
+              metadata: {
+                session: parseInt(sessionNum),
+                speaker,
+                benchmark: true,
+                ...(obsDiaId ? { dia_id: obsDiaId } : {}),
+                ...(session?.dateTime ? { event_date: session.dateTime } : {}),
+              },
+            });
+            seeded++;
+          }
         }
       }
     }
 
-    console.log(`   Total seeded (with summaries/observations): ${seeded}`);
+    // ── Seed event summaries as semantic memories ──
+    // Structure: { events_session_N: { SpeakerName: [event_text, ...], date: "..." } }
+    if ((conv as any).event_summary) {
+      for (const [evKey, evData] of Object.entries((conv as any).event_summary)) {
+        const sessionNum = evKey.match(/events_session_(\d+)/)?.[1] || evKey;
+        const session = sessions.find(s => s.sessionNum === parseInt(sessionNum));
+        if (typeof evData !== 'object' || evData === null) continue;
+        const evObj = evData as Record<string, any>;
+        const eventDate = evObj.date || session?.dateTime || null;
+        for (const [speaker, events] of Object.entries(evObj)) {
+          if (speaker === 'date' || !Array.isArray(events)) continue;
+          for (const event of events) {
+            if (!event || String(event).length < 5) continue;
+            const eventText = `[${eventDate || `Session ${sessionNum}`}] ${speaker}: ${event}`;
+            await cortex.store({
+              type: 'semantic',
+              content: eventText,
+              summary: eventText.slice(0, 300),
+              source: BENCHMARK_SOURCE,
+              tags: ['locomo', `session_${sessionNum}`, 'event', speaker.toLowerCase()],
+              importance: 0.8,
+              metadata: {
+                session: parseInt(sessionNum),
+                speaker,
+                benchmark: true,
+                ...(eventDate ? { event_date: eventDate } : {}),
+              },
+            });
+            seeded++;
+          }
+        }
+      }
+    }
+
+    // ── Extract and seed structured facts from dialog (per-session) ──
+    // Uses direct DB inserts to avoid cortex.store() side effects (entity extraction, etc.)
+    // that can hang on external API calls
+    if (opts.extractFacts && !opts.noDialogTurns) {
+      console.log('   Extracting facts from dialog turns...');
+      let factCount = 0;
+      const factBatch: any[] = [];
+
+      for (const session of sessions) {
+        // Process in chunks of 20 turns to stay within context window
+        for (let i = 0; i < session.turns.length; i += 20) {
+          const chunk = session.turns.slice(i, i + 20);
+          try {
+            const facts = await extractFactsFromDialog(chunk, session.sessionNum, session.dateTime);
+            for (const fact of facts) {
+              factBatch.push({
+                memory_type: 'semantic',
+                content: fact,
+                summary: fact.slice(0, 300),
+                source: BENCHMARK_SOURCE,
+                owner_wallet: BENCHMARK_OWNER_WALLET,
+                tags: ['locomo', `session_${session.sessionNum}`, 'extracted_fact'],
+                importance: 0.7,
+                decay_factor: 0.98,
+                metadata: {
+                  session: session.sessionNum,
+                  benchmark: true,
+                  ...(session.dateTime ? { event_date: session.dateTime } : {}),
+                },
+              });
+              factCount++;
+            }
+          } catch (err: any) {
+            // Non-fatal — skip this chunk
+            if (!err.message?.includes('529')) {
+              console.error(`   Fact extraction failed for session ${session.sessionNum}: ${err.message}`);
+            }
+          }
+        }
+      }
+
+      // Batch insert facts directly into DB (50 per batch)
+      for (let i = 0; i < factBatch.length; i += 50) {
+        const batch = factBatch.slice(i, i + 50);
+        const { error } = await db.from('memories').insert(batch);
+        if (error) {
+          console.error(`   Fact batch insert error: ${error.message}`);
+        }
+      }
+      seeded += factCount;
+      console.log(`   Extracted facts: ${factCount}`);
+    }
+
+    console.log(`   Total seeded (with summaries/observations/events): ${seeded}`);
 
     // Wait for async operations (embeddings, entity extraction)
     if (hasEmbeddings) {
@@ -567,21 +892,95 @@ async function main() {
     // ── Evaluate QA pairs ──────────────────────────────────
     let evaluated = 0;
 
+    // For full-context mode, fetch ALL benchmark memories once and reuse for every question
+    let allBenchmarkMemories: any[] | null = null;
+    if (opts.fullContext) {
+      const { data: allMems } = await db
+        .from('memories')
+        .select('*')
+        .eq('owner_wallet', BENCHMARK_OWNER_WALLET)
+        .order('created_at', { ascending: true });
+      allBenchmarkMemories = allMems || [];
+      console.log(`   Full-context mode: ${allBenchmarkMemories.length} memories loaded`);
+    }
+
     // Smaller QA batches when embeddings enabled to avoid rate-limiting the embedding API
-    const qaBatchSize = hasEmbeddings ? 2 : 5;
+    const qaBatchSize = hasEmbeddings ? 2 : (opts.fullContext ? 3 : 5);
     for (let qi = 0; qi < qaToEval.length; qi += qaBatchSize) {
       const batch = qaToEval.slice(qi, qi + qaBatchSize);
+
+      // Speaker names for entity-focused supplementary recall
+      const speakerA = conv.conversation.speaker_a;
+      const speakerB = conv.conversation.speaker_b;
 
       const batchResults = await Promise.allSettled(
         batch.map(async (qa): Promise<QAResult> => {
           // Recall — owner_wallet isolation ensures only benchmark memories are searched
           const recallStart = process.hrtime.bigint();
-          const memories = await cortex.recall({
-            query: qa.question,
-            limit: opts.recallLimit,
-            skipExpansion: true, // Uses 12x match_count multiplier for wider candidate pool
-          });
+          let memories: any[];
+
+          // Full-context mode: use all memories, skip recall entirely
+          if (opts.fullContext && allBenchmarkMemories) {
+            memories = allBenchmarkMemories;
+          } else {
+
+          // HyDE: Augment query with hypothetical answer vocabulary for better keyword matching
+          const recallQuery = opts.hyde
+            ? await hydeAugment(qa.question)
+            : qa.question;
+
+          if (opts.queryExpansion) {
+            // Multi-query retrieval with RRF (Reciprocal Rank Fusion)
+            // Each query gets FULL recall limit, then results are merged via RRF scoring
+            const expansions = await expandQuery(qa.question);
+            const allQueries = [qa.question, ...expansions];
+            const recallResults = await Promise.allSettled(
+              allQueries.map(q => cortex.recall({
+                query: q,
+                limit: opts.recallLimit,
+                skipExpansion: true,
+                trackAccess: false,
+              }))
+            );
+            const rankedLists: any[][] = [];
+            for (const result of recallResults) {
+              if (result.status === 'fulfilled' && result.value.length > 0) {
+                rankedLists.push(result.value);
+              }
+            }
+            memories = reciprocalRankFusion(rankedLists).slice(0, opts.recallLimit);
+          } else {
+            memories = await cortex.recall({
+              query: recallQuery,
+              limit: opts.recallLimit,
+              skipExpansion: true,
+              trackAccess: false,
+            });
+          }
+
+          // Supplementary entity-focused recall (disabled — adds noise, hurts accuracy)
+          // TODO: re-enable with smaller limit (10-15) if precision improves
+
+          // Exp 3: IRCoT for multi-hop questions (category 2)
+          if (opts.ircot && qa.category === 2) {
+            const ircotResult = await runIRCoT(
+              qa.question,
+              memories,
+              async (recallOpts) => cortex.recall({ ...recallOpts, skipExpansion: true }) as any,
+              makeLLMCallFn(),
+              { maxSteps: 3, recallLimit: 10 },
+            );
+            memories = ircotResult.memories;
+          }
+
+          } // end if (!opts.fullContext)
+
           const recallTime = ms(recallStart);
+
+          // Rerank memories by relevance to the question
+          if (opts.rerank && memories.length > 20) {
+            memories = await rerankMemories(memories, qa.question, 20);
+          }
 
           // Format context with full content (not just truncated summaries)
           const context = formatBenchmarkContext(memories);
@@ -732,7 +1131,13 @@ async function main() {
       embeddings: hasEmbeddings,
       embeddingProvider: EMBEDDING_PROVIDER || 'none',
       judgeModel: JUDGE_MODEL,
+      answerModel: ANSWER_MODEL,
       recallLimit: opts.recallLimit,
+      ircot: opts.ircot,
+      queryExpansion: opts.queryExpansion,
+      bm25: opts.bm25,
+      rerank: opts.rerank,
+      noDialogTurns: opts.noDialogTurns,
       conversations: conversations.length,
       categories: [...opts.categories],
     },

@@ -683,6 +683,33 @@ server.tool(
   }
 );
 
+// --- Prompt: clude-memory-instructions ---
+server.prompt(
+  'clude-memory-instructions',
+  'Usage instructions for the Clude persistent memory system. Auto-injected by MCP clients that support prompts.',
+  () => ({
+    messages: [{
+      role: 'user' as const,
+      content: {
+        type: 'text' as const,
+        text: [
+          'You have persistent memory via the clude-memory MCP server.',
+          '',
+          'At the start of every session, call `recall_memories` with relevant context before responding.',
+          '',
+          'During sessions, call `store_memory` when you learn:',
+          '- User name, preferences, working style',
+          '- Project decisions and reasoning',
+          '- Technical choices and why they were made',
+          '- Anything the user asks you to remember',
+          '',
+          'Use Clude memory INSTEAD of writing to MEMORY.md files.',
+        ].join('\n'),
+      },
+    }],
+  })
+);
+
 // --- Start ---
 async function main() {
   // Validate configuration

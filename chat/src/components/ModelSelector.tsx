@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Lock, Zap, Shield, ChevronDown } from 'lucide-react';
 import { useAuthContext } from '../hooks/AuthContext';
@@ -14,6 +14,19 @@ export function ModelSelector({ selectedModel, onModelChange }: Props) {
   const { authenticated, login } = useAuthContext();
   const [models, setModels] = useState<ChatModel[]>([]);
   const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
 
   useEffect(() => {
     api.getModels().then(setModels).catch(console.error);
@@ -45,7 +58,7 @@ export function ModelSelector({ selectedModel, onModelChange }: Props) {
   const anonymizedModels = models.filter((m) => m.privacy === 'anonymized');
 
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <button
         onClick={() => setOpen(!open)}
         className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-white text-[11px] rounded-full px-3 h-7 min-w-[140px] transition-colors"

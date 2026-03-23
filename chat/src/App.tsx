@@ -4,6 +4,7 @@ import { AuthContext } from './hooks/AuthContext'
 import { ChatInterface } from './components/chat-interface'
 import { CompoundDashboard } from './components/CompoundDashboard'
 import { CompoundAccuracyScorecard } from './components/CompoundAccuracyScorecard'
+import { CompoundChat } from './components/CompoundChat'
 import { MarketDetail } from './components/MarketDetail'
 
 export function App() {
@@ -22,6 +23,7 @@ export function App() {
           <Route path="/" element={<ChatInterface />} />
           <Route path="/compound" element={<CompoundDashboard />} />
           <Route path="/compound/accuracy" element={<CompoundAccuracyScorecard />} />
+          <Route path="/compound/chat" element={<CompoundChat />} />
           <Route path="/compound/markets/:id" element={<MarketDetail />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

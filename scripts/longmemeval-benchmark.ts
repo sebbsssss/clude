@@ -395,8 +395,36 @@ Rules:
 - For aggregation questions (totals, averages): list each data point individually, then calculate.
 - Items may be mentioned briefly or in passing within conversations about unrelated topics — check EVERY conversation.
 - Do NOT say "I don't have information" — the information IS in the memories. Look in BOTH the key facts AND the conversations.`,
-  'knowledge-update': 'Provide the MOST RECENT information. If information changed over time, give the latest version and note the update.',
-  'temporal-reasoning': 'Pay close attention to dates and chronological order. Use timestamps to determine the correct sequence of events.',
+  'knowledge-update': `This is a KNOWLEDGE UPDATE question — the answer has CHANGED over time.
+
+CRITICAL: The context contains MULTIPLE versions of the same information from different dates. You MUST:
+1. Find ALL mentions of the topic across all conversations and key facts
+2. Identify the DATE of each mention
+3. Return ONLY the value from the MOST RECENT date — older values are OUTDATED
+
+Common traps:
+- The FIRST mention you see may be the OLD value — keep reading to find updates
+- Facts section may contain both old and new values — check dates carefully
+- "Updated", "changed", "now", "switched to", "new" signal the latest value
+- For counting questions (how many X do I own): include ALL acquisitions up to the latest date
+- NEVER return an older value. If you see conflicting values, the one with the LATER date wins.`,
+  'temporal-reasoning': `This is a TEMPORAL REASONING question requiring date-based calculations or ordering.
+
+STEP-BY-STEP PROCESS:
+1. Find ALL events mentioned in the question within the context
+2. Extract the EXACT DATE for each event (look in both conversations and key facts)
+3. For "how many days/months" questions: calculate the difference between the two dates
+   - The question date tells you "today's date" — calculate from the event date to this date
+   - Show your work: "[event] was on [date], question asks on [date], difference = X days"
+4. For ordering questions: list each event with its date, then sort chronologically
+
+CRITICAL RULES:
+- NEVER say "I don't have information" — the dates ARE in the context. Search every conversation.
+- For "how many days ago": subtract the event date from the question date
+- For "how many days between X and Y": find both dates and calculate the difference
+- For ordering: extract ALL events with dates, then sort by date
+- Items may be mentioned briefly — scan EVERY conversation carefully
+- If a date is mentioned as "last Tuesday" or similar, calculate from the conversation date`,
   'abstention': 'ONLY answer if you find clearly relevant information in the context. If the context contains nothing related to the question, say "I don\'t have information about that."',
 };
 
@@ -467,6 +495,114 @@ CRITICAL RULES:
     return stage2.content[0].type === 'text' ? stage2.content[0].text.trim() : '';
   }
 
+  // Two-stage approach for temporal questions: extract timeline first, then answer
+  if (questionType === 'temporal-reasoning') {
+    // Stage 1: Extract a structured timeline of ALL events with dates
+    const stage1 = await anthropic.messages.create({
+      model: readerModel,
+      max_tokens: 1500,
+      system: `You are extracting a timeline of events from conversation memories.
+
+Read ALL the context below and extract EVERY event mentioned, with its exact date.
+
+Output format — list ALL events chronologically:
+TIMELINE:
+- [YYYY/MM/DD] Event description (from Conversation N)
+- [YYYY/MM/DD] Event description (from Conversation N)
+...
+
+CRITICAL:
+- Include EVERY event, even minor ones mentioned in passing
+- Extract the EXACT date from the conversation header or content
+- If a relative date is used (e.g., "last week"), calculate from the conversation date
+- Search ALL conversations — do not stop early
+- Include purchases, visits, activities, lessons, appointments, everything${dateContext}`,
+      messages: [{
+        role: 'user',
+        content: `Memory context:\n${context}\n\nExtract ALL events with dates:`,
+      }],
+    });
+
+    const timeline = stage1.content[0].type === 'text' ? stage1.content[0].text.trim() : '';
+
+    // Stage 2: Answer the temporal question using the extracted timeline
+    const stage2 = await anthropic.messages.create({
+      model: readerModel,
+      max_tokens: 600,
+      system: `You answer temporal reasoning questions using an extracted timeline of events.
+${dateContext}
+
+${typeInstruction}
+
+Rules:
+- Use the timeline below to find the relevant events and their dates
+- For "how many days ago": subtract event date from today's date (${questionDate || 'unknown'})
+- For "how many days between X and Y": find both dates and subtract
+- For "how many months": count calendar months between dates
+- For ordering: list events in chronological order based on dates
+- Show your date arithmetic briefly, then give the final answer
+- NEVER say "I don't have information" — the events ARE in the timeline
+- Keep the final answer concise (1-2 sentences)`,
+      messages: [{
+        role: 'user',
+        content: `Extracted timeline:\n${timeline}\n\nOriginal memory context:\n${context}\n\nQuestion: ${question}\n\nAnswer:`,
+      }],
+    });
+
+    return stage2.content[0].type === 'text' ? stage2.content[0].text.trim() : '';
+  }
+
+  // Two-stage approach for KU questions: find all versions, then pick latest
+  if (questionType === 'knowledge-update') {
+    // Stage 1: Extract all versions of the information with dates
+    const stage1 = await anthropic.messages.create({
+      model: readerModel,
+      max_tokens: 1000,
+      system: `You are tracking how a piece of information has CHANGED over time in conversation memories.
+
+Read ALL the context and find EVERY mention of the topic asked about. List ALL versions with dates.
+
+Output format:
+VERSIONS (oldest to newest):
+1. [DATE] VALUE/STATUS: description
+2. [DATE] VALUE/STATUS: description (UPDATED from #1)
+...
+LATEST VALUE: the most recent value
+
+CRITICAL:
+- Search ALL conversations and key facts for mentions of this topic
+- Include EVERY version, even if a value was mentioned briefly
+- Note what changed between versions
+- The LATEST entry (highest date) is the current/correct answer`,
+      messages: [{
+        role: 'user',
+        content: `Memory context:\n${context}\n\nQuestion: ${question}\n\nFind all versions of this information:`,
+      }],
+    });
+
+    const versions = stage1.content[0].type === 'text' ? stage1.content[0].text.trim() : '';
+
+    // Stage 2: Answer using the version history
+    const stage2 = await anthropic.messages.create({
+      model: readerModel,
+      max_tokens: 400,
+      system: `Answer the question using the version history below. Return ONLY the LATEST/MOST RECENT value.
+
+Rules:
+- The last entry in the version list is the correct answer
+- If counting (how many X): include ALL items accumulated up to the latest date
+- Do NOT return an older/outdated value
+- Answer directly and concisely (1-2 sentences)
+- NEVER say "I don't have information"`,
+      messages: [{
+        role: 'user',
+        content: `Version history:\n${versions}\n\nQuestion: ${question}\n\nAnswer (latest value only):`,
+      }],
+    });
+
+    return stage2.content[0].type === 'text' ? stage2.content[0].text.trim() : '';
+  }
+
   const resp = await anthropic.messages.create({
     model: readerModel,
     max_tokens: 600,
@@ -487,7 +623,8 @@ Rules:
 - For "how many" counting questions: scan ALL memories exhaustively, list each instance, then count. Be thorough — items may be mentioned briefly within longer conversations.
 - For knowledge updates: always provide the LATEST version of the information.
 - Do NOT add qualifiers like "Based on the context" or "According to the memories".
-- ONLY say "I don't have information" if the context is truly empty or completely unrelated. If there are relevant conversations, extract the answer from them even if it requires careful reading.
+- The information IS in the context. Read EVERY conversation and fact carefully. Items may be mentioned briefly or in passing.
+- NEVER say "I don't have information" — search more carefully instead.
 - Keep answers concise (1-3 sentences).`,
     messages: [{
       role: 'user',
@@ -495,7 +632,34 @@ Rules:
     }],
   });
 
-  return resp.content[0].type === 'text' ? resp.content[0].text.trim() : '';
+  let answer = resp.content[0].type === 'text' ? resp.content[0].text.trim() : '';
+
+  // Retry if the reader gives up — the evidence IS in the context
+  if (/i don't have (information|enough)|no.*information.*about|cannot find|not.*mentioned/i.test(answer)) {
+    const retry = await anthropic.messages.create({
+      model: readerModel,
+      max_tokens: 600,
+      system: `The user's conversation history below DOES contain the answer to this question. A previous attempt said "I don't have information" but that was wrong — the answer IS there.
+
+Search EVERY conversation carefully. The answer may be:
+- Mentioned briefly in passing within a longer conversation about a different topic
+- Phrased differently than the question expects
+- An indirect reference (e.g., "that place we went" = a specific location mentioned earlier in the same conversation)
+
+You MUST provide a specific answer. Do NOT say "I don't have information."${dateContext}`,
+      messages: [{
+        role: 'user',
+        content: `Memory context:\n${context}\n\nQuestion: ${question}\n\nThe answer IS in the context above. Search carefully and answer:`,
+      }],
+    });
+    const retryAnswer = retry.content[0].type === 'text' ? retry.content[0].text.trim() : '';
+    // Use retry answer if it's not another refusal
+    if (!/i don't have (information|enough)|no.*information.*about/i.test(retryAnswer)) {
+      answer = retryAnswer;
+    }
+  }
+
+  return answer;
 }
 
 /**
@@ -724,6 +888,9 @@ function formatBenchmarkContext(memories: any[], questionType: string): string {
     lines.push('');
   }
 
+  // For KU questions: reverse chronological order so LATEST info comes first
+  const isKU = questionType === 'knowledge-update';
+
   // For temporal questions, group episodic by session and sort by date
   if (episodic.length > 0) {
     // Group by session_id
@@ -734,22 +901,27 @@ function formatBenchmarkContext(memories: any[], questionType: string): string {
       sessionMap.get(sid)!.push(m);
     }
 
-    // Sort sessions by date
+    // Sort sessions by date (reverse for KU to put latest first)
     const sessions = Array.from(sessionMap.entries()).sort((a, b) => {
       const dateA = a[1][0]?.metadata?.event_date || '';
       const dateB = b[1][0]?.metadata?.event_date || '';
-      return String(dateA).localeCompare(String(dateB));
+      return isKU
+        ? String(dateB).localeCompare(String(dateA))  // Reverse: latest first
+        : String(dateA).localeCompare(String(dateB));  // Normal: earliest first
     });
 
     const totalSessions = sessions.length;
-    lines.push(`## Conversation History (${totalSessions} conversations, sorted by date)`);
+    const sortLabel = isKU ? 'LATEST FIRST' : 'sorted by date';
+    lines.push(`## Conversation History (${totalSessions} conversations, ${sortLabel})`);
     for (let ci = 0; ci < sessions.length; ci++) {
       const [sid, mems] = sessions[ci];
       const date = mems[0]?.metadata?.event_date || '';
       // Sort rounds within session
       mems.sort((a: any, b: any) => (a.metadata?.round_index || 0) - (b.metadata?.round_index || 0));
 
-      lines.push(`\n### Conversation ${ci + 1}/${totalSessions} — ${date || 'unknown date'}`);
+      // For KU: label first conversation as LATEST
+      const kuLabel = isKU && ci === 0 ? ' ⭐ LATEST' : '';
+      lines.push(`\n### Conversation ${ci + 1}/${totalSessions} — ${date || 'unknown date'}${kuLabel}`);
       for (const m of mems) {
         lines.push(m.content || m.summary);
       }
@@ -759,16 +931,29 @@ function formatBenchmarkContext(memories: any[], questionType: string): string {
 
   // Show key facts at the end (except multi-session which surfaces them first)
   if (semantic.length > 0 && questionType !== 'multi-session') {
-    lines.push('## Key Facts');
-    // Sort facts by date
+    // For KU: reverse chronological, label latest
     const sortedFacts = [...semantic].sort((a, b) => {
       const dateA = a.metadata?.event_date || '';
       const dateB = b.metadata?.event_date || '';
-      return String(dateA).localeCompare(String(dateB));
+      return isKU
+        ? String(dateB).localeCompare(String(dateA))  // Reverse for KU
+        : String(dateA).localeCompare(String(dateB));
     });
-    for (const m of sortedFacts) {
-      const date = m.metadata?.event_date || '';
-      lines.push(`- ${date ? `[${date}] ` : ''}${m.content || m.summary}`);
+
+    if (isKU) {
+      lines.push('## Key Facts (sorted LATEST FIRST — the first entry is the most current)');
+      for (let fi = 0; fi < sortedFacts.length; fi++) {
+        const m = sortedFacts[fi];
+        const date = m.metadata?.event_date || '';
+        const label = fi === 0 ? '⭐ LATEST: ' : `EARLIER (${date}): `;
+        lines.push(`- ${date ? `[${date}] ` : ''}${label}${m.content || m.summary}`);
+      }
+    } else {
+      lines.push('## Key Facts');
+      for (const m of sortedFacts) {
+        const date = m.metadata?.event_date || '';
+        lines.push(`- ${date ? `[${date}] ` : ''}${m.content || m.summary}`);
+      }
     }
     lines.push('');
   }

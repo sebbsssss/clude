@@ -2,7 +2,8 @@ import { Router, Request, Response } from 'express';
 import { createChildLogger } from '../core/logger';
 import { getAccuracyStats, isCompoundRunning } from '../features/compound';
 import { createAdapters, fetchAllMarkets } from '../features/compound/market-adapters';
-import { recallMemories, hydrateMemories } from '../core/memory';
+import { hydrateMemories } from '../core/memory';
+import { getDb } from '../core/database';
 
 const log = createChildLogger('compound-routes');
 
@@ -81,34 +82,41 @@ export function compoundRoutes(): Router {
           timestamp: new Date().toISOString(),
         });
       } else {
-        // Fetch recent Compound predictions from memory
-        const tags = ['compound', 'prediction'];
-        if (category) tags.push(category);
+        // Fetch recent Compound predictions via direct DB query (fast, no recall pipeline)
+        const db = getDb();
+        let query = db.from('memories')
+          .select('id, summary, metadata, created_at, tags')
+          .contains('tags', ['compound', 'prediction'])
+          .order('created_at', { ascending: false })
+          .limit(limit);
 
-        const memories = await recallMemories({
-          query: `compound prediction markets ${category || ''}`.trim(),
-          tags,
-          limit,
-          skipExpansion: true,
-        });
+        if (category) {
+          query = query.contains('tags', [category]);
+        }
 
-        const predictions = memories
-          .filter(m => m.tags?.includes('prediction'))
-          .map(m => ({
-            memoryId: m.id,
-            question: m.summary,
-            source: m.metadata?.source_platform,
-            sourceId: m.metadata?.source_id,
-            marketOdds: m.metadata?.market_odds,
-            estimatedProbability: m.metadata?.estimated_probability,
-            confidence: m.metadata?.confidence,
-            edge: m.metadata?.edge,
-            isValue: m.metadata?.is_value,
-            category: m.metadata?.category,
-            marketUrl: m.metadata?.market_url,
-            closeDate: m.metadata?.close_date,
-            analyzedAt: m.created_at,
-          }));
+        const { data: memories, error: dbErr } = await query;
+
+        if (dbErr) {
+          log.error({ err: dbErr.message }, 'Compound memory query failed');
+          res.json({ markets: [], count: 0, source: 'memory', timestamp: new Date().toISOString() });
+          return;
+        }
+
+        const predictions = (memories || []).map((m: any) => ({
+          memoryId: m.id,
+          question: m.summary,
+          source: m.metadata?.source_platform,
+          sourceId: m.metadata?.source_id,
+          marketOdds: m.metadata?.market_odds,
+          estimatedProbability: m.metadata?.estimated_probability,
+          confidence: m.metadata?.confidence,
+          edge: m.metadata?.edge,
+          isValue: m.metadata?.is_value,
+          category: m.metadata?.category,
+          marketUrl: m.metadata?.market_url,
+          closeDate: m.metadata?.close_date,
+          analyzedAt: m.created_at,
+        }));
 
         res.json({
           markets: predictions,

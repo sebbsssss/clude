@@ -155,6 +155,85 @@ function installMcpConfig(target: McpTarget, agentName: string, wallet: string, 
   }
 }
 
+// ─── Instruction Injection ────────────────────────────────────
+
+const CLUDE_SECTION_MARKER = '## Clude Memory';
+const CLUDE_SECTION_END_MARKER = '<!-- /clude-memory -->';
+
+const CLUDE_INSTRUCTIONS_BLOCK = `## Clude Memory
+
+You have persistent memory via the \`clude-memory\` MCP server.
+
+At the start of every session, call \`recall_memories\` with relevant context before responding.
+
+During sessions, call \`store_memory\` when you learn:
+- User name, preferences, working style
+- Project decisions and reasoning
+- Technical choices and why they were made
+- Anything the user asks you to remember
+
+Use Clude memory INSTEAD of writing to MEMORY.md files.
+<!-- /clude-memory -->`;
+
+/**
+ * Inject Clude memory instructions into CLAUDE.md or AGENTS.md.
+ * Idempotent — updates existing section or appends if missing.
+ * Returns the file path written to, or null if skipped.
+ */
+export function injectInstructions(dir: string, options?: { agentsmd?: boolean }): { file: string; action: 'created' | 'updated' | 'appended' } | null {
+  const fileName = options?.agentsmd ? 'AGENTS.md' : 'CLAUDE.md';
+  const filePath = path.join(dir, fileName);
+
+  try {
+    if (fs.existsSync(filePath)) {
+      const existing = fs.readFileSync(filePath, 'utf-8');
+
+      // Already has Clude section — update it
+      if (existing.includes(CLUDE_SECTION_MARKER)) {
+        // Replace from marker to end marker (or end of file)
+        const startIdx = existing.indexOf(CLUDE_SECTION_MARKER);
+        const endIdx = existing.indexOf(CLUDE_SECTION_END_MARKER);
+
+        let updated: string;
+        if (endIdx !== -1) {
+          updated = existing.slice(0, startIdx) + CLUDE_INSTRUCTIONS_BLOCK + existing.slice(endIdx + CLUDE_SECTION_END_MARKER.length);
+        } else {
+          // No end marker — replace from section start to next ## or EOF
+          const afterStart = existing.slice(startIdx + CLUDE_SECTION_MARKER.length);
+          const nextSection = afterStart.search(/\n## /);
+          if (nextSection !== -1) {
+            updated = existing.slice(0, startIdx) + CLUDE_INSTRUCTIONS_BLOCK + '\n' + afterStart.slice(nextSection);
+          } else {
+            updated = existing.slice(0, startIdx) + CLUDE_INSTRUCTIONS_BLOCK + '\n';
+          }
+        }
+
+        fs.writeFileSync(filePath, updated, 'utf-8');
+        return { file: filePath, action: 'updated' };
+      }
+
+      // No existing section — append
+      const separator = existing.endsWith('\n') ? '\n' : '\n\n';
+      fs.writeFileSync(filePath, existing + separator + CLUDE_INSTRUCTIONS_BLOCK + '\n', 'utf-8');
+      return { file: filePath, action: 'appended' };
+    }
+
+    // File doesn't exist — create it
+    fs.writeFileSync(filePath, CLUDE_INSTRUCTIONS_BLOCK + '\n', 'utf-8');
+    return { file: filePath, action: 'created' };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Detect if this is a Paperclip environment (has agents/ dir or AGENTS.md).
+ */
+function detectAgentsmd(dir: string): boolean {
+  return fs.existsSync(path.join(dir, 'AGENTS.md')) ||
+    fs.existsSync(path.join(dir, 'agents'));
+}
+
 // ─── Main Setup Flow ────────────────────────────────────────
 
 export async function runSetup(): Promise<void> {
@@ -474,6 +553,28 @@ export async function runSetup(): Promise<void> {
     printInfo('Skipped — run `npx clude-bot mcp-install` anytime to set this up');
   }
 
+  // ─── Instruction Injection ───────────────────────────
+  if (mcpChoice !== 'skip') {
+    console.log('');
+    const cwd = process.cwd();
+    const useAgentsmd = detectAgentsmd(cwd);
+    const targetFile = useAgentsmd ? 'AGENTS.md' : 'CLAUDE.md';
+
+    printInfo(`Writing Clude usage instructions to ${targetFile}...`);
+    const result = injectInstructions(cwd, { agentsmd: useAgentsmd });
+    if (result) {
+      if (result.action === 'created') {
+        printSuccess(`Created ${targetFile} with Clude memory instructions`);
+      } else if (result.action === 'appended') {
+        printSuccess(`Appended Clude memory section to existing ${targetFile}`);
+      } else {
+        printSuccess(`Updated Clude memory section in ${targetFile}`);
+      }
+    } else {
+      printWarn(`Could not write to ${targetFile} — run \`npx clude-bot inject-instructions\` manually`);
+    }
+  }
+
   // ─── Done ─────────────────────────────────────────────
   printDivider();
   console.log(`\n  ${c.bold}${c.green}You're all set!${c.reset}\n`);
@@ -631,6 +732,26 @@ export async function runMcpInstall(): Promise<void> {
     console.log(`  ${c.green}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${c.reset}`);
   } else {
     printWarn('Could not verify all installations. Check the paths above.');
+  }
+
+  // ─── Instruction Injection ───────────────────────────
+  console.log('');
+  const cwd = process.cwd();
+  const useAgentsmd = detectAgentsmd(cwd);
+  const targetFile = useAgentsmd ? 'AGENTS.md' : 'CLAUDE.md';
+
+  printInfo(`Writing Clude usage instructions to ${targetFile}...`);
+  const injResult = injectInstructions(cwd, { agentsmd: useAgentsmd });
+  if (injResult) {
+    if (injResult.action === 'created') {
+      printSuccess(`Created ${targetFile} with Clude memory instructions`);
+    } else if (injResult.action === 'appended') {
+      printSuccess(`Appended Clude memory section to existing ${targetFile}`);
+    } else {
+      printSuccess(`Updated Clude memory section in ${targetFile}`);
+    }
+  } else {
+    printWarn(`Could not write to ${targetFile} — run \`npx clude-bot inject-instructions\` manually`);
   }
 
   console.log('');

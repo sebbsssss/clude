@@ -28,6 +28,8 @@ import type { MemoryLinkType } from '../utils/constants';
 import { generateImportanceScore } from './claude-client';
 import { writeMemo, isRegistryEnabled, registerMemoryOnChain } from './solana-client';
 import { generateEmbedding, generateQueryEmbedding, generateEmbeddings, isEmbeddingEnabled } from './embeddings';
+import { getExperimentalConfig } from '../experimental/config';
+import { bm25SearchMemories } from '../experimental/bm25-search';
 import { generateVeniceResponse, isVeniceEnabled } from './venice-client';
 import { isEncryptionEnabled, getEncryptionPubkey, encryptContent, decryptMemoryBatch } from './encryption';
 import { eventBus } from '../events/event-bus';
@@ -218,6 +220,8 @@ export interface RecallOptions {
   trackAccess?: boolean;
   /** Pre-computed vector similarity scores from hybrid search (internal use). */
   _vectorScores?: Map<number, number>;
+  /** Pre-computed BM25 rank scores from full-text search (internal use). */
+  _bm25Scores?: Map<number, number>;
   /** Skip LLM-based query expansion for faster recall (saves ~500-800ms). */
   skipExpansion?: boolean;
 }
@@ -652,17 +656,17 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
         const stopWords = new Set(['the','a','an','is','are','was','were','be','been','and','or','but','in','on','at','to','for','of','with','by','from','how','what','who','why','when','where','does','do','did','can','will','about','that','this','it']);
         const keywords = opts.query!.toLowerCase().split(/\s+/)
           .filter(w => w.length > 2 && !stopWords.has(w))
-          .slice(0, 4);
+          .slice(0, 8);
         
         if (keywords.length === 0) return [];
         
-        // Search summary with ilike for each keyword
+        // Search summary AND content with ilike for each keyword
         let textQuery = db
           .from('memories')
           .select('*')
           .gte('decay_factor', minDecay)
           .not('source', 'in', '("demo","demo-maas")')
-          .or(keywords.map(k => `summary.ilike.%${k}%`).join(','))
+          .or(keywords.map(k => `summary.ilike.%${k}%,content.ilike.%${k}%`).join(','))
           .order('importance', { ascending: false })
           .limit(limit * 2);
         textQuery = scopeToOwner(textQuery);
@@ -679,6 +683,22 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
       }
     })() : Promise.resolve([]);
 
+    // Phase 2c: BM25 full-text search (Exp 8) — stemming + TF-IDF ranking
+    const expConfig = getExperimentalConfig();
+    const bm25Promise = (expConfig.bm25Search && opts.query && opts.query.length > 3) ? (async () => {
+      try {
+        return await bm25SearchMemories(opts.query!, {
+          limit: limit * 2,
+          minDecay: minDecay,
+          filterOwner: _ownerWallet || undefined,
+          filterTypes: opts.memoryTypes || undefined,
+          filterTags: opts.tags || undefined,
+        });
+      } catch {
+        return [];
+      }
+    })() : Promise.resolve([] as { id: number; rank: number }[]);
+
     // Phase 2b: Always fetch knowledge-seed memories (small fixed set, ~20 rows)
     // These are curated factual memories that must compete in scoring regardless of vector pool
     let knowledgeSeedQuery = db
@@ -691,11 +711,12 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
       knowledgeSeedQuery = knowledgeSeedQuery.in('memory_type', opts.memoryTypes);
     }
 
-    const [importanceResult, textResults, knowledgeSeeds] = await Promise.all([
+    const [importanceResult, textResults, knowledgeSeeds, , bm25Results] = await Promise.all([
       importanceQuery,
       textSearchPromise,
       (async () => { try { const r = await knowledgeSeedQuery; return (r as any).data || []; } catch { return []; } })(),
       vectorSearchPromise, // Ensure vector search completes before merge
+      bm25Promise,
     ]);
 
     const { data, error } = importanceResult as { data: any; error: any };
@@ -742,6 +763,28 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
       }
     }
 
+    // Merge BM25 results — store rank scores and fetch missing memory objects later
+    const bm25Scores = new Map<number, number>();
+    if (Array.isArray(bm25Results) && bm25Results.length > 0 && data) {
+      const existingIds = new Set((data as any[]).map((m: any) => m.id));
+      const bm25MissingIds: number[] = [];
+      for (const r of bm25Results) {
+        bm25Scores.set(r.id, r.rank);
+        if (!existingIds.has(r.id)) bm25MissingIds.push(r.id);
+      }
+      if (bm25MissingIds.length > 0) {
+        let bm25Query = db.from('memories').select('*').in('id', bm25MissingIds);
+        bm25Query = scopeToOwner(bm25Query);
+        const { data: bm25Data } = await bm25Query;
+        if (bm25Data) {
+          for (const m of bm25Data) {
+            (data as any[]).push(m);
+          }
+        }
+      }
+      log.debug({ bm25Hits: bm25Results.length, bm25New: bm25MissingIds.length }, 'BM25 search added candidates');
+    }
+
     if (error) {
       log.error({ error: error.message }, 'Memory recall query failed');
       return [];
@@ -777,7 +820,9 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
     if (candidates.length === 0) return [];
 
     // Phase 4: Score and rank with enhanced composite formula
-    const scoredOpts = vectorScores.size > 0 ? { ...opts, _vectorScores: vectorScores } : opts;
+    const scoredOpts = vectorScores.size > 0 || bm25Scores.size > 0
+      ? { ...opts, _vectorScores: vectorScores, _bm25Scores: bm25Scores }
+      : opts;
     const scored = candidates.map((mem: Memory) => ({
       ...mem,
       _score: scoreMemory(mem, scoredOpts),
@@ -1086,6 +1131,12 @@ export function scoreMemory(mem: Memory, opts: RecallOptions): number {
   // Hybrid agreement bonus: when keyword AND vector both agree, extra confidence
   if (vectorSim > 0 && textScore > 0.6) {
     rawScore += 0.10 * vectorSim; // small bonus for dual-signal agreement
+  }
+
+  // BM25 boost: when full-text search found this memory, boost by TF-IDF rank
+  const bm25Rank = opts._bm25Scores?.get(mem.id) || 0;
+  if (bm25Rank > 0) {
+    rawScore += 0.15 * Math.min(bm25Rank, 1); // small BM25-found bonus
   }
 
   // Knowledge type boost: semantic/procedural/self_model rank above raw episodic
