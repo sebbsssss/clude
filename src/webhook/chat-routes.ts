@@ -209,6 +209,7 @@ export function chatRoutes(): Router {
 
       const abortController = new AbortController();
       req.on('close', () => abortController.abort());
+      const veniceTimeout = setTimeout(() => abortController.abort(), 30000); // 30s max
 
       // Try models in order — fall back if primary is overloaded
       const guestModels = ['qwen3-5-9b', 'qwen3-4b', 'mistral-31-24b'];
@@ -340,140 +341,62 @@ export function chatRoutes(): Router {
   // All routes below require auth
   router.use(chatAuth);
 
-  // POST /greet — personalized greeting on login, streams memory-aware welcome
+  // POST /greet — instant personalized greeting (no LLM call — pure data)
   router.post('/greet', async (req: Request, res: Response) => {
     try {
       const chatReq = req as ChatRequest;
-      const veniceApiKey = config.venice?.apiKey || process.env.VENICE_API_KEY;
-      if (!veniceApiKey) {
-        res.status(500).json({ error: 'Chat not configured' });
-        return;
-      }
-
       const db = getDb();
 
-      // Fast greeting: skip full recall pipeline, use direct DB queries
-      // 1. Synthesized semantic memories (dream cycle outputs) — highest importance
-      // 2. Recent episodic memories — what user was last doing
-      // 3. Total count for context
-      let memories: any[] = [];
+      // SSE headers — send immediately so client sees connection
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders();
+
+      // Fast parallel DB queries — no recall pipeline, no LLM
+      let recentSummaries: string[] = [];
       let totalMemoryCount = 0;
       try {
-        const [semanticResult, episodicResult, countResult] = await Promise.all([
+        const [recentResult, countResult] = await Promise.all([
           db.from('memories')
-            .select('id, summary, memory_type, importance, created_at')
+            .select('summary, memory_type')
             .eq('owner_wallet', chatReq.ownerWallet!)
-            .in('memory_type', ['semantic', 'self_model', 'procedural'])
-            .order('importance', { ascending: false })
-            .limit(8),
-          db.from('memories')
-            .select('id, summary, memory_type, importance, created_at')
-            .eq('owner_wallet', chatReq.ownerWallet!)
-            .eq('memory_type', 'episodic')
             .order('created_at', { ascending: false })
             .limit(5),
           db.from('memories')
             .select('id', { count: 'exact', head: true })
             .eq('owner_wallet', chatReq.ownerWallet!),
         ]);
-        memories = [...(semanticResult.data || []), ...(episodicResult.data || [])];
+        recentSummaries = (recentResult.data || []).map((m: any) => m.summary);
         totalMemoryCount = countResult.count || 0;
       } catch (err) {
-        log.warn({ err }, 'Greeting memory query failed, continuing without memories');
+        log.warn({ err }, 'Greeting query failed');
       }
 
-      const systemPrompt = buildSystemPrompt(memories, { totalMemoryCount, isGreeting: true });
-
-      // SSE headers
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
-      res.flushHeaders();
-
-      // Send memory stats event first
-      res.write(`data: ${JSON.stringify({ memories_recalled: memories.length, total_memories: totalMemoryCount })}\n\n`);
-
-      const abortController = new AbortController();
-      req.on('close', () => abortController.abort());
-
-      // Use non-thinking model for greeting (faster, no <think> token issues)
-      const greetModels = ['llama-3.3-70b', 'mistral-31-24b', 'qwen3-4b'];
-      let veniceRes: globalThis.Response | null = null;
-
-      for (const model of greetModels) {
-        const attempt = await fetch('https://api.venice.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${veniceApiKey}`,
-          },
-          body: JSON.stringify({
-            model,
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: 'greet me' },
-            ],
-            max_tokens: 300,
-            temperature: 0.8,
-            stream: true,
-          }),
-          signal: abortController.signal,
-        });
-
-        if (attempt.ok) {
-          veniceRes = attempt;
-          break;
-        }
-        await attempt.text().catch(() => {});
+      // Build greeting from data — instant, no LLM needed
+      let greeting: string;
+      if (totalMemoryCount === 0) {
+        greeting = "Welcome to Clude! I'm your AI with persistent memory — everything we talk about, I'll remember for next time. What's on your mind?";
+      } else if (recentSummaries.length > 0) {
+        const recapItems = recentSummaries.slice(0, 3)
+          .map(s => s.length > 80 ? s.slice(0, 77) + '...' : s);
+        greeting = `Hey, welcome back! I've got ${totalMemoryCount.toLocaleString()} memories loaded. Here's what I remember recently:\n\n${recapItems.map(s => `• ${s}`).join('\n')}\n\nWhat would you like to work on?`;
+      } else {
+        greeting = `Welcome back! I've got ${totalMemoryCount.toLocaleString()} memories loaded and ready. How can I help?`;
       }
 
-      if (!veniceRes) {
-        res.write(`data: ${JSON.stringify({ error: 'Models unavailable' })}\n\n`);
-        res.end();
-        return;
-      }
-
-      const reader = veniceRes.body?.getReader();
-      if (!reader) { res.end(); return; }
-
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || !trimmed.startsWith('data: ')) continue;
-            const data = trimmed.slice(6);
-            if (data === '[DONE]') continue;
-            try {
-              const parsed = JSON.parse(data);
-              const delta = parsed.choices?.[0]?.delta?.content;
-              if (delta) {
-                res.write(`data: ${JSON.stringify({ content: delta })}\n\n`);
-              }
-            } catch {}
-          }
-        }
-      } catch (err: any) {
-        if (err.name === 'AbortError') return;
-        throw err;
-      }
-
-      res.write(`data: ${JSON.stringify({ done: true, memories_recalled: memories.length, total_memories: totalMemoryCount })}\n\n`);
+      // Send stats + greeting as SSE (instant — no streaming needed)
+      res.write(`data: ${JSON.stringify({ memories_recalled: recentSummaries.length, total_memories: totalMemoryCount })}\n\n`);
+      res.write(`data: ${JSON.stringify({ content: greeting })}\n\n`);
+      res.write(`data: ${JSON.stringify({ done: true, memories_recalled: recentSummaries.length, total_memories: totalMemoryCount })}\n\n`);
       res.end();
     } catch (err: any) {
-      if (err.name === 'AbortError') return;
       log.error({ err }, 'Greeting error');
       if (!res.headersSent) {
         res.status(500).json({ error: 'Greeting failed' });
       } else {
-        res.write(`data: ${JSON.stringify({ error: 'Greeting interrupted' })}\n\n`);
+        res.write(`data: ${JSON.stringify({ content: 'Hey! How can I help you today?' })}\n\n`);
+        res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
         res.end();
       }
     }
@@ -630,9 +553,10 @@ export function chatRoutes(): Router {
     const conversationId = req.params.id;
     const { content, model } = req.body;
     const abortController = new AbortController();
+    const veniceTimeout = setTimeout(() => abortController.abort(), 45000); // 45s max
 
     // Handle client disconnect
-    req.on('close', () => abortController.abort());
+    req.on('close', () => { clearTimeout(veniceTimeout); abortController.abort(); });
 
     try {
       if (!content || typeof content !== 'string') {

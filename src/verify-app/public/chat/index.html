@@ -4,10 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Clude Chat</title>
-    <script type="module" crossorigin src="/chat/assets/index-qDwT5wgP.js"></script>
-    <link rel="stylesheet" crossorigin href="/chat/assets/index-JWc_V94f.css">
+    <style>
+      body { margin: 0; background: #000; }
+      #splash { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; gap: 16px; }
+      #splash span { color: rgba(255,255,255,0.4); font-family: system-ui; font-size: 13px; letter-spacing: 2px; }
+      #splash .dot { width: 6px; height: 6px; background: rgba(59,130,246,0.5); border-radius: 50%; animation: pulse 1.2s ease-in-out infinite; }
+      @keyframes pulse { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
+    </style>
+    <script type="module" crossorigin src="/chat/assets/index-CQUszTLD.js"></script>
+    <link rel="stylesheet" crossorigin href="/chat/assets/index-B2V1VwBQ.css">
   </head>
   <body>
+    <div id="splash"><div class="dot"></div><span>CLUDE</span></div>
     <div id="root"></div>
+    <script>document.getElementById('root').addEventListener('DOMNodeInserted', function() { document.getElementById('splash')?.remove(); }, { once: true });</script>
   </body>
 </html>
