@@ -325,9 +325,14 @@ export function ChatInterface() {
                                 className="flex items-center gap-1"
                               >
                                 <span className="text-[10px] text-white/25 group-hover:text-white/40 transition-colors whitespace-nowrap">
-                                  {message.cost.total === 0
-                                    ? '◆ Free · $0.05 on Opus'
-                                    : `◆ $${message.cost.total < 0.001 ? message.cost.total.toFixed(5) : message.cost.total.toFixed(4)} · ${Math.round(0.045 / Math.max(message.cost.total, 0.0001))}x cheaper`}
+                                  {(() => {
+                                    const opusCost = message.tokens
+                                      ? (message.tokens.prompt / 1_000_000) * 15 + (message.tokens.completion / 1_000_000) * 75
+                                      : 0.0639;
+                                    return message.cost.total === 0
+                                      ? `◆ Free · $${opusCost.toFixed(4)} on Opus`
+                                      : `◆ $${message.cost.total < 0.001 ? message.cost.total.toFixed(5) : message.cost.total.toFixed(4)} · ${Math.round(opusCost / Math.max(message.cost.total, 0.0001))}x cheaper`;
+                                  })()}
                                 </span>
                                 <HelpCircle className="w-2.5 h-2.5 text-white/15 group-hover:text-white/40 transition-colors shrink-0" />
                               </button>
