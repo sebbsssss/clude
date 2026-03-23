@@ -16,6 +16,7 @@
  *   --recall-limit N        (default: 50)
  *   --skip-fact-extraction  (skip LLM fact extraction)
  *   --reader-model MODEL    (default: claude-sonnet-4-5-20250929)
+ *   --rejudge PATH          (re-judge existing results with current judge model)
  */
 process.env.LOG_LEVEL = 'error';
 import dotenv from 'dotenv';
@@ -445,6 +446,70 @@ async function generateAnswerCoN(
   const typeInstruction = TYPE_INSTRUCTIONS[questionType] || '';
   const dateContext = questionDate ? `\nThe question is being asked on: ${questionDate}. Use this to resolve relative time references like "last week", "a few months ago", etc.` : '';
 
+  // Two-stage approach for SS-Asst: extract assistant details first, then answer
+  if (questionType === 'single-session-assistant') {
+    // Stage 1: Find the relevant conversation and quote assistant's specific details
+    const stage1 = await anthropic.messages.create({
+      model: readerModel,
+      max_tokens: 1500,
+      temperature: 0,
+      system: `You are searching conversation memories to find specific details the ASSISTANT provided.
+
+The user is asking about something the assistant said or recommended in a previous conversation. Your job is to find the exact conversation and quote the assistant's specific details.${dateContext}
+
+STEP 1: Read ALL conversations below. Identify the ONE conversation where the topic of the question was discussed.
+STEP 2: From that conversation, QUOTE the assistant's exact words that contain:
+- Specific names (people, places, brands, products, websites, organizations)
+- Specific numbers (amounts, counts, measurements, ages)
+- Specific recommendations (suggestions, alternatives, options listed)
+- Specific instructions (steps, techniques, methods)
+
+OUTPUT FORMAT:
+RELEVANT CONVERSATION: [conversation number and date]
+TOPIC MATCH: [why this conversation matches the question]
+ASSISTANT QUOTES:
+- "[exact quote containing relevant detail]"
+- "[exact quote containing relevant detail]"
+KEY DETAILS: [list specific names, numbers, or items the assistant mentioned]
+
+CRITICAL: The answer is something the ASSISTANT said, not the user. Focus on assistant responses. Search EVERY conversation.`,
+      messages: [{
+        role: 'user',
+        content: `Memory context:\n${context}\n\nQuestion: ${question}\n\nFind the assistant's specific details:`,
+      }],
+    });
+
+    const extraction = stage1.content[0].type === 'text' ? stage1.content[0].text.trim() : '';
+
+    // Stage 2: Answer using extracted quotes
+    const stage2 = await anthropic.messages.create({
+      model: readerModel,
+      max_tokens: 400,
+      temperature: 0,
+      system: `Answer the question using the extracted assistant details below.
+
+Rules:
+- The answer comes from what the ASSISTANT said or recommended
+- Use specific names, numbers, and details from the quotes
+- Answer directly and concisely (1-2 sentences)
+- NEVER say "I don't have information" — the quotes contain the answer
+- If the quotes don't clearly answer, check the original context too`,
+      messages: [{
+        role: 'user',
+        content: `Extracted assistant details:\n${extraction}\n\nOriginal memory context:\n${context}\n\nQuestion: ${question}\n\nAnswer:`,
+      }],
+    });
+
+    let ssaAnswer = stage2.content[0].type === 'text' ? stage2.content[0].text.trim() : '';
+
+    const ssaIdkPattern = /i don't (have|see|find)|cannot (find|answer)|no.*(information|record|mention).*(about|of|for)/i;
+    if (ssaIdkPattern.test(ssaAnswer)) {
+      // Fall through to standard single-pass approach below
+    } else {
+      return ssaAnswer;
+    }
+  }
+
   // Two-stage approach for preference questions
   if (questionType === 'single-session-preference') {
     // Stage 1: Find the relevant conversation and quote specific details
@@ -502,6 +567,75 @@ CRITICAL RULES:
     });
 
     return stage2.content[0].type === 'text' ? stage2.content[0].text.trim() : '';
+  }
+
+  // Two-stage approach for multi-session questions: extract items first, then answer
+  if (questionType === 'multi-session') {
+    // Stage 1: Extract ALL relevant items/data points from every conversation
+    const stage1 = await anthropic.messages.create({
+      model: readerModel,
+      max_tokens: 2000,
+      temperature: 0,
+      system: `You are extracting ALL relevant data points from a user's conversation history to answer a question.
+
+TASK: Read EVERY conversation and key fact below. For each conversation, extract ALL items, facts, numbers, names, or events that are relevant to the question. Do NOT skip any conversation — items may be mentioned briefly or in passing.${dateContext}
+
+OUTPUT FORMAT:
+EXTRACTED DATA:
+- [Source: Conversation N, DATE] Item/fact description (include any amounts, counts, names, dates)
+- [Source: Conversation N, DATE] Item/fact description
+- [Source: Key Facts] Item/fact description
+...
+
+RULES:
+- Check EVERY conversation — do not stop after finding a few items
+- Include items mentioned briefly in one sentence within a longer conversation
+- For money: include the exact dollar amount for each item
+- For counting: include each distinct instance even if similar
+- For people: include each person's name and relationship
+- When in doubt, INCLUDE the item — over-extraction is better than under-extraction
+- Do NOT answer the question yet — just extract the raw data`,
+      messages: [{
+        role: 'user',
+        content: `Memory context:\n${context}\n\nQuestion: ${question}\n\nExtract ALL relevant data points:`,
+      }],
+    });
+
+    const extraction = stage1.content[0].type === 'text' ? stage1.content[0].text.trim() : '';
+
+    // Stage 2: Answer using the extracted data
+    const stage2 = await anthropic.messages.create({
+      model: readerModel,
+      max_tokens: 600,
+      temperature: 0,
+      system: `You answer questions using extracted data from a user's conversation history.${dateContext}
+
+Rules:
+- Use the extracted data below to answer the question
+- For "how many" questions: count ALL extracted items, list each one, then give the total
+- For "how much total/spent" questions: sum ALL amounts, show the calculation
+- For "average" questions: list all values, sum them, divide by count
+- For comparison questions (most, least, first, last): compare all extracted items
+- For "total distance/pages/etc": sum the relevant numbers
+- If the extracted data seems incomplete, also check the original context for missed items
+- Keep the final answer concise (1-3 sentences) but include the specific count/amount
+- If the question asks about something that is genuinely NOT mentioned in any conversation (the extraction found NO relevant data), say "The information provided is not enough" — but ONLY if the extraction truly found nothing relevant
+- If the extraction found at least some relevant data, use it to answer — do not say "I don't have information"`,
+      messages: [{
+        role: 'user',
+        content: `Extracted data:\n${extraction}\n\nOriginal memory context:\n${context}\n\nQuestion: ${question}\n\nAnswer:`,
+      }],
+    });
+
+    let multiAnswer = stage2.content[0].type === 'text' ? stage2.content[0].text.trim() : '';
+
+    // If multi two-stage gives IDK, fall back to single-pass with IDK retry
+    const multiIdkPattern = /i don't (have|see|find)|cannot (find|answer)|no.*(information|record|mention).*(about|of|for)/i;
+    if (multiIdkPattern.test(multiAnswer)) {
+      // Fall through to standard single-pass approach below
+    } else {
+      return multiAnswer;
+    }
   }
 
   // Two-stage approach for temporal questions: extract timeline first, then answer
@@ -969,8 +1103,8 @@ function formatBenchmarkContext(memories: any[], questionType: string): string {
     for (let ci = 0; ci < sessions.length; ci++) {
       const [sid, mems] = sessions[ci];
       const date = mems[0]?.metadata?.event_date || '';
-      // Sort rounds within session
-      mems.sort((a: any, b: any) => (a.metadata?.round_index || 0) - (b.metadata?.round_index || 0));
+      // Sort rounds/chunks within session
+      mems.sort((a: any, b: any) => (a.metadata?.round_index ?? a.metadata?.chunk_index ?? 0) - (b.metadata?.round_index ?? b.metadata?.chunk_index ?? 0));
 
       // For KU: label first conversation as LATEST
       const kuLabel = isKU && ci === 0 ? ' ⭐ LATEST' : '';
@@ -1147,29 +1281,47 @@ async function main() {
         });
       }
     } else {
-      const content = session.turns
-        .map(t => `${t.role === 'user' ? 'User' : 'Assistant'}: ${t.content}`)
-        .join('\n');
+      // Session-level: chunk at turn boundaries (~5000 chars per chunk)
+      // This preserves all content instead of truncating to 5000 chars
+      const CHUNK_SIZE = 5000;
+      const turnTexts = session.turns
+        .map(t => `${t.role === 'user' ? 'User' : 'Assistant'}: ${t.content}`);
 
-      allRows.push({
-        hash_id: randomBytes(16).toString('hex'),
-        memory_type: 'episodic',
-        content: content.slice(0, 5000),
-        summary: content.slice(0, 500),
-        tags: ['longmemeval', session.sessionId],
-        concepts: [],
-        emotional_valence: 0,
-        importance: 0.5,
-        source: BENCHMARK_SOURCE,
-        metadata: {
-          session_id: session.sessionId,
-          event_date: session.date,
-          benchmark: true,
-        },
-        owner_wallet: BENCHMARK_OWNER_WALLET,
-        compacted: false,
-        evidence_ids: [],
-      });
+      const chunks: string[] = [];
+      let currentChunk = '';
+      for (const turnText of turnTexts) {
+        if (currentChunk.length + turnText.length + 1 > CHUNK_SIZE && currentChunk.length > 0) {
+          chunks.push(currentChunk);
+          currentChunk = turnText;
+        } else {
+          currentChunk += (currentChunk ? '\n' : '') + turnText;
+        }
+      }
+      if (currentChunk) chunks.push(currentChunk);
+
+      for (let ci = 0; ci < chunks.length; ci++) {
+        allRows.push({
+          hash_id: randomBytes(16).toString('hex'),
+          memory_type: 'episodic',
+          content: chunks[ci],
+          summary: chunks[ci].slice(0, 500),
+          tags: ['longmemeval', session.sessionId],
+          concepts: [],
+          emotional_valence: 0,
+          importance: 0.5,
+          source: BENCHMARK_SOURCE,
+          metadata: {
+            session_id: session.sessionId,
+            event_date: session.date,
+            benchmark: true,
+            chunk_index: ci,
+            total_chunks: chunks.length,
+          },
+          owner_wallet: BENCHMARK_OWNER_WALLET,
+          compacted: false,
+          evidence_ids: [],
+        });
+      }
     }
   }
 
