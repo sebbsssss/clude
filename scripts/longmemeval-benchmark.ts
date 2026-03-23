@@ -1987,7 +1987,7 @@ async function main() {
     console.log();
   }
 
-  const totalTime = ms(seedStart);
+  const totalTime = typeof seedStart !== 'undefined' ? ms(seedStart) : 0;
 
   // ── Report ───────────────────────────────────────────────────
   console.log('╔════════════════════════════════════════════════════╗');
