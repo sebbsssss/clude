@@ -1,8 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ChevronDown, CheckCircle, AlertCircle, Copy, Loader2 } from 'lucide-react';
+import { X, ChevronDown, CheckCircle, AlertCircle, Copy, Loader2, QrCode, Smartphone } from 'lucide-react';
 import { useWallets } from '@privy-io/react-auth/solana';
 import { Connection, PublicKey, Transaction, TransactionInstruction } from '@solana/web3.js';
+import { createQR } from '@solana/pay';
 import bs58 from 'bs58';
 import { api } from '../lib/api';
 import { useAuthContext } from '../hooks/AuthContext';
@@ -16,6 +17,7 @@ interface Props {
 
 type Chain = 'solana' | 'base';
 type TxState = 'idle' | 'building' | 'signing' | 'confirming' | 'success' | 'error';
+type PayMethod = 'wallet' | 'qr';
 
 const PRESET_AMOUNTS = [5, 10, 50] as const;
 const MIN_AMOUNT = 1;
@@ -27,6 +29,11 @@ const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
 const USDC_DECIMALS = 6;
 const SOLANA_RPC = 'https://api.mainnet-beta.solana.com';
 const BASE_DEST = '0x48346152f7AaF4c645e939fC21Db0F9da287975d';
+
+/** Detect mobile by touch support + screen width */
+function isMobileDevice(): boolean {
+  return 'ontouchstart' in window && window.innerWidth < 768;
+}
 
 function findAta(walletPubkey: PublicKey, mint: PublicKey): PublicKey {
   return PublicKey.findProgramAddressSync(
@@ -83,15 +90,30 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
   const [errorMsg, setErrorMsg] = useState('');
   const [txHash, setTxHash] = useState('');
   const [copied, setCopied] = useState(false);
+  const [payMethod, setPayMethod] = useState<PayMethod>(isMobileDevice() ? 'wallet' : 'qr');
+  const [solanaPayUrl, setSolanaPayUrl] = useState('');
+  const [intentId, setIntentId] = useState('');
+  const qrRef = useRef<HTMLDivElement>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const effectiveAmount = isCustom ? parseFloat(customAmount) || 0 : (selectedAmount ?? 0);
   const isValidAmount = effectiveAmount >= MIN_AMOUNT;
 
+  // Clean up polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
+
   const handleClose = useCallback(() => {
     if (txState === 'building' || txState === 'signing' || txState === 'confirming') return;
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     setTxState('idle');
     setErrorMsg('');
     setTxHash('');
+    setSolanaPayUrl('');
+    setIntentId('');
     onClose();
   }, [txState, onClose]);
 
@@ -99,6 +121,10 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
     setIsCustom(false);
     setSelectedAmount(amt);
     setCustomAmount('');
+    // Reset QR state when amount changes
+    setSolanaPayUrl('');
+    setIntentId('');
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
   };
 
   const handleCustomFocus = () => {
@@ -106,7 +132,61 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
     setSelectedAmount(null);
   };
 
-  const handleSolana = useCallback(async () => {
+  /** Start polling balance to detect Solana Pay payment completion */
+  const startBalancePolling = useCallback((currentBal: number) => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      try {
+        const { balance_usdc } = await api.getBalance();
+        if (balance_usdc > currentBal) {
+          if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+          setTxState('success');
+          onSuccess(currentBal);
+        }
+      } catch { /* ignore poll errors */ }
+    }, 3000);
+  }, [onSuccess]);
+
+  /** Generate Solana Pay QR code / deep-link URL */
+  const handleSolanaPayIntent = useCallback(async () => {
+    if (!isValidAmount) return;
+    setTxState('building');
+    setErrorMsg('');
+
+    try {
+      const intent = await api.createTopupIntent(effectiveAmount, 'solana');
+      setIntentId(intent.id);
+
+      // The backend returns the full solana: URI
+      const url = (intent as any).solana_pay_url as string;
+      setSolanaPayUrl(url);
+
+      if (payMethod === 'qr') {
+        // Render QR code into the ref container
+        setTxState('confirming');
+        setTimeout(() => {
+          if (qrRef.current) {
+            qrRef.current.innerHTML = '';
+            const qr = createQR(url, 220, 'transparent', 'white');
+            qr.append(qrRef.current);
+          }
+        }, 50);
+        // Poll for payment confirmation
+        startBalancePolling(currentBalance ?? 0);
+      } else {
+        // Mobile: open deep-link
+        setTxState('confirming');
+        window.location.href = url;
+        startBalancePolling(currentBalance ?? 0);
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Failed to create payment. Please try again.');
+      setTxState('error');
+    }
+  }, [effectiveAmount, isValidAmount, payMethod, currentBalance, startBalancePolling]);
+
+  /** Direct wallet transfer via Privy (embedded wallet flow) */
+  const handleSolanaWallet = useCallback(async () => {
     if (!walletAddress || !isValidAmount) return;
     const wallet = wallets[0];
     if (!wallet) {
@@ -163,7 +243,11 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
 
   const handleSend = () => {
     if (chain === 'solana') {
-      handleSolana();
+      if (payMethod === 'wallet') {
+        handleSolanaWallet();
+      } else {
+        handleSolanaPayIntent();
+      }
     }
     // Base: handled inline in the UI
   };
@@ -322,18 +406,62 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
                   </div>
                 )}
 
-                {/* Solana send button */}
+                {/* Solana: payment method toggle + send/QR */}
                 {chain === 'solana' && (
-                  <button
-                    onClick={handleSend}
-                    disabled={!isValidAmount || txState === 'building' || txState === 'signing' || txState === 'confirming'}
-                    className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white disabled:cursor-not-allowed text-[13px] font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
-                  >
-                    {txState === 'building' && <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Building transaction…</>}
-                    {txState === 'signing' && <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Waiting for signature…</>}
-                    {txState === 'confirming' && <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Confirming…</>}
-                    {(txState === 'idle' || txState === 'error') && <>Send ${effectiveAmount > 0 ? effectiveAmount.toFixed(2) : '—'} USDC</>}
-                  </button>
+                  <div className="space-y-3">
+                    {/* Method toggle */}
+                    {(txState === 'idle' || txState === 'error') && (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setPayMethod('wallet')}
+                          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors border ${
+                            payMethod === 'wallet'
+                              ? 'bg-blue-600/20 border-blue-500/50 text-blue-300'
+                              : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-zinc-300'
+                          }`}
+                        >
+                          <Smartphone className="h-3 w-3" /> Wallet
+                        </button>
+                        <button
+                          onClick={() => setPayMethod('qr')}
+                          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors border ${
+                            payMethod === 'qr'
+                              ? 'bg-blue-600/20 border-blue-500/50 text-blue-300'
+                              : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-zinc-300'
+                          }`}
+                        >
+                          <QrCode className="h-3 w-3" /> QR Code
+                        </button>
+                      </div>
+                    )}
+
+                    {/* QR code display (shown while confirming with QR method) */}
+                    {payMethod === 'qr' && txState === 'confirming' && (
+                      <div className="flex flex-col items-center space-y-2">
+                        <div ref={qrRef} className="bg-white rounded-xl p-2" />
+                        <p className="text-[10px] text-zinc-400">Scan with any Solana wallet to pay</p>
+                        <div className="flex items-center gap-1.5">
+                          <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
+                          <p className="text-[10px] text-blue-400">Waiting for payment…</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Send button (wallet mode) or Generate QR button */}
+                    {txState !== 'confirming' || payMethod !== 'qr' ? (
+                      <button
+                        onClick={handleSend}
+                        disabled={!isValidAmount || txState === 'building' || txState === 'signing' || txState === 'confirming'}
+                        className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white disabled:cursor-not-allowed text-[13px] font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                      >
+                        {txState === 'building' && <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Creating payment…</>}
+                        {txState === 'signing' && <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Waiting for signature…</>}
+                        {txState === 'confirming' && <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Confirming…</>}
+                        {(txState === 'idle' || txState === 'error') && payMethod === 'wallet' && <>Send ${effectiveAmount > 0 ? effectiveAmount.toFixed(2) : '—'} USDC</>}
+                        {(txState === 'idle' || txState === 'error') && payMethod === 'qr' && <>Generate QR Code</>}
+                      </button>
+                    ) : null}
+                  </div>
                 )}
 
                 {/* Base: manual flow */}

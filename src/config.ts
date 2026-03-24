@@ -118,4 +118,13 @@ export const config = {
     maxConcurrent: parseInt(optional('EXECUTOR_MAX_CONCURRENT', '2'), 10),
     timeoutMs: parseInt(optional('EXECUTOR_TIMEOUT_MS', '300000'), 10),
   },
+  helius: {
+    webhookSecret: optional('HELIUS_WEBHOOK_SECRET', ''),
+  },
+  usdc: {
+    /** Treasury wallet that receives USDC top-up payments */
+    treasuryAddress: optional('USDC_TREASURY_ADDRESS', '81MVTcY8iKQA3DMurbm8C3k8kCGySrsE575vyVVXiqFu'),
+    /** Native Circle USDC mint on Solana */
+    mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+  },
 } as const;

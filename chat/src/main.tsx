@@ -30,7 +30,7 @@ createRoot(document.getElementById('root')!).render(
         externalWallets: {
           solana: { connectors: solanaConnectors },
         },
-      }}
+      } as any}
     >
       <BrowserRouter basename="/chat">
         <App />

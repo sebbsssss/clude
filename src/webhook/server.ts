@@ -12,10 +12,12 @@ import { cortexRoutes } from './cortex-routes';
 import { graphRoutes } from './graph-routes';
 import { campaignRoutes } from './campaign-routes';
 import { chatRoutes } from './chat-routes';
+import { topupWebhookRoutes, topupApiRoutes } from './topup-routes';
 import { getVeniceStats } from '../core/venice-client';
 import { createChildLogger } from '../core/logger';
 import { checkInputContent } from '../core/guardrails';
 import { withOwnerWallet } from '../core/owner-context';
+import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import { requirePrivyAuth, optionalPrivyAuth } from './privy-auth';
 import { traceMemory, explainMemory } from '../features/memory-trace';
@@ -66,6 +68,14 @@ export function createServer(): express.Application {
   app.set('trust proxy', 1);
 
   app.use(express.json());
+
+  // Gzip/Brotli compression — skip SSE streams (they flush per-chunk)
+  app.use(compression({
+    filter: (req, res) => {
+      if (res.getHeader('Content-Type') === 'text/event-stream') return false;
+      return compression.filter(req, res);
+    },
+  }));
 
   // CORS headers for Cortex SDK (browser-based consumers)
   app.use((req, res, next) => {
@@ -473,6 +483,12 @@ export function createServer(): express.Application {
 
   // Chat API (memory-augmented chat with Venice AI inference)
   app.use('/api/chat', chatRoutes());
+
+  // Chat billing: balance, top-up confirmation, history
+  app.use('/api/chat', topupApiRoutes());
+
+  // Helius webhook (USDC payment detection — outside /api to avoid API rate limiter)
+  app.use('/webhook', topupWebhookRoutes());
 
   // Campaign: 10 Days of Growing a Blockchain Brain
   app.use('/api/campaign', apiLimiter, campaignRoutes());

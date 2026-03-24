@@ -24,13 +24,11 @@ const log = createChildLogger('chat-api');
 
 export const CHAT_MODELS = [
   // Private (Venice infra, zero data retention)
-  { id: 'qwen3-5-9b', name: 'Qwen 3.5 9B', veniceId: 'qwen3-5-9b', privacy: 'private', context: 256000, default: true, tier: 'free' as const, cost: { input: 0, output: 0 } },
-  { id: 'qwen3-next-80b', name: 'Qwen 3 Next 80B', veniceId: 'qwen3-next-80b', privacy: 'private', context: 256000, tier: 'pro' as const, cost: { input: 0.35, output: 0.35 } },
+  { id: 'kimi-k2-thinking', name: 'Kimi K2 Thinking', veniceId: 'kimi-k2-thinking', privacy: 'private', context: 256000, default: true, tier: 'free' as const, cost: { input: 0, output: 0 } },
   { id: 'llama-3.3-70b', name: 'Llama 3.3 70B', veniceId: 'llama-3.3-70b', privacy: 'private', context: 128000, tier: 'pro' as const, cost: { input: 0.20, output: 0.20 } },
   { id: 'deepseek-v3.2', name: 'DeepSeek V3.2', veniceId: 'deepseek-v3.2', privacy: 'private', context: 160000, tier: 'pro' as const, cost: { input: 0.20, output: 0.20 } },
   { id: 'mistral-31-24b', name: 'Mistral 31 24B', veniceId: 'mistral-31-24b', privacy: 'private', context: 128000, tier: 'pro' as const, cost: { input: 0.15, output: 0.15 } },
   { id: 'venice-uncensored', name: 'Venice Uncensored', veniceId: 'venice-uncensored', privacy: 'private', context: 32000, tier: 'pro' as const, cost: { input: 0.15, output: 0.15 } },
-  { id: 'kimi-k2-thinking', name: 'Kimi K2 Thinking', veniceId: 'kimi-k2-thinking', privacy: 'private', context: 256000, tier: 'pro' as const, cost: { input: 0.40, output: 0.40 } },
   { id: 'openai-gpt-oss-120b', name: 'GPT OSS 120B', veniceId: 'openai-gpt-oss-120b', privacy: 'private', context: 128000, tier: 'pro' as const, cost: { input: 0.50, output: 0.50 } },
   // Anonymized (third-party providers via Venice, no user identity but provider sees prompt)
   { id: 'claude-sonnet-4.6', name: 'Claude Sonnet 4.6', veniceId: 'claude-sonnet-4-6', privacy: 'anonymized', context: 1000000, tier: 'pro' as const, cost: { input: 3.00, output: 15.00 } },
@@ -40,7 +38,7 @@ export const CHAT_MODELS = [
   { id: 'gemini-3-pro', name: 'Gemini 3 Pro', veniceId: 'gemini-3-pro-preview', privacy: 'anonymized', context: 198000, tier: 'pro' as const, cost: { input: 1.25, output: 5.00 } },
 ];
 
-const DEFAULT_MODEL = CHAT_MODELS.find(m => (m as any).default)?.id || 'qwen3-5-9b';
+const DEFAULT_MODEL = CHAT_MODELS.find(m => (m as any).default)?.id || 'kimi-k2-thinking';
 
 // ---- Request type ---- //
 
@@ -160,12 +158,13 @@ function resolveVeniceModel(modelId: string): string | null {
 export function chatRoutes(): Router {
   const router = Router();
 
-  // GET /models — public, no auth
+  // GET /models — public, no auth, static data cached aggressively
   router.get('/models', (_req: Request, res: Response) => {
+    res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     res.json(CHAT_MODELS);
   });
 
-  // POST /guest — free tier, no auth, no memory, qwen3-5-9b only, 10 msgs/day per IP
+  // POST /guest — free tier, no auth, no memory, kimi-k2-thinking, 10 msgs/day per IP
   router.post('/guest', async (req: Request, res: Response) => {
     try {
       const { content } = req.body;
@@ -217,7 +216,7 @@ export function chatRoutes(): Router {
       const veniceTimeout = setTimeout(() => abortController.abort(), 30000); // 30s max
 
       // Try all models in parallel — first successful response wins
-      const guestModels = ['qwen3-5-9b', 'qwen3-4b', 'mistral-31-24b'];
+      const guestModels = ['kimi-k2-thinking', 'mistral-31-24b', 'llama-3.3-70b'];
       const modelControllers = guestModels.map(() => new AbortController());
       abortController.signal.addEventListener('abort', () => {
         modelControllers.forEach(c => c.abort());
@@ -462,7 +461,7 @@ export function chatRoutes(): Router {
         total_memories: totalMemoryCount,
         temporal_span: temporalSpan,
         topics,
-        greeting_cost: 0,
+        cost: { total: 0, input: 0, output: 0 },
       })}\n\n`);
       res.end();
     } catch (err: any) {
@@ -483,10 +482,17 @@ export function chatRoutes(): Router {
       const chatReq = req as ChatRequest;
       const { title, model } = req.body;
 
-      const modelId = model || DEFAULT_MODEL;
-      if (!CHAT_MODELS.find(m => m.id === modelId)) {
-        res.status(400).json({ error: `Unknown model: ${modelId}. Use GET /models for available models.` });
+      if (!chatReq.ownerWallet) {
+        log.error({ headers: Object.keys(req.headers) }, 'Create conversation: ownerWallet not set after auth');
+        res.status(401).json({ error: 'Authentication failed — no wallet identity', code: 'NO_WALLET' });
         return;
+      }
+
+      // Fall back to default model if the requested model is unknown (e.g., stale localStorage)
+      let modelId = model || DEFAULT_MODEL;
+      if (!CHAT_MODELS.find(m => m.id === modelId)) {
+        log.warn({ requestedModel: modelId, fallback: DEFAULT_MODEL }, 'Unknown model requested, falling back to default');
+        modelId = DEFAULT_MODEL;
       }
 
       const db = getDb();
@@ -501,15 +507,19 @@ export function chatRoutes(): Router {
         .single();
 
       if (error) {
-        log.error({ err: error }, 'Failed to create conversation');
-        res.status(500).json({ error: 'Failed to create conversation' });
+        log.error({ err: error, ownerWallet: chatReq.ownerWallet, model: modelId }, 'Failed to create conversation');
+        const reason = error.code === '42P01' ? 'Chat table not found — database may need reinitialization'
+          : error.code === '23502' ? `Missing required field: ${error.message}`
+          : error.code === '42501' ? 'Database permission denied — check RLS policies'
+          : `Database error: ${error.message}`;
+        res.status(500).json({ error: reason, code: error.code || 'DB_ERROR' });
         return;
       }
 
       res.json(data);
     } catch (err) {
       log.error({ err }, 'Create conversation error');
-      res.status(500).json({ error: 'Failed to create conversation' });
+      res.status(500).json({ error: 'Internal server error creating conversation', code: 'INTERNAL' });
     }
   });
 
@@ -653,34 +663,95 @@ export function chatRoutes(): Router {
 
       const db = getDb();
 
-      // 1. Validate conversation belongs to owner
-      const { data: conversation } = await db
-        .from('chat_conversations')
-        .select('id, model')
-        .eq('id', conversationId)
-        .eq('owner_wallet', chatReq.ownerWallet!)
-        .single();
+      // 1+2. Validate conversation + rate limit IN PARALLEL (independent DB queries)
+      const [convResult, allowed] = await Promise.all([
+        db.from('chat_conversations')
+          .select('id, model')
+          .eq('id', conversationId)
+          .eq('owner_wallet', chatReq.ownerWallet!)
+          .single(),
+        checkRateLimit('chat:msg:' + chatReq.ownerWallet, 30, 1),
+      ]);
 
+      const conversation = convResult.data;
       if (!conversation) {
         res.status(404).json({ error: 'Conversation not found' });
         return;
       }
-
-      // 2. Rate limit
-      const allowed = await checkRateLimit('chat:msg:' + chatReq.ownerWallet, 30, 1);
       if (!allowed) {
         res.status(429).json({ error: 'Rate limit exceeded. 30 messages per minute.' });
         return;
       }
 
-      // 3. Content filter
+      // 3. Content filter (sync — no I/O)
       const contentCheck = checkInputContent(content);
       if (!contentCheck.allowed) {
         res.status(400).json({ error: 'Content rejected.', reason: contentCheck.reason });
         return;
       }
 
-      // 4. Insert user message
+      // 3b. Balance pre-check for pro models — reject before calling LLM if insufficient funds
+      const requestModelId = model || conversation.model || DEFAULT_MODEL;
+      const selectedModel = CHAT_MODELS.find(m => m.id === requestModelId);
+      if (selectedModel && selectedModel.tier !== 'free' && chatReq.ownerWallet) {
+        const { data: bal } = await db
+          .from('chat_balances')
+          .select('balance_usdc')
+          .eq('wallet_address', chatReq.ownerWallet)
+          .single();
+
+        const currentBalance = bal ? parseFloat(bal.balance_usdc) : 0;
+        // Estimate minimum cost: ~500 tokens output for a short reply
+        const minEstimatedCost = (500 / 1_000_000) * selectedModel.cost.input + (500 / 1_000_000) * selectedModel.cost.output;
+        if (currentBalance < minEstimatedCost) {
+          res.status(402).json({
+            error: 'Insufficient balance',
+            balance_usdc: currentBalance,
+            min_cost_estimate: minEstimatedCost,
+            model: requestModelId,
+          });
+          return;
+        }
+      }
+
+      // 4+5. Start memory recall IMMEDIATELY (doesn't need user message in DB),
+      //       insert user message in parallel, then load history alongside recall.
+      //       skipExpansion=true avoids a 500-3000ms LLM call for query expansion.
+      let memories: any[] = [];
+      let memoryIds: number[] = [];
+      let totalMemoryCount = 0;
+      const temporalConstraints = detectTemporalConstraints(content);
+      if (temporalConstraints) {
+        log.debug({ startDate: temporalConstraints.startDate, endDate: temporalConstraints.endDate }, 'Temporal query detected');
+      }
+
+      // Fire off recall pipeline immediately — runs while we insert the user message
+      const recallPromise = Promise.resolve(
+        withOwnerWallet(chatReq.ownerWallet!, () =>
+          recallMemories({ query: content, limit: 25, skipExpansion: true })
+        )
+      ).catch(err => {
+        log.warn({ err }, 'Memory recall failed, continuing without memories');
+        return [] as any[];
+      });
+      const countPromise = db.from('memories')
+        .select('id', { count: 'exact', head: true })
+        .eq('owner_wallet', chatReq.ownerWallet!);
+      const temporalPromise = (temporalConstraints && isEmbeddingEnabled())
+        ? generateQueryEmbedding(content).then(async (embedding) => {
+            if (!embedding) return [];
+            return matchMemoriesTemporal({
+              queryEmbedding: embedding,
+              matchThreshold: 0.3,
+              matchCount: 25,
+              startDate: temporalConstraints.startDate,
+              endDate: temporalConstraints.endDate,
+              filterOwner: chatReq.ownerWallet || null,
+            });
+          }).catch(() => [] as any[])
+        : Promise.resolve([] as any[]);
+
+      // Insert user message (must complete before history load to include it)
       const { data: userMsg, error: userMsgError } = await db
         .from('chat_messages')
         .insert({
@@ -697,87 +768,50 @@ export function chatRoutes(): Router {
         return;
       }
 
-      // 5. Recall memories + get total count (with temporal awareness)
-      let memories: any[] = [];
-      let memoryIds: number[] = [];
-      let totalMemoryCount = 0;
-      const temporalConstraints = detectTemporalConstraints(content);
-      if (temporalConstraints) {
-        log.debug({ startDate: temporalConstraints.startDate, endDate: temporalConstraints.endDate }, 'Temporal query detected');
-      }
-      try {
-        // Run recall, count, and optional temporal search in parallel
-        const recallPromise = withOwnerWallet(chatReq.ownerWallet!, () =>
-          recallMemories({ query: content, limit: 25 })
-        );
-        const countPromise = db.from('memories')
-          .select('id', { count: 'exact', head: true })
-          .eq('owner_wallet', chatReq.ownerWallet!);
+      // 6. Load history IN PARALLEL with recall completion (recall was started earlier)
+      const [recalled, countResult, temporalResults, historyResult] = await Promise.all([
+        recallPromise, countPromise, temporalPromise,
+        db.from('chat_messages')
+          .select('role, content')
+          .eq('conversation_id', conversationId)
+          .order('created_at', { ascending: true })
+          .limit(30),
+      ]);
 
-        // If temporal query detected AND embeddings available, also run temporal RPC
-        const temporalPromise = (temporalConstraints && isEmbeddingEnabled())
-          ? generateQueryEmbedding(content).then(async (embedding) => {
-              if (!embedding) return [];
-              return matchMemoriesTemporal({
-                queryEmbedding: embedding,
-                matchThreshold: 0.3,
-                matchCount: 25,
-                startDate: temporalConstraints.startDate,
-                endDate: temporalConstraints.endDate,
-                filterOwner: chatReq.ownerWallet || null,
-              });
-            })
-          : Promise.resolve([]);
+      memories = recalled;
+      totalMemoryCount = countResult.count || 0;
 
-        const [recalled, countResult, temporalResults] = await Promise.all([
-          recallPromise, countPromise, temporalPromise,
-        ]);
+      // Merge temporal results: fetch full records for any IDs not already in recall set
+      if (temporalResults.length > 0) {
+        const recalledIds = new Set(memories.map(m => m.id));
+        const missingIds = temporalResults
+          .map(r => r.id)
+          .filter(id => !recalledIds.has(id));
 
-        memories = recalled;
-        totalMemoryCount = countResult.count || 0;
+        if (missingIds.length > 0) {
+          const { data: temporalMemories } = await db
+            .from('memories')
+            .select('*')
+            .in('id', missingIds)
+            .eq('owner_wallet', chatReq.ownerWallet!);
 
-        // Merge temporal results: fetch full records for any IDs not already in recall set
-        if (temporalResults.length > 0) {
-          const recalledIds = new Set(memories.map(m => m.id));
-          const missingIds = temporalResults
-            .map(r => r.id)
-            .filter(id => !recalledIds.has(id));
-
-          if (missingIds.length > 0) {
-            const { data: temporalMemories } = await db
-              .from('memories')
-              .select('*')
-              .in('id', missingIds)
-              .eq('owner_wallet', chatReq.ownerWallet!);
-
-            if (temporalMemories) {
-              memories = [...memories, ...temporalMemories];
-              log.debug({ added: temporalMemories.length }, 'Merged temporal memories into recall set');
-            }
+          if (temporalMemories) {
+            memories = [...memories, ...temporalMemories];
+            log.debug({ added: temporalMemories.length }, 'Merged temporal memories into recall set');
           }
         }
-
-        memoryIds = memories.map(m => m.id);
-      } catch (err) {
-        log.warn({ err }, 'Memory recall failed, continuing without memories');
       }
 
-      // 6. Load last 30 messages
-      const { data: history } = await db
-        .from('chat_messages')
-        .select('role, content')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true })
-        .limit(30);
+      memoryIds = memories.map(m => m.id);
 
       // 7. Build messages array
+      const history = historyResult.data;
       const systemPrompt = buildSystemPrompt(memories, { totalMemoryCount });
       const messagesArray: Array<{ role: string; content: string }> = [
         { role: 'system', content: systemPrompt },
         ...(history || []).map(m => ({ role: m.role, content: m.content })),
       ];
 
-      // Resolve model
       const modelId = model || conversation.model || DEFAULT_MODEL;
       const veniceModelId = resolveVeniceModel(modelId);
       if (!veniceModelId) {
@@ -807,9 +841,10 @@ export function chatRoutes(): Router {
         body: JSON.stringify({
           model: veniceModelId,
           messages: messagesArray,
-          max_tokens: 4096,
+          max_tokens: (CHAT_MODELS.find(m => m.id === modelId)?.tier === 'pro') ? 16384 : 8192,
           temperature: 0.7,
           stream: true,
+          stream_options: { include_usage: true },
         }),
         signal: abortController.signal,
       });
@@ -830,6 +865,7 @@ export function chatRoutes(): Router {
       let fullContent = '';
       let tokensPrompt = 0;
       let tokensCompletion = 0;
+      let usageReceived = false;
 
       const reader = veniceRes.body?.getReader();
       if (!reader) {
@@ -870,6 +906,7 @@ export function chatRoutes(): Router {
               if (parsed.usage) {
                 tokensPrompt = parsed.usage.prompt_tokens || 0;
                 tokensCompletion = parsed.usage.completion_tokens || tokensCompletion;
+                usageReceived = true;
               }
             } catch {
               // Skip malformed JSON chunks
@@ -885,12 +922,53 @@ export function chatRoutes(): Router {
         throw err;
       }
 
-      // 11. Send done event with cost data
+      // 10b. Fallback token estimation when Venice omits usage metadata
+      if (!usageReceived && tokensPrompt === 0) {
+        const promptChars = messagesArray.reduce((sum, m) => sum + m.content.length, 0);
+        tokensPrompt = Math.ceil(promptChars / 4);
+        tokensCompletion = Math.ceil(fullContent.length / 4);
+        log.warn({ modelId, estimatedPrompt: tokensPrompt, estimatedCompletion: tokensCompletion },
+          'Venice did not return token usage — cost estimated from character count');
+      }
+
+      // 11. Send done event with cost + receipt data
       const assistantMsgId = crypto.randomUUID();
       const modelDef = CHAT_MODELS.find(m => m.id === modelId);
       const costInput = modelDef ? (tokensPrompt / 1_000_000) * modelDef.cost.input : 0;
       const costOutput = modelDef ? (tokensCompletion / 1_000_000) * modelDef.cost.output : 0;
       const totalCost = costInput + costOutput;
+
+      // Receipt: equivalent direct API cost (Claude Opus 4.6 as benchmark)
+      const OPUS_RATE = { input: 15, output: 75 }; // $/M tokens
+      const equivalentDirectCost = (tokensPrompt / 1_000_000) * OPUS_RATE.input + (tokensCompletion / 1_000_000) * OPUS_RATE.output;
+      const savingsPct = equivalentDirectCost > 0 ? Math.round(((equivalentDirectCost - totalCost) / equivalentDirectCost) * 100) : 0;
+
+      // 11b. Deduct usage from balance (pro models only, skip free models)
+      let remainingBalance: number | null = null;
+      const isFreeModel = modelDef?.tier === 'free';
+      if (!isFreeModel && totalCost > 0 && chatReq.ownerWallet) {
+        try {
+          const { data: bal } = await db
+            .from('chat_balances')
+            .select('balance_usdc, total_spent')
+            .eq('wallet_address', chatReq.ownerWallet)
+            .single();
+
+          if (bal) {
+            const newBalance = Math.max(0, parseFloat(bal.balance_usdc) - totalCost);
+            const newSpent = parseFloat(bal.total_spent) + totalCost;
+            await db.from('chat_balances').update({
+              balance_usdc: newBalance,
+              total_spent: newSpent,
+              updated_at: new Date().toISOString(),
+            }).eq('wallet_address', chatReq.ownerWallet);
+            remainingBalance = newBalance;
+          }
+        } catch (balErr) {
+          log.warn({ err: balErr }, 'Balance deduction failed — message still delivered');
+        }
+      }
+
       res.write(`data: ${JSON.stringify({
         done: true,
         message_id: assistantMsgId,
@@ -898,14 +976,19 @@ export function chatRoutes(): Router {
         memories_used: memoryIds.length,
         memory_ids: memoryIds,
         tokens: { prompt: tokensPrompt, completion: tokensCompletion },
-        cost: { total: totalCost, input: costInput, output: costOutput },
+        cost: { total: totalCost, input: costInput, output: costOutput, estimated: !usageReceived },
+        receipt: {
+          cost_usdc: totalCost,
+          equivalent_direct_cost: equivalentDirectCost,
+          savings_pct: savingsPct,
+          remaining_balance: remainingBalance,
+        },
       })}\n\n`);
       res.end();
 
-      // 12. Insert assistant message
-      await db
-        .from('chat_messages')
-        .insert({
+      // 12+13+14. Insert assistant message + update conversation + record usage IN PARALLEL
+      const dbOps: PromiseLike<any>[] = [
+        db.from('chat_messages').insert({
           id: assistantMsgId,
           conversation_id: conversationId,
           role: 'assistant',
@@ -914,20 +997,26 @@ export function chatRoutes(): Router {
           tokens_prompt: tokensPrompt || null,
           tokens_completion: tokensCompletion || null,
           memory_ids: memoryIds.length > 0 ? memoryIds : null,
-        });
-
-      // 13. Update conversation.updated_at and message_count
-      await db
-        .from('chat_conversations')
-        .update({
-          updated_at: new Date().toISOString(),
-          message_count: (await db
-            .from('chat_messages')
-            .select('id', { count: 'exact', head: true })
-            .eq('conversation_id', conversationId)
-          ).count || 0,
-        })
-        .eq('id', conversationId);
+        }),
+        db.from('chat_conversations')
+          .update({ updated_at: new Date().toISOString() })
+          .eq('id', conversationId),
+      ];
+      // Record usage for non-free models
+      if (!isFreeModel && totalCost > 0 && chatReq.ownerWallet) {
+        dbOps.push(
+          db.from('chat_usage').insert({
+            wallet_address: chatReq.ownerWallet,
+            conversation_id: conversationId,
+            message_id: assistantMsgId,
+            model: modelId,
+            tokens_prompt: tokensPrompt || null,
+            tokens_completion: tokensCompletion || null,
+            cost_usdc: totalCost,
+          })
+        );
+      }
+      await Promise.all(dbOps);
 
       // 14. Auto-generate title if null (fire-and-forget)
       autoGenerateTitle(conversationId, content, veniceApiKey).catch(err =>
@@ -976,6 +1065,44 @@ export function chatRoutes(): Router {
     }
   });
 
+  // ---- Usage Endpoints ---- //
+  // Note: /balance, /topup/confirm, and /topup/history are handled by topup-routes.ts
+  // (with proper on-chain verification for /topup/confirm)
+
+  // GET /usage/history — list per-message usage
+  router.get('/usage/history', async (req: Request, res: Response) => {
+    try {
+      const chatReq = req as ChatRequest;
+      const wallet = chatReq.ownerWallet!;
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+      const offset = parseInt(req.query.offset as string) || 0;
+
+      const db = getDb();
+
+      const { data, error } = await db
+        .from('chat_usage')
+        .select('id, conversation_id, message_id, model, tokens_prompt, tokens_completion, cost_usdc, created_at')
+        .eq('wallet_address', wallet)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (error) {
+        log.error({ err: error }, 'Failed to fetch usage history');
+        res.status(500).json({ error: 'Failed to fetch usage history' });
+        return;
+      }
+
+      res.json({
+        usage: (data || []).map(u => ({ ...u, cost_usdc: parseFloat(u.cost_usdc) })),
+        limit,
+        offset,
+      });
+    } catch (err) {
+      log.error({ err }, 'Usage history error');
+      res.status(500).json({ error: 'Failed to fetch usage history' });
+    }
+  });
+
   return router;
 }
 
@@ -1001,7 +1128,7 @@ async function autoGenerateTitle(conversationId: string, firstMessage: string, v
         'Authorization': `Bearer ${veniceApiKey}`,
       },
       body: JSON.stringify({
-        model: 'qwen3-5-9b',
+        model: 'mistral-31-24b',
         messages: [
           { role: 'system', content: 'Generate a short title (max 6 words) for this conversation. Return ONLY the title, no quotes, no punctuation at the end.' },
           { role: 'user', content: firstMessage.slice(0, 500) },

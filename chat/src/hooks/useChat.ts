@@ -3,6 +3,40 @@ import { useAuthContext } from './AuthContext';
 import { api } from '../lib/api';
 import type { Message } from '../lib/types';
 
+/**
+ * Creates a buffered chunk handler that batches SSE text chunks and flushes
+ * via requestAnimationFrame (~60fps). Prevents 100s of React re-renders per
+ * second during streaming and instead batches into ~60 updates/sec.
+ */
+function createChunkBuffer(
+  messageId: string,
+  setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>,
+) {
+  let pending = '';
+  let rafId = 0;
+
+  const flush = () => {
+    rafId = 0;
+    if (!pending) return;
+    const chunk = pending;
+    pending = '';
+    setMessages((prev) =>
+      prev.map((m) => m.id === messageId ? { ...m, content: m.content + chunk } : m)
+    );
+  };
+
+  return {
+    push(chunk: string) {
+      pending += chunk;
+      if (!rafId) rafId = requestAnimationFrame(flush);
+    },
+    flush() {
+      if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+      flush();
+    },
+  };
+}
+
 export interface MessageCost {
   total: number;
   input?: number;
@@ -12,6 +46,13 @@ export interface MessageCost {
 export interface MessageTokens {
   prompt: number;
   completion: number;
+}
+
+export interface MessageReceipt {
+  cost_usdc: number;
+  equivalent_direct_cost: number;
+  savings_pct: number;
+  remaining_balance: number | null;
 }
 
 export interface GreetingMeta {
@@ -31,6 +72,7 @@ export interface ChatMessage {
   model?: string;
   cost?: MessageCost;
   tokens?: MessageTokens;
+  receipt?: MessageReceipt;
   isGreeting?: boolean;
   greetingMeta?: GreetingMeta;
 }
@@ -41,6 +83,7 @@ export function useChat() {
   const [streaming, setStreaming] = useState(false);
   const [guestRemaining, setGuestRemaining] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [balance, setBalance] = useState<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const fetchGreeting = useCallback(async () => {
@@ -51,14 +94,15 @@ export function useChat() {
     const abort = new AbortController();
     abortRef.current = abort;
 
+    const greetBuf = createChunkBuffer(greetingId, setMessages);
+
     try {
       await api.greet(
         (chunk) => {
-          setMessages((prev) =>
-            prev.map((m) => m.id === greetingId ? { ...m, content: (m.content + chunk).trimStart() } : m)
-          );
+          greetBuf.push(chunk);
         },
         (data) => {
+          greetBuf.flush();
           const meta: GreetingMeta | undefined = data?.total_memories != null ? {
             total_memories: data.total_memories,
             memories_recalled: data.memories_recalled ?? 0,
@@ -75,6 +119,7 @@ export function useChat() {
         abort.signal,
       );
     } catch (err: any) {
+      greetBuf.flush();
       if (err.name !== 'AbortError') {
         setMessages((prev) =>
           prev.map((m) => m.id === greetingId
@@ -109,6 +154,8 @@ export function useChat() {
     const abort = new AbortController();
     abortRef.current = abort;
 
+    const msgBuf = createChunkBuffer(assistantId, setMessages);
+
     try {
       if (!authenticated || !conversationId) {
         const history = messages.slice(-10).map((m) => ({ role: m.role, content: m.content }));
@@ -116,14 +163,13 @@ export function useChat() {
           content,
           history,
           (chunk) => {
-            setMessages((prev) =>
-              prev.map((m) => m.id === assistantId ? { ...m, content: m.content + chunk } : m)
-            );
+            msgBuf.push(chunk);
           },
           (remaining) => {
+            msgBuf.flush();
             if (remaining !== undefined) setGuestRemaining(remaining);
             setMessages((prev) =>
-              prev.map((m) => m.id === assistantId ? { ...m, streaming: false, model: 'qwen3-5-9b', cost: { total: 0 } } : m)
+              prev.map((m) => m.id === assistantId ? { ...m, streaming: false, model: 'kimi-k2-thinking', cost: { total: 0 } } : m)
             );
           },
           abort.signal,
@@ -134,11 +180,14 @@ export function useChat() {
           content,
           model,
           (chunk) => {
-            setMessages((prev) =>
-              prev.map((m) => m.id === assistantId ? { ...m, content: m.content + chunk } : m)
-            );
+            msgBuf.push(chunk);
           },
           (data) => {
+            msgBuf.flush();
+            // Update balance from receipt if present
+            if (data?.receipt?.remaining_balance !== null && data?.receipt?.remaining_balance !== undefined) {
+              setBalance(data.receipt.remaining_balance);
+            }
             setMessages((prev) =>
               prev.map((m) => m.id === assistantId
                 ? {
@@ -147,8 +196,9 @@ export function useChat() {
                     streaming: false,
                     memoryIds: data?.memory_ids,
                     model: data?.model,
-                    cost: data?.cost,
+                    cost: data?.cost ?? (data ? { total: 0 } : undefined),
                     tokens: data?.tokens,
+                    receipt: data?.receipt,
                   }
                 : m)
             );
@@ -157,6 +207,7 @@ export function useChat() {
         );
       }
     } catch (err: any) {
+      msgBuf.flush();
       if (err.name === 'AbortError') {
         setMessages((prev) =>
           prev.map((m) => m.id === assistantId ? { ...m, streaming: false } : m)
@@ -210,6 +261,7 @@ export function useChat() {
     messages,
     streaming,
     guestRemaining,
+    balance,
     error,
     sendMessage,
     stopStreaming,

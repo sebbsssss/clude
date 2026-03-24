@@ -7,10 +7,9 @@ interface Props {
 }
 
 const COMPARISONS = [
-  { provider: 'Clude', model: 'Qwen 3.5 9B', cost: 'Free', perMsg: 0, privacy: 'private' as const, note: 'Zero data retention' },
+  { provider: 'Clude', model: 'Kimi K2 Thinking', cost: 'Free', perMsg: 0, privacy: 'private' as const, note: 'Zero data retention' },
   { provider: 'Clude', model: 'Llama 3.3 70B', cost: '$0.20/M', perMsg: 0.0002, privacy: 'private' as const, note: 'Zero data retention' },
   { provider: 'Clude', model: 'DeepSeek V3.2', cost: '$0.20/M', perMsg: 0.0002, privacy: 'private' as const, note: 'Zero data retention' },
-  { provider: 'Clude', model: 'Kimi K2 Thinking', cost: '$0.40/M', perMsg: 0.0004, privacy: 'private' as const, note: 'Zero data retention' },
   { divider: true },
   { provider: 'Clude', model: 'Claude Sonnet 4.6', cost: '$3–15/M', perMsg: 0.009, privacy: 'anonymized' as const, note: 'Via Venice proxy' },
   { provider: 'Clude', model: 'GPT-5.4', cost: '$2–8/M', perMsg: 0.005, privacy: 'anonymized' as const, note: 'Via Venice proxy' },
