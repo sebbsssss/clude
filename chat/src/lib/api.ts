@@ -4,6 +4,7 @@ const API_BASE = '';
 
 class ChatAPI {
   private cortexKey: string | null = null;
+  private modelsCache: ChatModel[] | null = null;
 
   setKey(key: string | null) {
     this.cortexKey = key;
@@ -18,9 +19,12 @@ class ChatAPI {
   }
 
   async getModels(): Promise<ChatModel[]> {
+    if (this.modelsCache) return this.modelsCache;
     const res = await fetch(`${API_BASE}/api/chat/models`);
     if (!res.ok) throw new Error('Failed to fetch models');
-    return res.json();
+    const models = await res.json();
+    this.modelsCache = models;
+    return models;
   }
 
   async autoRegister(privyToken: string, wallet: string): Promise<{ api_key: string; agent_id: string; created: boolean }> {
@@ -53,7 +57,10 @@ class ChatAPI {
       headers: this.headers(),
       body: JSON.stringify({ model }),
     });
-    if (!res.ok) throw new Error('Failed to create conversation');
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Request failed' }));
+      throw new Error(err.error || `Failed to create conversation (HTTP ${res.status})`);
+    }
     return res.json();
   }
 
@@ -191,6 +198,44 @@ class ChatAPI {
     return res.json();
   }
 
+  async getBalance(): Promise<{ balance_usdc: number; wallet_address: string }> {
+    const res = await fetch(`${API_BASE}/api/chat/balance`, { headers: this.headers() });
+    if (!res.ok) throw new Error(`Failed to fetch balance (HTTP ${res.status})`);
+    return res.json();
+  }
+
+  async createTopupIntent(amountUsdc: number, chain: 'solana' | 'base'): Promise<{
+    id: string;
+    wallet_address: string;
+    amount_usdc: number;
+    chain: string;
+    dest_address: string;
+  }> {
+    const res = await fetch(`${API_BASE}/api/chat/topup/intent`, {
+      method: 'POST',
+      headers: this.headers(),
+      body: JSON.stringify({ amount_usdc: amountUsdc, chain }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Request failed' }));
+      throw new Error(err.error || `Failed to create top-up intent (HTTP ${res.status})`);
+    }
+    return res.json();
+  }
+
+  async confirmTopup(txHash: string, intentId: string): Promise<{ status: string; balance_usdc: number }> {
+    const res = await fetch(`${API_BASE}/api/chat/topup/confirm`, {
+      method: 'POST',
+      headers: this.headers(),
+      body: JSON.stringify({ tx_hash: txHash, intent_id: intentId }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Request failed' }));
+      throw new Error(err.error || `Failed to confirm top-up (HTTP ${res.status})`);
+    }
+    return res.json();
+  }
+
   async validateKey(): Promise<boolean> {
     try {
       const res = await fetch(`${API_BASE}/api/cortex/stats`, { headers: this.headers() });
@@ -205,6 +250,23 @@ class ChatAPI {
     const decoder = new TextDecoder();
     let buffer = '';
 
+    const processLine = (line: string): { stop: boolean; data?: any } => {
+      if (!line.startsWith('data: ')) return { stop: false };
+      const raw = line.slice(6);
+      if (raw === '[DONE]') return { stop: true };
+      try {
+        const data = JSON.parse(raw);
+        if (data.error) throw new Error(data.error);
+        if (data.done) return { stop: true, data };
+        if (data.content) onChunk(data.content);
+        if (data.chunk) onChunk(data.chunk);
+      } catch (e) {
+        if (e instanceof Error && e.message) throw e;
+        /* skip malformed */
+      }
+      return { stop: false };
+    };
+
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -214,21 +276,17 @@ class ChatAPI {
       buffer = lines.pop() || '';
 
       for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const raw = line.slice(6);
-        if (raw === '[DONE]') { onDone(); return; }
-        try {
-          const data = JSON.parse(raw);
-          if (data.error) throw new Error(data.error);
-          if (data.done) { onDone(data); return; }
-          if (data.content) onChunk(data.content);
-          if (data.chunk) onChunk(data.chunk);
-        } catch (e) {
-          if (e instanceof Error && e.message) throw e;
-          /* skip malformed */
-        }
+        const result = processLine(line);
+        if (result.stop) { onDone(result.data); return; }
       }
     }
+
+    // Flush any data remaining in buffer when stream ends without an explicit done event
+    for (const line of buffer.split('\n')) {
+      const result = processLine(line);
+      if (result.stop) { onDone(result.data); return; }
+    }
+
     onDone();
   }
 }

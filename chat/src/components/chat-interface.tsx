@@ -1,6 +1,6 @@
 import { Button } from "./ui/button.tsx"
 import { Textarea } from "./ui/textarea.tsx"
-import { Brain, Send, Square, HelpCircle } from "lucide-react"
+import { Brain, Send, Square, ChevronDown, X, Clock } from "lucide-react"
 import { LiquidMetal, PulsingBorder } from "@paper-design/shaders-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useState, useRef, useEffect, useCallback } from "react"
@@ -53,18 +53,188 @@ function GreetingMetaBar({ meta }: { meta: GreetingMeta }) {
   )
 }
 
+function TransactionHistory({ open, onClose, messages }: { open: boolean; onClose: () => void; messages: ChatMessage[] }) {
+  // Derive transaction list from messages with cost data (real-time session view)
+  // Phase 1 will add persistent transaction history from chat_usage table
+  const transactions = messages
+    .filter(m => m.role === 'assistant' && m.cost && m.cost.total > 0)
+    .reverse();
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[360px] max-h-[70vh] bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl z-50 p-5 flex flex-col"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2 text-sm text-white font-medium">
+                <Clock className="h-4 w-4 text-blue-400" /> Transaction History
+              </div>
+              <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 space-y-1">
+              {transactions.length === 0 ? (
+                <div className="text-zinc-500 text-xs text-center py-8">
+                  No paid messages yet this session.
+                  <br />
+                  <span className="text-zinc-600 text-[10px]">Free model messages don't appear here.</span>
+                </div>
+              ) : (
+                transactions.map((msg, i) => (
+                  <div key={msg.id} className="flex items-center justify-between text-[11px] py-1.5 px-2 rounded hover:bg-zinc-800/50">
+                    <div className="flex-1 min-w-0">
+                      <span className="text-zinc-300 truncate block">{msg.model || 'unknown'}</span>
+                      <span className="text-zinc-600 text-[9px]">
+                        {msg.tokens ? `${msg.tokens.prompt.toLocaleString()} + ${msg.tokens.completion.toLocaleString()} tokens` : '—'}
+                      </span>
+                    </div>
+                    <span className="text-green-400/80 font-mono text-[10px] ml-2 shrink-0">
+                      ${msg.cost!.total < 0.001 ? msg.cost!.total.toFixed(5) : msg.cost!.total.toFixed(4)}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="mt-3 pt-3 border-t border-zinc-800">
+              <div className="text-[10px] text-zinc-600">
+                Session usage only. Full history will be available once balance system is live.
+              </div>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function formatCost(v: number): string {
+  if (v === 0) return 'Free';
+  return v < 0.001 ? `$${v.toFixed(5)}` : `$${v.toFixed(4)}`;
+}
+
+function ReceiptBadge({ message, onOpenComparison, onOpenHistory }: { message: ChatMessage; onOpenComparison: () => void; onOpenHistory: () => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const cost = message.cost!;
+  const receipt = message.receipt;
+  const tokens = message.tokens;
+
+  // Compute equivalent Opus cost from tokens (fallback when receipt isn't in stream)
+  const opusCost = receipt?.equivalent_direct_cost ?? (tokens
+    ? (tokens.prompt / 1_000_000) * 15 + (tokens.completion / 1_000_000) * 75
+    : 0);
+  const savingsPct = receipt?.savings_pct ?? (opusCost > 0
+    ? Math.round(((opusCost - cost.total) / opusCost) * 100)
+    : 0);
+
+  const collapsedLabel = cost.total === 0
+    ? `◆ Free · ${formatCost(opusCost)} on Opus`
+    : `◆ ${formatCost(cost.total)} · ${savingsPct}% saved`;
+
+  return (
+    <div className="mt-0.5">
+      {/* Collapsed badge */}
+      <button
+        onClick={() => setExpanded(e => !e)}
+        className="flex items-center gap-1 group"
+      >
+        <span className="text-[10px] text-white/25 group-hover:text-white/40 transition-colors whitespace-nowrap">
+          {collapsedLabel}
+        </span>
+        <ChevronDown className={`w-2.5 h-2.5 text-white/15 group-hover:text-white/40 transition-all shrink-0 ${expanded ? 'rotate-180' : ''}`} />
+      </button>
+
+      {/* Expanded receipt */}
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="overflow-hidden"
+          >
+            <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg px-3 py-2 mt-1 text-[10px] space-y-1.5">
+              {/* Cost line */}
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-500">Cost</span>
+                <span className="text-green-400 font-medium font-mono">{formatCost(cost.total)}</span>
+              </div>
+
+              {/* Equivalent direct API cost */}
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-500">Direct API (Opus)</span>
+                <span className="text-red-400/80 font-mono">{formatCost(opusCost)}</span>
+              </div>
+
+              {/* Savings */}
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-500">You saved</span>
+                <span className="text-green-400 font-medium">{savingsPct}%</span>
+              </div>
+
+              {/* Token breakdown */}
+              {tokens && (
+                <div className="flex items-center justify-between pt-1 border-t border-zinc-700/50">
+                  <span className="text-zinc-600">Tokens</span>
+                  <span className="text-zinc-500 font-mono">
+                    {tokens.prompt.toLocaleString()} in · {tokens.completion.toLocaleString()} out
+                  </span>
+                </div>
+              )}
+
+              {/* Balance (stub for Phase 1) */}
+              {receipt?.remaining_balance !== null && receipt?.remaining_balance !== undefined && (
+                <div className="flex items-center justify-between pt-1 border-t border-zinc-700/50">
+                  <span className="text-zinc-500">Balance</span>
+                  <span className="text-zinc-300 font-mono">${receipt.remaining_balance.toFixed(2)}</span>
+                </div>
+              )}
+
+              {/* Links */}
+              <div className="flex items-center gap-3 pt-0.5">
+                <button
+                  onClick={(e) => { e.stopPropagation(); onOpenComparison(); }}
+                  className="text-[9px] text-blue-400/60 hover:text-blue-400 transition-colors"
+                >
+                  Model comparison →
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onOpenHistory(); }}
+                  className="text-[9px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                >
+                  History →
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export function ChatInterface() {
   const { authenticated } = useAuthContext()
-  const { messages, streaming, guestRemaining, error, sendMessage, stopStreaming, clearMessages, loadMessages, prependMessages, fetchGreeting } = useChat()
+  const { messages, streaming, guestRemaining, balance, error, sendMessage, stopStreaming, clearMessages, loadMessages, prependMessages, fetchGreeting } = useChat()
   const greetedRef = useRef(false)
   const { conversations, activeId, hasMoreMessages, createConversation, selectConversation, loadMoreMessages, deleteConversation, refreshTitle, setActiveId } = useConversations()
   const { stats, recent, importPack } = useMemory()
 
   const [isFocused, setIsFocused] = useState(false)
   const [inputValue, setInputValue] = useState("")
-  const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem(MODEL_STORAGE_KEY) || "qwen3-5-9b")
+  const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem(MODEL_STORAGE_KEY) || "kimi-k2-thinking")
   const [showMemoryPills, setShowMemoryPills] = useState(false)
   const [showCostModal, setShowCostModal] = useState(false)
+  const [showTransactions, setShowTransactions] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -84,7 +254,7 @@ export function ChatInterface() {
     if (!authenticated) {
       clearMessages()
       greetedRef.current = false
-      setSelectedModel("qwen3-5-9b")
+      setSelectedModel("kimi-k2-thinking")
     }
   }, [authenticated, clearMessages])
 
@@ -145,10 +315,15 @@ export function ChatInterface() {
       sendMessage(content, null, selectedModel)
     } else if (!activeId) {
       // Auth, no active conversation — create one first
-      const convId = await createConversation(selectedModel)
-      isFirstResponseRef.current = true
-      pendingConvIdRef.current = convId
-      sendMessage(content, convId, selectedModel)
+      try {
+        const convId = await createConversation(selectedModel)
+        isFirstResponseRef.current = true
+        pendingConvIdRef.current = convId
+        sendMessage(content, convId, selectedModel)
+      } catch (err: any) {
+        console.error('Failed to create conversation:', err)
+        setInputValue(content) // Restore input so user doesn't lose their message
+      }
     } else {
       // Auth, existing conversation
       sendMessage(content, activeId, selectedModel)
@@ -319,52 +494,7 @@ export function ChatInterface() {
                             <GreetingMetaBar meta={message.greetingMeta} />
                           )}
                           {!message.streaming && message.content && message.cost !== undefined && (
-                            <div className="relative group mt-0.5">
-                              <button
-                                onClick={() => setShowCostModal(true)}
-                                className="flex items-center gap-1"
-                              >
-                                <span className="text-[10px] text-white/25 group-hover:text-white/40 transition-colors whitespace-nowrap">
-                                  {(() => {
-                                    const opusCost = message.tokens
-                                      ? (message.tokens.prompt / 1_000_000) * 15 + (message.tokens.completion / 1_000_000) * 75
-                                      : 0.0639;
-                                    return message.cost.total === 0
-                                      ? `◆ Free · $${opusCost.toFixed(4)} on Opus`
-                                      : `◆ $${message.cost.total < 0.001 ? message.cost.total.toFixed(5) : message.cost.total.toFixed(4)} · ${Math.round(opusCost / Math.max(message.cost.total, 0.0001))}x cheaper`;
-                                  })()}
-                                </span>
-                                <HelpCircle className="w-2.5 h-2.5 text-white/15 group-hover:text-white/40 transition-colors shrink-0" />
-                              </button>
-                              <div className="absolute left-0 bottom-full mb-1.5 hidden group-hover:block z-50">
-                                <div className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 shadow-xl text-[10px] whitespace-nowrap space-y-1">
-                                  {message.tokens && (
-                                    <>
-                                      <div className="text-zinc-400">
-                                        <span className="text-zinc-500">In:</span> {message.tokens.prompt.toLocaleString()} tokens
-                                        <span className="text-zinc-600 mx-1">·</span>
-                                        <span className="text-zinc-500">Out:</span> {message.tokens.completion.toLocaleString()} tokens
-                                      </div>
-                                    </>
-                                  )}
-                                  <div className="text-zinc-400">
-                                    <span className="text-zinc-500">Clude:</span>{' '}
-                                    <span className="text-green-400">{message.cost.total === 0 ? 'Free' : `$${message.cost.total < 0.001 ? message.cost.total.toFixed(5) : message.cost.total.toFixed(4)}`}</span>
-                                    {message.cost.input !== undefined && message.cost.output !== undefined && message.cost.total > 0 && (
-                                      <span className="text-zinc-600"> (in ${message.cost.input < 0.001 ? message.cost.input.toFixed(5) : message.cost.input.toFixed(4)} + out ${message.cost.output < 0.001 ? message.cost.output.toFixed(5) : message.cost.output.toFixed(4)})</span>
-                                    )}
-                                  </div>
-                                  {message.tokens && (
-                                    <div className="text-zinc-500">
-                                      <span>Opus 4.6:</span>{' '}
-                                      <span className="text-red-400/80">${((message.tokens.prompt / 1_000_000) * 15 + (message.tokens.completion / 1_000_000) * 75).toFixed(4)}</span>
-                                      <span className="text-zinc-600"> ($15/$75 per M)</span>
-                                    </div>
-                                  )}
-                                  <div className="text-zinc-600 text-[9px] pt-0.5">Click for full comparison</div>
-                                </div>
-                              </div>
-                            </div>
+                            <ReceiptBadge message={message} onOpenComparison={() => setShowCostModal(true)} onOpenHistory={() => setShowTransactions(true)} />
                           )}
                         </div>
                       </div>
@@ -397,6 +527,25 @@ export function ChatInterface() {
 
           {/* Guest rate limit banner */}
           <GuestRateLimit remaining={guestRemaining} />
+
+          {/* Low balance warning (active once Phase 1 balance tables land) */}
+          <AnimatePresence>
+            {balance !== null && balance > 0 && balance < 0.5 && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mb-2"
+              >
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 text-amber-400 text-xs flex items-center gap-2">
+                  <span>⚠️ Low balance: ${balance.toFixed(2)} remaining</span>
+                  <button className="ml-auto text-amber-300 hover:text-amber-200 text-[10px] font-medium underline underline-offset-2">
+                    Top Up
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Welcome state - only show when no messages */}
           <AnimatePresence>
@@ -578,6 +727,13 @@ export function ChatInterface() {
                     >
                       <Square className="h-4 w-4" />
                     </Button>
+                  ) : balance !== null && balance <= 0 ? (
+                    <button
+                      onClick={() => { /* Phase 1: open top-up modal */ }}
+                      className="h-8 px-3 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-xs font-medium transition-colors"
+                    >
+                      Top Up to continue
+                    </button>
                   ) : (
                     <Button
                       variant="ghost"
@@ -598,6 +754,8 @@ export function ChatInterface() {
 
       {/* Cost comparison modal */}
       <CostComparison open={showCostModal} onClose={() => setShowCostModal(false)} />
+      {/* Transaction history modal */}
+      <TransactionHistory open={showTransactions} onClose={() => setShowTransactions(false)} messages={messages} />
     </div>
   )
 }
