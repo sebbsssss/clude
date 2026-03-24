@@ -5,7 +5,7 @@
  * - Cognitive model router (right model for the right task)
  * - Memory Packs (portable memory bundles for cross-agent sharing)
  * - Multi-backend support (local SQLite → Supabase → custom)
- * - Privacy controls (Venice integration, selective sharing)
+ * - Privacy controls (private inference, selective sharing)
  * - Token metering hooks ($CLUDE gas tracking)
  * 
  * The 5 P's: Private, Portable, Permissionless, Poly-model, Persistent
@@ -30,7 +30,7 @@ export type CognitiveFunction =
   ;
 
 export interface ModelRoute {
-  provider: string;  // 'venice' | 'anthropic' | 'openai' | 'local'
+  provider: string;  // 'openrouter' | 'anthropic' | 'openai' | 'local'
   model: string;
   maxTokens?: number;
   temperature?: number;
@@ -46,11 +46,11 @@ const DEFAULT_ROUTES: RouterConfig = {
     embed: { provider: 'voyage', model: 'voyage-4-large' },
     consolidate: { provider: 'anthropic', model: 'claude-sonnet-4-20250514' },
     reflect: { provider: 'anthropic', model: 'claude-sonnet-4-20250514' },
-    emerge: { provider: 'venice', model: 'qwen-2.5-coder-32b' },
-    classify: { provider: 'venice', model: 'llama-3.2-3b' },
-    summarize: { provider: 'venice', model: 'llama-3.2-3b' },
+    emerge: { provider: 'openrouter', model: 'qwen/qwen3-coder-480b-a35b-instruct' },
+    classify: { provider: 'openrouter', model: 'meta-llama/llama-3.2-3b-instruct' },
+    summarize: { provider: 'openrouter', model: 'meta-llama/llama-3.2-3b-instruct' },
   },
-  fallback: { provider: 'venice', model: 'llama-3.3-70b' },
+  fallback: { provider: 'openrouter', model: 'meta-llama/llama-3.3-70b-instruct' },
 };
 
 // ── Memory Packs ─────────────────────────────────────────
@@ -85,8 +85,8 @@ export interface PrivacyPolicy {
   default: PrivacyLevel;
   /** Types that are always private regardless of default */
   alwaysPrivate: MemoryType[];
-  /** Whether to use Venice (private inference) for all LLM calls */
-  veniceOnly: boolean;
+  /** Whether to use private inference for all LLM calls */
+  privateInference: boolean;
   /** Whether to encrypt memories at rest */
   encryptAtRest: boolean;
 }
@@ -94,7 +94,7 @@ export interface PrivacyPolicy {
 const DEFAULT_PRIVACY: PrivacyPolicy = {
   default: 'private',
   alwaysPrivate: ['self_model'],
-  veniceOnly: false,
+  privateInference: false,
   encryptAtRest: false,
 };
 

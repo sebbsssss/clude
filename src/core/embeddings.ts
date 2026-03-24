@@ -32,11 +32,6 @@ const PROVIDERS: Record<string, ProviderConfig> = {
     defaultModel: 'text-embedding-3-small',
     authHeader: (key) => `Bearer ${key}`,
   },
-  venice: {
-    url: 'https://api.venice.ai/api/v1/embeddings',
-    defaultModel: 'text-embedding-3-small',
-    authHeader: (key) => `Bearer ${key}`,
-  },
   // Ollama local embedding provider — zero API cost, fully offline.
   // Uses OpenAI-compatible /v1/embeddings endpoint.
   // Set EMBEDDING_PROVIDER=ollama, EMBEDDING_MODEL=nomic-embed-text (or mxbai-embed-large).

@@ -1,7 +1,7 @@
 /**
- * Chat API routes — memory-augmented chat with Venice AI inference.
+ * Chat API routes — memory-augmented chat with OpenRouter inference.
  *
- * Supports multiple models (private via Venice infra, anonymized via third-party).
+ * Supports multiple models via OpenRouter's unified API.
  * Auth: Cortex API key (clk_*) or Privy JWT + wallet.
  * Memory: Recalls user's memories and injects as context for each conversation turn.
  */
@@ -17,25 +17,26 @@ import { createChildLogger } from '../core/logger';
 import { config } from '../config';
 import { detectTemporalConstraints, matchMemoriesTemporal } from '../experimental/temporal-bonds';
 import { generateQueryEmbedding, isEmbeddingEnabled } from '../core/embeddings';
+import { isOpenRouterEnabled, getOpenRouterConfig } from '../core/openrouter-client';
 
 const log = createChildLogger('chat-api');
 
 // ---- Model Registry ---- //
 
 export const CHAT_MODELS = [
-  // Private (Venice infra, zero data retention)
-  { id: 'kimi-k2-thinking', name: 'Kimi K2 Thinking', veniceId: 'kimi-k2-thinking', privacy: 'private', context: 256000, default: true, tier: 'free' as const, cost: { input: 0, output: 0 } },
-  { id: 'llama-3.3-70b', name: 'Llama 3.3 70B', veniceId: 'llama-3.3-70b', privacy: 'private', context: 128000, tier: 'pro' as const, cost: { input: 0.20, output: 0.20 } },
-  { id: 'deepseek-v3.2', name: 'DeepSeek V3.2', veniceId: 'deepseek-v3.2', privacy: 'private', context: 160000, tier: 'pro' as const, cost: { input: 0.20, output: 0.20 } },
-  { id: 'mistral-31-24b', name: 'Mistral 31 24B', veniceId: 'mistral-31-24b', privacy: 'private', context: 128000, tier: 'pro' as const, cost: { input: 0.15, output: 0.15 } },
-  { id: 'venice-uncensored', name: 'Venice Uncensored', veniceId: 'venice-uncensored', privacy: 'private', context: 32000, tier: 'pro' as const, cost: { input: 0.15, output: 0.15 } },
-  { id: 'openai-gpt-oss-120b', name: 'GPT OSS 120B', veniceId: 'openai-gpt-oss-120b', privacy: 'private', context: 128000, tier: 'pro' as const, cost: { input: 0.50, output: 0.50 } },
-  // Anonymized (third-party providers via Venice, no user identity but provider sees prompt)
-  { id: 'claude-sonnet-4.6', name: 'Claude Sonnet 4.6', veniceId: 'claude-sonnet-4-6', privacy: 'anonymized', context: 1000000, tier: 'pro' as const, cost: { input: 3.00, output: 15.00 } },
-  { id: 'claude-opus-4.6', name: 'Claude Opus 4.6', veniceId: 'claude-opus-4-6', privacy: 'anonymized', context: 1000000, tier: 'pro' as const, cost: { input: 15.00, output: 75.00 } },
-  { id: 'gpt-5.4', name: 'GPT-5.4', veniceId: 'openai-gpt-54', privacy: 'anonymized', context: 1000000, tier: 'pro' as const, cost: { input: 2.00, output: 8.00 } },
-  { id: 'grok-4.1-fast', name: 'Grok 4.1 Fast', veniceId: 'grok-41-fast', privacy: 'anonymized', context: 1000000, tier: 'pro' as const, cost: { input: 3.00, output: 15.00 } },
-  { id: 'gemini-3-pro', name: 'Gemini 3 Pro', veniceId: 'gemini-3-pro-preview', privacy: 'anonymized', context: 198000, tier: 'pro' as const, cost: { input: 1.25, output: 5.00 } },
+  // Open-source models (via OpenRouter)
+  { id: 'kimi-k2-thinking', name: 'Kimi K2 Thinking', openrouterId: 'moonshotai/kimi-k2', privacy: 'private', context: 256000, default: true, tier: 'free' as const, cost: { input: 0, output: 0 } },
+  { id: 'llama-3.3-70b', name: 'Llama 3.3 70B', openrouterId: 'meta-llama/llama-3.3-70b-instruct', privacy: 'private', context: 128000, tier: 'pro' as const, cost: { input: 0.20, output: 0.20 } },
+  { id: 'deepseek-v3.2', name: 'DeepSeek V3.2', openrouterId: 'deepseek/deepseek-chat-v3-0324', privacy: 'private', context: 160000, tier: 'pro' as const, cost: { input: 0.20, output: 0.20 } },
+  { id: 'mistral-31-24b', name: 'Mistral 31 24B', openrouterId: 'mistralai/mistral-small-3.1-24b-instruct-2503', privacy: 'private', context: 128000, tier: 'pro' as const, cost: { input: 0.15, output: 0.15 } },
+  { id: 'llama-uncensored', name: 'Llama Uncensored', openrouterId: 'meta-llama/llama-3.3-70b-instruct', privacy: 'private', context: 32000, tier: 'pro' as const, cost: { input: 0.15, output: 0.15 } },
+  { id: 'qwen-235b', name: 'Qwen 235B', openrouterId: 'qwen/qwen3-235b-a22b-instruct', privacy: 'private', context: 128000, tier: 'pro' as const, cost: { input: 0.50, output: 0.50 } },
+  // Frontier models (via OpenRouter)
+  { id: 'claude-sonnet-4.6', name: 'Claude Sonnet 4.6', openrouterId: 'anthropic/claude-sonnet-4-6', privacy: 'standard', context: 1000000, tier: 'pro' as const, cost: { input: 3.00, output: 15.00 } },
+  { id: 'claude-opus-4.6', name: 'Claude Opus 4.6', openrouterId: 'anthropic/claude-opus-4-6', privacy: 'standard', context: 1000000, tier: 'pro' as const, cost: { input: 15.00, output: 75.00 } },
+  { id: 'gpt-5.4', name: 'GPT-5.4', openrouterId: 'openai/gpt-5.2', privacy: 'standard', context: 1000000, tier: 'pro' as const, cost: { input: 2.00, output: 8.00 } },
+  { id: 'grok-4.1-fast', name: 'Grok 4.1 Fast', openrouterId: 'x-ai/grok-4.1-fast', privacy: 'standard', context: 1000000, tier: 'pro' as const, cost: { input: 3.00, output: 15.00 } },
+  { id: 'gemini-3-pro', name: 'Gemini 3 Pro', openrouterId: 'google/gemini-3-pro-preview', privacy: 'standard', context: 198000, tier: 'pro' as const, cost: { input: 1.25, output: 5.00 } },
 ];
 
 const DEFAULT_MODEL = CHAT_MODELS.find(m => (m as any).default)?.id || 'kimi-k2-thinking';
@@ -97,6 +98,72 @@ async function chatAuth(req: Request, res: Response, next: NextFunction): Promis
 
 // ---- Helpers ---- //
 
+/** Rough token estimate: ~4 chars per token (same heuristic used for usage fallback). */
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+/**
+ * Trim history + memories to fit within a token budget.
+ * Priority: system prompt (always kept) > recent messages > memories.
+ * Oldest messages are dropped first; memories are trimmed from lowest-importance.
+ */
+function fitToTokenBudget(
+  history: Array<{ role: string; content: string }>,
+  memories: any[],
+  modelId: string,
+  totalMemoryCount: number,
+): { messagesArray: Array<{ role: string; content: string }>; trimmedMemories: any[] } {
+  const maxOutputTokens = (CHAT_MODELS.find(m => m.id === modelId)?.tier === 'pro') ? 16384 : 8192;
+  const budget = config.chat.maxContextTokens - maxOutputTokens;
+
+  // System prompt without memories (base cost)
+  const basePrompt = buildSystemPrompt([], { totalMemoryCount });
+  const basePromptTokens = estimateTokens(basePrompt);
+
+  // Budget available for history + memory context
+  let remaining = budget - basePromptTokens;
+  if (remaining < 2000) remaining = 2000; // floor to avoid degenerate cases
+
+  // 1. Fit history messages (keep newest, drop oldest)
+  const fittedHistory: Array<{ role: string; content: string }> = [];
+  let historyTokens = 0;
+  // Reserve 30% of remaining budget for memories (min 4K tokens)
+  const memoryReserve = Math.max(4000, Math.floor(remaining * 0.3));
+  const historyBudget = remaining - memoryReserve;
+
+  // Walk from newest to oldest, adding messages until budget exhausted
+  for (let i = history.length - 1; i >= 0; i--) {
+    const msgTokens = estimateTokens(history[i].content) + 4; // +4 for role/overhead
+    if (historyTokens + msgTokens > historyBudget) break;
+    historyTokens += msgTokens;
+    fittedHistory.unshift(history[i]);
+  }
+
+  // 2. Fit memories within remaining budget
+  const memoryBudget = remaining - historyTokens;
+  const trimmedMemories: any[] = [];
+  let memoryTokens = 0;
+  // Memories come pre-sorted by relevance from recall pipeline — keep that order
+  for (const mem of memories) {
+    const memText = mem.summary || mem.content || '';
+    const memTokens = estimateTokens(memText) + 20; // overhead for XML tags etc
+    if (memoryTokens + memTokens > memoryBudget) break;
+    memoryTokens += memTokens;
+    trimmedMemories.push(mem);
+  }
+
+  // 3. Build final system prompt with fitted memories
+  const finalPrompt = buildSystemPrompt(trimmedMemories, { totalMemoryCount });
+
+  const messagesArray: Array<{ role: string; content: string }> = [
+    { role: 'system', content: finalPrompt },
+    ...fittedHistory,
+  ];
+
+  return { messagesArray, trimmedMemories };
+}
+
 function buildSystemPrompt(memories: any[], opts?: { totalMemoryCount?: number; isGreeting?: boolean }): string {
   const currentDate = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
   const semantic = memories.filter(m => m.memory_type === 'semantic');
@@ -137,7 +204,7 @@ Today's date is ${currentDate}.
 
 This user just signed in. Greet them warmly and personally. If you have their memories, give a brief recap of what you remember about them and what they were last working on. Be conversational, not robotic. Don't list memories mechanically — weave them into a natural greeting. Keep it to 2-3 sentences.
 
-Never mention Venice, infrastructure, or technical details about how you work. You ARE the memory system — you don't "query" it, you simply remember.${memoryContext}`;
+Never mention infrastructure providers or technical details about how you work. You ARE the memory system — you don't "query" it, you simply remember.${memoryContext}`;
   }
 
   return `You are Clude — an AI with persistent, long-term memory. You remember everything users tell you across conversations.
@@ -145,12 +212,12 @@ Today's date is ${currentDate}.
 
 Use your memories naturally in conversation. Don't say "according to my records" or "I recall from my database" — just reference what you know like a person would. If a user asks about their memories, you can describe what you remember.
 
-Never mention Venice, infrastructure providers, or technical details about how you work. Never tell users to "check Venice.ai" or any external service. You ARE the memory system.${memoryContext}`;
+Never mention infrastructure providers or technical details about how you work. Never tell users to check any external service. You ARE the memory system.${memoryContext}`;
 }
 
-function resolveVeniceModel(modelId: string): string | null {
+function resolveOpenRouterModel(modelId: string): string | null {
   const model = CHAT_MODELS.find(m => m.id === modelId);
-  return model?.veniceId || null;
+  return model?.openrouterId || null;
 }
 
 // ---- Route factory ---- //
@@ -191,8 +258,8 @@ export function chatRoutes(): Router {
         return;
       }
 
-      const veniceApiKey = config.venice?.apiKey || process.env.VENICE_API_KEY;
-      if (!veniceApiKey) {
+      const openrouterApiKey = config.openrouter?.apiKey || process.env.OPENROUTER_API_KEY;
+      if (!openrouterApiKey) {
         res.status(500).json({ error: 'Chat not configured' });
         return;
       }
@@ -200,7 +267,7 @@ export function chatRoutes(): Router {
       // Build simple messages (no memory, no conversation history)
       const messages = req.body.history || [];
       const allMessages = [
-        { role: 'system', content: 'You are Clude — an AI with persistent, long-term memory. This user is not signed in yet and has limited free messages. Be helpful and naturally mention that signing in unlocks persistent memory across conversations. Never mention Venice or infrastructure details.' },
+        { role: 'system', content: 'You are Clude — an AI with persistent, long-term memory. This user is not signed in yet and has limited free messages. Be helpful and naturally mention that signing in unlocks persistent memory across conversations. Never mention infrastructure details.' },
         ...messages.slice(-10), // last 10 messages from client-side history
         { role: 'user', content },
       ];
@@ -213,21 +280,21 @@ export function chatRoutes(): Router {
 
       const abortController = new AbortController();
       req.on('close', () => abortController.abort());
-      const veniceTimeout = setTimeout(() => abortController.abort(), 30000); // 30s max
+      const llmTimeout = setTimeout(() => abortController.abort(), 30000); // 30s max
 
       // Try all models in parallel — first successful response wins
-      const guestModels = ['kimi-k2-thinking', 'mistral-31-24b', 'llama-3.3-70b'];
+      const guestModels = ['moonshotai/kimi-k2', 'mistralai/mistral-small-3.1-24b-instruct-2503', 'meta-llama/llama-3.3-70b-instruct'];
       const modelControllers = guestModels.map(() => new AbortController());
       abortController.signal.addEventListener('abort', () => {
         modelControllers.forEach(c => c.abort());
       });
 
       const attempts = guestModels.map((model, i) =>
-        fetch('https://api.venice.ai/api/v1/chat/completions', {
+        fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${veniceApiKey}`,
+            'Authorization': `Bearer ${openrouterApiKey}`,
           },
           body: JSON.stringify({
             model,
@@ -239,7 +306,7 @@ export function chatRoutes(): Router {
           signal: modelControllers[i].signal,
         }).then(attempt => {
           if (!attempt.ok) {
-            attempt.text().then(body => log.warn({ status: attempt.status, body, model }, 'Venice guest model unavailable')).catch(() => {});
+            attempt.text().then(body => log.warn({ status: attempt.status, body, model }, 'OpenRouter guest model unavailable')).catch(() => {});
             throw new Error(`${model}: ${attempt.status}`);
           }
           return { response: attempt, model, idx: i };
@@ -256,13 +323,13 @@ export function chatRoutes(): Router {
         return;
       }
 
-      // Abort the losing requests to avoid wasting Venice credits
+      // Abort the losing requests to save costs
       modelControllers.forEach((c, i) => { if (i !== winner.idx) c.abort(); });
 
-      const veniceRes = winner.response;
+      const llmRes = winner.response;
       const usedModel = winner.model;
 
-      const reader = veniceRes.body?.getReader();
+      const reader = llmRes.body?.getReader();
       if (!reader) { res.end(); return; }
 
       const decoder = new TextDecoder();
@@ -337,6 +404,27 @@ export function chatRoutes(): Router {
       }
 
       const { apiKey, agentId, isNew } = await findOrCreateAgentForWallet(wallet);
+
+      // Auto-credit promo balance for new users
+      if (isNew && config.features.freePromoEnabled) {
+        const promoCredit = config.features.freePromoCreditUsdc;
+        const db = getDb();
+        const { error: creditErr } = await db
+          .from('chat_balances')
+          .upsert({
+            wallet_address: wallet,
+            balance_usdc: promoCredit,
+            total_deposited: promoCredit,
+            total_spent: 0,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'wallet_address', ignoreDuplicates: false });
+
+        if (creditErr) {
+          log.error({ err: creditErr, wallet }, 'Failed to auto-credit promo balance');
+        } else {
+          log.info({ wallet, promoCredit }, 'Promo balance credited on registration');
+        }
+      }
 
       res.json({
         api_key: apiKey,
@@ -650,10 +738,10 @@ export function chatRoutes(): Router {
     const conversationId = req.params.id;
     const { content, model } = req.body;
     const abortController = new AbortController();
-    const veniceTimeout = setTimeout(() => abortController.abort(), 45000); // 45s max
+    const llmTimeout = setTimeout(() => abortController.abort(), config.chat.llmTimeoutSec * 1000);
 
     // Handle client disconnect
-    req.on('close', () => { clearTimeout(veniceTimeout); abortController.abort(); });
+    req.on('close', () => { clearTimeout(llmTimeout); abortController.abort(); });
 
     try {
       if (!content || typeof content !== 'string') {
@@ -775,7 +863,7 @@ export function chatRoutes(): Router {
           .select('role, content')
           .eq('conversation_id', conversationId)
           .order('created_at', { ascending: true })
-          .limit(30),
+          .limit(50), // fetch more than needed; fitToTokenBudget trims to fit
       ]);
 
       memories = recalled;
@@ -804,24 +892,32 @@ export function chatRoutes(): Router {
 
       memoryIds = memories.map(m => m.id);
 
-      // 7. Build messages array
-      const history = historyResult.data;
-      const systemPrompt = buildSystemPrompt(memories, { totalMemoryCount });
-      const messagesArray: Array<{ role: string; content: string }> = [
-        { role: 'system', content: systemPrompt },
-        ...(history || []).map(m => ({ role: m.role, content: m.content })),
-      ];
-
+      // 7. Build messages array — token-budgeted to avoid context overflow
+      const history = (historyResult.data || []).map(m => ({ role: m.role, content: m.content }));
       const modelId = model || conversation.model || DEFAULT_MODEL;
-      const veniceModelId = resolveVeniceModel(modelId);
-      if (!veniceModelId) {
+      const { messagesArray, trimmedMemories } = fitToTokenBudget(
+        history, memories, modelId, totalMemoryCount,
+      );
+      // Update memoryIds to reflect what was actually sent
+      memoryIds = trimmedMemories.map(m => m.id);
+      if (trimmedMemories.length < memories.length || history.length > (messagesArray.length - 1)) {
+        log.info({
+          originalHistory: history.length,
+          sentHistory: messagesArray.length - 1,
+          originalMemories: memories.length,
+          sentMemories: trimmedMemories.length,
+          budgetTokens: config.chat.maxContextTokens,
+        }, 'Context trimmed to fit token budget');
+      }
+      const openrouterModelId = resolveOpenRouterModel(modelId);
+      if (!openrouterModelId) {
         res.status(400).json({ error: `Unknown model: ${modelId}` });
         return;
       }
 
-      const veniceApiKey = config.venice?.apiKey || process.env.VENICE_API_KEY;
-      if (!veniceApiKey) {
-        res.status(500).json({ error: 'Venice API not configured' });
+      const openrouterApiKey = config.openrouter?.apiKey || process.env.OPENROUTER_API_KEY;
+      if (!openrouterApiKey) {
+        res.status(500).json({ error: 'OpenRouter API not configured' });
         return;
       }
 
@@ -831,15 +927,15 @@ export function chatRoutes(): Router {
       res.setHeader('Connection', 'keep-alive');
       res.flushHeaders();
 
-      // 9. Call Venice streaming API
-      const veniceRes = await fetch('https://api.venice.ai/api/v1/chat/completions', {
+      // 9. Call OpenRouter streaming API
+      const llmRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${veniceApiKey}`,
+          'Authorization': `Bearer ${openrouterApiKey}`,
         },
         body: JSON.stringify({
-          model: veniceModelId,
+          model: openrouterModelId,
           messages: messagesArray,
           max_tokens: (CHAT_MODELS.find(m => m.id === modelId)?.tier === 'pro') ? 16384 : 8192,
           temperature: 0.7,
@@ -849,14 +945,14 @@ export function chatRoutes(): Router {
         signal: abortController.signal,
       });
 
-      if (!veniceRes.ok) {
-        const errBody = await veniceRes.text().catch(() => 'Unknown error');
-        log.error({ status: veniceRes.status, body: errBody, model: veniceModelId }, 'Venice API error');
-        const isOverloaded = errBody.includes('overloaded') || veniceRes.status === 503;
+      if (!llmRes.ok) {
+        const errBody = await llmRes.text().catch(() => 'Unknown error');
+        log.error({ status: llmRes.status, body: errBody, model: openrouterModelId }, 'OpenRouter API error');
+        const isOverloaded = errBody.includes('overloaded') || llmRes.status === 503;
         const userMsg = isOverloaded
           ? `${modelId} is currently overloaded. Try a different model.`
           : 'Model inference failed';
-        res.write(`data: ${JSON.stringify({ error: userMsg, status: veniceRes.status })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: userMsg, status: llmRes.status })}\n\n`);
         res.end();
         return;
       }
@@ -867,7 +963,7 @@ export function chatRoutes(): Router {
       let tokensCompletion = 0;
       let usageReceived = false;
 
-      const reader = veniceRes.body?.getReader();
+      const reader = llmRes.body?.getReader();
       if (!reader) {
         res.write(`data: ${JSON.stringify({ error: 'No response stream' })}\n\n`);
         res.end();
@@ -876,6 +972,11 @@ export function chatRoutes(): Router {
 
       const decoder = new TextDecoder();
       let buffer = '';
+
+      // SSE keepalive: send comment every 15s to prevent proxy/CDN idle timeouts
+      const keepaliveInterval = setInterval(() => {
+        if (!res.writableEnded) res.write(': keepalive\n\n');
+      }, 15000);
 
       try {
         while (true) {
@@ -915,20 +1016,26 @@ export function chatRoutes(): Router {
         }
       } catch (err: any) {
         if (err.name === 'AbortError') {
-          // Client disconnected — clean up silently
-          log.debug({ conversationId }, 'Client disconnected during streaming');
+          // Client disconnected or timeout — send descriptive error if stream was active
+          log.debug({ conversationId }, 'Stream aborted during streaming');
+          if (!res.writableEnded) {
+            res.write(`data: ${JSON.stringify({ error: 'Response was interrupted — try a shorter question or start a new conversation.' })}\n\n`);
+            res.end();
+          }
           return;
         }
         throw err;
+      } finally {
+        clearInterval(keepaliveInterval);
       }
 
-      // 10b. Fallback token estimation when Venice omits usage metadata
+      // 10b. Fallback token estimation when provider omits usage metadata
       if (!usageReceived && tokensPrompt === 0) {
         const promptChars = messagesArray.reduce((sum, m) => sum + m.content.length, 0);
         tokensPrompt = Math.ceil(promptChars / 4);
         tokensCompletion = Math.ceil(fullContent.length / 4);
         log.warn({ modelId, estimatedPrompt: tokensPrompt, estimatedCompletion: tokensCompletion },
-          'Venice did not return token usage — cost estimated from character count');
+          'Provider did not return token usage — cost estimated from character count');
       }
 
       // 11. Send done event with cost + receipt data
@@ -1019,7 +1126,7 @@ export function chatRoutes(): Router {
       await Promise.all(dbOps);
 
       // 14. Auto-generate title if null (fire-and-forget)
-      autoGenerateTitle(conversationId, content, veniceApiKey).catch(err =>
+      autoGenerateTitle(conversationId, content, openrouterApiKey).catch(err =>
         log.warn({ err, conversationId }, 'Auto-title generation failed')
       );
 
@@ -1108,7 +1215,7 @@ export function chatRoutes(): Router {
 
 // ---- Auto-title generation ---- //
 
-async function autoGenerateTitle(conversationId: string, firstMessage: string, veniceApiKey: string): Promise<void> {
+async function autoGenerateTitle(conversationId: string, firstMessage: string, openrouterApiKey: string): Promise<void> {
   const db = getDb();
 
   // Check if title is already set
@@ -1121,14 +1228,14 @@ async function autoGenerateTitle(conversationId: string, firstMessage: string, v
   if (conv?.title) return;
 
   try {
-    const titleRes = await fetch('https://api.venice.ai/api/v1/chat/completions', {
+    const titleRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${veniceApiKey}`,
+        'Authorization': `Bearer ${openrouterApiKey}`,
       },
       body: JSON.stringify({
-        model: 'mistral-31-24b',
+        model: 'mistralai/mistral-small-3.1-24b-instruct-2503',
         messages: [
           { role: 'system', content: 'Generate a short title (max 6 words) for this conversation. Return ONLY the title, no quotes, no punctuation at the end.' },
           { role: 'user', content: firstMessage.slice(0, 500) },

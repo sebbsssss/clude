@@ -33,14 +33,20 @@ if (require.main === module) {
   const { _setSystemPromptProvider, _setResponsePostProcessor } = require('./core/claude-client');
   const { getBasePrompt, getRandomCloser } = require('./character/base-prompt');
   const { setGuardrailBotAddress } = require('./core/guardrails');
-  const { initVenice } = require('./core/venice-client');
+  const { initOpenRouter } = require('./core/openrouter-client');
+  const { initWebSearch } = require('./core/web-search');
 
-  // Initialize Venice if API key is configured
-  if (config.venice.apiKey) {
-    initVenice({
-      apiKey: config.venice.apiKey,
-      model: config.venice.model,
+  // Initialize OpenRouter (required for inference)
+  if (config.openrouter.apiKey) {
+    initOpenRouter({
+      apiKey: config.openrouter.apiKey,
+      model: config.openrouter.model,
     });
+  }
+
+  // Initialize Tavily web search
+  if (config.tavily.apiKey) {
+    initWebSearch(config.tavily.apiKey);
   }
 
   // Wire bot personality into the LLM client

@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config';
 import { createChildLogger } from './logger';
 import { checkOutput } from './guardrails';
-import { isVeniceEnabled, generateVeniceResponse, type CognitiveFunction } from './venice-client';
+import { isOpenRouterEnabled, generateOpenRouterResponse, type CognitiveFunction } from './openrouter-client';
 import { TWEET_MAX_LENGTH } from '../utils/constants';
 
 const log = createChildLogger('claude-client');
@@ -63,7 +63,7 @@ export interface GenerateOptions {
   maxTokens?: number;
   /** If true, adds Twitter/X response style instructions */
   forTwitter?: boolean;
-  /** Venice cognitive function routing: selects optimal model for the task */
+  /** Cognitive function routing: selects optimal model for the task */
   cognitiveFunction?: CognitiveFunction;
 }
 
@@ -100,14 +100,15 @@ export async function generateResponse(options: GenerateOptions): Promise<string
     userContent = '(Someone mentioned you with no specific message. React to being summoned for nothing.)';
   }
 
-  log.debug({ systemLength: systemPrompt.length, userLength: userContent.length, provider: isVeniceEnabled() ? 'venice' : 'anthropic' }, 'Generating response');
+  const provider = isOpenRouterEnabled() ? 'openrouter' : 'anthropic';
+  log.debug({ systemLength: systemPrompt.length, userLength: userContent.length, provider }, 'Generating response');
 
   let text: string;
 
-  if (isVeniceEnabled()) {
-    // Route through Venice (OpenAI-compatible API, supports Claude models)
+  if (isOpenRouterEnabled()) {
+    // Route through OpenRouter (OpenAI-compatible API, all models)
     // Cognitive function routing selects optimal model per task type
-    text = await generateVeniceResponse({
+    text = await generateOpenRouterResponse({
       messages: [{ role: 'user', content: userContent }],
       systemPrompt,
       maxTokens: options.maxTokens || 1024,

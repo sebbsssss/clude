@@ -213,7 +213,13 @@ export function useChat() {
           prev.map((m) => m.id === assistantId ? { ...m, streaming: false } : m)
         );
       } else {
-        const errorMsg = err.message || 'Something went wrong';
+        // Provide descriptive error messages for common stream failures
+        let errorMsg = err.message || 'Something went wrong';
+        if (errorMsg === 'Failed to fetch' || errorMsg.includes('network') || errorMsg.includes('NetworkError')) {
+          errorMsg = 'Connection lost — check your internet and try again.';
+        } else if (errorMsg.includes('interrupted') || errorMsg.includes('aborted')) {
+          errorMsg = 'Response was interrupted — try a shorter question or start a new conversation.';
+        }
         setError(errorMsg);
         setMessages((prev) =>
           prev.map((m) => m.id === assistantId

@@ -1,6 +1,6 @@
 import { createChildLogger } from './logger';
 import { generateResponse as generateClaudeResponse } from './claude-client';
-import { generateVeniceResponse, isVeniceEnabled, type VeniceMessage } from './venice-client';
+import { generateOpenRouterResponse, isOpenRouterEnabled, type OpenRouterMessage } from './openrouter-client';
 
 const log = createChildLogger('inference');
 
@@ -11,25 +11,24 @@ const log = createChildLogger('inference');
 // Supports automatic fallback for resilience.
 //
 // Providers:
-// - anthropic: Claude (centralized, high quality)
-// - venice: Permissionless (decentralized, private)
+// - anthropic: Claude (direct Anthropic API)
+// - openrouter: Unified router (all models via single key)
 //
-// Philosophy: Clude uses decentralized memory (Solana).
-// Inference should match — Venice as primary, Anthropic as fallback.
+// Priority in auto mode: OpenRouter > Anthropic
 // ============================================================
 
-export type InferenceProvider = 'anthropic' | 'venice' | 'auto';
+export type InferenceProvider = 'anthropic' | 'openrouter' | 'auto';
 
 export interface InferenceConfig {
-  /** Primary provider (default: 'auto' — tries Venice first, falls back to Anthropic) */
+  /** Primary provider (default: 'auto' — tries OpenRouter first, falls back to Anthropic) */
   primary?: InferenceProvider;
-  
+
   /** Fallback provider if primary fails */
   fallback?: InferenceProvider;
-  
-  /** Venice model override */
-  veniceModel?: string;
-  
+
+  /** OpenRouter model override */
+  openrouterModel?: string;
+
   /** Anthropic model override */
   anthropicModel?: string;
 }
@@ -37,19 +36,19 @@ export interface InferenceConfig {
 export interface GenerateOptions {
   /** User message/prompt */
   userMessage: string;
-  
+
   /** Additional context to include */
   context?: string;
-  
+
   /** Feature-specific instructions */
   featureInstruction?: string;
-  
+
   /** System prompt override */
   systemPrompt?: string;
-  
+
   /** Max tokens */
   maxTokens?: number;
-  
+
   /** Force a specific provider */
   provider?: InferenceProvider;
 }
@@ -74,12 +73,12 @@ export function getInferenceConfig(): InferenceConfig {
  */
 export async function generate(opts: GenerateOptions): Promise<string> {
   const provider = opts.provider || inferenceConfig.primary || 'auto';
-  
+
   // Determine which providers to try
   const providers = getProviderOrder(provider);
-  
+
   let lastError: Error | null = null;
-  
+
   for (const p of providers) {
     try {
       const result = await generateWithProvider(p, opts);
@@ -92,24 +91,23 @@ export async function generate(opts: GenerateOptions): Promise<string> {
       log.warn({ provider: p, error: (err as Error).message }, 'Provider failed, trying next');
     }
   }
-  
+
   throw lastError || new Error('All inference providers failed');
 }
 
-function getProviderOrder(provider: InferenceProvider): Array<'anthropic' | 'venice'> {
+function getProviderOrder(provider: InferenceProvider): Array<'anthropic' | 'openrouter'> {
   if (provider === 'auto') {
-    // Prefer Venice (decentralized) if available, fall back to Anthropic
-    const providers: Array<'anthropic' | 'venice'> = [];
-    if (isVeniceEnabled()) {
-      providers.push('venice');
+    const providers: Array<'anthropic' | 'openrouter'> = [];
+    if (isOpenRouterEnabled()) {
+      providers.push('openrouter');
     }
     providers.push('anthropic');
     return providers;
   }
-  
-  const providers: Array<'anthropic' | 'venice'> = [provider as 'anthropic' | 'venice'];
+
+  const providers: Array<'anthropic' | 'openrouter'> = [provider as 'anthropic' | 'openrouter'];
   if (inferenceConfig.fallback && inferenceConfig.fallback !== provider) {
-    providers.push(inferenceConfig.fallback as 'anthropic' | 'venice');
+    providers.push(inferenceConfig.fallback as 'anthropic' | 'openrouter');
   }
   return providers;
 }
@@ -119,8 +117,8 @@ async function generateWithProvider(
   opts: GenerateOptions
 ): Promise<string> {
   switch (provider) {
-    case 'venice':
-      return generateWithVenice(opts);
+    case 'openrouter':
+      return generateWithOpenRouter(opts);
     case 'anthropic':
       return generateWithAnthropic(opts);
     default:
@@ -128,32 +126,32 @@ async function generateWithProvider(
   }
 }
 
-async function generateWithVenice(opts: GenerateOptions): Promise<string> {
-  if (!isVeniceEnabled()) {
-    throw new Error('Venice not configured');
+async function generateWithOpenRouter(opts: GenerateOptions): Promise<string> {
+  if (!isOpenRouterEnabled()) {
+    throw new Error('OpenRouter not configured');
   }
 
-  const messages: VeniceMessage[] = [];
-  
+  const messages: OpenRouterMessage[] = [];
+
   // Build system prompt
   let systemPrompt = opts.systemPrompt || 'You are Clude, an AI with persistent memory.';
   if (opts.featureInstruction) {
     systemPrompt += `\n\n${opts.featureInstruction}`;
   }
-  
+
   // Add context if provided
   let userContent = opts.userMessage;
   if (opts.context) {
     userContent = `${opts.context}\n\n---\n\n${opts.userMessage}`;
   }
-  
+
   messages.push({ role: 'user', content: userContent });
 
-  return generateVeniceResponse({
+  return generateOpenRouterResponse({
     messages,
     systemPrompt,
     maxTokens: opts.maxTokens,
-    model: inferenceConfig.veniceModel,
+    model: inferenceConfig.openrouterModel,
   });
 }
 

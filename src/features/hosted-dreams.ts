@@ -19,7 +19,7 @@ import {
   createMemoryLink,
   type MemoryType,
 } from '../core/memory';
-import { isVeniceEnabled, generateVeniceResponse } from '../core/venice-client';
+import { isOpenRouterEnabled, generateOpenRouterResponse } from '../core/openrouter-client';
 import { createChildLogger } from '../core/logger';
 
 const log = createChildLogger('hosted-dreams');
@@ -62,19 +62,19 @@ async function dreamForAgent(ownerWallet: string, agentName: string): Promise<{ 
       .map(m => `- [${m.created_at?.slice(0, 10)}] ${m.summary}`)
       .join('\n');
 
-    if (!isVeniceEnabled()) {
-      log.warn({ agentName }, 'Venice not enabled — cannot run dream cycle');
+    if (!isOpenRouterEnabled()) {
+      log.warn({ agentName }, 'OpenRouter not enabled — cannot run dream cycle');
       return;
     }
 
     try {
-      const consolidationResponse = await generateVeniceResponse({
+      const consolidationResponse = await generateOpenRouterResponse({
         systemPrompt: 'You extract factual insights from data. Always respond with ONLY a JSON array of strings. No explanation, no markdown, no thinking process.',
         messages: [{
           role: 'user',
           content: `Extract 5-8 key factual insights from these agent memories. Facts, patterns, learned knowledge — not events.\n\n${episodicSummaries}`,
         }],
-        model: 'llama-3.3-70b',
+        model: 'meta-llama/llama-3.3-70b-instruct',
         maxTokens: 1000,
         temperature: 0.2,
       });
@@ -108,13 +108,13 @@ async function dreamForAgent(ownerWallet: string, agentName: string): Promise<{ 
     // ── Phase 2: Procedural extraction ──
     // Extract behavioral patterns / rules from episodes
     try {
-      const proceduralResponse = await generateVeniceResponse({
+      const proceduralResponse = await generateOpenRouterResponse({
         systemPrompt: 'You extract actionable rules from data. Always respond with ONLY a JSON array of strings. No explanation.',
         messages: [{
           role: 'user',
           content: `Extract 3-4 actionable rules/behaviors from these agent memories. Things to DO or AVOID.\n\n${episodicSummaries}`,
         }],
-        model: 'llama-3.3-70b',
+        model: 'meta-llama/llama-3.3-70b-instruct',
         maxTokens: 500,
         temperature: 0.2,
       });
@@ -212,7 +212,7 @@ export async function runHostedDreams(): Promise<void> {
         }, 'Dream cycle complete for agent');
       }
 
-      // Small delay between agents to avoid hammering Venice
+      // Small delay between agents to avoid hammering OpenRouter
       await new Promise(r => setTimeout(r, 2000));
     } catch (err) {
       log.error({ err, agentId: agent.agent_id }, 'Dream failed for agent');

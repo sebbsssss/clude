@@ -20,7 +20,7 @@ import { replyAndMark } from '../services/social.service';
 import { loadInstruction } from '../utils/env-persona';
 import { getVestingInfo, getCAResponse, CLUDE_CA, getTokenStatus } from '../knowledge/tokenomics';
 import { checkInput, getCASpoofResponse, getTokenDeployResponse } from '../core/guardrails';
-import { generateVeniceResponseWithSearch, isVeniceEnabled } from '../core/venice-client';
+import { webSearch, isWebSearchEnabled } from '../core/web-search';
 import { checkRateLimit, getDb } from '../core/database';
 
 const log = createChildLogger('dispatcher');
@@ -258,34 +258,46 @@ async function handleWebSearch(
 ): Promise<void> {
   const cleanText = cleanMentionText(text);
 
-  if (!isVeniceEnabled()) {
-    // Fallback to general reply if Venice is not available
+  if (!isWebSearchEnabled()) {
+    // Fallback to general reply if web search is not available
     await handleGeneralReply(tweetId, text, authorId, tier);
     return;
   }
 
   try {
     const tierMod = getTierModifier(tier);
-    const { content, citations } = await generateVeniceResponseWithSearch({
-      messages: [{ role: 'user', content: cleanText }],
-      systemPrompt:
-        'You are Clude, an AI agent with persistent on-chain memory on Solana. ' +
-        'You are answering a question that requires current information. ' +
-        'Search the web and provide an accurate, concise answer. ' +
-        'If you find relevant sources, mention them naturally. ' +
-        'Keep your response under 800 characters. Be direct and helpful.' +
-        (tierMod ? `\n\n${tierMod}` : ''),
-      maxTokens: 400,
+    // Search the web with Tavily, then synthesize a response via our LLM pipeline
+    const searchResult = await webSearch({ query: cleanText, maxResults: 5 });
+
+    const searchContext = [
+      'WEB SEARCH RESULTS:',
+      searchResult.content,
+      '',
+      searchResult.citations.length > 0
+        ? `Sources: ${searchResult.citations.slice(0, 3).join(', ')}`
+        : '',
+    ].join('\n');
+
+    const instruction =
+      'You are Clude, an AI agent with persistent on-chain memory on Solana. ' +
+      'You are answering a question that requires current information. ' +
+      'Use the web search results provided to give an accurate, concise answer. ' +
+      'If you cite sources, mention them naturally. ' +
+      'Keep your response under 800 characters. Be direct and helpful.' +
+      (tierMod ? `\n\n${tierMod}` : '');
+
+    const response = await buildAndGenerate({
+      message: cleanText,
+      context: searchContext,
+      tierModifier: getTierModifier(tier),
+      instruction,
+      forTwitter: true,
     });
 
-    const response = citations && citations.length > 0
-      ? `${content}\n\n(searched via Venice AI - private, no logs)`
-      : `${content}\n\n(searched via Venice AI)`;
-
     await replyAndMark(tweetId, response, 'web-search');
-    log.info({ tweetId, hasCitations: !!citations?.length }, 'Web search response sent via Venice');
+    log.info({ tweetId, citationCount: searchResult.citations.length }, 'Web search response sent via Tavily');
   } catch (err) {
-    log.error({ err, tweetId }, 'Venice web search failed, falling back to general reply');
+    log.error({ err, tweetId }, 'Web search failed, falling back to general reply');
     await handleGeneralReply(tweetId, text, authorId, tier);
   }
 }

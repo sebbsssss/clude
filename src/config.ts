@@ -84,29 +84,34 @@ export const config = {
     siteOnly: optional('SITE_ONLY', 'false') === 'true',
     campaignEnabled: optional('CAMPAIGN_ENABLED', 'false') === 'true',
     telegramEnabled: optional('TELEGRAM_ENABLED', 'false') === 'true',
+    freePromoEnabled: optional('FREE_PROMO_ENABLED', 'false') === 'true',
+    freePromoCreditUsdc: parseFloat(optional('FREE_PROMO_CREDIT_USDC', '5')),
   },
   campaign: {
     startDate: optional('CAMPAIGN_START', ''),
   },
   embedding: {
-    provider: optional('EMBEDDING_PROVIDER', '') as '' | 'voyage' | 'openai' | 'venice',
+    provider: optional('EMBEDDING_PROVIDER', '') as '' | 'voyage' | 'openai',
     apiKey: optional('EMBEDDING_API_KEY', ''),
     model: optional('EMBEDDING_MODEL', ''),
     dimensions: parseInt(optional('EMBEDDING_DIMENSIONS', '1024'), 10),
     // Optional: faster provider for query-time embeddings (recall)
-    queryProvider: optional('EMBEDDING_QUERY_PROVIDER', '') as '' | 'voyage' | 'openai' | 'venice',
+    queryProvider: optional('EMBEDDING_QUERY_PROVIDER', '') as '' | 'voyage' | 'openai',
     queryApiKey: optional('EMBEDDING_QUERY_API_KEY', ''),
     queryModel: optional('EMBEDDING_QUERY_MODEL', ''),
   },
-  venice: {
-    apiKey: optional('VENICE_API_KEY', ''),
-    model: optional('VENICE_MODEL', 'llama-3.3-70b'),
+  openrouter: {
+    apiKey: optional('OPENROUTER_API_KEY', ''),
+    model: optional('OPENROUTER_MODEL', 'meta-llama/llama-3.3-70b-instruct'),
   },
   inference: {
-    /** Primary provider: 'anthropic' | 'venice' | 'auto' (default: auto) */
-    primary: optional('INFERENCE_PRIMARY', 'auto') as 'anthropic' | 'venice' | 'auto',
+    /** Primary provider: 'anthropic' | 'openrouter' | 'auto' (default: auto) */
+    primary: optional('INFERENCE_PRIMARY', 'auto') as 'anthropic' | 'openrouter' | 'auto',
     /** Fallback provider if primary fails */
-    fallback: optional('INFERENCE_FALLBACK', 'anthropic') as 'anthropic' | 'venice',
+    fallback: optional('INFERENCE_FALLBACK', 'anthropic') as 'anthropic' | 'openrouter',
+  },
+  tavily: {
+    apiKey: optional('TAVILY_API_KEY', ''),
   },
   privy: {
     appId: optional('PRIVY_APP_ID', ''),
@@ -117,6 +122,12 @@ export const config = {
     pollMs: parseInt(optional('EXECUTOR_POLL_MS', '15000'), 10),
     maxConcurrent: parseInt(optional('EXECUTOR_MAX_CONCURRENT', '2'), 10),
     timeoutMs: parseInt(optional('EXECUTOR_TIMEOUT_MS', '300000'), 10),
+  },
+  chat: {
+    /** LLM timeout in seconds for authenticated users (default 120s) */
+    llmTimeoutSec: parseInt(optional('CHAT_LLM_TIMEOUT_SEC', '120'), 10),
+    /** Max token budget for the entire context window sent to the LLM */
+    maxContextTokens: parseInt(optional('CHAT_MAX_CONTEXT_TOKENS', '80000'), 10),
   },
   helius: {
     webhookSecret: optional('HELIUS_WEBHOOK_SECRET', ''),

@@ -198,7 +198,7 @@ class ChatAPI {
     return res.json();
   }
 
-  async getBalance(): Promise<{ balance_usdc: number; wallet_address: string }> {
+  async getBalance(): Promise<{ balance_usdc: number; wallet_address: string; promo?: boolean; promo_credit_usdc?: number }> {
     const res = await fetch(`${API_BASE}/api/chat/balance`, { headers: this.headers() });
     if (!res.ok) throw new Error(`Failed to fetch balance (HTTP ${res.status})`);
     return res.json();
@@ -249,8 +249,11 @@ class ChatAPI {
     const reader = res.body!.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    let receivedContent = false;
 
     const processLine = (line: string): { stop: boolean; data?: any } => {
+      // Skip SSE comments (keepalive pings)
+      if (line.startsWith(':')) return { stop: false };
       if (!line.startsWith('data: ')) return { stop: false };
       const raw = line.slice(6);
       if (raw === '[DONE]') return { stop: true };
@@ -258,8 +261,8 @@ class ChatAPI {
         const data = JSON.parse(raw);
         if (data.error) throw new Error(data.error);
         if (data.done) return { stop: true, data };
-        if (data.content) onChunk(data.content);
-        if (data.chunk) onChunk(data.chunk);
+        if (data.content) { onChunk(data.content); receivedContent = true; }
+        if (data.chunk) { onChunk(data.chunk); receivedContent = true; }
       } catch (e) {
         if (e instanceof Error && e.message) throw e;
         /* skip malformed */
@@ -267,27 +270,33 @@ class ChatAPI {
       return { stop: false };
     };
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
 
-      for (const line of lines) {
+        for (const line of lines) {
+          const result = processLine(line);
+          if (result.stop) { onDone(result.data); return; }
+        }
+      }
+
+      // Flush any data remaining in buffer when stream ends without an explicit done event
+      for (const line of buffer.split('\n')) {
         const result = processLine(line);
         if (result.stop) { onDone(result.data); return; }
       }
-    }
 
-    // Flush any data remaining in buffer when stream ends without an explicit done event
-    for (const line of buffer.split('\n')) {
-      const result = processLine(line);
-      if (result.stop) { onDone(result.data); return; }
+      onDone();
+    } catch (e) {
+      // Re-throw errors with more context if stream was interrupted mid-content
+      if (e instanceof Error && !e.message.includes('interrupted')) throw e;
+      throw e;
     }
-
-    onDone();
   }
 }
 

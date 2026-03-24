@@ -13,7 +13,8 @@ import { graphRoutes } from './graph-routes';
 import { campaignRoutes } from './campaign-routes';
 import { chatRoutes } from './chat-routes';
 import { topupWebhookRoutes, topupApiRoutes } from './topup-routes';
-import { getVeniceStats } from '../core/venice-client';
+import { getOpenRouterStats } from '../core/openrouter-client';
+import { isWebSearchEnabled } from '../core/web-search';
 import { createChildLogger } from '../core/logger';
 import { checkInputContent } from '../core/guardrails';
 import { withOwnerWallet } from '../core/owner-context';
@@ -115,6 +116,18 @@ export function createServer(): express.Application {
     }
   });
 
+  // Apply rate limiting to all API routes
+  app.use('/api', apiLimiter);
+
+  // Attach Privy user to all API requests (optional — doesn't block unauthenticated)
+  app.use('/api', optionalPrivyAuth);
+
+  // Prevent browser/CDN caching of API responses (data is user-scoped)
+  app.use('/api', (_req: Request, res: Response, next: express.NextFunction) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    next();
+  });
+
   // Solana RPC proxy — keeps the Helius API key server-side.
   // The chat frontend uses this endpoint instead of calling Helius directly.
   app.post('/api/solana-rpc', async (req: Request, res: Response) => {
@@ -133,38 +146,29 @@ export function createServer(): express.Application {
     }
   });
 
-  // Apply rate limiting to all API routes
-  app.use('/api', apiLimiter);
-
-  // Attach Privy user to all API requests (optional — doesn't block unauthenticated)
-  app.use('/api', optionalPrivyAuth);
-
-  // Prevent browser/CDN caching of API responses (data is user-scoped)
-  app.use('/api', (_req: Request, res: Response, next: express.NextFunction) => {
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-    next();
-  });
-
-  // Venice integration stats (privacy dashboard) — intentionally unscoped/global
-  app.get('/api/venice-stats', async (_req: Request, res: Response) => {
+  // Inference stats (privacy dashboard) — intentionally unscoped/global
+  const handleInferenceStats = async (_req: Request, res: Response) => {
     try {
-      const veniceStats = await getVeniceStats();
+      const inferenceStats = await getOpenRouterStats();
       const memoryStats = await getMemoryStats();
       res.json({
-        venice: veniceStats,
+        inference: inferenceStats,
+        webSearch: { provider: isWebSearchEnabled() ? 'tavily' : null },
         decentralization: {
-          inference: 'Venice AI (permissionless, no logs)',
+          inference: 'OpenRouter (unified routing)',
           memory: 'Solana (on-chain, verifiable)',
-          embeddings: 'Venice AI (private indexing)',
+          embeddings: 'Voyage AI (private indexing)',
           totalMemoriesOnChain: memoryStats.total,
           embeddedCount: memoryStats.embeddedCount,
         },
       });
     } catch (err) {
-      log.error({ err }, 'Venice stats endpoint error');
-      res.status(500).json({ error: 'Failed to fetch Venice stats' });
+      log.error({ err }, 'Inference stats endpoint error');
+      res.status(500).json({ error: 'Failed to fetch inference stats' });
     }
-  });
+  };
+  app.get('/api/inference-stats', handleInferenceStats);
+  app.get('/api/venice-stats', handleInferenceStats); // backward compat
 
   // Memory stats API (for frontend cortex visualization)
   app.get('/api/memory-stats', async (req: Request, res: Response) => {
@@ -499,7 +503,7 @@ export function createServer(): express.Application {
   // Agent Dashboard (orchestration & monitoring)
   app.use('/api/dashboard', dashboardRoutes());
 
-  // Chat API (memory-augmented chat with Venice AI inference)
+  // Chat API (memory-augmented chat with OpenRouter inference)
   app.use('/api/chat', chatRoutes());
 
   // Chat billing: balance, top-up confirmation, history
@@ -726,8 +730,8 @@ export function createServer(): express.Application {
       const owner = getRequestOwner(req);
       if (!owner) { res.status(401).json({ error: 'Authentication required' }); return; }
 
-      const veniceApiKey = process.env.VENICE_API_KEY;
-      if (!veniceApiKey) { res.status(500).json({ error: 'Venice API not configured' }); return; }
+      const openrouterApiKey = process.env.OPENROUTER_API_KEY;
+      if (!openrouterApiKey) { res.status(500).json({ error: 'OpenRouter API not configured' }); return; }
 
       // Paginate all memories
       const db = getDb();
@@ -783,14 +787,14 @@ export function createServer(): express.Application {
 
       const targetName = targetProvider === 'chatgpt' ? 'ChatGPT' : targetProvider === 'gemini' ? 'Gemini' : 'Claude';
 
-      const veniceRes = await fetch('https://api.venice.ai/api/v1/chat/completions', {
+      const llmRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${veniceApiKey}`,
+          'Authorization': `Bearer ${openrouterApiKey}`,
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
+          model: 'anthropic/claude-sonnet-4-6',
           messages: [
             { role: 'system', content: 'You are an expert at synthesizing information into structured context documents.' },
             { role: 'user', content: `Analyze this user's ${allMemories.length} memories (${typeCounts}) and create a comprehensive context document optimized for ${targetName}.
@@ -816,14 +820,14 @@ ${sections.join('\n')}` },
         }),
       });
 
-      if (!veniceRes.ok) {
-        log.error({ status: veniceRes.status }, 'Venice synthesis failed');
+      if (!llmRes.ok) {
+        log.error({ status: llmRes.status }, 'OpenRouter synthesis failed');
         res.status(500).json({ error: 'Synthesis failed' });
         return;
       }
 
-      const veniceData = await veniceRes.json() as any;
-      const synthesis = veniceData.choices?.[0]?.message?.content;
+      const llmData = await llmRes.json() as any;
+      const synthesis = llmData.choices?.[0]?.message?.content;
       if (!synthesis) { res.status(500).json({ error: 'Empty synthesis' }); return; }
 
       res.json({

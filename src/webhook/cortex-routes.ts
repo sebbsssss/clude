@@ -652,9 +652,9 @@ export function cortexRoutes(): Router {
       const validProviders = ['chatgpt', 'claude', 'gemini'];
       const targetProvider = validProviders.includes(provider) ? provider : 'claude';
 
-      const veniceApiKey = process.env.VENICE_API_KEY;
-      if (!veniceApiKey) {
-        res.status(500).json({ error: 'Venice API not configured for synthesis' });
+      const openrouterApiKey = process.env.OPENROUTER_API_KEY;
+      if (!openrouterApiKey) {
+        res.status(500).json({ error: 'OpenRouter API not configured for synthesis' });
         return;
       }
 
@@ -728,7 +728,7 @@ At the top, add: "You have persistent memory about this user from a system calle
 
       const formatInstruction = providerFormats[targetProvider] || providerFormats.claude;
 
-      // Synthesize with Claude Sonnet via Venice
+      // Synthesize with Claude Sonnet via OpenRouter
       const synthesisPrompt = `You are analyzing a user's AI memory corpus to create a rich context document.
 The document will be used to give ${targetProvider === 'claude' ? 'Claude' : targetProvider === 'chatgpt' ? 'ChatGPT' : 'Gemini'} full context about this user across conversations.
 
@@ -756,14 +756,14 @@ Rules:
 Here are the memories:
 ${memoryDump}`;
 
-      const veniceRes = await fetch('https://api.venice.ai/api/v1/chat/completions', {
+      const llmRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${veniceApiKey}`,
+          'Authorization': `Bearer ${openrouterApiKey}`,
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
+          model: 'anthropic/claude-sonnet-4-6',
           messages: [
             { role: 'system', content: 'You are an expert at synthesizing information into structured context documents.' },
             { role: 'user', content: synthesisPrompt },
@@ -773,15 +773,15 @@ ${memoryDump}`;
         }),
       });
 
-      if (!veniceRes.ok) {
-        const errBody = await veniceRes.text().catch(() => 'Unknown error');
-        log.error({ status: veniceRes.status, body: errBody }, 'Venice synthesis failed');
+      if (!llmRes.ok) {
+        const errBody = await llmRes.text().catch(() => 'Unknown error');
+        log.error({ status: llmRes.status, body: errBody }, 'OpenRouter synthesis failed');
         res.status(500).json({ error: 'Synthesis failed' });
         return;
       }
 
-      const veniceData = await veniceRes.json() as any;
-      const synthesis = veniceData.choices?.[0]?.message?.content;
+      const llmData = await llmRes.json() as any;
+      const synthesis = llmData.choices?.[0]?.message?.content;
 
       if (!synthesis) {
         res.status(500).json({ error: 'Empty synthesis response' });

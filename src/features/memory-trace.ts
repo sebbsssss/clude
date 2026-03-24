@@ -10,7 +10,7 @@
 import { getDb } from '../core/database';
 import { scopeToOwner } from '../core/memory';
 import { generateResponse } from '../core/claude-client';
-import type { CognitiveFunction } from '../core/venice-client';
+import type { CognitiveFunction } from '../core/openrouter-client';
 import { createChildLogger } from '../core/logger';
 
 const log = createChildLogger('memory-trace');

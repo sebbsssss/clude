@@ -30,7 +30,7 @@ import { writeMemo, isRegistryEnabled, registerMemoryOnChain } from './solana-cl
 import { generateEmbedding, generateQueryEmbedding, generateEmbeddings, isEmbeddingEnabled } from './embeddings';
 import { getExperimentalConfig } from '../experimental/config';
 import { bm25SearchMemories } from '../experimental/bm25-search';
-import { generateVeniceResponse, isVeniceEnabled } from './venice-client';
+import { generateOpenRouterResponse, isOpenRouterEnabled } from './openrouter-client';
 import { isEncryptionEnabled, getEncryptionPubkey, encryptContent, decryptMemoryBatch } from './encryption';
 import { eventBus } from '../events/event-bus';
 
@@ -486,14 +486,14 @@ async function embedMemory(memoryId: number, opts: StoreMemoryOptions): Promise<
  * Falls back to just the original query if LLM is unavailable or slow.
  */
 async function expandQuery(query: string): Promise<string[]> {
-  if (!isVeniceEnabled()) return [query];
-  
+  if (!isOpenRouterEnabled()) return [query];
+
   try {
     const response = await Promise.race([
-      generateVeniceResponse({
+      generateOpenRouterResponse({
         systemPrompt: 'You are a search query expander. Given a question, output 3 alternative phrasings that would help find relevant information in a memory database. Output ONLY the 3 alternatives, one per line. No numbering, no explanations.',
         messages: [{ role: 'user', content: query }],
-        model: 'llama-3.2-3b',
+        model: 'meta-llama/llama-3.2-3b-instruct',
         maxTokens: 150,
         temperature: 0.3,
         cognitiveFunction: 'entity', // Use fast model slot
