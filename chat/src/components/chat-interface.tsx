@@ -442,7 +442,7 @@ export function ChatInterface() {
                 ref={messagesContainerRef}
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
-                className="overflow-y-auto mb-3 space-y-3 max-h-[60vh] pb-2"
+                className="overflow-y-auto mb-3 space-y-3 max-h-[60vh] pb-2 relative z-10"
               >
                 {(hasMoreMessages || loadingMore) && (
                   <div className="flex justify-center py-1">

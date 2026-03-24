@@ -227,7 +227,7 @@ export function chatRoutes(): Router {
 
   // GET /models — public, no auth, static data cached aggressively
   router.get('/models', (_req: Request, res: Response) => {
-    res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+    res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
     res.json(CHAT_MODELS);
   });
 
