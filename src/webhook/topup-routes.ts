@@ -640,12 +640,22 @@ export function topupApiRoutes(): Router {
       .eq('wallet_address', wallet)
       .single();
 
+    const promoExpiry = config.features.freePromoExpiry;
+    const promoActive = config.features.freePromoEnabled &&
+      (!promoExpiry || new Date() < new Date(promoExpiry));
+    const promoCredit = config.features.freePromoCreditUsdc;
+
     res.json({
       wallet,
       balance_usdc: data ? Number(data.balance_usdc) : 0,
       total_deposited: data ? Number(data.total_deposited) : 0,
       total_spent: data ? Number(data.total_spent) : 0,
       updated_at: data?.updated_at || null,
+      ...(promoActive && {
+        promo: true,
+        promoLabel: 'Free - Limited Time',
+        promo_credit_usdc: promoCredit,
+      }),
     });
   });
 

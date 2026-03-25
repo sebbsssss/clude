@@ -63,6 +63,20 @@ function createUsdcTransferInstruction(
   });
 }
 
+/** Returns true when the error was a user-initiated wallet rejection (not a network/code error) */
+function isWalletRejection(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const e = err as { code?: number; message?: string };
+  const msg = (e.message ?? '').toLowerCase();
+  return (
+    e.code === 4001 ||
+    msg.includes('user rejected') ||
+    msg.includes('user cancelled') ||
+    msg.includes('transaction cancelled') ||
+    msg.includes('rejected the request')
+  );
+}
+
 async function buildSolanaUsdcTx(senderAddress: string, destAddress: string, amountUsdc: number): Promise<Uint8Array> {
   const conn = new Connection(SOLANA_RPC, 'confirmed');
   const { blockhash } = await conn.getLatestBlockhash('confirmed');
@@ -90,7 +104,8 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
   const [errorMsg, setErrorMsg] = useState('');
   const [txHash, setTxHash] = useState('');
   const [copied, setCopied] = useState(false);
-  const [payMethod, setPayMethod] = useState<PayMethod>(isMobileDevice() ? 'wallet' : 'qr');
+  const [payMethod, setPayMethod] = useState<PayMethod>('qr');
+  const [walletRejected, setWalletRejected] = useState(false);
   const [solanaPayUrl, setSolanaPayUrl] = useState('');
   const [intentId, setIntentId] = useState('');
   const qrRef = useRef<HTMLDivElement>(null);
@@ -112,6 +127,7 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
     setTxState('idle');
     setErrorMsg('');
     setTxHash('');
+    setWalletRejected(false);
     setSolanaPayUrl('');
     setIntentId('');
     onClose();
@@ -121,9 +137,12 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
     setIsCustom(false);
     setSelectedAmount(amt);
     setCustomAmount('');
-    // Reset QR state when amount changes
+    // Reset QR/error state when amount changes
     setSolanaPayUrl('');
     setIntentId('');
+    setWalletRejected(false);
+    setErrorMsg('');
+    if (txState === 'error') setTxState('idle');
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
   };
 
@@ -197,6 +216,7 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
 
     setTxState('building');
     setErrorMsg('');
+    setWalletRejected(false);
 
     try {
       // 1. Create intent on backend
@@ -205,16 +225,30 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
       // 2. Build unsigned transaction
       const txBytes = await buildSolanaUsdcTx(walletAddress, intent.dest_address, effectiveAmount);
 
-      // 3. Sign & send via Privy wallet
+      // 3. Sign & send via Privy wallet — isolated catch so rejection never bleeds into confirm error
       setTxState('signing');
-      const { signature } = await wallet.signAndSendTransaction({
-        transaction: txBytes,
-        chain: 'solana:mainnet',
-      });
+      let signature: Uint8Array;
+      try {
+        ({ signature } = await wallet.signAndSendTransaction({
+          transaction: txBytes,
+          chain: 'solana:mainnet',
+        }));
+      } catch (sigErr: unknown) {
+        if (isWalletRejection(sigErr)) {
+          setWalletRejected(true);
+          setErrorMsg('Your wallet blocked this transaction. Try the QR code instead.');
+        } else {
+          const e = sigErr as { message?: string };
+          setErrorMsg(e?.message ?? 'Signing failed. Please try again.');
+        }
+        setTxState('error');
+        return; // Never call /topup/confirm when signing fails
+      }
+
       const hash = bs58.encode(signature);
       setTxHash(hash);
 
-      // 4. Confirm with backend
+      // 4. Confirm with backend (only reached when signing succeeded)
       setTxState('confirming');
       await api.confirmTopup(hash, intent.id);
 
@@ -400,9 +434,24 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
 
                 {/* Error */}
                 {txState === 'error' && (
-                  <div className="mb-4 flex items-start gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
-                    <AlertCircle className="h-3.5 w-3.5 text-red-400 shrink-0 mt-0.5" />
-                    <p className="text-[11px] text-red-400">{errorMsg}</p>
+                  <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="h-3.5 w-3.5 text-red-400 shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-red-400">{errorMsg}</p>
+                    </div>
+                    {walletRejected && chain === 'solana' && (
+                      <button
+                        onClick={() => {
+                          setPayMethod('qr');
+                          setTxState('idle');
+                          setErrorMsg('');
+                          setWalletRejected(false);
+                        }}
+                        className="w-full py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-400 text-[11px] rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <QrCode className="h-3 w-3" /> Switch to QR Code instead
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -411,27 +460,34 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
                   <div className="space-y-3">
                     {/* Method toggle */}
                     {(txState === 'idle' || txState === 'error') && (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setPayMethod('wallet')}
-                          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors border ${
-                            payMethod === 'wallet'
-                              ? 'bg-blue-600/20 border-blue-500/50 text-blue-300'
-                              : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-zinc-300'
-                          }`}
-                        >
-                          <Smartphone className="h-3 w-3" /> Wallet
-                        </button>
-                        <button
-                          onClick={() => setPayMethod('qr')}
-                          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors border ${
-                            payMethod === 'qr'
-                              ? 'bg-blue-600/20 border-blue-500/50 text-blue-300'
-                              : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-zinc-300'
-                          }`}
-                        >
-                          <QrCode className="h-3 w-3" /> QR Code
-                        </button>
+                      <div className="space-y-2">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setPayMethod('qr')}
+                            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors border ${
+                              payMethod === 'qr'
+                                ? 'bg-blue-600/20 border-blue-500/50 text-blue-300'
+                                : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-zinc-300'
+                            }`}
+                          >
+                            <QrCode className="h-3 w-3" /> QR Code
+                          </button>
+                          <button
+                            onClick={() => setPayMethod('wallet')}
+                            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors border ${
+                              payMethod === 'wallet'
+                                ? 'bg-blue-600/20 border-blue-500/50 text-blue-300'
+                                : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-zinc-300'
+                            }`}
+                          >
+                            <Smartphone className="h-3 w-3" /> Wallet
+                          </button>
+                        </div>
+                        {payMethod === 'qr' && (
+                          <p className="text-[10px] text-zinc-500">
+                            Scan with your mobile wallet app — works even if your browser wallet is blocked.
+                          </p>
+                        )}
                       </div>
                     )}
 

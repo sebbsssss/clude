@@ -40,6 +40,7 @@ vi.mock('../../config', () => ({
       treasuryAddress: 'TREASURY111111111111111111111111111111111111',
     },
     privy: { appId: null, jwksUrl: null },
+    features: { freePromoEnabled: false, freePromoCreditUsdc: 5, freePromoExpiry: '' },
   },
 }));
 
@@ -72,12 +73,14 @@ function chainBuilder(): any {
   });
 }
 
+const mockCheckRateLimit = vi.fn().mockResolvedValue(true);
 vi.mock('../../core/database', () => ({
   getDb: () => ({ from: () => chainBuilder() }),
-  checkRateLimit: vi.fn().mockResolvedValue(true),
+  checkRateLimit: (...args: any[]) => mockCheckRateLimit(...args),
 }));
 
 import { topupWebhookRoutes, topupApiRoutes } from '../topup-routes';
+import { config as mockConfig } from '../../config';
 
 // ---- Test infrastructure ----
 
@@ -365,6 +368,76 @@ describe('GET /api/chat/balance — user balance', () => {
     expect(r.body.total_deposited).toBe(20.0);
     expect(r.body.total_spent).toBe(7.5);
   });
+
+  it('returns promo fields when FREE_PROMO_ENABLED=true', async () => {
+    mockConfig.features.freePromoEnabled = true;
+    try {
+      mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
+      mockDbQueue.push({ data: null, error: null }); // SELECT — no record
+      const r = await req(server, 'GET', '/api/chat/balance', { headers: CORTEX_AUTH });
+      expect(r.status).toBe(200);
+      expect(r.body.promo).toBe(true);
+      expect(r.body.promoLabel).toBe('Free - Limited Time');
+      expect(r.body.promo_credit_usdc).toBe(5);
+    } finally {
+      mockConfig.features.freePromoEnabled = false;
+    }
+  });
+
+  it('omits promo fields when FREE_PROMO_ENABLED=false', async () => {
+    mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
+    mockDbQueue.push({ data: null, error: null }); // SELECT — no record
+    const r = await req(server, 'GET', '/api/chat/balance', { headers: CORTEX_AUTH });
+    expect(r.status).toBe(200);
+    expect(r.body.promo).toBeUndefined();
+    expect(r.body.promoLabel).toBeUndefined();
+    expect(r.body.promo_credit_usdc).toBeUndefined();
+  });
+
+  it('omits promo fields when enabled but expired', async () => {
+    mockConfig.features.freePromoEnabled = true;
+    mockConfig.features.freePromoExpiry = '2020-01-01T00:00:00Z'; // past date
+    try {
+      mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
+      mockDbQueue.push({ data: null, error: null });
+      const r = await req(server, 'GET', '/api/chat/balance', { headers: CORTEX_AUTH });
+      expect(r.status).toBe(200);
+      expect(r.body.promo).toBeUndefined();
+    } finally {
+      mockConfig.features.freePromoEnabled = false;
+      mockConfig.features.freePromoExpiry = '';
+    }
+  });
+
+  it('returns promo fields when enabled and not yet expired', async () => {
+    mockConfig.features.freePromoEnabled = true;
+    mockConfig.features.freePromoExpiry = '2099-12-31T23:59:59Z'; // far future
+    try {
+      mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
+      mockDbQueue.push({ data: null, error: null });
+      const r = await req(server, 'GET', '/api/chat/balance', { headers: CORTEX_AUTH });
+      expect(r.status).toBe(200);
+      expect(r.body.promo).toBe(true);
+      expect(r.body.promo_credit_usdc).toBe(5);
+    } finally {
+      mockConfig.features.freePromoEnabled = false;
+      mockConfig.features.freePromoExpiry = '';
+    }
+  });
+
+  it('returns promo fields when enabled and no expiry set (never expires)', async () => {
+    mockConfig.features.freePromoEnabled = true;
+    mockConfig.features.freePromoExpiry = '';
+    try {
+      mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
+      mockDbQueue.push({ data: null, error: null });
+      const r = await req(server, 'GET', '/api/chat/balance', { headers: CORTEX_AUTH });
+      expect(r.status).toBe(200);
+      expect(r.body.promo).toBe(true);
+    } finally {
+      mockConfig.features.freePromoEnabled = false;
+    }
+  });
 });
 
 // ---- API Routes — Topup History ----
@@ -647,5 +720,349 @@ describe('CLU-166 Security regression: unverified /topup/confirm endpoint', () =
     expect(r.status).toBe(200);
     // The verified path uses RPC-determined amount (1.0), not the client-supplied 999
     expect(r.body.amount_usdc).toBe(1.0);
+  });
+});
+
+// ---- Solana Pay Intent Creation ----
+
+describe('POST /api/chat/topup/intent — Solana Pay intent', () => {
+  let server: http.Server;
+  beforeAll(async () => { server = await startServer(createApiApp()); });
+  afterAll(async () => stopServer(server));
+  beforeEach(() => {
+    mockDbQueue.length = 0;
+    mockAuthenticateAgent.mockReset();
+    mockCheckRateLimit.mockResolvedValue(true);
+  });
+
+  it('returns 401 for unauthenticated request', async () => {
+    const r = await req(server, 'POST', '/api/chat/topup/intent', { body: { amount_usdc: 10 } });
+    expect(r.status).toBe(401);
+  });
+
+  it('returns 400 when amount_usdc is missing', async () => {
+    mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
+    const r = await req(server, 'POST', '/api/chat/topup/intent', {
+      headers: CORTEX_AUTH,
+      body: {},
+    });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/amount_usdc/i);
+  });
+
+  it('returns 400 when amount_usdc < 1 (minimum enforcement)', async () => {
+    mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
+    const r = await req(server, 'POST', '/api/chat/topup/intent', {
+      headers: CORTEX_AUTH,
+      body: { amount_usdc: 0.5 },
+    });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/minimum/i);
+  });
+
+  it('returns 400 when amount_usdc is 0', async () => {
+    mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
+    const r = await req(server, 'POST', '/api/chat/topup/intent', {
+      headers: CORTEX_AUTH,
+      body: { amount_usdc: 0 },
+    });
+    expect(r.status).toBe(400);
+  });
+
+  it('returns 429 when rate limit exceeded', async () => {
+    mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
+    mockCheckRateLimit.mockResolvedValueOnce(false);
+    const r = await req(server, 'POST', '/api/chat/topup/intent', {
+      headers: CORTEX_AUTH,
+      body: { amount_usdc: 10 },
+    });
+    expect(r.status).toBe(429);
+    expect(r.body.error).toMatch(/too many/i);
+  });
+
+  it('returns 500 on DB insert error', async () => {
+    mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
+    mockDbQueue.push({ data: null, error: { message: 'insert error' } });
+    const r = await req(server, 'POST', '/api/chat/topup/intent', {
+      headers: CORTEX_AUTH,
+      body: { amount_usdc: 5 },
+    });
+    expect(r.status).toBe(500);
+  });
+
+  it('creates intent and returns Solana Pay URL with correct format', async () => {
+    mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
+    const fakeReference = '9Mbn3wJrNxFfJvM2PiHGKMTnqQF3nVvUHF1PPKJxYa5m';
+    mockDbQueue.push({
+      data: {
+        id: 'intent-uuid-123',
+        wallet_address: AGENT_MOCK.owner_wallet,
+        amount_usdc: '10',
+        chain: 'solana',
+        reference: fakeReference,
+      },
+      error: null,
+    });
+    const r = await req(server, 'POST', '/api/chat/topup/intent', {
+      headers: CORTEX_AUTH,
+      body: { amount_usdc: 10 },
+    });
+    expect(r.status).toBe(200);
+    expect(r.body.id).toBe('intent-uuid-123');
+    expect(r.body.amount_usdc).toBe(10);
+    expect(r.body.dest_address).toBe(TREASURY);
+    expect(r.body.chain).toBe('solana');
+    // Solana Pay URL format: solana:<treasury>?amount=<n>&spl-token=<mint>&reference=<ref>&memo=<wallet>
+    expect(r.body.solana_pay_url).toMatch(/^solana:/);
+    expect(r.body.solana_pay_url).toContain(TREASURY);
+    expect(r.body.solana_pay_url).toContain(`amount=10`);
+    expect(r.body.solana_pay_url).toContain(`spl-token=${USDC_MINT}`);
+    expect(r.body.reference).toBeTruthy();
+  });
+
+  it('defaults chain to solana when not specified', async () => {
+    mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
+    mockDbQueue.push({
+      data: { id: 'intent-2', wallet_address: AGENT_MOCK.owner_wallet, amount_usdc: '5', chain: 'solana', reference: 'ref123' },
+      error: null,
+    });
+    const r = await req(server, 'POST', '/api/chat/topup/intent', {
+      headers: CORTEX_AUTH,
+      body: { amount_usdc: 5 },
+    });
+    expect(r.status).toBe(200);
+    expect(r.body.chain).toBe('solana');
+  });
+});
+
+// ---- /topup/confirm with intent_id (reference-based path) ----
+
+describe('POST /api/chat/topup/confirm — intent_id path', () => {
+  let server: http.Server;
+  beforeAll(async () => { server = await startServer(createApiApp()); });
+  afterAll(async () => stopServer(server));
+  beforeEach(() => {
+    mockDbQueue.length = 0;
+    mockAuthenticateAgent.mockReset();
+    mockGetParsedTransaction.mockReset();
+    mockCheckRateLimit.mockResolvedValue(true);
+  });
+
+  it('returns 404 when intent_id not found', async () => {
+    mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
+    mockDbQueue.push({ data: null, error: null }); // SELECT intent — not found
+    const r = await req(server, 'POST', '/api/chat/topup/confirm', {
+      headers: CORTEX_AUTH,
+      body: { tx_hash: VALID_TX_HASH, intent_id: 'nonexistent-intent' },
+    });
+    expect(r.status).toBe(404);
+    expect(r.body.error).toMatch(/intent not found/i);
+  });
+
+  it('returns already_confirmed when intent already confirmed', async () => {
+    mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
+    mockDbQueue.push({
+      data: { id: 'intent-1', status: 'confirmed', amount_usdc: '10.00', reference: 'ref123', wallet_address: AGENT_MOCK.owner_wallet },
+      error: null,
+    });
+    const r = await req(server, 'POST', '/api/chat/topup/confirm', {
+      headers: CORTEX_AUTH,
+      body: { tx_hash: VALID_TX_HASH, intent_id: 'intent-1' },
+    });
+    expect(r.status).toBe(200);
+    expect(r.body.status).toBe('already_confirmed');
+    expect(r.body.amount_usdc).toBe(10.0);
+  });
+
+  it('returns 400 when RPC verification fails for intent path', async () => {
+    mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
+    mockDbQueue.push({
+      data: { id: 'intent-1', status: 'pending', amount_usdc: '10.00', reference: 'ref123', wallet_address: AGENT_MOCK.owner_wallet },
+      error: null,
+    });
+    mockGetParsedTransaction.mockResolvedValueOnce(null); // not found on chain
+    const r = await req(server, 'POST', '/api/chat/topup/confirm', {
+      headers: CORTEX_AUTH,
+      body: { tx_hash: VALID_TX_HASH, intent_id: 'intent-1' },
+    });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/not found|not confirmed/i);
+  });
+
+  it('returns 500 on DB update error for intent', async () => {
+    mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
+    // SELECT intent — found pending
+    mockDbQueue.push({
+      data: { id: 'intent-1', status: 'pending', amount_usdc: '5.00', reference: 'ref123', wallet_address: AGENT_MOCK.owner_wallet },
+      error: null,
+    });
+    // RPC valid
+    mockGetParsedTransaction.mockResolvedValueOnce({
+      meta: {
+        err: null,
+        preTokenBalances: [],
+        postTokenBalances: [{ owner: TREASURY, mint: USDC_MINT, uiTokenAmount: { uiAmount: 5.0 } }],
+      },
+      transaction: { message: { accountKeys: [{ pubkey: { toString: () => 'Sender' } }] } },
+    });
+    // UPDATE intent — fails
+    mockDbQueue.push({ data: null, error: { message: 'update failed' } });
+    const r = await req(server, 'POST', '/api/chat/topup/confirm', {
+      headers: CORTEX_AUTH,
+      body: { tx_hash: VALID_TX_HASH, intent_id: 'intent-1' },
+    });
+    expect(r.status).toBe(500);
+  });
+
+  it('confirms intent and credits balance via intent_id path', async () => {
+    mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
+    // SELECT intent — found pending
+    mockDbQueue.push({
+      data: { id: 'intent-1', status: 'pending', amount_usdc: '10.00', reference: 'ref123', wallet_address: AGENT_MOCK.owner_wallet },
+      error: null,
+    });
+    // RPC verification returns $10
+    mockGetParsedTransaction.mockResolvedValueOnce({
+      meta: {
+        err: null,
+        preTokenBalances: [],
+        postTokenBalances: [{ owner: TREASURY, mint: USDC_MINT, uiTokenAmount: { uiAmount: 10.0 } }],
+      },
+      transaction: { message: { accountKeys: [{ pubkey: { toString: () => 'SenderWallet' } }] } },
+    });
+    // UPDATE intent — success
+    mockDbQueue.push({ data: null, error: null });
+    // creditBalanceOnly: SELECT balance — not found
+    mockDbQueue.push({ data: null, error: null });
+    // creditBalanceOnly: INSERT balance — success
+    mockDbQueue.push({ data: null, error: null });
+
+    const r = await req(server, 'POST', '/api/chat/topup/confirm', {
+      headers: CORTEX_AUTH,
+      body: { tx_hash: VALID_TX_HASH, intent_id: 'intent-1' },
+    });
+    expect(r.status).toBe(200);
+    expect(r.body.status).toBe('confirmed');
+    expect(r.body.amount_usdc).toBe(10.0);
+    expect(r.body.credited_to).toBe(AGENT_MOCK.owner_wallet);
+    expect(r.body.balance_usdc).toBe(10.0);
+  });
+});
+
+// ---- Rate limiting on /topup/confirm ----
+
+describe('POST /api/chat/topup/confirm — rate limiting', () => {
+  let server: http.Server;
+  beforeAll(async () => { server = await startServer(createApiApp()); });
+  afterAll(async () => stopServer(server));
+  beforeEach(() => {
+    mockDbQueue.length = 0;
+    mockAuthenticateAgent.mockReset();
+    mockCheckRateLimit.mockResolvedValue(true);
+  });
+
+  it('returns 429 when rate limit exceeded on confirm', async () => {
+    mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
+    mockCheckRateLimit.mockResolvedValueOnce(false);
+    const r = await req(server, 'POST', '/api/chat/topup/confirm', {
+      headers: CORTEX_AUTH,
+      body: { tx_hash: VALID_TX_HASH },
+    });
+    expect(r.status).toBe(429);
+    expect(r.body.error).toMatch(/too many/i);
+  });
+});
+
+// ---- Reference-based Helius webhook matching ----
+
+describe('POST /webhook/helius/usdc — reference-based intent matching', () => {
+  let server: http.Server;
+  beforeAll(async () => { server = await startServer(createWebhookApp()); });
+  afterAll(async () => stopServer(server));
+  beforeEach(() => { mockDbQueue.length = 0; });
+
+  const REFERENCE_KEY = '9Mbn3wJrNxFfJvM2PiHGKMTnqQF3nVvUHF1PPKJxYa5m';
+
+  it('credits via reference match when accountData contains the reference key', async () => {
+    // Reference-based path DB calls:
+    // 1. SELECT pending intents
+    // 2. UPDATE intent to confirmed
+    // 3. creditBalanceOnly: SELECT balance — not found
+    // 4. creditBalanceOnly: INSERT balance
+    mockDbQueue.push({
+      data: [{ id: 'intent-1', wallet_address: 'UserWalletABC', reference: REFERENCE_KEY }],
+      error: null,
+    });
+    mockDbQueue.push({ data: null, error: null }); // UPDATE intent
+    mockDbQueue.push({ data: null, error: null }); // SELECT balance — not found
+    mockDbQueue.push({ data: null, error: null }); // INSERT balance
+
+    const r = await req(server, 'POST', '/webhook/helius/usdc', {
+      headers: { Authorization: WEBHOOK_SECRET },
+      body: [
+        {
+          signature: VALID_TX_HASH,
+          tokenTransfers: [{ fromUserAccount: 'SomeFeePayer', toUserAccount: TREASURY, mint: USDC_MINT, tokenAmount: 10 }],
+          transactionError: null,
+          accountData: [
+            { account: 'someOtherAccount' },
+            { account: REFERENCE_KEY }, // reference key in accountData
+          ],
+        },
+      ],
+    });
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ ok: true, credited: 1, skipped: 0 });
+  });
+
+  it('falls back to fee-payer credit when no matching reference found', async () => {
+    // accountData has accounts, but none match a pending intent
+    // 1. SELECT pending intents — returns intents with different references
+    mockDbQueue.push({
+      data: [{ id: 'intent-99', wallet_address: 'OtherWallet', reference: 'DifferentReference11111111111111111111111111' }],
+      error: null,
+    });
+    // Fallback: creditBalance for fee-payer
+    // 2. INSERT topup — success
+    mockDbQueue.push({ data: null, error: null });
+    // 3. SELECT balance — not found
+    mockDbQueue.push({ data: null, error: null });
+    // 4. INSERT balance
+    mockDbQueue.push({ data: null, error: null });
+
+    const r = await req(server, 'POST', '/webhook/helius/usdc', {
+      headers: { Authorization: WEBHOOK_SECRET },
+      body: [
+        {
+          signature: VALID_TX_HASH,
+          tokenTransfers: [{ fromUserAccount: 'FeePayer', toUserAccount: TREASURY, mint: USDC_MINT, tokenAmount: 5 }],
+          transactionError: null,
+          accountData: [{ account: 'NotMatchingRef1111111111111111111111111111' }],
+        },
+      ],
+    });
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ ok: true, credited: 1, skipped: 0 });
+  });
+
+  it('uses fee-payer fallback when no accountData present', async () => {
+    // No accountData → skip reference lookup, go straight to fee-payer creditBalance
+    mockDbQueue.push({ data: null, error: null }); // INSERT topup
+    mockDbQueue.push({ data: null, error: null }); // SELECT balance — not found
+    mockDbQueue.push({ data: null, error: null }); // INSERT balance
+
+    const r = await req(server, 'POST', '/webhook/helius/usdc', {
+      headers: { Authorization: WEBHOOK_SECRET },
+      body: [
+        {
+          signature: VALID_TX_HASH,
+          tokenTransfers: [{ fromUserAccount: 'FeePayer', toUserAccount: TREASURY, mint: USDC_MINT, tokenAmount: 7 }],
+          transactionError: null,
+          // no accountData field
+        },
+      ],
+    });
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ ok: true, credited: 1, skipped: 0 });
   });
 });

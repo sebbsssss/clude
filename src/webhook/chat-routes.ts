@@ -405,8 +405,11 @@ export function chatRoutes(): Router {
 
       const { apiKey, agentId, isNew } = await findOrCreateAgentForWallet(wallet);
 
-      // Auto-credit promo balance for new users
-      if (isNew && config.features.freePromoEnabled) {
+      // Auto-credit promo balance for new users (respects expiry)
+      const promoExpiry = config.features.freePromoExpiry;
+      const promoActive = config.features.freePromoEnabled &&
+        (!promoExpiry || new Date() < new Date(promoExpiry));
+      if (isNew && promoActive) {
         const promoCredit = config.features.freePromoCreditUsdc;
         const db = getDb();
         const { error: creditErr } = await db

@@ -8,6 +8,7 @@ import { useAuthContext } from "../hooks/AuthContext"
 import { useChat, type ChatMessage, type MessageTokens, type GreetingMeta } from "../hooks/useChat"
 import { useConversations } from "../hooks/useConversations"
 import { useMemory } from "../hooks/useMemory"
+import { useBalance } from "../hooks/useBalance"
 import { Sidebar } from "./Sidebar"
 import { ModelSelector } from "./ModelSelector"
 import { ChatHeader } from "./ChatHeader"
@@ -15,6 +16,7 @@ import { GuestRateLimit } from "./GuestRateLimit"
 import { MemoryPills } from "./MemoryPills"
 import { CostComparison } from "./CostComparison"
 import { Markdown } from "./Markdown"
+import { PromoSlideout } from "./PromoSlideout"
 
 const MODEL_STORAGE_KEY = "chat_selected_model"
 
@@ -225,6 +227,7 @@ function ReceiptBadge({ message, onOpenComparison, onOpenHistory }: { message: C
 export function ChatInterface() {
   const { authenticated } = useAuthContext()
   const { messages, streaming, guestRemaining, balance, error, sendMessage, stopStreaming, clearMessages, loadMessages, prependMessages, fetchGreeting } = useChat()
+  const { balance: balanceInfo } = useBalance()
   const greetedRef = useRef(false)
   const { conversations, activeId, hasMoreMessages, createConversation, selectConversation, loadMoreMessages, deleteConversation, refreshTitle, setActiveId } = useConversations()
   const { stats, recent, importPack } = useMemory()
@@ -756,6 +759,8 @@ export function ChatInterface() {
       <CostComparison open={showCostModal} onClose={() => setShowCostModal(false)} />
       {/* Transaction history modal */}
       <TransactionHistory open={showTransactions} onClose={() => setShowTransactions(false)} messages={messages} />
+      {/* First-time promo slideout — shows once per device for signed-in users with an active promo */}
+      <PromoSlideout show={authenticated && !!balanceInfo?.promo} />
     </div>
   )
 }

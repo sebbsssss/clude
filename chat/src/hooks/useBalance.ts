@@ -5,6 +5,8 @@ import { api } from '../lib/api';
 export interface Balance {
   balance_usdc: number;
   wallet_address: string;
+  promo?: boolean;
+  promo_credit_usdc?: number;
 }
 
 export function useBalance() {
