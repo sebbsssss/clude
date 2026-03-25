@@ -48,11 +48,11 @@ export const OPENROUTER_MODELS = {
   // Frontier (Anthropic)
   'claude-opus-4.6': 'anthropic/claude-opus-4.6',
   'claude-sonnet-4.6': 'anthropic/claude-sonnet-4.6',
-  'claude-opus-4.5': 'anthropic/claude-opus-4-5-20250514',
-  'claude-sonnet-4.5': 'anthropic/claude-sonnet-4-5-20250514',
+  'claude-opus-4.5': 'anthropic/claude-opus-4.5',
+  'claude-sonnet-4.5': 'anthropic/claude-sonnet-4.5',
 
   // Frontier (Other providers)
-  'gpt-5.2': 'openai/gpt-5.2',
+  'gpt-5.4': 'openai/gpt-5.4',
   'grok-4.1': 'x-ai/grok-4.1-fast',
   'gemini-3-pro': 'google/gemini-3-pro-preview',
   'deepseek-v3.2': 'deepseek/deepseek-chat-v3-0324',
@@ -63,16 +63,16 @@ export const OPENROUTER_MODELS = {
 
   // General
   'llama-70b': 'meta-llama/llama-3.3-70b-instruct',
-  'qwen-235b': 'qwen/qwen3-235b-a22b-instruct',
-  'glm-4': 'zhipuai/glm-4-plus',
+  'qwen-235b': 'qwen/qwen3-235b-a22b',
+  'glm-4': 'z-ai/glm-4.5',
 
   // Fast
   'llama-3b': 'meta-llama/llama-3.2-3b-instruct',
-  'qwen-4b': 'qwen/qwen3-4b',
-  'venice-medium': 'mistralai/mistral-small-3.1-24b-instruct-2503',
+  'qwen-4b': 'qwen/qwen3-4b:free',
+  'venice-medium': 'mistralai/mistral-small-3.1-24b-instruct',
 
   // Code
-  'qwen-coder': 'qwen/qwen3-coder-480b-a35b-instruct',
+  'qwen-coder': 'qwen/qwen3-coder',
 
   // Uncensored — no direct equivalent; use llama-70b as fallback
   'venice-uncensored': 'meta-llama/llama-3.3-70b-instruct',

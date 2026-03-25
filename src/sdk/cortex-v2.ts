@@ -46,7 +46,7 @@ const DEFAULT_ROUTES: RouterConfig = {
     embed: { provider: 'voyage', model: 'voyage-4-large' },
     consolidate: { provider: 'anthropic', model: 'claude-sonnet-4-20250514' },
     reflect: { provider: 'anthropic', model: 'claude-sonnet-4-20250514' },
-    emerge: { provider: 'openrouter', model: 'qwen/qwen3-coder-480b-a35b-instruct' },
+    emerge: { provider: 'openrouter', model: 'qwen/qwen3-coder' },
     classify: { provider: 'openrouter', model: 'meta-llama/llama-3.2-3b-instruct' },
     summarize: { provider: 'openrouter', model: 'meta-llama/llama-3.2-3b-instruct' },
   },
