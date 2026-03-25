@@ -40,7 +40,7 @@ vi.mock('../../config', () => ({
       treasuryAddress: 'TREASURY111111111111111111111111111111111111',
     },
     privy: { appId: null, jwksUrl: null },
-    features: { freePromoEnabled: false, freePromoCreditUsdc: 5, freePromoExpiry: '' },
+    features: { freePromoEnabled: false, freePromoCreditUsdc: 1, freePromoExpiry: '' },
   },
 }));
 
@@ -381,7 +381,7 @@ describe('GET /api/chat/balance — user balance', () => {
       expect(r.status).toBe(200);
       expect(r.body.promo).toBe(true);
       expect(r.body.promoLabel).toBe('Free - Limited Time');
-      expect(r.body.promo_credit_usdc).toBe(5);
+      expect(r.body.promo_credit_usdc).toBe(1);
     } finally {
       mockConfig.features.freePromoEnabled = false;
     }
@@ -421,7 +421,7 @@ describe('GET /api/chat/balance — user balance', () => {
       const r = await req(server, 'GET', '/api/chat/balance', { headers: CORTEX_AUTH });
       expect(r.status).toBe(200);
       expect(r.body.promo).toBe(true);
-      expect(r.body.promo_credit_usdc).toBe(5);
+      expect(r.body.promo_credit_usdc).toBe(1);
     } finally {
       mockConfig.features.freePromoEnabled = false;
       mockConfig.features.freePromoExpiry = '';

@@ -55,7 +55,7 @@ export function PromoSlideout({ show }: PromoSlideoutProps) {
           {/* Body */}
           <p className="text-[12px] text-zinc-300 leading-relaxed mb-3">
             As part of our launch, <span className="text-white font-medium">Clude Chat is free for a limited time.</span>{' '}
-            You have <span className="text-violet-300 font-medium">$5 of free usage</span> across all models.
+            You have <span className="text-violet-300 font-medium">$1 of free usage</span> across all models.
           </p>
 
           {/* CTA */}

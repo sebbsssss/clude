@@ -10,7 +10,7 @@ function BalanceBadge({ balance, onClick }: { balance: Balance; onClick: () => v
 
   if (balance.promo) {
     const remaining = balance.balance_usdc;
-    const total = balance.promo_credit_usdc ?? 5;
+    const total = balance.promo_credit_usdc ?? 1;
     const isEmpty = remaining <= 0;
 
     return (

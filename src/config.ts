@@ -85,7 +85,7 @@ export const config = {
     campaignEnabled: optional('CAMPAIGN_ENABLED', 'false') === 'true',
     telegramEnabled: optional('TELEGRAM_ENABLED', 'false') === 'true',
     freePromoEnabled: optional('FREE_PROMO_ENABLED', 'false') === 'true',
-    freePromoCreditUsdc: parseFloat(optional('FREE_PROMO_CREDIT_USDC', '5')),
+    freePromoCreditUsdc: parseFloat(optional('FREE_PROMO_CREDIT_USDC', '1')),
     freePromoExpiry: optional('FREE_PROMO_EXPIRY', ''),
   },
   campaign: {
