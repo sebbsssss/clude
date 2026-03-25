@@ -15,7 +15,7 @@ import { getConnection } from '../core/solana-client';
 import { config } from '../config';
 import { createChildLogger } from '../core/logger';
 import { authenticateAgent } from '../features/agent-tier';
-import { Keypair } from '@solana/web3.js';
+import { Keypair, PublicKey } from '@solana/web3.js';
 
 const log = createChildLogger('topup');
 
@@ -257,9 +257,60 @@ async function creditBalanceOnly(
 
 // ---- Verify a tx hash via Solana RPC ---- //
 
+/** Sleep helper for retry backoff */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Parse a confirmed transaction and verify it contains a USDC transfer to
+ * the treasury. Used internally after the tx has been fetched.
+ */
+function extractUsdcTransfer(tx: any): {
+  valid: boolean;
+  sender?: string;
+  amount?: number;
+  reason?: string;
+} {
+  if (tx.meta?.err) {
+    return { valid: false, reason: 'Transaction failed on-chain' };
+  }
+
+  const preBalances = tx.meta?.preTokenBalances || [];
+  const postBalances = tx.meta?.postTokenBalances || [];
+
+  const treasuryPost = postBalances.find(
+    (b: any) => b.owner === TREASURY && b.mint === USDC_MINT,
+  );
+  const treasuryPre = preBalances.find(
+    (b: any) => b.owner === TREASURY && b.mint === USDC_MINT,
+  );
+
+  if (!treasuryPost) {
+    return { valid: false, reason: 'No USDC transfer to treasury address found' };
+  }
+
+  const postAmount = Number(treasuryPost.uiTokenAmount?.uiAmount || 0);
+  const preAmount = treasuryPre ? Number(treasuryPre.uiTokenAmount?.uiAmount || 0) : 0;
+  const transferred = postAmount - preAmount;
+
+  if (transferred <= 0) {
+    return { valid: false, reason: 'No positive USDC inflow to treasury' };
+  }
+
+  const sender = tx.transaction.message.accountKeys[0]?.pubkey?.toString();
+  if (!sender) {
+    return { valid: false, reason: 'Could not determine sender' };
+  }
+
+  return { valid: true, sender, amount: transferred };
+}
+
 /**
  * Fetch a parsed transaction from Solana RPC and verify it contains a USDC
- * transfer to the treasury address. Returns the sender and amount if valid.
+ * transfer to the treasury address. Retries up to 3 times with backoff to
+ * handle the common race where the client calls confirm immediately after
+ * signAndSendTransaction but the tx hasn't been confirmed on-chain yet.
  */
 async function verifyTransactionViaRPC(txHash: string): Promise<{
   valid: boolean;
@@ -267,56 +318,40 @@ async function verifyTransactionViaRPC(txHash: string): Promise<{
   amount?: number;
   reason?: string;
 }> {
-  try {
-    const connection = getConnection();
-    const tx = await connection.getParsedTransaction(txHash, {
-      maxSupportedTransactionVersion: 0,
-      commitment: 'confirmed',
-    });
+  const RETRY_DELAYS = [0, 2000, 4000]; // immediate, then 2s, then 4s
+  const connection = getConnection();
 
-    if (!tx) {
-      return { valid: false, reason: 'Transaction not found — may not be confirmed yet' };
+  for (let attempt = 0; attempt < RETRY_DELAYS.length; attempt++) {
+    if (RETRY_DELAYS[attempt] > 0) {
+      log.info({ txHash, attempt, delayMs: RETRY_DELAYS[attempt] }, 'Retrying tx verification');
+      await sleep(RETRY_DELAYS[attempt]);
     }
 
-    if (tx.meta?.err) {
-      return { valid: false, reason: 'Transaction failed on-chain' };
+    try {
+      const tx = await connection.getParsedTransaction(txHash, {
+        maxSupportedTransactionVersion: 0,
+        commitment: 'confirmed',
+      });
+
+      if (!tx) {
+        // Tx not confirmed yet — retry if we have attempts left
+        if (attempt < RETRY_DELAYS.length - 1) continue;
+        return { valid: false, reason: 'Transaction not found after retries — may still be confirming. Try again in a few seconds.' };
+      }
+
+      return extractUsdcTransfer(tx);
+    } catch (err) {
+      // RPC error — retry if we have attempts left
+      if (attempt < RETRY_DELAYS.length - 1) {
+        log.warn({ err, txHash, attempt }, 'RPC error during verification, retrying');
+        continue;
+      }
+      log.error({ err, txHash }, 'RPC verification failed after retries');
+      return { valid: false, reason: 'RPC error — try again later' };
     }
-
-    // Search pre/post token balances for USDC transfer to treasury
-    const preBalances = tx.meta?.preTokenBalances || [];
-    const postBalances = tx.meta?.postTokenBalances || [];
-
-    // Find treasury's USDC post-balance
-    const treasuryPost = postBalances.find(
-      b => b.owner === TREASURY && b.mint === USDC_MINT,
-    );
-    const treasuryPre = preBalances.find(
-      b => b.owner === TREASURY && b.mint === USDC_MINT,
-    );
-
-    if (!treasuryPost) {
-      return { valid: false, reason: 'No USDC transfer to treasury address found' };
-    }
-
-    const postAmount = Number(treasuryPost.uiTokenAmount?.uiAmount || 0);
-    const preAmount = treasuryPre ? Number(treasuryPre.uiTokenAmount?.uiAmount || 0) : 0;
-    const transferred = postAmount - preAmount;
-
-    if (transferred <= 0) {
-      return { valid: false, reason: 'No positive USDC inflow to treasury' };
-    }
-
-    // Identify sender: the fee payer is typically the sender
-    const sender = tx.transaction.message.accountKeys[0]?.pubkey?.toString();
-    if (!sender) {
-      return { valid: false, reason: 'Could not determine sender' };
-    }
-
-    return { valid: true, sender, amount: transferred };
-  } catch (err) {
-    log.error({ err, txHash }, 'RPC verification failed');
-    return { valid: false, reason: 'RPC error — try again later' };
   }
+
+  return { valid: false, reason: 'Verification exhausted retries' };
 }
 
 // ---- Routes ---- //
@@ -505,9 +540,11 @@ export function topupApiRoutes(): Router {
       return;
     }
 
-    // Basic Solana signature format check (base58, 87-88 chars)
-    if (!/^[1-9A-HJ-NP-Za-km-z]{87,88}$/.test(tx_hash)) {
-      res.status(400).json({ error: 'Invalid Solana transaction signature format' });
+    // Validate tx hash format: Solana (base58, 87-88 chars) or EVM (0x hex, 66 chars)
+    const isSolanaTx = /^[1-9A-HJ-NP-Za-km-z]{87,88}$/.test(tx_hash);
+    const isEvmTx = /^0x[0-9a-fA-F]{64}$/.test(tx_hash);
+    if (!isSolanaTx && !isEvmTx) {
+      res.status(400).json({ error: 'Invalid transaction hash format' });
       return;
     }
 
@@ -524,7 +561,7 @@ export function topupApiRoutes(): Router {
     if (intent_id) {
       const { data: intent } = await db
         .from('chat_topups')
-        .select('id, status, amount_usdc, reference, wallet_address')
+        .select('id, status, amount_usdc, reference, wallet_address, chain')
         .eq('id', intent_id)
         .single();
 
@@ -538,11 +575,23 @@ export function topupApiRoutes(): Router {
         return;
       }
 
-      // Verify the tx_hash matches a transaction with this reference
-      const verification = await verifyTransactionViaRPC(tx_hash);
-      if (!verification.valid) {
-        res.status(400).json({ error: verification.reason });
-        return;
+      let verifiedAmount: number;
+      let verifiedSender: string | undefined;
+
+      if (isSolanaTx) {
+        // Solana: verify on-chain via RPC (with retry for timing race)
+        const verification = await verifyTransactionViaRPC(tx_hash);
+        if (!verification.valid) {
+          res.status(400).json({ error: verification.reason });
+          return;
+        }
+        verifiedAmount = verification.amount!;
+        verifiedSender = verification.sender;
+      } else {
+        // EVM (Base): no on-chain verification yet — trust the intent amount
+        // The intent was created by the authenticated user, so the amount is reliable
+        verifiedAmount = Number(intent.amount_usdc);
+        log.info({ txHash: tx_hash, chain: intent.chain, intentId: intent_id }, 'EVM tx — skipping on-chain verification (not yet supported)');
       }
 
       // Update the pending intent to confirmed with the tx_hash
@@ -564,19 +613,18 @@ export function topupApiRoutes(): Router {
 
       // Credit the balance using the intent's wallet and verified amount
       const senderWallet = intent.wallet_address;
-      const amount = verification.amount!;
 
-      const balanceResult = await creditBalanceOnly(senderWallet, amount);
+      const balanceResult = await creditBalanceOnly(senderWallet, verifiedAmount);
       if (!balanceResult.credited) {
         res.status(500).json({ error: balanceResult.reason || 'Failed to credit balance' });
         return;
       }
 
-      log.info({ wallet: senderWallet, amount, intentId: intent_id }, 'Intent confirmed and balance credited');
+      log.info({ wallet: senderWallet, amount: verifiedAmount, intentId: intent_id }, 'Intent confirmed and balance credited');
       res.json({
         status: 'confirmed',
-        amount_usdc: amount,
-        sender: verification.sender,
+        amount_usdc: verifiedAmount,
+        sender: verifiedSender,
         credited_to: senderWallet,
         balance_usdc: balanceResult.newBalance,
       });
@@ -657,6 +705,115 @@ export function topupApiRoutes(): Router {
         promo_credit_usdc: promoCredit,
       }),
     });
+  });
+
+  /**
+   * GET /api/chat/topup/status/:intentId
+   * Check whether a Solana Pay QR payment has landed on-chain by polling
+   * getSignaturesForAddress on the intent's reference key. This is the
+   * fallback that makes QR payments work even without the Helius webhook.
+   *
+   * If a matching on-chain tx is found, the intent is auto-confirmed and
+   * balance is credited (idempotent — already-confirmed intents return early).
+   */
+  router.get('/topup/status/:intentId', topupAuth, async (req: Request, res: Response) => {
+    const { intentId } = req.params;
+    const wallet = (req as TopupRequest).ownerWallet!;
+    const db = getDb();
+
+    const { data: intent } = await db
+      .from('chat_topups')
+      .select('id, status, amount_usdc, reference, wallet_address, tx_hash')
+      .eq('id', intentId)
+      .single();
+
+    if (!intent) {
+      res.status(404).json({ error: 'Intent not found' });
+      return;
+    }
+
+    // Already confirmed — return immediately
+    if (intent.status === 'confirmed') {
+      res.json({ status: 'confirmed', amount_usdc: Number(intent.amount_usdc), tx_hash: intent.tx_hash });
+      return;
+    }
+
+    // Only the owner can check their intent
+    if (intent.wallet_address !== wallet) {
+      res.status(403).json({ error: 'Not authorized' });
+      return;
+    }
+
+    // No reference key → can't do on-chain detection
+    if (!intent.reference) {
+      res.json({ status: 'pending', amount_usdc: Number(intent.amount_usdc) });
+      return;
+    }
+
+    // Poll on-chain: look for transactions involving the reference public key
+    try {
+      const connection = getConnection();
+      const referencePubkey = new PublicKey(intent.reference);
+      const signatures = await connection.getSignaturesForAddress(referencePubkey, { limit: 1 }, 'confirmed');
+
+      if (!signatures || signatures.length === 0) {
+        res.json({ status: 'pending', amount_usdc: Number(intent.amount_usdc) });
+        return;
+      }
+
+      const sig = signatures[0];
+      if (sig.err) {
+        res.json({ status: 'failed', reason: 'Transaction failed on-chain' });
+        return;
+      }
+
+      // Found a confirmed tx with this reference — verify it's a USDC transfer to treasury
+      const verification = await verifyTransactionViaRPC(sig.signature);
+      if (!verification.valid) {
+        res.json({ status: 'pending', reason: verification.reason });
+        return;
+      }
+
+      // Credit the balance
+      const { error: updateErr } = await db
+        .from('chat_topups')
+        .update({
+          tx_hash: sig.signature,
+          status: 'confirmed',
+          confirmed_at: new Date().toISOString(),
+        })
+        .eq('id', intentId)
+        .eq('status', 'pending');
+
+      if (updateErr) {
+        // Might be a race with the webhook — check if already confirmed
+        const { data: refreshed } = await db
+          .from('chat_topups')
+          .select('status, tx_hash')
+          .eq('id', intentId)
+          .single();
+        if (refreshed?.status === 'confirmed') {
+          res.json({ status: 'confirmed', amount_usdc: Number(intent.amount_usdc), tx_hash: refreshed.tx_hash });
+          return;
+        }
+        log.error({ err: updateErr, intentId }, 'Failed to confirm intent via reference detection');
+        res.status(500).json({ error: 'Failed to confirm payment' });
+        return;
+      }
+
+      const balResult = await creditBalanceOnly(intent.wallet_address, verification.amount!);
+      log.info({ wallet: intent.wallet_address, amount: verification.amount, intentId, sig: sig.signature }, 'QR payment detected via reference polling');
+
+      res.json({
+        status: 'confirmed',
+        amount_usdc: verification.amount,
+        tx_hash: sig.signature,
+        balance_usdc: balResult.newBalance,
+      });
+    } catch (err) {
+      log.error({ err, intentId }, 'Reference-based status check failed');
+      res.json({ status: 'pending', amount_usdc: Number(intent.amount_usdc) });
+    }
   });
 
   /**

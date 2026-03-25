@@ -45,9 +45,11 @@ vi.mock('../../config', () => ({
 }));
 
 const mockGetParsedTransaction = vi.fn();
+const mockGetSignaturesForAddress = vi.fn().mockResolvedValue([]);
 vi.mock('../../core/solana-client', () => ({
   getConnection: () => ({
     getParsedTransaction: (...args: any[]) => mockGetParsedTransaction(...args),
+    getSignaturesForAddress: (...args: any[]) => mockGetSignaturesForAddress(...args),
   }),
 }));
 
@@ -555,14 +557,16 @@ describe('POST /api/chat/topup/confirm — RPC-verified top-up', () => {
   it('returns 400 when RPC cannot find the transaction', async () => {
     mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
     mockDbQueue.push({ data: null, error: null }); // SELECT — not found (no duplicate)
-    mockGetParsedTransaction.mockResolvedValueOnce(null); // tx not found on chain
+    // Must return null for all retry attempts (3 total)
+    mockGetParsedTransaction.mockResolvedValue(null);
     const r = await req(server, 'POST', '/api/chat/topup/confirm', {
       headers: CORTEX_AUTH,
       body: { tx_hash: VALID_TX_HASH },
     });
     expect(r.status).toBe(400);
-    expect(r.body.error).toMatch(/not found|not confirmed/i);
-  });
+    expect(r.body.error).toMatch(/not found|retries/i);
+    mockGetParsedTransaction.mockReset();
+  }, 15_000);
 
   it('returns 400 when on-chain tx has an error', async () => {
     mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
@@ -865,7 +869,7 @@ describe('POST /api/chat/topup/confirm — intent_id path', () => {
   it('returns already_confirmed when intent already confirmed', async () => {
     mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
     mockDbQueue.push({
-      data: { id: 'intent-1', status: 'confirmed', amount_usdc: '10.00', reference: 'ref123', wallet_address: AGENT_MOCK.owner_wallet },
+      data: { id: 'intent-1', status: 'confirmed', amount_usdc: '10.00', reference: 'ref123', wallet_address: AGENT_MOCK.owner_wallet, chain: 'solana' },
       error: null,
     });
     const r = await req(server, 'POST', '/api/chat/topup/confirm', {
@@ -880,23 +884,25 @@ describe('POST /api/chat/topup/confirm — intent_id path', () => {
   it('returns 400 when RPC verification fails for intent path', async () => {
     mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
     mockDbQueue.push({
-      data: { id: 'intent-1', status: 'pending', amount_usdc: '10.00', reference: 'ref123', wallet_address: AGENT_MOCK.owner_wallet },
+      data: { id: 'intent-1', status: 'pending', amount_usdc: '10.00', reference: 'ref123', wallet_address: AGENT_MOCK.owner_wallet, chain: 'solana' },
       error: null,
     });
-    mockGetParsedTransaction.mockResolvedValueOnce(null); // not found on chain
+    // Must return null for all retry attempts (3 total)
+    mockGetParsedTransaction.mockResolvedValue(null);
     const r = await req(server, 'POST', '/api/chat/topup/confirm', {
       headers: CORTEX_AUTH,
       body: { tx_hash: VALID_TX_HASH, intent_id: 'intent-1' },
     });
     expect(r.status).toBe(400);
-    expect(r.body.error).toMatch(/not found|not confirmed/i);
-  });
+    expect(r.body.error).toMatch(/not found|retries/i);
+    mockGetParsedTransaction.mockReset();
+  }, 15_000);
 
   it('returns 500 on DB update error for intent', async () => {
     mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
     // SELECT intent — found pending
     mockDbQueue.push({
-      data: { id: 'intent-1', status: 'pending', amount_usdc: '5.00', reference: 'ref123', wallet_address: AGENT_MOCK.owner_wallet },
+      data: { id: 'intent-1', status: 'pending', amount_usdc: '5.00', reference: 'ref123', wallet_address: AGENT_MOCK.owner_wallet, chain: 'solana' },
       error: null,
     });
     // RPC valid
@@ -921,7 +927,7 @@ describe('POST /api/chat/topup/confirm — intent_id path', () => {
     mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
     // SELECT intent — found pending
     mockDbQueue.push({
-      data: { id: 'intent-1', status: 'pending', amount_usdc: '10.00', reference: 'ref123', wallet_address: AGENT_MOCK.owner_wallet },
+      data: { id: 'intent-1', status: 'pending', amount_usdc: '10.00', reference: 'ref123', wallet_address: AGENT_MOCK.owner_wallet, chain: 'solana' },
       error: null,
     });
     // RPC verification returns $10

@@ -151,10 +151,29 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
     setSelectedAmount(null);
   };
 
-  /** Start polling balance to detect Solana Pay payment completion */
-  const startBalancePolling = useCallback((currentBal: number) => {
+  /** Start polling intent status to detect Solana Pay payment via on-chain reference detection */
+  const startStatusPolling = useCallback((currentBal: number, pollIntentId: string) => {
     if (pollRef.current) clearInterval(pollRef.current);
+    let pollCount = 0;
     pollRef.current = setInterval(async () => {
+      pollCount++;
+      // Stop after 60 polls (~3 min at 3s intervals)
+      if (pollCount > 60) {
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+        setErrorMsg('Payment not detected after 3 minutes. If you sent USDC, your balance will update shortly.');
+        setTxState('error');
+        return;
+      }
+      try {
+        const result = await api.checkTopupStatus(pollIntentId);
+        if (result.status === 'confirmed') {
+          if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+          setTxState('success');
+          onSuccess(currentBal);
+          return;
+        }
+      } catch { /* ignore poll errors */ }
+      // Fallback: also check balance directly
       try {
         const { balance_usdc } = await api.getBalance();
         if (balance_usdc > currentBal) {
@@ -162,7 +181,7 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
           setTxState('success');
           onSuccess(currentBal);
         }
-      } catch { /* ignore poll errors */ }
+      } catch { /* ignore */ }
     }, 3000);
   }, [onSuccess]);
 
@@ -191,18 +210,18 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
           }
         }, 50);
         // Poll for payment confirmation
-        startBalancePolling(currentBalance ?? 0);
+        startStatusPolling(currentBalance ?? 0, intent.id);
       } else {
         // Mobile: open deep-link
         setTxState('confirming');
         window.location.href = url;
-        startBalancePolling(currentBalance ?? 0);
+        startStatusPolling(currentBalance ?? 0, intent.id);
       }
     } catch (err: any) {
       setErrorMsg(err?.message || 'Failed to create payment. Please try again.');
       setTxState('error');
     }
-  }, [effectiveAmount, isValidAmount, payMethod, currentBalance, startBalancePolling]);
+  }, [effectiveAmount, isValidAmount, payMethod, currentBalance, startStatusPolling]);
 
   /** Direct wallet transfer via Privy (embedded wallet flow) */
   const handleSolanaWallet = useCallback(async () => {

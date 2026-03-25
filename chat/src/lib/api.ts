@@ -232,6 +232,16 @@ class ChatAPI {
     return res.json();
   }
 
+  async checkTopupStatus(intentId: string): Promise<{ status: string; amount_usdc?: number; tx_hash?: string; balance_usdc?: number }> {
+    const res = await fetch(`${API_BASE}/api/chat/topup/status/${intentId}`, {
+      headers: this.headers(),
+    });
+    if (!res.ok) {
+      throw new Error(`Status check failed (HTTP ${res.status})`);
+    }
+    return res.json();
+  }
+
   async validateKey(): Promise<boolean> {
     try {
       const res = await fetch(`${API_BASE}/api/cortex/stats`, { headers: this.headers() });
