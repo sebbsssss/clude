@@ -1,130 +1,110 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useAuthContext } from './AuthContext';
 import { api } from '../lib/api';
-import type { Message } from '../lib/types';
+import type { Message, SettledMessage, StreamingState, MessageCost, MessageReceipt, GreetingMeta } from '../lib/types';
+
+// Re-export types that chat-interface.tsx imports
+export type { SettledMessage, StreamingState, MessageCost, GreetingMeta };
+export type { MessageTokens } from '../lib/types';
 
 /**
- * Creates a word-level reveal queue that smooths out bursty SSE delivery.
- * SSE chunks arrive at irregular intervals (15-300ms, 1-8 words each).
- * Instead of dumping each batch instantly, words are queued and drained
- * at a steady 2-words-per-frame pace (~120 words/sec at 60fps).
- * On stream end, remaining words flush immediately.
+ * Throttled RAF loop: writes contentRef to streamingMsg state at ~15fps.
+ * SSE chunks write to contentRef (zero renders). This loop copies at display rate.
  */
-function createChunkBuffer(
-  messageId: string,
-  setMessages: (fn: (prev: ChatMessage[]) => ChatMessage[]) => void,
+function createStreamRenderer(
+  contentRef: React.MutableRefObject<string>,
+  setStreamingMsg: React.Dispatch<React.SetStateAction<StreamingState | null>>,
+  scrollFn: () => void,
 ) {
-  let trailing = '';        // Partial word waiting for next space
-  const wordQueue: string[] = [];
-  let wordIndex = 0;
   let rafId = 0;
+  let lastRender = 0;
+  const FRAME_INTERVAL = 66; // ~15fps
 
-  const drain = () => {
-    if (wordIndex >= wordQueue.length) { rafId = 0; return; }
-    const end = Math.min(wordIndex + 2, wordQueue.length);
-    const batch = wordQueue.slice(wordIndex, end).join(' ') + ' ';
-    wordIndex = end;
-    setMessages((prev) =>
-      prev.map((m) => m.id === messageId ? { ...m, content: m.content + batch } : m)
-    );
-    rafId = requestAnimationFrame(drain);
+  const tick = () => {
+    rafId = 0;
+    const now = performance.now();
+    if (now - lastRender < FRAME_INTERVAL) {
+      rafId = requestAnimationFrame(tick);
+      return;
+    }
+    lastRender = now;
+    setStreamingMsg(prev => prev ? { ...prev, content: contentRef.current } : prev);
+    scrollFn();
+    rafId = requestAnimationFrame(tick);
   };
 
   return {
-    push(chunk: string) {
-      const text = trailing + chunk;
-      // Split on spaces, keep trailing non-space text for next chunk
-      const parts = text.split(' ');
-      trailing = parts.pop() || '';
-      for (const word of parts) {
-        if (word) wordQueue.push(word);
+    start() {
+      if (!rafId) {
+        lastRender = 0;
+        rafId = requestAnimationFrame(tick);
       }
-      if (!rafId && wordIndex < wordQueue.length) {
-        rafId = requestAnimationFrame(drain);
+    },
+    stop() {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = 0;
       }
     },
     flush() {
-      if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
-      // Push any trailing partial word
-      if (trailing) { wordQueue.push(trailing); trailing = ''; }
-      // Drain all remaining words immediately
-      if (wordIndex < wordQueue.length) {
-        const remaining = wordQueue.slice(wordIndex).join(' ');
-        wordIndex = wordQueue.length;
-        setMessages((prev) =>
-          prev.map((m) => m.id === messageId ? { ...m, content: m.content + remaining } : m)
-        );
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = 0;
       }
+      setStreamingMsg(prev => prev ? { ...prev, content: contentRef.current } : prev);
+      scrollFn();
     },
   };
-}
-
-export interface MessageCost {
-  total: number;
-  input?: number;
-  output?: number;
-}
-
-export interface MessageTokens {
-  prompt: number;
-  completion: number;
-}
-
-export interface MessageReceipt {
-  cost_usdc: number;
-  equivalent_direct_cost: number;
-  savings_pct: number;
-  remaining_balance: number | null;
-}
-
-export interface GreetingMeta {
-  total_memories: number;
-  memories_recalled: number;
-  temporal_span: { weeks: number; since_label: string } | null;
-  topics: string[];
-  greeting_cost: number;
-}
-
-export interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  memoryIds?: number[];
-  streaming?: boolean;
-  model?: string;
-  cost?: MessageCost;
-  tokens?: MessageTokens;
-  receipt?: MessageReceipt;
-  isGreeting?: boolean;
-  greetingMeta?: GreetingMeta;
 }
 
 export function useChat() {
   const { authenticated } = useAuthContext();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [streaming, setStreaming] = useState(false);
+
+  // Cold state — changes only on send or stream completion
+  const [settled, setSettled] = useState<SettledMessage[]>([]);
+  // Hot state — single object replacement at ~15fps during streaming
+  const [streamingMsg, setStreamingMsg] = useState<StreamingState | null>(null);
+
   const [guestRemaining, setGuestRemaining] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [balance, setBalance] = useState<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  // Ref for streaming content — SSE writes here, zero React renders
+  const contentRef = useRef('');
+
+  // Ref for settled history — allows sendMessage to read without dependency
+  const settledRef = useRef<SettledMessage[]>([]);
+  useEffect(() => { settledRef.current = settled; }, [settled]);
+
+  // Scroll helper ref — set by the consumer component
+  const scrollRef = useRef<() => void>(() => {});
+
+  // Stream renderer — throttled RAF loop
+  const rendererRef = useRef<ReturnType<typeof createStreamRenderer> | null>(null);
+
+  const getRenderer = useCallback(() => {
+    if (!rendererRef.current) {
+      rendererRef.current = createStreamRenderer(contentRef, setStreamingMsg, () => scrollRef.current());
+    }
+    return rendererRef.current;
+  }, []);
+
   const fetchGreeting = useCallback(async () => {
     const greetingId = `greeting-${Date.now()}`;
-    setMessages([{ id: greetingId, role: 'assistant', content: '', streaming: true, isGreeting: true }]);
-    setStreaming(true);
+    contentRef.current = '';
+    setStreamingMsg({ kind: 'streaming', id: greetingId, role: 'assistant', content: '', isGreeting: true });
 
     const abort = new AbortController();
     abortRef.current = abort;
-
-    const greetBuf = createChunkBuffer(greetingId, setMessages);
+    const renderer = getRenderer();
+    renderer.start();
 
     try {
       await api.greet(
-        (chunk) => {
-          greetBuf.push(chunk);
-        },
+        (chunk) => { contentRef.current += chunk; },
         (data) => {
-          greetBuf.flush();
+          renderer.flush();
           const meta: GreetingMeta | undefined = data?.total_memories != null ? {
             total_memories: data.total_memories,
             memories_recalled: data.memories_recalled ?? 0,
@@ -132,28 +112,41 @@ export function useChat() {
             topics: data.topics ?? [],
             greeting_cost: data.greeting_cost ?? 0,
           } : undefined;
-          setMessages((prev) =>
-            prev.map((m) => m.id === greetingId
-              ? { ...m, content: (m.content || 'Hey! How can I help you today?').trimStart(), streaming: false, cost: data?.cost, tokens: data?.tokens, greetingMeta: meta }
-              : m)
-          );
+          // Promote to settled
+          const final: SettledMessage = {
+            kind: 'settled',
+            id: greetingId,
+            role: 'assistant',
+            content: (contentRef.current || 'Hey! How can I help you today?').trimStart(),
+            cost: data?.cost,
+            tokens: data?.tokens,
+            isGreeting: true,
+            greetingMeta: meta,
+          };
+          setSettled(prev => [...prev, final]);
+          setStreamingMsg(null);
+          contentRef.current = '';
         },
         abort.signal,
       );
     } catch (err: any) {
-      greetBuf.flush();
+      renderer.stop();
       if (err.name !== 'AbortError') {
-        setMessages((prev) =>
-          prev.map((m) => m.id === greetingId
-            ? { ...m, content: m.content || 'Hey! How can I help you today?', streaming: false }
-            : m)
-        );
+        const final: SettledMessage = {
+          kind: 'settled',
+          id: greetingId,
+          role: 'assistant',
+          content: contentRef.current || 'Hey! How can I help you today?',
+          isGreeting: true,
+        };
+        setSettled(prev => [...prev, final]);
       }
+      setStreamingMsg(null);
+      contentRef.current = '';
     } finally {
-      setStreaming(false);
       abortRef.current = null;
     }
-  }, []);
+  }, [getRenderer]);
 
   const sendMessage = useCallback(async (
     content: string,
@@ -162,37 +155,47 @@ export function useChat() {
   ) => {
     setError(null);
 
-    const userMsg: ChatMessage = {
+    // Add user message to settled immediately
+    const userMsg: SettledMessage = {
+      kind: 'settled',
       id: `user-${Date.now()}`,
       role: 'user',
       content,
     };
-    setMessages((prev) => [...prev, userMsg]);
+    setSettled(prev => [...prev, userMsg]);
 
+    // Start streaming assistant message
     const assistantId = `assistant-${Date.now()}`;
-    setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '', streaming: true }]);
-    setStreaming(true);
+    contentRef.current = '';
+    setStreamingMsg({ kind: 'streaming', id: assistantId, role: 'assistant', content: '' });
 
     const abort = new AbortController();
     abortRef.current = abort;
-
-    const msgBuf = createChunkBuffer(assistantId, setMessages);
+    const renderer = getRenderer();
+    renderer.start();
 
     try {
       if (!authenticated || !conversationId) {
-        const history = messages.slice(-10).map((m) => ({ role: m.role, content: m.content }));
+        // Guest mode — read history from ref (no dependency on settled state)
+        const history = settledRef.current.slice(-10).map(m => ({ role: m.role, content: m.content }));
         await api.sendGuestMessage(
           content,
           history,
-          (chunk) => {
-            msgBuf.push(chunk);
-          },
+          (chunk) => { contentRef.current += chunk; },
           (remaining) => {
-            msgBuf.flush();
+            renderer.flush();
             if (remaining !== undefined) setGuestRemaining(remaining);
-            setMessages((prev) =>
-              prev.map((m) => m.id === assistantId ? { ...m, streaming: false, model: 'kimi-k2-thinking', cost: { total: 0 } } : m)
-            );
+            const final: SettledMessage = {
+              kind: 'settled',
+              id: assistantId,
+              role: 'assistant',
+              content: contentRef.current,
+              model: 'kimi-k2-thinking',
+              cost: { total: 0 },
+            };
+            setSettled(prev => [...prev, final]);
+            setStreamingMsg(null);
+            contentRef.current = '';
           },
           abort.signal,
         );
@@ -201,65 +204,75 @@ export function useChat() {
           conversationId,
           content,
           model,
-          (chunk) => {
-            msgBuf.push(chunk);
-          },
+          (chunk) => { contentRef.current += chunk; },
           (data) => {
-            msgBuf.flush();
-            // Update balance from receipt if present
+            renderer.flush();
             if (data?.receipt?.remaining_balance !== null && data?.receipt?.remaining_balance !== undefined) {
               setBalance(data.receipt.remaining_balance);
             }
-            setMessages((prev) =>
-              prev.map((m) => m.id === assistantId
-                ? {
-                    ...m,
-                    id: data?.message_id || m.id,
-                    streaming: false,
-                    memoryIds: data?.memory_ids,
-                    model: data?.model,
-                    cost: data?.cost ?? (data ? { total: 0 } : undefined),
-                    tokens: data?.tokens,
-                    receipt: data?.receipt,
-                  }
-                : m)
-            );
+            const final: SettledMessage = {
+              kind: 'settled',
+              id: data?.message_id || assistantId,
+              role: 'assistant',
+              content: contentRef.current,
+              memoryIds: data?.memory_ids,
+              model: data?.model,
+              cost: data?.cost ?? (data ? { total: 0 } : undefined),
+              tokens: data?.tokens,
+              receipt: data?.receipt,
+            };
+            setSettled(prev => [...prev, final]);
+            setStreamingMsg(null);
+            contentRef.current = '';
           },
           abort.signal,
         );
       }
     } catch (err: any) {
-      msgBuf.flush();
+      renderer.stop();
       if (err.name === 'AbortError') {
-        setMessages((prev) =>
-          prev.map((m) => m.id === assistantId ? { ...m, streaming: false } : m)
-        );
+        // Keep whatever was streamed so far
+        if (contentRef.current) {
+          const partial: SettledMessage = {
+            kind: 'settled',
+            id: assistantId,
+            role: 'assistant',
+            content: contentRef.current,
+          };
+          setSettled(prev => [...prev, partial]);
+        }
       } else {
         const errorMsg = err.message || 'Something went wrong';
         setError(errorMsg);
-        setMessages((prev) =>
-          prev.map((m) => m.id === assistantId
-            ? { ...m, content: m.content || errorMsg, streaming: false }
-            : m)
-        );
+        const errFinal: SettledMessage = {
+          kind: 'settled',
+          id: assistantId,
+          role: 'assistant',
+          content: contentRef.current || errorMsg,
+        };
+        setSettled(prev => [...prev, errFinal]);
       }
+      setStreamingMsg(null);
+      contentRef.current = '';
     } finally {
-      setStreaming(false);
       abortRef.current = null;
     }
-  }, [authenticated, messages]);
+  }, [authenticated, getRenderer]); // stable — no dependency on settled/messages
 
   const stopStreaming = useCallback(() => {
     abortRef.current?.abort();
   }, []);
 
   const clearMessages = useCallback(() => {
-    setMessages([]);
+    setSettled([]);
+    setStreamingMsg(null);
     setError(null);
+    contentRef.current = '';
   }, []);
 
   const loadMessages = useCallback((msgs: Message[]) => {
-    setMessages(msgs.map((m) => ({
+    setSettled(msgs.map((m) => ({
+      kind: 'settled' as const,
       id: m.id,
       role: m.role,
       content: m.content,
@@ -268,8 +281,9 @@ export function useChat() {
   }, []);
 
   const prependMessages = useCallback((msgs: Message[]) => {
-    setMessages((prev) => [
+    setSettled((prev) => [
       ...msgs.map((m) => ({
+        kind: 'settled' as const,
         id: m.id,
         role: m.role as 'user' | 'assistant',
         content: m.content,
@@ -280,8 +294,9 @@ export function useChat() {
   }, []);
 
   return {
-    messages,
-    streaming,
+    settled,
+    streamingMsg,
+    isStreaming: !!streamingMsg,
     guestRemaining,
     balance,
     error,
@@ -291,5 +306,6 @@ export function useChat() {
     loadMessages,
     prependMessages,
     fetchGreeting,
+    scrollRef,
   };
 }

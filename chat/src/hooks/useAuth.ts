@@ -22,23 +22,12 @@ export function useAuth(): AuthState {
   const [cortexKey, setCortexKey] = useState<string | null>(null);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<'privy' | 'cortex' | null>(null);
-  const [ready, setReady] = useState(false);
+  // Start ready immediately — guest mode renders instantly while Privy loads in background.
+  // Auth upgrades in place when Privy resolves or saved key validates.
+  const [ready, setReady] = useState(true);
 
   const cortexInitRef = useRef(false);
   const loggingOutRef = useRef(false);
-
-  // Timeout: if Privy SDK never becomes ready (e.g. Cloudflare Turnstile
-  // blocked by network/browser), proceed as guest after 5 seconds.
-  useEffect(() => {
-    if (ready) return;
-    const timer = setTimeout(() => {
-      if (!ready) {
-        console.warn('[auth] Privy init timed out after 5s — proceeding as guest');
-        setReady(true);
-      }
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, [ready]);
 
   // Restore saved cortex key on mount (with legacy key migration)
   useEffect(() => {
@@ -101,12 +90,7 @@ export function useAuth(): AuthState {
     })();
   }, [privyReady, privyAuth, wallets, cortexKey]);
 
-  // Mark ready when Privy loads (if no saved key)
-  useEffect(() => {
-    if (privyReady && !cortexInitRef.current && !ready) {
-      setReady(true);
-    }
-  }, [privyReady, ready]);
+  // (No-op: ready starts true, no need to wait for Privy)
 
   const login = useCallback(() => {
     privyLogin();

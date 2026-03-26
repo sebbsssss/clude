@@ -2,6 +2,63 @@ export type MemoryType = 'episodic' | 'semantic' | 'procedural' | 'self_model';
 export type ModelTier = 'free' | 'pro';
 export type ModelPrivacy = 'private' | 'anonymized';
 
+// --- Cost/token types (moved from useChat.ts) ---
+
+export interface MessageCost {
+  total: number;
+  input?: number;
+  output?: number;
+}
+
+export interface MessageTokens {
+  prompt: number;
+  completion: number;
+}
+
+export interface MessageReceipt {
+  cost_usdc: number;
+  equivalent_direct_cost: number;
+  savings_pct: number;
+  remaining_balance: number | null;
+}
+
+export interface GreetingMeta {
+  total_memories: number;
+  memories_recalled: number;
+  temporal_span: { weeks: number; since_label: string } | null;
+  topics: string[];
+  greeting_cost: number;
+}
+
+// --- Hot/cold message types ---
+
+/** Immutable message from history or completed stream. */
+export interface SettledMessage {
+  readonly kind: 'settled';
+  readonly id: string;
+  readonly role: 'user' | 'assistant';
+  readonly content: string;
+  readonly memoryIds?: readonly number[];
+  readonly model?: string;
+  readonly cost?: MessageCost;
+  readonly tokens?: MessageTokens;
+  readonly receipt?: MessageReceipt;
+  readonly isGreeting?: boolean;
+  readonly greetingMeta?: GreetingMeta;
+}
+
+/** Actively streaming message — content mutates via ref, rendered separately. */
+export interface StreamingState {
+  readonly kind: 'streaming';
+  readonly id: string;
+  readonly role: 'assistant';
+  content: string;
+  readonly isGreeting?: boolean;
+}
+
+/** Union for rendering — components discriminate on `kind`. */
+export type DisplayMessage = SettledMessage | StreamingState;
+
 export interface ChatModel {
   id: string;
   name: string;

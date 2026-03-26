@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Lock, Zap, Shield, ChevronDown } from 'lucide-react';
 import { useAuthContext } from '../hooks/AuthContext';
@@ -66,8 +66,8 @@ export function ModelSelector({ selectedModel, onModelChange }: Props) {
     setOpen(false);
   };
 
-  const privateModels = models.filter((m) => m.privacy === 'private');
-  const anonymizedModels = models.filter((m) => m.privacy === 'anonymized');
+  const privateModels = useMemo(() => models.filter((m) => m.privacy === 'private'), [models]);
+  const anonymizedModels = useMemo(() => models.filter((m) => m.privacy === 'anonymized'), [models]);
 
   return (
     <div className="relative" ref={containerRef}>
