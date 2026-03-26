@@ -59,6 +59,7 @@ interface TopupRequest extends Request {
 async function topupAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers['authorization'];
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    log.warn({ path: req.path, method: req.method }, 'topupAuth: missing or invalid Authorization header');
     res.status(401).json({ error: 'Missing Authorization: Bearer <token> header' });
     return;
   }
@@ -68,6 +69,7 @@ async function topupAuth(req: Request, res: Response, next: NextFunction): Promi
   if (token.startsWith('clk_')) {
     const agent = await authenticateAgent(token);
     if (!agent) {
+      log.warn({ path: req.path, tokenPrefix: token.slice(0, 8) }, 'topupAuth: invalid or inactive API key');
       res.status(401).json({ error: 'Invalid or inactive API key' });
       return;
     }
@@ -318,7 +320,7 @@ async function verifyTransactionViaRPC(txHash: string): Promise<{
   amount?: number;
   reason?: string;
 }> {
-  const RETRY_DELAYS = [0, 2000, 4000]; // immediate, then 2s, then 4s
+  const RETRY_DELAYS = [0, 2000, 4000, 6000, 8000]; // immediate, 2s, 4s, 6s, 8s — 20s total window
   const connection = getConnection();
 
   for (let attempt = 0; attempt < RETRY_DELAYS.length; attempt++) {
@@ -535,16 +537,20 @@ export function topupApiRoutes(): Router {
     const { tx_hash, intent_id } = req.body;
     const wallet = (req as TopupRequest).ownerWallet!;
 
+    log.info({ wallet, intentId: intent_id, txHashLen: tx_hash?.length, txHashType: typeof tx_hash, txHashHead: typeof tx_hash === 'string' ? tx_hash.slice(0, 8) : undefined }, 'Confirm request received');
+
     if (!tx_hash || typeof tx_hash !== 'string') {
+      log.warn({ wallet, txHashType: typeof tx_hash, txHashValue: tx_hash }, 'Rejected: tx_hash missing or not a string');
       res.status(400).json({ error: 'tx_hash required' });
       return;
     }
 
-    // Validate tx hash format: Solana (base58, 87-88 chars) or EVM (0x hex, 66 chars)
-    const isSolanaTx = /^[1-9A-HJ-NP-Za-km-z]{87,88}$/.test(tx_hash);
+    // Validate tx hash format: Solana (base58, 43-90 chars) or EVM (0x hex, 66 chars)
+    // Solana signatures are 64 bytes → 86-88 base58 chars typically, but accept wider range
+    const isSolanaTx = /^[1-9A-HJ-NP-Za-km-z]{43,90}$/.test(tx_hash);
     const isEvmTx = /^0x[0-9a-fA-F]{64}$/.test(tx_hash);
     if (!isSolanaTx && !isEvmTx) {
-      log.warn({ wallet, txHashLen: tx_hash.length, txHashHead: tx_hash.slice(0, 4), txHashTail: tx_hash.slice(-4) }, 'Rejected tx_hash: invalid format');
+      log.warn({ wallet, txHashLen: tx_hash.length, txHashHead: tx_hash.slice(0, 8), txHashTail: tx_hash.slice(-4) }, 'Rejected tx_hash: invalid format');
       res.status(400).json({ error: 'Invalid transaction hash format' });
       return;
     }

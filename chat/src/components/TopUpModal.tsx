@@ -251,7 +251,9 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
     // 2. Build unsigned transaction (requires Solana RPC for blockhash)
     let txBytes: Uint8Array;
     try {
+      console.log('[TopUp] Building tx:', { sender: walletAddress, dest: intent.dest_address, amount: effectiveAmount });
       txBytes = await buildSolanaUsdcTx(walletAddress, intent.dest_address, effectiveAmount);
+      console.log('[TopUp] Tx built successfully, size:', txBytes.length, 'bytes');
     } catch (err: any) {
       console.error('[TopUp] Transaction build failed (RPC/blockhash):', err);
       setErrorMsg('Failed to connect to Solana network. Please try the QR code method instead.');
@@ -261,6 +263,7 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
 
     // 3. Sign & send via Privy wallet — isolated catch so rejection never bleeds into confirm error
     setTxState('signing');
+    console.log('[TopUp] Requesting wallet signature...');
     let rawSignature: unknown;
     try {
       ({ signature: rawSignature } = await wallet.signAndSendTransaction({
@@ -268,7 +271,7 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
         chain: 'solana:mainnet',
       }));
     } catch (sigErr: unknown) {
-      console.error('[TopUp] Wallet sign/send failed:', sigErr);
+      console.error('[TopUp] Wallet sign/send failed:', sigErr, 'type:', typeof sigErr, 'keys:', sigErr && typeof sigErr === 'object' ? Object.keys(sigErr) : 'N/A');
       if (isWalletRejection(sigErr)) {
         setWalletRejected(true);
         setErrorMsg('Your wallet blocked this transaction. Try the QR code instead.');
@@ -279,7 +282,8 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
       return; // Never call /topup/confirm when signing fails
     }
 
-    // 4. Encode signature — Privy may return base58 string OR Uint8Array depending on version
+    // 4. Encode signature — Privy returns { signature: Uint8Array } per SDK types
+    console.log('[TopUp] Raw signature from Privy:', { type: typeof rawSignature, isUint8Array: rawSignature instanceof Uint8Array, length: rawSignature instanceof Uint8Array ? rawSignature.length : (typeof rawSignature === 'string' ? rawSignature.length : 'N/A'), value: rawSignature });
     let hash: string;
     try {
       if (typeof rawSignature === 'string') {
@@ -295,21 +299,25 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
       setTxState('error');
       return;
     }
+    console.log('[TopUp] Encoded tx hash:', { hash, length: hash.length });
     setTxHash(hash);
 
     // 5. Confirm with backend (only reached when signing succeeded)
     setTxState('confirming');
     try {
+      console.log('[TopUp] Calling confirmTopup:', { hash, intentId: intent.id, hashLength: hash.length });
       await api.confirmTopup(hash, intent.id);
       setTxState('success');
       onSuccess(currentBalance ?? 0);
     } catch (err: any) {
       console.error('[TopUp] Backend confirmation failed:', err);
-      // Transaction was sent on-chain — balance will update via webhook even if confirm fails
+      // Transaction was sent on-chain — start polling for balance update
       setErrorMsg('Transaction sent but confirmation pending. Your balance will update shortly.');
       setTxState('error');
+      // Start polling as fallback — the Helius webhook or next status check should credit it
+      startStatusPolling(currentBalance ?? 0, intent.id);
     }
-  }, [walletAddress, wallets, effectiveAmount, isValidAmount, currentBalance, onSuccess]);
+  }, [walletAddress, wallets, effectiveAmount, isValidAmount, currentBalance, onSuccess, startStatusPolling]);
 
   const handleBaseManualConfirm = useCallback(async (manualTxHash: string) => {
     if (!manualTxHash.trim()) return;
