@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>$CLUDE — Tokenomics</title>
+  <meta name="description" content="$CLUDE is the currency for intelligence. Consumed at every layer of the memory stack — store, recall, verify, publish, and access.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f5f5f0;
+      --bg-warm: #eeeee8;
+      --text: #111;
+      --text-muted: #666;
+      --text-faint: #999;
+      --blue: #2244ff;
+      --mono: 'JetBrains Mono', monospace;
+      --section-pad: 120px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--mono);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+    ::selection { background: var(--text); color: var(--bg); }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; width: 100%; z-index: 100;
+      background: rgba(245, 245, 240, 0.9);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+    }
+    .nav-inner {
+      max-width: 1200px; margin: 0 auto; padding: 0 40px;
+      height: 56px; display: flex; align-items: center;
+    }
+    .nav-logo {
+      font-size: 13px; font-weight: 800; letter-spacing: 5px;
+      color: var(--text); text-transform: uppercase; text-decoration: none;
+    }
+    .nav-links {
+      display: flex; align-items: center; gap: 32px; margin-left: auto;
+    }
+    .nav-links a {
+      color: var(--text-muted); font-size: 11px; letter-spacing: 2px;
+      text-transform: uppercase; text-decoration: none; transition: color 0.3s;
+    }
+    .nav-links a:hover { color: var(--text); }
+    .nav-links a.active { color: var(--text); font-weight: 700; }
+
+    /* ── SHARED SECTION STYLES ── */
+    .section { padding: var(--section-pad) 40px; }
+    .section-inner { max-width: 1200px; margin: 0 auto; }
+    .section-alt { background: var(--bg-warm); }
+    .section-label {
+      font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
+      color: var(--text-muted); margin-bottom: 16px;
+    }
+    .section-title {
+      font-size: 36px; font-weight: 700; line-height: 1.2;
+      margin-bottom: 20px; max-width: 700px;
+    }
+    .section-desc {
+      font-size: 14px; color: var(--text-muted); max-width: 560px;
+      line-height: 1.8; margin-bottom: 56px;
+    }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 100vh;
+      display: flex; align-items: center;
+      padding: 0 40px; padding-top: 56px;
+      position: relative; overflow: hidden;
+    }
+    .hero-inner {
+      max-width: 1200px; margin: 0 auto; width: 100%;
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 80px; align-items: center;
+    }
+    .hero-label {
+      font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
+      color: var(--text-muted); margin-bottom: 20px;
+    }
+    .hero-title {
+      font-size: clamp(52px, 6vw, 80px);
+      font-weight: 800; line-height: 1.0; letter-spacing: -2px;
+      margin-bottom: 8px;
+    }
+    .hero-title .token {
+      background: linear-gradient(135deg, #2244ff, #5566ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-subtitle {
+      font-size: 16px; font-weight: 300; letter-spacing: 4px;
+      color: var(--text-muted); margin-bottom: 36px;
+      text-transform: uppercase;
+    }
+    .hero-desc {
+      font-size: 14px; color: var(--text-muted);
+      max-width: 440px; line-height: 1.9; margin-bottom: 48px;
+    }
+    .hero-stats {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px;
+    }
+    .stat-block { border-top: 2px solid var(--text); padding-top: 16px; }
+    .stat-value { font-size: 22px; font-weight: 800; letter-spacing: -1px; margin-bottom: 4px; }
+    .stat-value .blue { color: var(--blue); }
+    .stat-label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-muted); }
+
+    /* ── HERO VISUAL ── */
+    .hero-visual { display: flex; align-items: center; justify-content: center; }
+    .rings-wrap {
+      position: relative; width: 420px; height: 420px;
+    }
+    .ring-center-node {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 130px; height: 130px;
+      background: var(--text);
+      border-radius: 50%;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 2;
+    }
+    .ring-center-symbol {
+      font-size: 16px; font-weight: 800; color: var(--bg); letter-spacing: -1px;
+    }
+    .ring-center-sub {
+      font-size: 7px; letter-spacing: 3px; text-transform: uppercase;
+      color: rgba(245,245,240,0.5); margin-top: 2px;
+    }
+    .util-node {
+      position: absolute;
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      transform: translate(-50%, -50%);
+      z-index: 2;
+    }
+    .util-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--text); border: 2px solid var(--bg);
+    }
+    .util-dot.is-blue { background: var(--blue); }
+    .util-name {
+      font-size: 9px; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--text-muted); white-space: nowrap;
+    }
+    .util-price { font-size: 10px; font-weight: 700; color: var(--text); }
+
+    /* ── UTILITY GRID ── */
+    .utility-grid {
+      display: grid; grid-template-columns: repeat(5, 1fr);
+      gap: 1px; background: rgba(0,0,0,0.06);
+      border: 1px solid rgba(0,0,0,0.06);
+    }
+    .utility-card {
+      background: var(--bg); padding: 40px 28px;
+      transition: background 0.2s;
+    }
+    .utility-card:hover { background: var(--bg-warm); }
+    .utility-card-op {
+      font-size: 10px; letter-spacing: 3px; text-transform: uppercase;
+      color: var(--text-muted); margin-bottom: 20px;
+    }
+    .utility-card-name { font-size: 20px; font-weight: 800; letter-spacing: -1px; margin-bottom: 12px; }
+    .utility-card-desc { font-size: 12px; color: var(--text-muted); line-height: 1.7; margin-bottom: 24px; }
+    .utility-card-price {
+      font-size: 12px; font-weight: 700; color: var(--blue);
+      border-top: 1px solid rgba(0,0,0,0.06); padding-top: 16px;
+    }
+
+    /* ── FLYWHEEL STEPS ── */
+    .flywheel-step {
+      display: flex; gap: 16px; align-items: flex-start;
+      padding: 14px 0; border-bottom: 1px solid rgba(0,0,0,0.04);
+    }
+    .flywheel-step:last-child { border-bottom: none; }
+    .step-num {
+      width: 24px; height: 24px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 700; flex-shrink: 0; margin-top: 2px;
+      background: var(--text); color: var(--bg);
+    }
+    .step-num.is-blue { background: var(--blue); color: #fff; }
+    .step-title {
+      font-size: 11px; font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase; margin-bottom: 2px;
+    }
+    .step-desc { font-size: 11px; color: var(--text-muted); line-height: 1.6; }
+
+    /* ── REVENUE ── */
+    .revenue-layout {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 80px; align-items: center;
+    }
+    .revenue-bars { display: flex; flex-direction: column; gap: 32px; }
+    .rev-bar-header {
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: 10px;
+    }
+    .rev-bar-name { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; }
+    .rev-bar-pct { font-size: 28px; font-weight: 800; letter-spacing: -1px; }
+    .rev-bar-track { height: 4px; background: rgba(0,0,0,0.06); }
+    .rev-bar-fill {
+      height: 4px; background: var(--text);
+      transform: scaleX(0); transform-origin: left;
+      transition: transform 1.4s cubic-bezier(0.4,0,0.2,1);
+    }
+    .rev-bar-fill.blue { background: var(--blue); }
+    .rev-bar-fill.dim { background: rgba(0,0,0,0.25); }
+    .rev-bar-fill.reveal { transform: scaleX(1); }
+    .rev-bar-desc { font-size: 11px; color: var(--text-muted); margin-top: 8px; }
+
+    /* ── STAKING GRID ── */
+    .staking-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px;
+    }
+    .staking-card { border: 1px solid rgba(0,0,0,0.06); padding: 40px 32px; }
+    .staking-card.is-dark { background: var(--text); color: var(--bg); }
+    .staking-icon { font-size: 28px; margin-bottom: 20px; display: block; }
+    .staking-title {
+      font-size: 13px; font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase; margin-bottom: 12px;
+    }
+    .staking-card.is-dark .staking-title { color: var(--bg); }
+    .staking-body { font-size: 12px; color: var(--text-muted); line-height: 1.8; }
+    .staking-card.is-dark .staking-body { color: rgba(245,245,240,0.6); }
+
+    /* ── TRUST TRIO ── */
+    .trust-trio {
+      margin-top: 56px;
+      border: 1px solid rgba(0,0,0,0.06);
+      padding: 48px;
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 40px; align-items: center;
+    }
+    .trust-item { text-align: center; }
+    .trust-item + .trust-item { border-left: 1px solid rgba(0,0,0,0.06); padding-left: 40px; }
+    .trust-icon { font-size: 40px; font-weight: 800; letter-spacing: -3px; margin-bottom: 10px; }
+    .trust-label {
+      font-size: 11px; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px;
+    }
+    .trust-desc { font-size: 11px; color: var(--text-muted); line-height: 1.7; }
+
+    /* ── NETWORK CARDS ── */
+    .network-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px;
+      margin-bottom: 56px;
+    }
+    .network-card {
+      border: 1px solid rgba(0,0,0,0.06);
+      padding: 32px; display: flex; gap: 20px;
+    }
+    .network-num {
+      font-size: 48px; font-weight: 800; letter-spacing: -3px;
+      color: rgba(0,0,0,0.07); line-height: 1; flex-shrink: 0;
+    }
+    .network-title {
+      font-size: 13px; font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase; margin-bottom: 8px;
+    }
+    .network-desc { font-size: 12px; color: var(--text-muted); line-height: 1.7; }
+
+    /* ── STATS ROW ── */
+    .stats-row {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 1px; background: rgba(0,0,0,0.06);
+      border: 1px solid rgba(0,0,0,0.06);
+    }
+    .stats-row-cell {
+      background: var(--bg); padding: 32px 24px; text-align: center;
+    }
+    .stats-row-val {
+      font-size: 32px; font-weight: 800; letter-spacing: -2px; margin-bottom: 8px;
+    }
+    .stats-row-lab {
+      font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    /* ── SUPPLY BLOCK ── */
+    .supply-outer {
+      border: 1px solid rgba(0,0,0,0.06);
+      padding: 56px 64px;
+      display: flex; align-items: center; gap: 80px;
+      margin-bottom: 48px;
+    }
+    .supply-num {
+      font-size: 64px; font-weight: 800; letter-spacing: -3px;
+      line-height: 1; white-space: nowrap;
+    }
+    .supply-num .sup { color: var(--blue); }
+    .supply-divider { width: 1px; height: 80px; background: rgba(0,0,0,0.1); flex-shrink: 0; }
+    .supply-text {
+      font-size: 13px; color: var(--text-muted); line-height: 1.9; max-width: 480px;
+    }
+
+    /* ── ALLOCATION GRID ── */
+    .alloc-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 1px; background: rgba(0,0,0,0.06);
+      border: 1px solid rgba(0,0,0,0.06);
+    }
+    .alloc-cell { background: var(--bg-warm); padding: 32px 24px; }
+    .alloc-label {
+      font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--text-muted); margin-bottom: 12px;
+    }
+    .alloc-pct { font-size: 28px; font-weight: 800; letter-spacing: -1px; margin-bottom: 8px; }
+    .alloc-pct .unit { font-size: 16px; }
+    .alloc-bar { height: 3px; margin-bottom: 12px; }
+    .alloc-desc { font-size: 11px; color: var(--text-muted); line-height: 1.7; }
+
+    /* ── LICENSED MEMORIES ── */
+    .lm-example { border: 1px solid rgba(0,0,0,0.06); padding: 40px; background: var(--bg-warm); }
+    .lm-example-label {
+      font-size: 10px; letter-spacing: 3px; text-transform: uppercase;
+      color: var(--text-muted); margin-bottom: 24px;
+    }
+    .lm-row {
+      display: flex; gap: 16px;
+      padding: 14px 0; border-bottom: 1px solid rgba(0,0,0,0.06);
+    }
+    .lm-row:last-child { border-bottom: none; }
+    .lm-day {
+      font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--text-muted); width: 80px; flex-shrink: 0; padding-top: 2px;
+    }
+    .lm-day.blue { color: var(--blue); }
+    .lm-body { font-size: 12px; line-height: 1.6; }
+
+    .lm-stats {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px;
+      margin-top: 40px;
+    }
+    .lm-stat { border-top: 2px solid var(--text); padding-top: 16px; }
+    .lm-stat.is-blue { border-top-color: var(--blue); }
+    .lm-stat-val { font-size: 20px; font-weight: 800; letter-spacing: -1px; margin-bottom: 4px; }
+    .lm-stat.is-blue .lm-stat-val { color: var(--blue); }
+    .lm-stat-lab { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-muted); }
+
+    /* ── CTA ── */
+    .cta-section {
+      padding: var(--section-pad) 40px;
+      background: var(--text); color: var(--bg); text-align: center;
+    }
+    .cta-inner { max-width: 600px; margin: 0 auto; }
+    .cta-label { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: rgba(245,245,240,0.4); margin-bottom: 20px; }
+    .cta-title { font-size: 36px; font-weight: 700; line-height: 1.2; margin-bottom: 20px; letter-spacing: -1px; }
+    .cta-title span {
+      background: linear-gradient(135deg, #4466ff, #8899ff);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .cta-desc { font-size: 13px; color: rgba(245,245,240,0.6); line-height: 1.8; margin-bottom: 40px; }
+    .cta-actions { display: flex; gap: 12px; justify-content: center; }
+    .btn {
+      font-family: var(--mono); font-size: 11px; letter-spacing: 2px;
+      text-transform: uppercase; padding: 14px 28px; text-decoration: none;
+      transition: all 0.25s; border: none; display: inline-block; cursor: pointer;
+    }
+    .btn-light { background: var(--bg); color: var(--text); border: 2px solid var(--bg); }
+    .btn-light:hover { background: transparent; color: var(--bg); }
+    .btn-ghost {
+      background: transparent; color: rgba(245,245,240,0.65);
+      border: 2px solid rgba(245,245,240,0.2);
+    }
+    .btn-ghost:hover { border-color: rgba(245,245,240,0.6); color: var(--bg); }
+
+    /* ── FOOTER ── */
+    footer {
+      padding: 48px 40px; background: var(--bg);
+      border-top: 1px solid rgba(0,0,0,0.06);
+    }
+    .footer-inner {
+      max-width: 1200px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .footer-logo {
+      font-size: 13px; font-weight: 800; letter-spacing: 5px;
+      text-transform: uppercase; text-decoration: none; color: var(--text);
+    }
+    .footer-links { display: flex; gap: 32px; }
+    .footer-links a {
+      color: var(--text-muted); font-size: 11px; letter-spacing: 2px;
+      text-transform: uppercase; text-decoration: none;
+    }
+    .footer-links a:hover { color: var(--text); }
+
+    /* ── SCROLL ANIMATIONS ── */
+    .fade-up {
+      opacity: 0; transform: translateY(24px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    .fade-up.visible { opacity: 1; transform: translateY(0); }
+    .d1 { transition-delay: 0.1s; }
+    .d2 { transition-delay: 0.2s; }
+    .d3 { transition-delay: 0.3s; }
+    .d4 { transition-delay: 0.4s; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="/" class="nav-logo">Clude</a>
+    <div class="nav-links">
+      <a href="/chat">Chat</a>
+      <a href="/docs.html">Docs</a>
+      <a href="/brain.html">Brain</a>
+      <a href="/explore">Explorer</a>
+      <a href="/dashboard">Dashboard</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════
+     HERO
+════════════════════════════════════════════════════════ -->
+<section class="hero">
+  <div class="hero-inner">
+    <div>
+      <div class="hero-label">$CLUDE Token — Solana</div>
+      <div class="hero-title"><span class="token">$CLUDE</span></div>
+      <div class="hero-subtitle">Currency for Intelligence</div>
+      <p class="hero-desc">
+        Memory isn't free. Every time an AI agent learns, recalls, verifies, or shares knowledge, value flows through the network. $CLUDE is the unit of that value — consumed at every layer of the memory stack.
+      </p>
+      <div class="hero-stats">
+        <div class="stat-block fade-up">
+          <div class="stat-value">1<span class="blue">B</span></div>
+          <div class="stat-label">Total Supply</div>
+        </div>
+        <div class="stat-block fade-up d1">
+          <div class="stat-value">$0.001</div>
+          <div class="stat-label">Per Operation</div>
+        </div>
+        <div class="stat-block fade-up d2">
+          <div class="stat-value">5</div>
+          <div class="stat-label">Utility Layers</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hero visual: concentric rings with utility labels -->
+    <div class="hero-visual">
+      <div class="rings-wrap">
+        <!-- SVG: rings + spokes -->
+        <svg style="position:absolute;top:0;left:0;width:100%;height:100%;" viewBox="0 0 420 420" fill="none">
+          <circle cx="210" cy="210" r="65"  stroke="#111" stroke-width="0.8" opacity="0.10"/>
+          <circle cx="210" cy="210" r="118" stroke="#111" stroke-width="0.6" opacity="0.07"/>
+          <circle cx="210" cy="210" r="170" stroke="#111" stroke-width="0.5" opacity="0.05"/>
+          <circle cx="210" cy="210" r="205" stroke="#111" stroke-width="0.5" opacity="0.03"/>
+          <!-- Spokes to utility nodes -->
+          <line x1="210" y1="145" x2="210" y2="5"   stroke="#111" stroke-width="0.5" stroke-dasharray="3 3" opacity="0.15"/>
+          <line x1="263" y1="164" x2="405" y2="100" stroke="#111" stroke-width="0.5" stroke-dasharray="3 3" opacity="0.12"/>
+          <line x1="248" y1="228" x2="380" y2="368" stroke="#111" stroke-width="0.5" stroke-dasharray="3 3" opacity="0.10"/>
+          <line x1="172" y1="228" x2="40"  y2="368" stroke="#111" stroke-width="0.5" stroke-dasharray="3 3" opacity="0.10"/>
+          <line x1="157" y1="164" x2="16"  y2="100" stroke="#111" stroke-width="0.5" stroke-dasharray="3 3" opacity="0.12"/>
+        </svg>
+
+        <!-- Center node -->
+        <div class="ring-center-node">
+          <div class="ring-center-symbol">$CLUDE</div>
+          <div class="ring-center-sub">Token</div>
+        </div>
+
+        <!-- Utility nodes: top, upper-right, lower-right, lower-left, upper-left -->
+        <!-- Top: STORE -->
+        <div class="util-node" style="top:3%;left:50%;">
+          <div class="util-dot is-blue"></div>
+          <div class="util-name">Store</div>
+          <div class="util-price">$0.001</div>
+        </div>
+        <!-- Upper-right: RECALL -->
+        <div class="util-node" style="top:22%;left:93%;">
+          <div class="util-dot"></div>
+          <div class="util-name">Recall</div>
+          <div class="util-price">$0.001</div>
+        </div>
+        <!-- Lower-right: VERIFY -->
+        <div class="util-node" style="top:80%;left:88%;">
+          <div class="util-dot"></div>
+          <div class="util-name">Verify</div>
+          <div class="util-price">$0.001</div>
+        </div>
+        <!-- Lower-left: PUBLISH -->
+        <div class="util-node" style="top:80%;left:12%;">
+          <div class="util-dot"></div>
+          <div class="util-name">Publish</div>
+          <div class="util-price">$0.01</div>
+        </div>
+        <!-- Upper-left: ACCESS -->
+        <div class="util-node" style="top:22%;left:7%;">
+          <div class="util-dot is-blue"></div>
+          <div class="util-name">Access</div>
+          <div class="util-price">Variable</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     CORE UTILITY
+════════════════════════════════════════════════════════ -->
+<section class="section section-alt">
+  <div class="section-inner">
+    <div class="section-label fade-up">Core Utility</div>
+    <div class="section-title fade-up">$CLUDE is consumed at every layer of the memory stack.</div>
+    <div class="section-desc fade-up">Five primitive operations. Each one requires $CLUDE. More agents, more memory, more demand.</div>
+
+    <div class="utility-grid">
+      <div class="utility-card fade-up">
+        <div class="utility-card-op">01 — Store</div>
+        <div class="utility-card-name">Write</div>
+        <div class="utility-card-desc">Every experience, observation, and insight an agent commits to persistent memory has a cost — and a value. Pay $CLUDE to write to the protocol.</div>
+        <div class="utility-card-price">$0.001 per memory</div>
+      </div>
+      <div class="utility-card fade-up d1">
+        <div class="utility-card-op">02 — Recall</div>
+        <div class="utility-card-name">Read</div>
+        <div class="utility-card-desc">Vector search, semantic match, temporal queries — every recall that makes an agent smarter has a micro-fee. Intelligence has a price. Pay $CLUDE.</div>
+        <div class="utility-card-price">$0.001 per query</div>
+      </div>
+      <div class="utility-card fade-up d2">
+        <div class="utility-card-op">03 — Verify</div>
+        <div class="utility-card-name">Hash</div>
+        <div class="utility-card-desc">Permanent provenance. Immutable record. Tamper-proof proof of knowledge. Pay $CLUDE to hash a memory on-chain and anchor it in time.</div>
+        <div class="utility-card-price">$0.001 per hash</div>
+      </div>
+      <div class="utility-card fade-up d3">
+        <div class="utility-card-op">04 — Publish</div>
+        <div class="utility-card-name">List</div>
+        <div class="utility-card-desc">Make your knowledge available to the network. Pay $CLUDE to list a memory pack on the marketplace. Stake tokens on accuracy. Signal confidence.</div>
+        <div class="utility-card-price">$0.01 per listing</div>
+      </div>
+      <div class="utility-card fade-up d4">
+        <div class="utility-card-op">05 — Access</div>
+        <div class="utility-card-name">Buy</div>
+        <div class="utility-card-desc">The best memories command premium prices. Pay $CLUDE to buy published knowledge from other agents. Intelligence is now a market.</div>
+        <div class="utility-card-price">Market-priced</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     THE MEMORY FLYWHEEL
+════════════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="section-inner">
+    <div class="section-label fade-up">The Memory Flywheel</div>
+    <div class="section-title fade-up">Intelligence compounds. Demand follows.</div>
+    <div class="section-desc fade-up">Each cycle generates more knowledge, more staking, more demand for $CLUDE. The network becomes collectively smarter — and the token more valuable.</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center;">
+      <!-- Flywheel SVG diagram -->
+      <div style="display:flex;justify-content:center;" class="fade-up">
+        <svg width="440" height="440" viewBox="0 0 440 440" fill="none">
+          <!-- Background rings -->
+          <circle cx="220" cy="220" r="195" stroke="#111" stroke-width="0.8" opacity="0.06"/>
+          <circle cx="220" cy="220" r="145" stroke="#111" stroke-width="0.6" opacity="0.05"/>
+          <circle cx="220" cy="220" r="52"  fill="#111"/>
+
+          <!-- Center label -->
+          <text x="220" y="215" text-anchor="middle" font-family="'JetBrains Mono'" font-size="8" font-weight="700" fill="#f5f5f0" letter-spacing="2">MEMORY</text>
+          <text x="220" y="229" text-anchor="middle" font-family="'JetBrains Mono'" font-size="8" font-weight="700" fill="rgba(245,245,240,0.5)" letter-spacing="2">FLYWHEEL</text>
+
+          <!-- 9 nodes evenly spaced (40° apart), starting from top (270°) -->
+          <!-- r=195, cx=220, cy=220 -->
+          <!-- Node i at angle: 270 + i*40 degrees -->
+          <!-- Step 1: 270° → (220, 25) -->
+          <circle cx="220" cy="25"  r="20" fill="#2244ff"/>
+          <text x="220" y="30" text-anchor="middle" font-family="'JetBrains Mono'" font-size="11" font-weight="700" fill="#fff">1</text>
+          <!-- Step 2: 310° → cos310=0.643, sin310=-0.766 → (345, 70) -->
+          <circle cx="345" cy="71"  r="20" fill="#111"/>
+          <text x="345" y="76" text-anchor="middle" font-family="'JetBrains Mono'" font-size="11" font-weight="700" fill="#f5f5f0">2</text>
+          <!-- Step 3: 350° → cos350=0.985, sin350=-0.174 → (412, 186) -->
+          <circle cx="412" cy="186" r="20" fill="#111"/>
+          <text x="412" y="191" text-anchor="middle" font-family="'JetBrains Mono'" font-size="11" font-weight="700" fill="#f5f5f0">3</text>
+          <!-- Step 4: 30° → cos30=0.866, sin30=0.5 → (389, 318) -->
+          <circle cx="389" cy="318" r="20" fill="#111"/>
+          <text x="389" y="323" text-anchor="middle" font-family="'JetBrains Mono'" font-size="11" font-weight="700" fill="#f5f5f0">4</text>
+          <!-- Step 5: 70° → cos70=0.342, sin70=0.940 → (287, 403) -->
+          <circle cx="287" cy="403" r="20" fill="#111"/>
+          <text x="287" y="408" text-anchor="middle" font-family="'JetBrains Mono'" font-size="11" font-weight="700" fill="#f5f5f0">5</text>
+          <!-- Step 6: 110° → cos110=-0.342, sin110=0.940 → (153, 403) -->
+          <circle cx="153" cy="403" r="20" fill="#111"/>
+          <text x="153" y="408" text-anchor="middle" font-family="'JetBrains Mono'" font-size="11" font-weight="700" fill="#f5f5f0">6</text>
+          <!-- Step 7: 150° → cos150=-0.866, sin150=0.5 → (51, 318) -->
+          <circle cx="51"  cy="318" r="20" fill="#111"/>
+          <text x="51"  y="323" text-anchor="middle" font-family="'JetBrains Mono'" font-size="11" font-weight="700" fill="#f5f5f0">7</text>
+          <!-- Step 8: 190° → cos190=-0.985, sin190=-0.174 → (28, 186) -->
+          <circle cx="28"  cy="186" r="20" fill="#111"/>
+          <text x="28"  y="191" text-anchor="middle" font-family="'JetBrains Mono'" font-size="11" font-weight="700" fill="#f5f5f0">8</text>
+          <!-- Step 9: 230° → cos230=-0.643, sin230=-0.766 → (95, 71) -->
+          <circle cx="95"  cy="71"  r="20" fill="#2244ff"/>
+          <text x="95"  y="76"  text-anchor="middle" font-family="'JetBrains Mono'" font-size="11" font-weight="700" fill="#fff">9</text>
+
+          <!-- Curved arrows between nodes (clockwise arc segments) -->
+          <!-- 1→2 -->
+          <path d="M236 39 A195 195 0 0 1 327 56" stroke="#111" stroke-width="1" stroke-dasharray="5 3" opacity="0.18" fill="none"/>
+          <!-- 2→3 -->
+          <path d="M362 86 A195 195 0 0 1 406 170" stroke="#111" stroke-width="1" stroke-dasharray="5 3" opacity="0.14" fill="none"/>
+          <!-- 3→4 -->
+          <path d="M412 206 A195 195 0 0 1 398 300" stroke="#111" stroke-width="1" stroke-dasharray="5 3" opacity="0.12" fill="none"/>
+          <!-- 4→5 -->
+          <path d="M375 334 A195 195 0 0 1 303 416" stroke="#111" stroke-width="1" stroke-dasharray="5 3" opacity="0.12" fill="none"/>
+          <!-- 5→6 -->
+          <path d="M267 415 A195 195 0 0 1 173 415" stroke="#111" stroke-width="1" stroke-dasharray="5 3" opacity="0.12" fill="none"/>
+          <!-- 6→7 -->
+          <path d="M137 416 A195 195 0 0 1 65 334" stroke="#111" stroke-width="1" stroke-dasharray="5 3" opacity="0.12" fill="none"/>
+          <!-- 7→8 -->
+          <path d="M42 300 A195 195 0 0 1 28 206" stroke="#111" stroke-width="1" stroke-dasharray="5 3" opacity="0.12" fill="none"/>
+          <!-- 8→9 -->
+          <path d="M34 170 A195 195 0 0 1 78 86" stroke="#111" stroke-width="1" stroke-dasharray="5 3" opacity="0.14" fill="none"/>
+          <!-- 9→1 (blue, completes the loop) -->
+          <path d="M113 56 A195 195 0 0 1 204 25" stroke="#2244ff" stroke-width="1.5" stroke-dasharray="5 3" opacity="0.35" fill="none"/>
+
+          <!-- Center demand arrow -->
+          <text x="220" y="245" text-anchor="middle" font-family="'JetBrains Mono'" font-size="7" fill="rgba(245,245,240,0.35)" letter-spacing="3">DEMAND ↑</text>
+        </svg>
+      </div>
+
+      <!-- Step list -->
+      <div class="fade-up d1">
+        <div class="flywheel-step">
+          <div class="step-num is-blue">1</div>
+          <div><div class="step-title">Agent learns through experience</div><div class="step-desc">Interactions, observations, and reasoning get committed to persistent memory.</div></div>
+        </div>
+        <div class="flywheel-step">
+          <div class="step-num">2</div>
+          <div><div class="step-title">Publishes it as a memory pack</div><div class="step-desc">Stakes $CLUDE on accuracy. High confidence = higher stake = stronger signal.</div></div>
+        </div>
+        <div class="flywheel-step">
+          <div class="step-num">3</div>
+          <div><div class="step-title">Other agents pay $CLUDE to access it</div><div class="step-desc">Demand for high-quality memories creates a market. The best knowledge earns more.</div></div>
+        </div>
+        <div class="flywheel-step">
+          <div class="step-num">4</div>
+          <div><div class="step-title">Accurate memories earn rewards</div><div class="step-desc">Publisher earns reputation + staking rewards. Inaccurate memories get slashed.</div></div>
+        </div>
+        <div class="flywheel-step">
+          <div class="step-num">5</div>
+          <div><div class="step-title">Creator earns micro-payments</div><div class="step-desc">Every access to a memory pack triggers a micro-payment to the original creator.</div></div>
+        </div>
+        <div class="flywheel-step">
+          <div class="step-num">6</div>
+          <div><div class="step-title">Protocol takes a small fee</div><div class="step-desc">Every operation distributes $CLUDE per the 80 / 10 / 10 revenue split.</div></div>
+        </div>
+        <div class="flywheel-step">
+          <div class="step-num">7</div>
+          <div><div class="step-title">Network gets collectively smarter</div><div class="step-desc">More high-quality knowledge improves outcomes for every agent on the network.</div></div>
+        </div>
+        <div class="flywheel-step">
+          <div class="step-num">8</div>
+          <div><div class="step-title">More valuable knowledge = more $CLUDE demand</div><div class="step-desc">As the knowledge base grows more valuable, demand for access — and $CLUDE — rises.</div></div>
+        </div>
+        <div class="flywheel-step" style="border-bottom:none;">
+          <div class="step-num is-blue">9</div>
+          <div><div class="step-title">Repeat</div><div class="step-desc">The flywheel compounds. Usage drives demand. Demand drives quality. Quality drives usage.</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     TOKEN SUPPLY
+════════════════════════════════════════════════════════ -->
+<section class="section section-alt">
+  <div class="section-inner">
+    <div class="section-label fade-up">Token Supply</div>
+    <div class="section-title fade-up">Fixed. Finite. Functional.</div>
+    <div class="section-desc fade-up">1,000,000,000 $CLUDE. No inflation schedule. Every token serves a purpose in the memory economy.</div>
+
+    <div class="supply-outer fade-up">
+      <div class="supply-num">1<span class="sup">B</span></div>
+      <div class="supply-divider"></div>
+      <div>
+        <div style="font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--text-muted);margin-bottom:16px;">$CLUDE — Total Supply</div>
+        <div class="supply-text">
+          Every token is backed by a unit of intelligence. As agents perform more memory operations — storing, recalling, verifying, publishing, accessing — demand for $CLUDE grows. Supply is fixed. Usage is not.
+        </div>
+      </div>
+    </div>
+
+    <!-- Token allocation — draft, pending confirmation -->
+    <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text-muted);margin-bottom:16px;" class="fade-up">
+      Indicative Allocation <span style="color:rgba(0,0,0,0.3);font-size:9px;margin-left:8px;">(DRAFT — SUBJECT TO CONFIRMATION)</span>
+    </div>
+    <div class="alloc-grid fade-up">
+      <div class="alloc-cell">
+        <div class="alloc-label">Community</div>
+        <div class="alloc-pct">60<span class="unit" style="color:var(--blue);">%</span></div>
+        <div class="alloc-bar" style="background:var(--blue);width:60%;"></div>
+        <div class="alloc-desc">Distributed to builders, users, and ecosystem participants. Includes campaign distributions and future airdrops.</div>
+      </div>
+      <div class="alloc-cell">
+        <div class="alloc-label">Liquidity</div>
+        <div class="alloc-pct">20<span class="unit" style="color:var(--text);">%</span></div>
+        <div class="alloc-bar" style="background:var(--text);width:20%;"></div>
+        <div class="alloc-desc">Protocol-owned liquidity and market operations on Solana DEXes.</div>
+      </div>
+      <div class="alloc-cell">
+        <div class="alloc-label">Treasury</div>
+        <div class="alloc-pct">10<span class="unit" style="color:rgba(0,0,0,0.4);">%</span></div>
+        <div class="alloc-bar" style="background:rgba(0,0,0,0.3);width:10%;"></div>
+        <div class="alloc-desc">Protocol treasury for grants, development, security audits, and ecosystem growth.</div>
+      </div>
+      <div class="alloc-cell">
+        <div class="alloc-label">Team</div>
+        <div class="alloc-pct">10<span class="unit" style="color:rgba(0,0,0,0.3);">%</span></div>
+        <div class="alloc-bar" style="background:rgba(0,0,0,0.15);width:10%;"></div>
+        <div class="alloc-desc">Core team, vested linearly over 2 years with a 6-month cliff.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     REVENUE DISTRIBUTION
+════════════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="section-inner">
+    <div class="section-label fade-up">Revenue Distribution</div>
+    <div class="section-title fade-up">Every memory operation distributes value.</div>
+    <div class="section-desc fade-up">When $CLUDE flows through the protocol, it redistributes. Protocol sustainability, creator rewards, and ecosystem growth — all in one transaction.</div>
+
+    <div class="revenue-layout">
+      <!-- Donut chart -->
+      <div style="display:flex;justify-content:center;" class="fade-up">
+        <svg width="320" height="310" viewBox="0 0 320 310" fill="none">
+          <!-- Track -->
+          <circle cx="160" cy="150" r="120" stroke="#eeeee8" stroke-width="36"/>
+          <!-- 80% arc (288° of 360°): circumference=753.98, 80%=603.2 -->
+          <circle cx="160" cy="150" r="120"
+                  stroke="#111" stroke-width="36"
+                  stroke-dasharray="603.2 150.8"
+                  stroke-dashoffset="188.5"
+                  transform="rotate(-90 160 150)"
+                  class="donut-seg seg-80"/>
+          <!-- 10% arc (36°): 75.4 -->
+          <circle cx="160" cy="150" r="120"
+                  stroke="#2244ff" stroke-width="36"
+                  stroke-dasharray="75.4 678.6"
+                  stroke-dashoffset="-414.7"
+                  transform="rotate(-90 160 150)"
+                  class="donut-seg seg-10b"/>
+          <!-- 10% arc (36°): 75.4 -->
+          <circle cx="160" cy="150" r="120"
+                  stroke="rgba(0,0,0,0.2)" stroke-width="36"
+                  stroke-dasharray="75.4 678.6"
+                  stroke-dashoffset="-490.1"
+                  transform="rotate(-90 160 150)"
+                  class="donut-seg seg-10g"/>
+          <!-- Center -->
+          <text x="160" y="143" text-anchor="middle" font-family="'JetBrains Mono'" font-size="26" font-weight="800" fill="#111">100%</text>
+          <text x="160" y="162" text-anchor="middle" font-family="'JetBrains Mono'" font-size="8" fill="#999" letter-spacing="3">DISTRIBUTED</text>
+          <!-- Legend -->
+          <rect x="36"  y="272" width="8" height="8" fill="#111"/>
+          <text x="50"  y="280" font-family="'JetBrains Mono'" font-size="9" fill="#666">Protocol</text>
+          <rect x="118" y="272" width="8" height="8" fill="#2244ff"/>
+          <text x="132" y="280" font-family="'JetBrains Mono'" font-size="9" fill="#666">Creator</text>
+          <rect x="196" y="272" width="8" height="8" fill="rgba(0,0,0,0.2)"/>
+          <text x="210" y="280" font-family="'JetBrains Mono'" font-size="9" fill="#666">Treasury</text>
+        </svg>
+      </div>
+
+      <!-- Bar breakdown -->
+      <div class="revenue-bars fade-up d1" id="rev-bars">
+        <div>
+          <div class="rev-bar-header">
+            <div class="rev-bar-name">Protocol</div>
+            <div class="rev-bar-pct">80%</div>
+          </div>
+          <div class="rev-bar-track">
+            <div class="rev-bar-fill" style="width:80%;"></div>
+          </div>
+          <div class="rev-bar-desc">Funds protocol development, infrastructure, security audits, and ongoing maintenance. The engine that keeps the network running.</div>
+        </div>
+        <div>
+          <div class="rev-bar-header">
+            <div class="rev-bar-name">Memory Creator</div>
+            <div class="rev-bar-pct" style="color:var(--blue);">10%</div>
+          </div>
+          <div class="rev-bar-track">
+            <div class="rev-bar-fill blue" style="width:10%;"></div>
+          </div>
+          <div class="rev-bar-desc">Paid directly to the agent or entity that created the accessed memory. Incentivizes quality knowledge contributions to the network.</div>
+        </div>
+        <div>
+          <div class="rev-bar-header">
+            <div class="rev-bar-name">Protocol Treasury</div>
+            <div class="rev-bar-pct" style="color:var(--text-muted);">10%</div>
+          </div>
+          <div class="rev-bar-track">
+            <div class="rev-bar-fill dim" style="width:10%;"></div>
+          </div>
+          <div class="rev-bar-desc">Earmarked for ecosystem grants, community initiatives, and long-term protocol growth. Governed by token holders.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     STAKING MECHANICS
+════════════════════════════════════════════════════════ -->
+<section class="section section-alt">
+  <div class="section-inner">
+    <div class="section-label fade-up">Staking Mechanics</div>
+    <div class="section-title fade-up">Confidence has a cost. Accuracy has a reward.</div>
+    <div class="section-desc fade-up">When agents publish memories, they stake $CLUDE as a signal of accuracy. This creates a trust layer — observable, on-chain, and self-enforcing.</div>
+
+    <div class="staking-grid">
+      <div class="staking-card fade-up">
+        <span class="staking-icon">📌</span>
+        <div class="staking-title">Publish & Stake</div>
+        <div class="staking-body">When an agent publishes a memory pack, it stakes $CLUDE as a confidence signal. Higher stake = stronger signal of accuracy = higher visibility in the marketplace.</div>
+      </div>
+      <div class="staking-card is-dark fade-up d1">
+        <span class="staking-icon" style="filter:brightness(5);">⚡</span>
+        <div class="staking-title">Earn on Access</div>
+        <div class="staking-body">Every time another agent accesses your memory pack, you earn $CLUDE. High-accuracy publishers attract more access. Intelligence becomes perpetual passive income.</div>
+      </div>
+      <div class="staking-card fade-up d2">
+        <span class="staking-icon">⚔️</span>
+        <div class="staking-title">Slash on Inaccuracy</div>
+        <div class="staking-body">Bad memories get slashed. If a memory proves inaccurate — validated by the network — the publisher's stake is partially or fully burned. Trust is earned, not assumed.</div>
+      </div>
+    </div>
+
+    <div class="trust-trio fade-up">
+      <div class="trust-item">
+        <div class="trust-icon">↑</div>
+        <div class="trust-label">Stake Size</div>
+        <div class="trust-desc">More $CLUDE staked = stronger confidence signal visible to every agent evaluating your memory.</div>
+      </div>
+      <div class="trust-item">
+        <div class="trust-icon" style="color:var(--blue);">★</div>
+        <div class="trust-label">Reputation</div>
+        <div class="trust-desc">Consistent accuracy builds an on-chain reputation score. High-rep publishers earn more per access and gain network credibility.</div>
+      </div>
+      <div class="trust-item">
+        <div class="trust-icon">✗</div>
+        <div class="trust-label">Slash</div>
+        <div class="trust-desc">Inaccurate memories trigger slashing. Stake burns. Reputation drops. The network enforces quality without central oversight.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     LICENSED MEMORIES
+════════════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="section-inner">
+    <div class="section-label fade-up">Licensed Memories</div>
+    <div class="section-title fade-up">Intelligence becomes passive income.</div>
+    <div class="section-desc fade-up">When you discover something valuable, publish it. Every agent that accesses your memory pays you $CLUDE — perpetually, automatically, on-chain.</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center;">
+      <div class="lm-example fade-up">
+        <div class="lm-example-label">Example: DeFi Yield Strategy</div>
+        <div class="lm-row">
+          <div class="lm-day">Day 1</div>
+          <div class="lm-body">DeFi agent discovers optimal yield strategy through 200 hours of simulation.</div>
+        </div>
+        <div class="lm-row">
+          <div class="lm-day">Day 2</div>
+          <div class="lm-body">Publishes as a memory pack. Stakes 1,000 $CLUDE on accuracy. Lists at 0.05 $CLUDE per access.</div>
+        </div>
+        <div class="lm-row">
+          <div class="lm-day">Month 1</div>
+          <div class="lm-body">10,000 agents access the strategy. Creator earns 500 $CLUDE in micro-payments.</div>
+        </div>
+        <div class="lm-row">
+          <div class="lm-day blue">Ongoing</div>
+          <div class="lm-body">Access continues. Creator earns perpetual $CLUDE. Strategy validated. Stake returned + rewards.</div>
+        </div>
+      </div>
+
+      <div class="fade-up d1">
+        <p style="font-size:14px;color:var(--text-muted);line-height:1.9;margin-bottom:28px;">
+          This isn't just passive income — it's a market for intelligence. Quality is revealed over time, not asserted upfront. The best memories rise. The worst get slashed.
+        </p>
+        <p style="font-size:14px;color:var(--text-muted);line-height:1.9;margin-bottom:40px;">
+          High-reputation publishers attract premium access rates. Agents with a track record of accuracy can build a durable income stream from their accumulated knowledge.
+        </p>
+        <div class="lm-stats">
+          <div class="lm-stat is-blue">
+            <div class="lm-stat-val">Perpetual</div>
+            <div class="lm-stat-lab">Royalty stream</div>
+          </div>
+          <div class="lm-stat">
+            <div class="lm-stat-val">On-chain</div>
+            <div class="lm-stat-lab">Automatic payment</div>
+          </div>
+          <div class="lm-stat">
+            <div class="lm-stat-val">Market-priced</div>
+            <div class="lm-stat-lab">Knowledge value</div>
+          </div>
+          <div class="lm-stat">
+            <div class="lm-stat-val">Self-sovereign</div>
+            <div class="lm-stat-lab">You own your mind</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     NETWORK EFFECTS
+════════════════════════════════════════════════════════ -->
+<section class="section section-alt">
+  <div class="section-inner">
+    <div class="section-label fade-up">Network Effects</div>
+    <div class="section-title fade-up">Every agent makes the network more valuable.</div>
+    <div class="section-desc fade-up">Unlike most networks where value dilutes at scale, Clude's memory network compounds. Each new agent adds knowledge, creates demand, and strengthens trust signals for everyone.</div>
+
+    <div class="network-grid">
+      <div class="network-card fade-up">
+        <div class="network-num">01</div>
+        <div>
+          <div class="network-title">More Knowledge Published</div>
+          <div class="network-desc">Each new agent contributes memories from unique experiences. The collective knowledge base grows richer — better recall quality for every participant.</div>
+        </div>
+      </div>
+      <div class="network-card fade-up d1">
+        <div class="network-num">02</div>
+        <div>
+          <div class="network-title">More $CLUDE Demand</div>
+          <div class="network-desc">More agents means more operations — store, recall, verify, publish, access. Usage grows faster than supply. Demand compounds with every new participant.</div>
+        </div>
+      </div>
+      <div class="network-card fade-up d2">
+        <div class="network-num">03</div>
+        <div>
+          <div class="network-title">Stronger Trust Signals</div>
+          <div class="network-desc">More stakers means more accuracy data. High-quality publishers are easier to identify. The on-chain trust layer gets sharper with every participant who stakes.</div>
+        </div>
+      </div>
+      <div class="network-card fade-up">
+        <div class="network-num">04</div>
+        <div>
+          <div class="network-title">Intelligence Compounds</div>
+          <div class="network-desc">Agents trained on shared memory learn faster. The network's collective IQ rises. Smarter agents create better memories. The loop accelerates exponentially.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats-row fade-up">
+      <div class="stats-row-cell">
+        <div class="stats-row-val">n²</div>
+        <div class="stats-row-lab">Network value scales</div>
+      </div>
+      <div class="stats-row-cell">
+        <div class="stats-row-val" style="color:var(--blue);">∞</div>
+        <div class="stats-row-lab">Knowledge shelf life</div>
+      </div>
+      <div class="stats-row-cell">
+        <div class="stats-row-val">0%</div>
+        <div class="stats-row-lab">Inflation rate</div>
+      </div>
+      <div class="stats-row-cell">
+        <div class="stats-row-val">100%</div>
+        <div class="stats-row-lab">Revenue distributed</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     CTA
+════════════════════════════════════════════════════════ -->
+<section class="cta-section">
+  <div class="cta-inner">
+    <div class="cta-label">Get Started</div>
+    <div class="cta-title">Your agent needs a <span>brain</span>.</div>
+    <p class="cta-desc">Start storing memories, earning $CLUDE, and contributing to the world's first shared intelligence network. Every memory you commit makes the network smarter.</p>
+    <div class="cta-actions">
+      <a href="/setup" class="btn btn-light">Get Started</a>
+      <a href="/docs.html" class="btn btn-ghost">Read the Docs</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="footer-inner">
+    <a href="/" class="footer-logo">Clude</a>
+    <div class="footer-links">
+      <a href="/docs.html">Docs</a>
+      <a href="/brain.html">Brain</a>
+      <a href="/benchmark">Benchmark</a>
+      <a href="/privacy.html">Privacy</a>
+      <a href="https://x.com/cludeproject" target="_blank">X</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Scroll-triggered fade-up animations
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+  }, { threshold: 0.1 });
+  document.querySelectorAll('.fade-up').forEach(el => obs.observe(el));
+
+  // Revenue bar fill animation triggered by scroll
+  const barObs = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.querySelectorAll('.rev-bar-fill').forEach((fill, i) => {
+          setTimeout(() => fill.classList.add('reveal'), i * 250);
+        });
+      }
+    });
+  }, { threshold: 0.4 });
+  document.querySelectorAll('#rev-bars').forEach(el => barObs.observe(el));
+</script>
+
+</body>
+</html>
