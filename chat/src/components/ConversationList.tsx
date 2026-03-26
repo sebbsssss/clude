@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Trash2, MessageSquare } from 'lucide-react';
 import type { Conversation } from '../lib/types';
@@ -22,8 +23,8 @@ function groupByTime(convs: Conversation[]) {
   return groups;
 }
 
-export function ConversationList({ conversations, activeId, onSelect, onDelete }: Props) {
-  const groups = groupByTime(conversations);
+export const ConversationList = memo(function ConversationList({ conversations, activeId, onSelect, onDelete }: Props) {
+  const groups = useMemo(() => groupByTime(conversations), [conversations]);
 
   return (
     <div className="flex-1 overflow-y-auto px-2">
@@ -57,4 +58,4 @@ export function ConversationList({ conversations, activeId, onSelect, onDelete }
       ))}
     </div>
   );
-}
+});

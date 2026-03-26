@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { memo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { MemoryType } from '../lib/types';
 
@@ -29,7 +29,7 @@ interface Props {
   visible: boolean;
 }
 
-export function MemoryPills({ memoryIds, visible }: Props) {
+export const MemoryPills = memo(function MemoryPills({ memoryIds, visible }: Props) {
   const [memories, setMemories] = useState<MemoryDetail[]>([]);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
@@ -69,4 +69,4 @@ export function MemoryPills({ memoryIds, visible }: Props) {
       </motion.div>
     </AnimatePresence>
   );
-}
+});

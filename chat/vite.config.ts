@@ -4,11 +4,25 @@ import tailwindcss from '@tailwindcss/vite'
 import { nodePolyfills } from 'vite-plugin-node-polyfills'
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), nodePolyfills()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    nodePolyfills({ include: ['buffer'], globals: { Buffer: true } }),
+  ],
+  envDir: '..',
   base: '/chat/',
   build: {
     outDir: '../src/verify-app/public/chat',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-privy': ['@privy-io/react-auth'],
+          'vendor-motion': ['framer-motion'],
+        },
+      },
+    },
   },
   server: {
     proxy: {
