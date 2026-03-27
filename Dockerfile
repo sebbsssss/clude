@@ -10,10 +10,10 @@ RUN npm ci
 
 # Frontend dependencies
 COPY chat/package.json chat/package-lock.json* ./chat/
-RUN cd chat && npm ci
+RUN cd chat && npm ci --legacy-peer-deps
 
 COPY dashboard/package.json dashboard/package-lock.json* ./dashboard/
-RUN cd dashboard && npm ci
+RUN cd dashboard && npm ci --legacy-peer-deps
 
 # Copy source
 COPY tsconfig.json ./
