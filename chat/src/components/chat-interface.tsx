@@ -165,7 +165,7 @@ export function ChatInterface() {
         className={`flex flex-col min-h-screen items-center justify-center px-4 py-6 flex-1 transition-all duration-300 ${authenticated && !isMobile ? 'ml-[260px]' : 'ml-0'}`}
       >
         {/* Header */}
-        <div className="fixed top-0 right-0 z-50 p-4 flex items-center gap-2" style={{ left: authenticated && !isMobile ? 260 : 0 }}>
+        <div className={`fixed top-0 right-0 p-4 flex items-center gap-2 ${sidebarOpen ? 'z-30' : 'z-50'}`} style={{ left: authenticated && !isMobile ? 260 : 0 }}>
           {isMobile && authenticated && (
             <button
               onClick={() => setSidebarOpen(true)}
