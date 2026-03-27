@@ -25,30 +25,10 @@ Clude is our product. Every agent MUST actively use it. The `clude-memory` MCP s
 
 ## Staging Workflow (Required)
 
-All changes MUST go through the staging environment before reaching production. **No exceptions.**
+All changes go through staging first. See `CLAUDE.md` for the full workflow.
 
-### Rules
-
-1. **All PRs target `staging`** — never open a PR directly to `main`.
-2. **No direct pushes** to `main` or `staging`. Always use feature branches and PRs.
-3. **Merge to `main` only with board approval.** After your PR lands on `staging`, the board verifies changes at `cludebot-test-preview.up.railway.app`. Only after they approve does the staging→main merge happen.
-4. **CI runs on both branches.** PRs to `staging` and `main` both trigger typecheck + build.
-
-### Flow
-
-```
-feature-branch ──PR──▶ staging ──Railway Preview──▶ Board verifies
-                                                        │
-                                  cludebot-test-preview.up.railway.app
-                                                        │
-                                                   Board approves
-                                                        │
-                                             staging ──PR──▶ main ──Auto-deploy──▶ production
-```
-
-### For Agents
-
-- When using `/ship` or creating PRs, always set `staging` as the base branch.
-- When asked to "ship" or "deploy", create a PR to `staging`, not `main`.
-- Never run `git push origin main` or merge directly to `main`.
-- If you need an emergency fix, still go through `staging` — the board can fast-track approval.
+**Key rules for all agents:**
+- All PRs target `staging`, never `main`
+- No direct pushes to `main` or `staging`
+- Board verifies at `cludebot-test-preview.up.railway.app` before approving merge to `main`
+- When shipping, always set base branch to `staging`
