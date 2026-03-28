@@ -4,6 +4,7 @@ import { PrivyProvider } from '@privy-io/react-auth'
 import { toSolanaWalletConnectors } from '@privy-io/react-auth/solana'
 import { BrowserRouter } from 'react-router-dom'
 import { App } from './App'
+import { SOLANA_NETWORK, SOLANA_RPC_URL } from './lib/solana-config'
 import './index.css'
 
 const solanaConnectors = toSolanaWalletConnectors({
@@ -27,7 +28,7 @@ createRoot(document.getElementById('root')!).render(
         loginMethods: ['wallet'],
         walletChainType: 'solana-only',
         embeddedWallets: { createOnLogin: 'off' },
-        solanaClusters: [{ name: 'mainnet-beta', rpcUrl: import.meta.env.VITE_SOLANA_RPC_URL ?? `${window.location.origin}/api/solana-rpc` }],
+        solanaClusters: [{ name: SOLANA_NETWORK, rpcUrl: SOLANA_RPC_URL }],
         externalWallets: {
           solana: { connectors: solanaConnectors },
         },

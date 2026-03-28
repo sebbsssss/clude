@@ -322,7 +322,7 @@ async function verifyTransactionViaRPC(txHash: string): Promise<{
   amount?: number;
   reason?: string;
 }> {
-  const RETRY_DELAYS = [0, 2000, 4000, 6000, 8000]; // immediate, 2s, 4s, 6s, 8s — 20s total window
+  const RETRY_DELAYS = [0, 3000, 6000, 10000, 15000, 20000, 25000]; // immediate → ~79s total window
   const connection = getConnection();
 
   for (let attempt = 0; attempt < RETRY_DELAYS.length; attempt++) {

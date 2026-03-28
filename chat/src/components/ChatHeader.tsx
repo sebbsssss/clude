@@ -1,17 +1,33 @@
-import { useState, lazy, Suspense } from 'react';
-import { Settings, LogOut, Key, Wallet, Sparkles } from 'lucide-react';
-import { useAuthContext } from '../hooks/AuthContext';
-import { useBalance, type Balance } from '../hooks/useBalance';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, lazy, Suspense } from "react";
+import { Settings, LogOut, Key, Wallet, Sparkles } from "lucide-react";
+import { useAuthContext } from "../hooks/AuthContext";
+import { useBalance, type Balance } from "../hooks/useBalance";
+import { IS_DEVNET } from "../lib/solana-config";
+import { motion, AnimatePresence } from "framer-motion";
 
-const TopUpModal = lazy(() => import('./TopUpModal').then(m => ({ default: m.TopUpModal })));
+const TopUpModal = lazy(() =>
+  import("./TopUpModal").then((m) => ({ default: m.TopUpModal })),
+);
+const TOP_UP_ALLOWLIST: string[] | null = IS_DEVNET
+  ? null
+  : [
+      "5vK6WRCq5V6BCte8cQvaNeNv2KzErCfGzeBDwtBGGv2r",
+      "91K7zE12yBQcwYwdBs6JSzt73sYv8SdRdSoYQME4rH1d",
+    ];
 
-// Wallets allowed to use the top-up flow (everyone else sees "coming soon")
-const TOP_UP_ALLOWLIST = ['5vK6WRCq5V6BCte8cQvaNeNv2KzErCfGzeBDwtBGGv2r'];
-
-function BalanceBadge({ balance, onClick, walletAddress }: { balance: Balance; onClick: () => void; walletAddress: string | null }) {
+function BalanceBadge({
+  balance,
+  onClick,
+  walletAddress,
+}: {
+  balance: Balance;
+  onClick: () => void;
+  walletAddress: string | null;
+}) {
   const [showTooltip, setShowTooltip] = useState(false);
-  const TOP_UP_DISABLED = !TOP_UP_ALLOWLIST.includes(walletAddress || '');
+  const TOP_UP_DISABLED =
+    TOP_UP_ALLOWLIST !== null &&
+    !TOP_UP_ALLOWLIST.includes(walletAddress || "");
 
   const handleClick = TOP_UP_DISABLED ? undefined : onClick;
 
@@ -26,17 +42,21 @@ function BalanceBadge({ balance, onClick, walletAddress }: { balance: Balance; o
           onClick={handleClick}
           onMouseEnter={() => setShowTooltip(true)}
           onMouseLeave={() => setShowTooltip(false)}
-          title={TOP_UP_DISABLED ? 'Top up coming soon' : 'Free promo — click for details'}
+          title={
+            TOP_UP_DISABLED
+              ? "Top up coming soon"
+              : "Free promo — click for details"
+          }
           className={`flex items-center gap-1 text-[10px] border rounded-full px-2 py-0.5 transition-colors ${
             TOP_UP_DISABLED
-              ? 'text-zinc-500 border-zinc-600/30 bg-zinc-700/10 cursor-not-allowed opacity-60'
+              ? "text-zinc-500 border-zinc-600/30 bg-zinc-700/10 cursor-not-allowed opacity-60"
               : isEmpty
-                ? 'text-red-400 border-red-500/30 bg-red-500/8 hover:bg-red-500/15'
-                : 'text-violet-300 border-violet-500/40 bg-violet-500/10 hover:bg-violet-500/18'
+                ? "text-red-400 border-red-500/30 bg-red-500/8 hover:bg-red-500/15"
+                : "text-violet-300 border-violet-500/40 bg-violet-500/10 hover:bg-violet-500/18"
           }`}
         >
           <Sparkles className="h-2.5 w-2.5" />
-          {isEmpty ? 'Limit reached' : 'Free · Limited Time'}
+          {isEmpty ? "Limit reached" : "Free · Limited Time"}
         </button>
         <AnimatePresence>
           {showTooltip && (
@@ -57,13 +77,20 @@ function BalanceBadge({ balance, onClick, walletAddress }: { balance: Balance; o
                 </p>
               ) : (
                 <>
-                  <p className="text-[10px] text-violet-300 font-medium mb-1">Free Promo Active</p>
+                  <p className="text-[10px] text-violet-300 font-medium mb-1">
+                    Free Promo Active
+                  </p>
                   <p className="text-[10px] text-zinc-400 leading-snug">
-                    ${remaining.toFixed(2)} of ${total.toFixed(2)} free remaining
+                    ${remaining.toFixed(2)} of ${total.toFixed(2)} free
+                    remaining
                   </p>
                 </>
               )}
-              {!TOP_UP_DISABLED && <p className="text-[9px] text-zinc-600 mt-1.5">Click to top up</p>}
+              {!TOP_UP_DISABLED && (
+                <p className="text-[9px] text-zinc-600 mt-1.5">
+                  Click to top up
+                </p>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -72,12 +99,12 @@ function BalanceBadge({ balance, onClick, walletAddress }: { balance: Balance; o
   }
 
   const colorClass = TOP_UP_DISABLED
-    ? 'text-zinc-500 border-zinc-600/30 bg-zinc-700/10 cursor-not-allowed opacity-60'
+    ? "text-zinc-500 border-zinc-600/30 bg-zinc-700/10 cursor-not-allowed opacity-60"
     : balance.balance_usdc >= 1
-      ? 'text-green-400 border-green-500/30 bg-green-500/8 hover:bg-green-500/15'
+      ? "text-green-400 border-green-500/30 bg-green-500/8 hover:bg-green-500/15"
       : balance.balance_usdc >= 0.5
-        ? 'text-yellow-400 border-yellow-500/30 bg-yellow-500/8 hover:bg-yellow-500/15'
-        : 'text-red-400 border-red-500/30 bg-red-500/8 hover:bg-red-500/15';
+        ? "text-yellow-400 border-yellow-500/30 bg-yellow-500/8 hover:bg-yellow-500/15"
+        : "text-red-400 border-red-500/30 bg-red-500/8 hover:bg-red-500/15";
 
   return (
     <div className="relative">
@@ -85,11 +112,10 @@ function BalanceBadge({ balance, onClick, walletAddress }: { balance: Balance; o
         onClick={handleClick}
         onMouseEnter={() => TOP_UP_DISABLED && setShowTooltip(true)}
         onMouseLeave={() => TOP_UP_DISABLED && setShowTooltip(false)}
-        title={TOP_UP_DISABLED ? 'Top up coming soon' : 'Click to top up USDC'}
+        title={TOP_UP_DISABLED ? "Top up coming soon" : "Click to top up USDC"}
         className={`flex items-center gap-1 text-[10px] border rounded-full px-2 py-0.5 transition-colors ${colorClass}`}
       >
-        <Wallet className="h-2.5 w-2.5" />
-        ${balance.balance_usdc.toFixed(2)}
+        <Wallet className="h-2.5 w-2.5" />${balance.balance_usdc.toFixed(2)}
       </button>
       {TOP_UP_DISABLED && (
         <AnimatePresence>
@@ -113,18 +139,25 @@ function BalanceBadge({ balance, onClick, walletAddress }: { balance: Balance; o
 }
 
 export function ChatHeader() {
-  const { authenticated, walletAddress, authMode, login, logout, loginWithApiKey } = useAuthContext();
+  const {
+    authenticated,
+    walletAddress,
+    authMode,
+    login,
+    logout,
+    loginWithApiKey,
+  } = useAuthContext();
   const { balance, pollUntilUpdated } = useBalance();
   const [showSettings, setShowSettings] = useState(false);
   const [showTopUp, setShowTopUp] = useState(false);
-  const [apiKeyInput, setApiKeyInput] = useState('');
-  const [apiKeyError, setApiKeyError] = useState('');
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const [apiKeyError, setApiKeyError] = useState("");
 
   const handleApiKeySubmit = async () => {
     if (!apiKeyInput.trim()) return;
-    setApiKeyError('');
+    setApiKeyError("");
     const valid = await loginWithApiKey(apiKeyInput.trim());
-    if (!valid) setApiKeyError('Invalid API key');
+    if (!valid) setApiKeyError("Invalid API key");
     else setShowSettings(false);
   };
 
@@ -138,14 +171,24 @@ export function ChatHeader() {
         <>
           {/* Balance badge */}
           {balance !== null && (
-            <BalanceBadge balance={balance} onClick={() => setShowTopUp(true)} walletAddress={walletAddress} />
+            <BalanceBadge
+              balance={balance}
+              onClick={() => setShowTopUp(true)}
+              walletAddress={walletAddress}
+            />
           )}
 
           {/* Wallet address / auth mode */}
           <span className="text-[10px] text-zinc-500">
-            {walletAddress ? `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}` : authMode}
+            {walletAddress
+              ? `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`
+              : authMode}
           </span>
-          <button onClick={logout} className="text-zinc-500 hover:text-zinc-300 transition-colors" title="Sign out">
+          <button
+            onClick={logout}
+            className="text-zinc-500 hover:text-zinc-300 transition-colors"
+            title="Sign out"
+          >
             <LogOut className="h-3.5 w-3.5" />
           </button>
         </>
@@ -182,7 +225,7 @@ export function ChatHeader() {
                 value={apiKeyInput}
                 onChange={(e) => setApiKeyInput(e.target.value)}
                 placeholder="clk_..."
-                onKeyDown={(e) => e.key === 'Enter' && handleApiKeySubmit()}
+                onKeyDown={(e) => e.key === "Enter" && handleApiKeySubmit()}
                 className="flex-1 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-[11px] text-white outline-none focus:border-blue-500"
               />
               <button
@@ -192,7 +235,9 @@ export function ChatHeader() {
                 Go
               </button>
             </div>
-            {apiKeyError && <p className="text-[9px] text-red-400 mt-1">{apiKeyError}</p>}
+            {apiKeyError && (
+              <p className="text-[9px] text-red-400 mt-1">{apiKeyError}</p>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

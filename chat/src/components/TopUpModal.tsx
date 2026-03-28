@@ -6,6 +6,7 @@ import { Connection, PublicKey, Transaction, TransactionInstruction } from '@sol
 import { createQR } from '@solana/pay';
 import bs58 from 'bs58';
 import { api } from '../lib/api';
+import { SOLANA_RPC_URL, USDC_MINT_ADDRESS, SOLANA_CHAIN } from '../lib/solana-config';
 import { useAuthContext } from '../hooks/AuthContext';
 
 interface Props {
@@ -25,9 +26,8 @@ const MIN_AMOUNT = 1;
 // Solana constants
 const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
-const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+const USDC_MINT = new PublicKey(USDC_MINT_ADDRESS);
 const USDC_DECIMALS = 6;
-const SOLANA_RPC = import.meta.env.VITE_SOLANA_RPC_URL ?? `${window.location.origin}/api/solana-rpc`;
 const BASE_DEST = '0x48346152f7AaF4c645e939fC21Db0F9da287975d';
 
 /** Detect mobile by touch support + screen width */
@@ -94,7 +94,7 @@ function createAtaIdempotentInstruction(payer: PublicKey, ata: PublicKey, owner:
 }
 
 async function buildSolanaUsdcTx(senderAddress: string, destAddress: string, amountUsdc: number): Promise<Uint8Array> {
-  const conn = new Connection(SOLANA_RPC, 'confirmed');
+  const conn = new Connection(SOLANA_RPC_URL, 'confirmed');
   const { blockhash } = await conn.getLatestBlockhash('confirmed');
   const sender = new PublicKey(senderAddress);
   const dest = new PublicKey(destAddress);
@@ -279,45 +279,32 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
       return;
     }
 
-    // 3. Sign & send via Privy wallet — isolated catch so rejection never bleeds into confirm error
+    // 3. Sign & send via Privy wallet
     setTxState('signing');
-    console.log('[TopUp] Requesting wallet signature...');
-    let rawSignature: unknown;
+    console.log('[TopUp] Requesting wallet sign & send...');
+    let hash: string;
     try {
-      ({ signature: rawSignature } = await wallet.signAndSendTransaction({
+      const { signature } = await wallet.signAndSendTransaction({
         transaction: txBytes,
-        chain: 'solana:mainnet',
-      }));
+        chain: SOLANA_CHAIN,
+      });
+      // Privy may return string or Uint8Array depending on wallet adapter
+      hash = typeof signature === 'string'
+        ? signature
+        : bs58.encode(signature as Uint8Array);
     } catch (sigErr: unknown) {
-      console.error('[TopUp] Wallet sign/send failed:', sigErr, 'type:', typeof sigErr, 'keys:', sigErr && typeof sigErr === 'object' ? Object.keys(sigErr) : 'N/A');
+      console.error('[TopUp] Wallet sign/send failed:', sigErr);
       if (isWalletRejection(sigErr)) {
         setWalletRejected(true);
         setErrorMsg('Your wallet blocked this transaction. Try the QR code instead.');
       } else {
-        setErrorMsg('Wallet failed to send transaction. Try the QR code method instead.');
+        const detail = (sigErr as any)?.message || (sigErr as any)?.error?.message || '';
+        setErrorMsg(`Wallet failed to send: ${detail || 'unknown error'}. Try the QR code method instead.`);
       }
-      setTxState('error');
-      return; // Never call /topup/confirm when signing fails
-    }
-
-    // 4. Encode signature — Privy returns { signature: Uint8Array } per SDK types
-    console.log('[TopUp] Raw signature from Privy:', { type: typeof rawSignature, isUint8Array: rawSignature instanceof Uint8Array, length: rawSignature instanceof Uint8Array ? rawSignature.length : (typeof rawSignature === 'string' ? rawSignature.length : 'N/A'), value: rawSignature });
-    let hash: string;
-    try {
-      if (typeof rawSignature === 'string') {
-        hash = rawSignature; // Already a base58 tx hash string
-      } else if (rawSignature instanceof Uint8Array) {
-        hash = bs58.encode(rawSignature);
-      } else {
-        throw new Error('Unexpected signature type: ' + typeof rawSignature);
-      }
-    } catch (err: any) {
-      console.error('[TopUp] Signature encoding failed:', err, 'signature type:', typeof rawSignature, 'value:', rawSignature);
-      setErrorMsg('Wallet returned an unexpected response. Please try again.');
       setTxState('error');
       return;
     }
-    console.log('[TopUp] Encoded tx hash:', { hash, length: hash.length });
+    console.log('[TopUp] Tx sent, hash:', hash);
     setTxHash(hash);
 
     // 5. Confirm with backend (only reached when signing succeeded)
