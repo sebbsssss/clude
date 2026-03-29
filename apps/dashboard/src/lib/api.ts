@@ -295,6 +295,74 @@ class CludeAPI {
     return this.fetch('/api/memory-packs');
   }
 
+  // ── File Upload / Scene Extraction ──
+
+  /** Check if current wallet has access to file upload feature */
+  async checkUploadAccess(): Promise<boolean> {
+    try {
+      const url = this.appendWallet('/api/upload/check-access');
+      const result = await this.fetch<{ allowed: boolean }>(url);
+      return result.allowed;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Upload a file for node extraction → memory ingestion */
+  async uploadFile(file: File, title: string): Promise<{ batch_id: string; status: string; file_name: string; document_title: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('title', title);
+    if (this.walletAddress) formData.append('wallet', this.walletAddress);
+
+    const headers: Record<string, string> = {};
+    if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+
+    const res = await fetch(`${this.agentEndpoint}${this.appendWallet('/api/upload/process')}`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Upload failed' }));
+      throw new Error(err.error || `Upload failed (HTTP ${res.status})`);
+    }
+
+    return res.json();
+  }
+
+  /** List upload batches */
+  async listUploadBatches(): Promise<{ batches: Array<{
+    batch_id: string;
+    document_title: string;
+    file_name: string;
+    status: string;
+    total_nodes: number;
+    total_chunks: number;
+    chunks_completed: number;
+    chunks_failed: number;
+    chunks_pending: number;
+    chunks_processing: number;
+    created_at: string;
+    error_message?: string;
+  }> }> {
+    return this.fetch(this.appendWallet('/api/upload/batches'));
+  }
+
+  /** Get batch detail with memories */
+  async getUploadBatch(batchId: string): Promise<{
+    batch_id: string;
+    document_title: string;
+    file_name: string;
+    status: string;
+    chunks: Array<{ chunk_index: number; status: string; parsed_node_count: number; raw_response: string; error_message?: string }>;
+    total_nodes: number;
+    memories: Array<{ id: number; summary: string; tags: string[]; importance: number; created_at: string; metadata: any }>;
+  }> {
+    return this.fetch(this.appendWallet(`/api/upload/batch/${batchId}`));
+  }
+
   // List agents (scoped to current user's wallet or API key)
   async listAgents(): Promise<Agent[]> {
     try {

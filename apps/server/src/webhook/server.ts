@@ -12,6 +12,7 @@ import { cortexRoutes } from './cortex-routes';
 import { graphRoutes } from './graph-routes';
 import { campaignRoutes } from './campaign-routes';
 import { chatRoutes } from './chat-routes';
+import { uploadRoutes } from './upload-routes';
 import { topupWebhookRoutes, topupApiRoutes } from './topup-routes';
 import { getOpenRouterStats } from '../core/openrouter-client';
 import { isWebSearchEnabled } from '../core/web-search';
@@ -561,6 +562,9 @@ export function createServer(): express.Application {
 
   // Agent Dashboard (orchestration & monitoring)
   app.use('/api/dashboard', dashboardRoutes());
+
+  // File Upload → Scene Extraction → Memory pipeline (owner-gated)
+  app.use('/api/upload', uploadRoutes());
 
   // Chat API (memory-augmented chat with OpenRouter inference)
   app.use('/api/chat', chatRoutes());

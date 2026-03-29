@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuthContext } from '../hooks/AuthContext';
 import { AgentSelector } from './AgentSelector';
 import { useTheme } from '../hooks/useTheme';
+import { api } from '../lib/api';
 import styles from './Layout.module.css';
 
 const NAV_ITEMS = [
@@ -20,6 +21,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const { isDark, toggle } = useTheme();
   const [chatOpen, setChatOpen] = useState(false);
+  const [hasUploadAccess, setHasUploadAccess] = useState(false);
+
+  // Check if wallet has access to file upload feature
+  useEffect(() => {
+    if (walletAddress) {
+      api.checkUploadAccess().then(setHasUploadAccess).catch(() => setHasUploadAccess(false));
+    }
+  }, [walletAddress]);
+
   const displayName = email
     ? email
     : walletAddress
@@ -74,6 +84,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
               {item.label}
             </NavLink>
           ))}
+          {hasUploadAccess && (
+            <NavLink
+              to="/file-memory"
+              className={({ isActive }) =>
+                `${styles.navItem} ${isActive ? styles.navItemActive : ''}`
+              }
+            >
+              <span className={styles.navIcon}>▧</span>
+              File Memory
+            </NavLink>
+          )}
         </nav>
 
         <div className={styles.sidebarFooter}>
