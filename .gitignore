@@ -1,6 +1,10 @@
 node_modules/
 dist/
 .env
+
+# Frontend built assets (built in Docker)
+src/verify-app/public/chat/
+src/verify-app/public/dashboard/
 *.db
 *.db-shm
 *.db-wal
@@ -12,3 +16,24 @@ scripts/.longmemeval-cache/
 .gstack/
 .mcp.json
 .DS_Store
+
+# AI spec-driven development (local dev aids, not committed)
+rules/
+specs/
+
+# AI tool configs (per-developer, derived from rules/)
+.cursorrules
+.cursor/
+.github/copilot-instructions.md
+.windsurfrules
+.windsurfcontext
+.clinerules
+.aider.conf.yml
+.aider*
+.continue/
+.continuerc*
+.copilot/
+.bolt/
+.idx/
+.replit
+rules/99-private.md
