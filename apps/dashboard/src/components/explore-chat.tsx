@@ -7,6 +7,7 @@ interface ChatMessage {
   content: string;
   memoryIds?: number[];
   streaming?: boolean;
+  entities?: string[]; // entity filters active when this message was sent
 }
 
 /** Extract ordered Memory #ID references from LLM text */
@@ -29,12 +30,14 @@ interface Props {
   onNarrativeChain: (chain: number[]) => void;
   onMemoryClick: (id: number) => void;
   onEntityClick?: (entity: string) => void;
+  entityFilters: string[];
+  onRemoveEntityFilter: (entity: string) => void;
   knownEntities: Set<string>;
   searchResults: Array<{ id: number; _score?: number; [key: string]: any }>;
   setSearchResults: (results: Array<{ id: number; _score?: number; [key: string]: any }>) => void;
 }
 
-export function ExploreChat({ onHighlight, onNarrativeChain, onMemoryClick, onEntityClick, knownEntities, searchResults, setSearchResults }: Props) {
+export function ExploreChat({ onHighlight, onNarrativeChain, onMemoryClick, onEntityClick, entityFilters, onRemoveEntityFilter, knownEntities, searchResults, setSearchResults }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
 
@@ -71,6 +74,7 @@ export function ExploreChat({ onHighlight, onNarrativeChain, onMemoryClick, onEn
       id: `user-${Date.now()}`,
       role: 'user',
       content: input.trim(),
+      entities: entityFilters.length > 0 ? [...entityFilters] : undefined,
     };
 
     const assistantId = `assistant-${Date.now()}`;
@@ -91,8 +95,10 @@ export function ExploreChat({ onHighlight, onNarrativeChain, onMemoryClick, onEn
     const history = messages.map(m => ({ role: m.role, content: m.content }));
 
     try {
+      // Prepend entity context to the query
+      const entityContext = entityFilters.length > 0 ? `[Context: focusing on ${entityFilters.join(', ')}] ` : '';
       await api.exploreChat(
-        userMsg.content,
+        entityContext + userMsg.content,
         history,
         (chunk) => {
           contentRef.current += chunk;
@@ -315,6 +321,17 @@ export function ExploreChat({ onHighlight, onNarrativeChain, onMemoryClick, onEn
                 fontFamily: 'var(--mono)',
                 whiteSpace: 'pre-wrap',
               }}>
+                {msg.role === 'user' && msg.entities && msg.entities.length > 0 && (
+                  <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginBottom: 4 }}>
+                    {msg.entities.map(e => (
+                      <span key={e} style={{
+                        fontSize: 9, padding: '1px 6px', fontWeight: 600,
+                        background: 'rgba(16, 185, 129, 0.15)', color: '#10b981',
+                        borderRadius: 8, border: '1px solid rgba(16, 185, 129, 0.25)',
+                      }}>{e}</span>
+                    ))}
+                  </div>
+                )}
                 {msg.role === 'assistant' ? renderContent(msg.content, msg.streaming) : msg.content}
                 {msg.streaming && !msg.content && (
                   <span style={{ color: 'var(--text-faint)', letterSpacing: 2 }}>
@@ -328,6 +345,45 @@ export function ExploreChat({ onHighlight, onNarrativeChain, onMemoryClick, onEn
             </div>
           ))}
           <div ref={messagesEndRef} />
+        </div>
+      )}
+
+      {/* Entity filter chips */}
+      {entityFilters.length > 0 && (
+        <div style={{
+          width: '100%',
+          display: 'flex',
+          gap: 4,
+          flexWrap: 'wrap',
+          marginBottom: 6,
+          paddingLeft: 4,
+        }}>
+          {entityFilters.map(entity => (
+            <span
+              key={entity}
+              onClick={() => onRemoveEntityFilter(entity)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '2px 8px',
+                fontSize: 10,
+                fontFamily: 'var(--mono)',
+                fontWeight: 600,
+                background: 'rgba(16, 185, 129, 0.12)',
+                color: '#10b981',
+                borderRadius: 10,
+                cursor: 'pointer',
+                border: '1px solid rgba(16, 185, 129, 0.25)',
+              }}
+            >
+              {entity}
+              <span style={{ fontSize: 8, opacity: 0.6 }}>x</span>
+            </span>
+          ))}
+          <span style={{ fontSize: 9, color: 'var(--text-faint)', alignSelf: 'center' }}>
+            included in search
+          </span>
         </div>
       )}
 
@@ -347,7 +403,7 @@ export function ExploreChat({ onHighlight, onNarrativeChain, onMemoryClick, onEn
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ask about your memories..."
+          placeholder={entityFilters.length > 0 ? `Ask about ${entityFilters.join(', ')}...` : 'Ask about your memories...'}
           disabled={streaming}
           style={{
             flex: 1,

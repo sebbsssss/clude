@@ -96,6 +96,15 @@ export function Explore() {
     if (node) setSelectedNode(node);
   }, [nodeMap]);
 
+  // Click entity → add/remove as persistent search filter
+  const [entityFilters, setEntityFilters] = useState<string[]>([]);
+
+  const handleEntityClick = useCallback((entity: string) => {
+    setEntityFilters(prev =>
+      prev.includes(entity) ? prev.filter(e => e !== entity) : [...prev, entity]
+    );
+  }, []);
+
   const handleMemoryClick = useCallback((id: number) => {
     const node = nodeMap.get(id);
     if (node) setSelectedNode(node);
@@ -258,6 +267,9 @@ export function Explore() {
         onHighlight={setHighlightedIds}
         onNarrativeChain={setNarrativeChain}
         onMemoryClick={handleMemoryClick}
+        onEntityClick={handleEntityClick}
+        entityFilters={entityFilters}
+        onRemoveEntityFilter={(e) => setEntityFilters(prev => prev.filter(x => x !== e))}
         knownEntities={knownEntities}
         searchResults={searchResults}
         setSearchResults={setSearchResults}
