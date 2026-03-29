@@ -434,13 +434,10 @@ export function createServer(): express.Application {
   });
 
   // Brain visualization API (full graph data for neural network viz)
-  // Falls back to OWNER_WALLET for unauthenticated public preview (brain.html)
+  // Brain data — always scoped to the requesting user's wallet
   app.get('/api/brain', async (req: Request, res: Response) => {
     try {
       const limit = Math.min(parseInt(req.query.limit as string) || 300, 500);
-      if (!req.query.wallet && config.owner.wallet) {
-        req.query.wallet = config.owner.wallet;
-      }
       const result = await withRequestScope(req, () =>
         Promise.all([getRecentMemories(8760, undefined, limit), getMemoryStats()])
       );
@@ -475,12 +472,8 @@ export function createServer(): express.Application {
   });
 
   // Consciousness stream API (self-model, emergence, procedural insights)
-  // Falls back to OWNER_WALLET for unauthenticated public preview
   app.get('/api/brain/consciousness', async (req: Request, res: Response) => {
     try {
-      if (!req.query.wallet && config.owner.wallet) {
-        req.query.wallet = config.owner.wallet;
-      }
       const result = await withRequestScope(req, () =>
         Promise.all([
           getRecentMemories(8760, ['self_model'], 10),

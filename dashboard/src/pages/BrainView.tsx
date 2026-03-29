@@ -1,9 +1,24 @@
 import { useAuthContext } from '../hooks/AuthContext';
 
 export function BrainView() {
-  const { walletAddress } = useAuthContext();
+  const { walletAddress, ready } = useAuthContext();
 
-  const brainUrl = `/brain.html${walletAddress ? '?wallet=' + encodeURIComponent(walletAddress) : ''}`;
+  if (!ready || !walletAddress) {
+    return (
+      <div style={{
+        height: 'calc(100vh - 80px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#a1a1aa',
+        fontSize: '14px',
+      }}>
+        Loading wallet...
+      </div>
+    );
+  }
+
+  const brainUrl = `/brain.html?wallet=${encodeURIComponent(walletAddress)}`;
 
   return (
     <div style={{
@@ -13,6 +28,7 @@ export function BrainView() {
       margin: '-40px',
     }}>
       <iframe
+        key={walletAddress}
         src={brainUrl}
         style={{
           width: '100%',
