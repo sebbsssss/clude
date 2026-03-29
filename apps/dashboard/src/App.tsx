@@ -13,6 +13,7 @@ import { MemoryPacks } from './pages/MemoryPacks';
 import { Settings } from './pages/Settings';
 import { Setup } from './pages/Setup';
 import { FileMemory } from './pages/file-memory';
+import { Explore } from './pages/explore';
 
 function AuthenticatedApp() {
   return (
@@ -26,6 +27,7 @@ function AuthenticatedApp() {
           <Route path="/decay" element={<DecayHeatmap />} />
           <Route path="/packs" element={<MemoryPacks />} />
           <Route path="/file-memory" element={<FileMemory />} />
+          <Route path="/explore" element={<Explore />} />
           <Route path="/setup" element={<Setup />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />

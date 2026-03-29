@@ -414,6 +414,55 @@ export function cortexRoutes(): Router {
     }
   });
 
+  // GET /brain/graph — memories + memory_links for graph visualization
+  router.get('/brain/graph', async (req: Request, res: Response) => {
+    try {
+      const cortexReq = req as CortexRequest;
+      const limit = Math.min(parseInt(req.query.limit as string) || 500, 2000);
+
+      const memories = await withOwnerWallet(cortexReq.ownerWallet!, async () => {
+        return getRecentMemories(8760, undefined, limit);
+      });
+
+      const memoryIds = memories.map(m => m.id);
+
+      // Fetch links — use RPC to avoid URL length limits with large .in() arrays
+      let links: any[] = [];
+      if (memoryIds.length > 0) {
+        const db = getDb();
+        const { data, error: linkErr } = await db.rpc('get_links_for_ids', {
+          ids: memoryIds,
+        });
+        if (linkErr) {
+          log.warn({ err: linkErr }, 'Failed to fetch links, falling back to empty');
+        }
+        links = data || [];
+      }
+
+      await recordAgentInteraction(cortexReq.agent!.agent_id);
+      res.json({
+        nodes: memories.map(m => ({
+          id: m.id,
+          type: m.memory_type,
+          summary: m.summary,
+          content: m.content,
+          tags: m.tags || [],
+          importance: m.importance,
+          decay: m.decay_factor,
+          valence: m.emotional_valence,
+          accessCount: m.access_count,
+          source: m.source,
+          createdAt: m.created_at,
+        })),
+        links,
+        total: memories.length,
+      });
+    } catch (err) {
+      log.error({ err }, 'Cortex brain/graph endpoint error');
+      res.status(500).json({ error: 'Failed to fetch brain graph data' });
+    }
+  });
+
   // GET /self-model — self-model memories
   router.get('/self-model', async (req: Request, res: Response) => {
     try {

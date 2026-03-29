@@ -67,6 +67,7 @@ export const OPENROUTER_MODELS = {
   'glm-4': 'z-ai/glm-4.5',
 
   // Fast
+  'claude-haiku-4.5': 'anthropic/claude-haiku-4-5-20251001',
   'llama-3b': 'meta-llama/llama-3.2-3b-instruct',
   'qwen-4b': 'qwen/qwen3-4b:free',
   'venice-medium': 'mistralai/mistral-small-3.1-24b-instruct',

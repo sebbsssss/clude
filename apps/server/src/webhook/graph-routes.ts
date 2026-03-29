@@ -258,5 +258,111 @@ export function graphRoutes(): Router {
     }
   });
 
+  // POST /recall — wallet-scoped memory recall for explore search (legacy mode)
+  router.post('/recall', async (req: Request, res: Response) => {
+    try {
+      const wallet = (req.query.wallet as string) || req.body.wallet;
+      if (!wallet) {
+        res.status(400).json({ error: 'wallet query param or body field required' });
+        return;
+      }
+
+      const { query, limit: rawLimit, memoryTypes } = req.body;
+      const effectiveLimit = Math.min(Number(rawLimit) || 10, 50);
+
+      const { withOwnerWallet } = await import('../core/owner-context');
+      const { recallMemories } = await import('../core/memory');
+
+      const memories = await withOwnerWallet(wallet, async () => {
+        return recallMemories({
+          query: query ? String(query) : undefined,
+          limit: effectiveLimit,
+          memoryTypes: Array.isArray(memoryTypes) ? memoryTypes : undefined,
+          skipExpansion: true,
+        });
+      });
+
+      res.json({
+        memories: (memories || []).map((m: any) => ({
+          id: m.id,
+          memory_type: m.memory_type,
+          summary: m.summary,
+          content: m.content,
+          tags: m.tags || [],
+          importance: m.importance,
+          decay_factor: m.decay_factor,
+          _score: (m as any)._score || null,
+        })),
+        count: (memories || []).length,
+      });
+    } catch (err) {
+      log.error({ err }, 'Graph recall error');
+      res.status(500).json({ error: 'Recall failed' });
+    }
+  });
+
+  // GET /memory-graph — memories + memory_links for 3D visualization (legacy mode)
+  router.get('/memory-graph', async (req: Request, res: Response) => {
+    try {
+      const wallet = req.query.wallet as string;
+      const limit = Math.min(parseInt(req.query.limit as string) || 500, 2000);
+
+      const db = getDb();
+
+      // Fetch memories scoped to wallet
+      let memQuery = db
+        .from('memories')
+        .select('id, memory_type, summary, content, tags, importance, decay_factor, emotional_valence, access_count, source, created_at')
+        .order('importance', { ascending: false })
+        .limit(limit);
+
+      if (wallet) {
+        memQuery = memQuery.eq('owner_wallet', wallet);
+      }
+
+      const { data: memories, error: memErr } = await memQuery;
+      if (memErr) {
+        log.error({ err: memErr }, 'Failed to fetch memories for graph');
+        res.status(500).json({ error: 'Failed to fetch memories' });
+        return;
+      }
+
+      const memoryIds = (memories || []).map(m => m.id);
+
+      // Fetch links — use raw SQL via rpc to avoid URL length limits with large .in() arrays
+      let links: any[] = [];
+      if (memoryIds.length > 0) {
+        const { data, error: linkErr } = await db.rpc('get_links_for_ids', {
+          ids: memoryIds,
+        });
+        if (linkErr) {
+          log.warn({ err: linkErr }, 'Failed to fetch links, falling back to empty');
+        }
+        links = data || [];
+      }
+
+      res.json({
+        nodes: (memories || []).map(m => ({
+          id: m.id,
+          type: m.memory_type,
+          summary: m.summary,
+          content: m.content,
+          tags: m.tags || [],
+          importance: m.importance,
+          decay: m.decay_factor,
+          valence: m.emotional_valence,
+          accessCount: m.access_count,
+          source: m.source,
+          createdAt: m.created_at,
+        })),
+        links,
+        total: (memories || []).length,
+      });
+    } catch (err) {
+      log.error({ err }, 'Memory graph endpoint error');
+      res.status(500).json({ error: 'Failed to fetch memory graph' });
+    }
+  });
+
   return router;
 }

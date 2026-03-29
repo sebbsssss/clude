@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthContext } from '../hooks/AuthContext';
 import { AgentSelector } from './AgentSelector';
 import { useTheme } from '../hooks/useTheme';
@@ -19,9 +19,11 @@ const NAV_ITEMS = [
 export function Layout({ children }: { children: React.ReactNode }) {
   const { walletAddress, email, logout } = useAuthContext();
   const navigate = useNavigate();
+  const location = useLocation();
   const { isDark, toggle } = useTheme();
   const [chatOpen, setChatOpen] = useState(false);
   const [hasUploadAccess, setHasUploadAccess] = useState(false);
+  const isExplorePage = location.pathname === '/explore';
 
   // Check if wallet has access to file upload feature
   useEffect(() => {
@@ -85,15 +87,26 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </NavLink>
           ))}
           {hasUploadAccess && (
-            <NavLink
-              to="/file-memory"
-              className={({ isActive }) =>
-                `${styles.navItem} ${isActive ? styles.navItemActive : ''}`
-              }
-            >
-              <span className={styles.navIcon}>▧</span>
-              File Memory
-            </NavLink>
+            <>
+              <NavLink
+                to="/file-memory"
+                className={({ isActive }) =>
+                  `${styles.navItem} ${isActive ? styles.navItemActive : ''}`
+                }
+              >
+                <span className={styles.navIcon}>▧</span>
+                File Memory
+              </NavLink>
+              <NavLink
+                to="/explore"
+                className={({ isActive }) =>
+                  `${styles.navItem} ${isActive ? styles.navItemActive : ''}`
+                }
+              >
+                <span className={styles.navIcon}>◆</span>
+                Explore
+              </NavLink>
+            </>
           )}
         </nav>
 

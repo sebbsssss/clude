@@ -295,6 +295,117 @@ class CludeAPI {
     return this.fetch('/api/memory-packs');
   }
 
+  // ── Explore (Memory Graph + Search) ──
+
+  /** Explore agent chat — SSE streaming with two-phase LLM */
+  async exploreChat(
+    content: string,
+    history: Array<{ role: string; content: string }>,
+    onChunk: (text: string) => void,
+    onRecalled: (ids: number[]) => void,
+    onDone: (data: { memory_ids: number[]; clean_content: string }) => void,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const res = await fetch(`${this.agentEndpoint}/api/explore`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
+      },
+      body: JSON.stringify({ content, history, wallet: this.walletAddress }),
+      signal,
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Request failed' }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith(':')) continue; // keepalive
+        if (!line.startsWith('data: ')) continue;
+        const raw = line.slice(6);
+        if (raw === '[DONE]') continue;
+
+        try {
+          const data = JSON.parse(raw);
+          if (data.error) throw new Error(data.error);
+          if (data.recalled_ids) onRecalled(data.recalled_ids);
+          if (data.content) onChunk(data.content);
+          if (data.done) { onDone(data); return; }
+        } catch (e) {
+          if (e instanceof Error && e.message) throw e;
+        }
+      }
+    }
+
+    onDone({ memory_ids: [], clean_content: '' });
+  }
+
+  /** Wallet-scoped recall for the explore page */
+  async exploreSearch(query: string, opts?: { limit?: number; types?: string[] }): Promise<Memory[]> {
+    if (this.mode === 'cortex') {
+      const result = await this.fetch<any>('/api/cortex/recall', {
+        method: 'POST',
+        body: JSON.stringify({
+          query,
+          limit: opts?.limit || 20,
+          memory_types: opts?.types,
+        }),
+      });
+      return Array.isArray(result) ? result : (result?.memories || []);
+    }
+    const result = await this.fetch<any>(this.appendWallet('/api/graph/recall'), {
+      method: 'POST',
+      body: JSON.stringify({
+        query,
+        limit: opts?.limit || 20,
+        memoryTypes: opts?.types,
+        wallet: this.walletAddress,
+      }),
+    });
+    return Array.isArray(result) ? result : (result?.memories || []);
+  }
+
+  // ── Memory Graph (3D Visualization) ──
+
+  /** Fetch memories + their links for graph visualization */
+  async getMemoryGraph(opts?: { limit?: number }): Promise<{
+    nodes: Array<{
+      id: number;
+      type: string;
+      summary: string;
+      content: string;
+      tags: string[];
+      importance: number;
+      decay: number;
+      valence: number;
+      accessCount: number;
+      source: string;
+      createdAt: string;
+    }>;
+    links: Array<{ source_id: number; target_id: number; link_type: string; strength: number }>;
+    total: number;
+  }> {
+    const limit = opts?.limit || 500;
+    if (this.mode === 'cortex') {
+      return this.fetch(`/api/cortex/brain/graph?limit=${limit}`);
+    }
+    return this.fetch(this.appendWallet(`/api/graph/memory-graph?limit=${limit}`));
+  }
+
   // ── File Upload / Scene Extraction ──
 
   /** Check if current wallet has access to file upload feature */

@@ -13,6 +13,7 @@ import { graphRoutes } from './graph-routes';
 import { campaignRoutes } from './campaign-routes';
 import { chatRoutes } from './chat-routes';
 import { uploadRoutes } from './upload-routes';
+import { exploreRoutes } from './explore-routes';
 import { topupWebhookRoutes, topupApiRoutes } from './topup-routes';
 import { getOpenRouterStats } from '../core/openrouter-client';
 import { isWebSearchEnabled } from '../core/web-search';
@@ -565,6 +566,9 @@ export function createServer(): express.Application {
 
   // File Upload → Scene Extraction → Memory pipeline (owner-gated)
   app.use('/api/upload', uploadRoutes());
+
+  // Explore Agent (memory graph chat)
+  app.use('/api/explore', exploreRoutes());
 
   // Chat API (memory-augmented chat with OpenRouter inference)
   app.use('/api/chat', chatRoutes());
