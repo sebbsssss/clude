@@ -1,0 +1,40 @@
+node_modules/
+dist/
+.git/
+.env
+.env.*
+!.env.example
+
+# Frontend built assets (rebuilt in Docker)
+src/verify-app/public/chat/
+src/verify-app/public/dashboard/
+
+# Dev tooling
+.claude/
+.gstack/
+.cursor/
+.github/
+.vscode/
+*.db
+*.db-shm
+*.db-wal
+
+# Docs and non-build files
+docs/
+experiments/
+benchmarks/
+agents/
+examples/
+rules/
+specs/
+
+# Anchor / Rust (not needed for Node build)
+programs/
+target/
+Anchor.toml
+
+# Misc
+*.md
+!README.md
+LICENSE
+.DS_Store

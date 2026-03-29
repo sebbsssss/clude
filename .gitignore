@@ -1,5 +1,6 @@
 node_modules/
 dist/
+.turbo/
 .env
 
 # Frontend built assets (built in Docker)

@@ -1,0 +1,6 @@
+{
+  "name": "@clude/database",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Supabase schema and migrations for Clude memory system"
+}
