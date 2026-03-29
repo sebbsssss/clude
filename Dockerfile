@@ -1,49 +1,50 @@
 # Build stage
 FROM node:22-slim AS builder
 
+RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
+
 WORKDIR /app
 
-# Backend dependencies
-COPY package.json package-lock.json* ./
-COPY scripts/ ./scripts/
-RUN npm ci
+# Copy workspace config and all package.json files for install
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY packages/tsconfig/ ./packages/tsconfig/
+COPY apps/server/package.json ./apps/server/
+COPY apps/chat/package.json ./apps/chat/
+COPY apps/dashboard/package.json ./apps/dashboard/
 
-# Frontend dependencies
-COPY chat/package.json chat/package-lock.json* ./chat/
-RUN cd chat && npm ci --legacy-peer-deps
-
-COPY dashboard/package.json dashboard/package-lock.json* ./dashboard/
-RUN cd dashboard && npm ci --legacy-peer-deps
+RUN pnpm install --frozen-lockfile
 
 # Copy source
-COPY tsconfig.json ./
-COPY src/ ./src/
-COPY chat/ ./chat/
-COPY dashboard/ ./dashboard/
+COPY apps/server/ ./apps/server/
+COPY apps/chat/ ./apps/chat/
+COPY apps/dashboard/ ./apps/dashboard/
 
 # Build backend
-RUN npm run build
+RUN pnpm --filter @clude/server build
 
 # Build frontends
 ARG PRIVY_APP_ID
 ENV VITE_PRIVY_APP_ID=$PRIVY_APP_ID
 
-RUN cd chat && npx vite build
-RUN cd dashboard && npx vite build
+RUN pnpm --filter @clude/chat exec vite build
+RUN pnpm --filter @clude/dashboard exec vite build
 
 # Production stage
 FROM node:22-slim
 
+RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
+
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
-COPY scripts/ ./scripts/
-RUN npm ci
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY packages/tsconfig/ ./packages/tsconfig/
+COPY apps/server/package.json ./apps/server/
+RUN pnpm install --frozen-lockfile --prod
 
-COPY --from=builder /app/dist/ ./dist/
-COPY --from=builder /app/src/verify-app/public/ ./dist/verify-app/public/
+COPY --from=builder /app/apps/server/dist/ ./apps/server/dist/
+COPY --from=builder /app/apps/server/src/verify-app/public/ ./apps/server/dist/verify-app/public/
 
 ENV NODE_ENV=production
 EXPOSE 3000
 
-CMD ["node", "dist/index.js"]
+CMD ["node", "apps/server/dist/index.js"]
