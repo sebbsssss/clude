@@ -95,6 +95,7 @@ export function useAuth(): AuthState {
   }, [privyLogin]);
 
   const logout = useCallback(() => {
+    api.onAuthExpired(null);
     loggingOutRef.current = true;
     setCortexKey(null);
     setWalletAddress(null);
@@ -112,6 +113,12 @@ export function useAuth(): AuthState {
       loggingOutRef.current = false;
     }
   }, [privyAuth, privyLogout]);
+
+  // On 401 (key revoked): logout gracefully
+  useEffect(() => {
+    api.onAuthExpired(() => logout());
+    return () => api.onAuthExpired(null);
+  }, [logout]);
 
   const loginWithApiKey = useCallback(async (apiKey: string): Promise<boolean> => {
     if (cortexKey) {

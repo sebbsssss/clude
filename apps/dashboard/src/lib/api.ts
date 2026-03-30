@@ -5,15 +5,29 @@ const API_BASE = import.meta.env.VITE_API_BASE || '';
 type ApiMode = 'legacy' | 'cortex';
 type RefreshListener = () => void;
 
+type ApiResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: 'auth_expired' }
+  | { ok: false; error: 'server'; status: number; message: string };
+
+export class AuthExpiredError extends Error {
+  constructor() { super('Session expired'); this.name = 'AuthExpiredError'; }
+}
+
 class CludeAPI {
   private token: string | null = null;
   private agentEndpoint: string = API_BASE;
   private mode: ApiMode = 'legacy';
   private walletAddress: string | null = null;
   private refreshListeners: Set<RefreshListener> = new Set();
+  private authExpiredCallback: (() => void) | null = null;
 
   setToken(token: string) {
     this.token = token;
+  }
+
+  onAuthExpired(fn: (() => void) | null) {
+    this.authExpiredCallback = fn;
   }
 
   setAgentEndpoint(endpoint: string) {
@@ -50,6 +64,21 @@ class CludeAPI {
     this.refreshListeners.forEach(fn => fn());
   }
 
+  private async request(url: string, init: RequestInit): Promise<ApiResult<Response>> {
+    let res: Response;
+    try {
+      res = await fetch(url, init);
+    } catch {
+      return { ok: false, error: 'server', status: 0, message: 'Network error' };
+    }
+    if (res.ok) return { ok: true, data: res };
+    if (res.status === 401) {
+      this.authExpiredCallback?.();
+      return { ok: false, error: 'auth_expired' };
+    }
+    return { ok: false, error: 'server', status: res.status, message: res.statusText };
+  }
+
   private async fetch<T>(path: string, opts?: RequestInit): Promise<T> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -58,23 +87,23 @@ class CludeAPI {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
 
-    const res = await fetch(`${this.agentEndpoint}${path}`, {
+    const result = await this.request(`${this.agentEndpoint}${path}`, {
       ...opts,
       headers: { ...headers, ...opts?.headers },
     });
 
-    if (!res.ok) {
-      throw new Error(`API error: ${res.status} ${res.statusText}`);
-    }
-
-    return res.json();
+    if (result.ok) return result.data.json();
+    if (result.error === 'auth_expired') throw new AuthExpiredError();
+    throw new Error(`API error: ${result.status} ${result.message}`);
   }
 
-  /** Validate a Cortex API key by pinging stats. */
+  /** Validate a Cortex API key by pinging stats. Bypasses request() to avoid triggering auth expiry. */
   async validateApiKey(): Promise<boolean> {
     try {
-      await this.fetch('/api/cortex/stats');
-      return true;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+      const res = await fetch(`${this.agentEndpoint}/api/cortex/stats`, { headers });
+      return res.ok;
     } catch {
       return false;
     }
@@ -306,7 +335,7 @@ class CludeAPI {
     onDone: (data: { memory_ids: number[]; clean_content: string }) => void,
     signal?: AbortSignal,
   ): Promise<void> {
-    const res = await fetch(`${this.agentEndpoint}/api/explore`, {
+    const result = await this.request(`${this.agentEndpoint}/api/explore`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -316,12 +345,12 @@ class CludeAPI {
       signal,
     });
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: 'Request failed' }));
-      throw new Error(err.error || `HTTP ${res.status}`);
+    if (!result.ok) {
+      if (result.error === 'auth_expired') throw new AuthExpiredError();
+      throw new Error(`HTTP ${result.status}: ${result.message}`);
     }
 
-    const reader = res.body!.getReader();
+    const reader = result.data.body!.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
 
@@ -429,18 +458,18 @@ class CludeAPI {
     const headers: Record<string, string> = {};
     if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
 
-    const res = await fetch(`${this.agentEndpoint}${this.appendWallet('/api/upload/process')}`, {
+    const result = await this.request(`${this.agentEndpoint}${this.appendWallet('/api/upload/process')}`, {
       method: 'POST',
       headers,
       body: formData,
     });
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: 'Upload failed' }));
-      throw new Error(err.error || `Upload failed (HTTP ${res.status})`);
+    if (!result.ok) {
+      if (result.error === 'auth_expired') throw new AuthExpiredError();
+      throw new Error(`Upload failed (HTTP ${result.status})`);
     }
 
-    return res.json();
+    return result.data.json();
   }
 
   /** List upload batches */

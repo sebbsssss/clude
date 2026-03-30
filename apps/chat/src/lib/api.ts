@@ -2,11 +2,25 @@ import type { ChatModel, Conversation, Message, MemoryStats, MemorySummary, Comp
 
 const API_BASE = '';
 
+type ApiResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: 'auth_expired' }
+  | { ok: false; error: 'server'; status: number; message: string };
+
+export class AuthExpiredError extends Error {
+  constructor() { super('Session expired'); this.name = 'AuthExpiredError'; }
+}
+
 class ChatAPI {
   private cortexKey: string | null = null;
+  private authExpiredCallback: (() => void) | null = null;
 
   setKey(key: string | null) {
     this.cortexKey = key;
+  }
+
+  onAuthExpired(fn: (() => void) | null) {
+    this.authExpiredCallback = fn;
   }
 
   private headers(): Record<string, string> {
@@ -15,6 +29,35 @@ class ChatAPI {
       h['Authorization'] = `Bearer ${this.cortexKey}`;
     }
     return h;
+  }
+
+  private async request(url: string, init?: RequestInit): Promise<ApiResult<Response>> {
+    let res: Response;
+    try {
+      res = await fetch(url, init);
+    } catch {
+      return { ok: false, error: 'server', status: 0, message: 'Network error' };
+    }
+    if (res.ok) return { ok: true, data: res };
+    if (res.status === 401 && this.cortexKey) {
+      this.authExpiredCallback?.();
+      return { ok: false, error: 'auth_expired' };
+    }
+    return { ok: false, error: 'server', status: res.status, message: res.statusText };
+  }
+
+  private async fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+    const result = await this.request(url, { ...init, headers: { ...this.headers(), ...init?.headers } });
+    if (result.ok) return result.data.json();
+    if (result.error === 'auth_expired') throw new AuthExpiredError();
+    throw new Error(`API error: ${result.status} ${result.message}`);
+  }
+
+  private async fetchStream(url: string, init?: RequestInit): Promise<Response> {
+    const result = await this.request(url, { ...init, headers: { ...this.headers(), ...init?.headers } });
+    if (result.ok) return result.data;
+    if (result.error === 'auth_expired') throw new AuthExpiredError();
+    throw new Error(`HTTP ${result.status}: ${result.message}`);
   }
 
   async getModels(): Promise<ChatModel[]> {
@@ -48,92 +91,61 @@ class ChatAPI {
   }
 
   async createConversation(model?: string): Promise<Conversation> {
-    const res = await fetch(`${API_BASE}/api/chat/conversations`, {
+    return this.fetchJson(`${API_BASE}/api/chat/conversations`, {
       method: 'POST',
-      headers: this.headers(),
       body: JSON.stringify({ model }),
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: 'Request failed' }));
-      throw new Error(err.error || `Failed to create conversation (HTTP ${res.status})`);
-    }
-    return res.json();
   }
 
   async listConversations(limit = 50): Promise<Conversation[]> {
-    const res = await fetch(`${API_BASE}/api/chat/conversations?limit=${limit}`, {
-      headers: this.headers(),
-    });
-    if (!res.ok) throw new Error('Failed to list conversations');
-    return res.json();
+    return this.fetchJson(`${API_BASE}/api/chat/conversations?limit=${limit}`);
   }
 
   async getConversation(id: string, before?: string): Promise<Conversation & { messages: Message[]; hasMore: boolean }> {
     const url = before
       ? `${API_BASE}/api/chat/conversations/${id}?before=${encodeURIComponent(before)}`
       : `${API_BASE}/api/chat/conversations/${id}`;
-    const res = await fetch(url, { headers: this.headers() });
-    if (!res.ok) throw new Error('Failed to get conversation');
-    return res.json();
+    return this.fetchJson(url);
   }
 
   async deleteConversation(id: string): Promise<void> {
-    const res = await fetch(`${API_BASE}/api/chat/conversations/${id}`, {
+    await this.fetchJson(`${API_BASE}/api/chat/conversations/${id}`, {
       method: 'DELETE',
-      headers: this.headers(),
     });
-    if (!res.ok) throw new Error('Failed to delete conversation');
   }
 
   async greet(onChunk: (text: string) => void, onDone: (data: any) => void, signal?: AbortSignal): Promise<void> {
-    const res = await fetch(`${API_BASE}/api/chat/greet`, {
+    const res = await this.fetchStream(`${API_BASE}/api/chat/greet`, {
       method: 'POST',
-      headers: this.headers(),
       body: JSON.stringify({}),
       signal,
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: 'Greeting failed' }));
-      throw new Error(err.error || `HTTP ${res.status}`);
-    }
     await this.readSSE(res, onChunk, onDone);
   }
 
   async sendMessage(conversationId: string, content: string, model: string, onChunk: (text: string) => void, onDone: (data: any) => void, signal?: AbortSignal): Promise<void> {
-    const res = await fetch(`${API_BASE}/api/chat/conversations/${conversationId}/messages`, {
+    const res = await this.fetchStream(`${API_BASE}/api/chat/conversations/${conversationId}/messages`, {
       method: 'POST',
-      headers: this.headers(),
       body: JSON.stringify({ content, model }),
       signal,
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: 'Request failed' }));
-      throw new Error(err.error || `HTTP ${res.status}`);
-    }
     await this.readSSE(res, onChunk, onDone);
   }
 
   async getMemoryStats(): Promise<MemoryStats> {
-    const res = await fetch(`${API_BASE}/api/cortex/stats`, { headers: this.headers() });
-    if (!res.ok) throw new Error('Failed to fetch memory stats');
-    return res.json();
+    return this.fetchJson(`${API_BASE}/api/cortex/stats`);
   }
 
   async getRecentMemories(limit = 20): Promise<MemorySummary[]> {
-    const res = await fetch(`${API_BASE}/api/cortex/recent?limit=${limit}`, { headers: this.headers() });
-    if (!res.ok) throw new Error('Failed to fetch recent memories');
-    const data = await res.json();
+    const data = await this.fetchJson<any>(`${API_BASE}/api/cortex/recent?limit=${limit}`);
     return data.memories || data;
   }
 
   async importMemoryPack(pack: any): Promise<{ imported: number }> {
-    const res = await fetch(`${API_BASE}/api/cortex/packs/import`, {
+    return this.fetchJson(`${API_BASE}/api/cortex/packs/import`, {
       method: 'POST',
-      headers: this.headers(),
       body: JSON.stringify({ pack }),
     });
-    if (!res.ok) throw new Error('Failed to import memory pack');
-    return res.json();
   }
 
   async getCompoundMarkets(params: {
@@ -195,9 +207,7 @@ class ChatAPI {
   }
 
   async getBalance(): Promise<{ balance_usdc: number; wallet_address: string; promo?: boolean; promo_credit_usdc?: number }> {
-    const res = await fetch(`${API_BASE}/api/chat/balance`, { headers: this.headers() });
-    if (!res.ok) throw new Error(`Failed to fetch balance (HTTP ${res.status})`);
-    return res.json();
+    return this.fetchJson(`${API_BASE}/api/chat/balance`);
   }
 
   async createTopupIntent(amountUsdc: number, chain: 'solana' | 'base'): Promise<{
@@ -207,39 +217,21 @@ class ChatAPI {
     chain: string;
     dest_address: string;
   }> {
-    const res = await fetch(`${API_BASE}/api/chat/topup/intent`, {
+    return this.fetchJson(`${API_BASE}/api/chat/topup/intent`, {
       method: 'POST',
-      headers: this.headers(),
       body: JSON.stringify({ amount_usdc: amountUsdc, chain }),
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: 'Request failed' }));
-      throw new Error(err.error || `Failed to create top-up intent (HTTP ${res.status})`);
-    }
-    return res.json();
   }
 
   async confirmTopup(txHash: string, intentId: string): Promise<{ status: string; balance_usdc: number }> {
-    const res = await fetch(`${API_BASE}/api/chat/topup/confirm`, {
+    return this.fetchJson(`${API_BASE}/api/chat/topup/confirm`, {
       method: 'POST',
-      headers: this.headers(),
       body: JSON.stringify({ tx_hash: txHash, intent_id: intentId }),
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: 'Request failed' }));
-      throw new Error(err.error || `Failed to confirm top-up (HTTP ${res.status})`);
-    }
-    return res.json();
   }
 
   async checkTopupStatus(intentId: string): Promise<{ status: string; amount_usdc?: number; tx_hash?: string; balance_usdc?: number }> {
-    const res = await fetch(`${API_BASE}/api/chat/topup/status/${intentId}`, {
-      headers: this.headers(),
-    });
-    if (!res.ok) {
-      throw new Error(`Status check failed (HTTP ${res.status})`);
-    }
-    return res.json();
+    return this.fetchJson(`${API_BASE}/api/chat/topup/status/${intentId}`);
   }
 
   async validateKey(): Promise<boolean> {

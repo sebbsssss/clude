@@ -15,6 +15,7 @@ export function useAuth(): AuthState {
   const hasRefreshed = useRef(false);
   const getAccessTokenRef = useRef(getAccessToken);
   getAccessTokenRef.current = getAccessToken;
+  const refreshingRef = useRef<Promise<string | null> | null>(null);
 
   // Track whether cortex init is in progress — blocks Privy from overriding
   const cortexInitRef = useRef(false);
@@ -125,6 +126,7 @@ export function useAuth(): AuthState {
 
   const handleLogout = useCallback(() => {
     // Clear everything
+    api.onAuthExpired(null);
     cortexInitRef.current = false;
     setTokenReady(false);
     hasRefreshed.current = false;
@@ -142,6 +144,33 @@ export function useAuth(): AuthState {
     }
     api.emitRefresh();
   }, [privyAuth, logout]);
+
+  // On 401: refresh token silently, re-fetch data. Logout if refresh fails.
+  useEffect(() => {
+    api.onAuthExpired(() => {
+      if (refreshingRef.current) return;
+
+      refreshingRef.current = getAccessTokenRef.current()
+        .then((newToken) => {
+          if (newToken) {
+            api.setToken(newToken);
+            api.emitRefresh();
+          } else {
+            handleLogout();
+          }
+          return newToken;
+        })
+        .catch(() => {
+          handleLogout();
+          return null;
+        })
+        .finally(() => {
+          refreshingRef.current = null;
+        });
+    });
+
+    return () => api.onAuthExpired(null);
+  }, [handleLogout]);
 
   const isAuthenticated = privyAuth || cortexAuth;
 
