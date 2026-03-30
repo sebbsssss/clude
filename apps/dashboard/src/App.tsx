@@ -7,7 +7,6 @@ import { Landing } from './pages/Landing';
 import { Dashboard } from './pages/Dashboard';
 import { Timeline } from './pages/Timeline';
 import { EntityMap } from './pages/EntityMap';
-import { BrainView } from './pages/BrainView';
 import { DecayHeatmap } from './pages/DecayHeatmap';
 import { MemoryPacks } from './pages/MemoryPacks';
 import { Settings } from './pages/Settings';

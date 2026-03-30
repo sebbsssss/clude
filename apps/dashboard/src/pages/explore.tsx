@@ -76,25 +76,6 @@ export function Explore() {
       margin: '-40px',
       background: 'var(--bg)',
     }}>
-      {/* Stats — top right */}
-      <div style={{
-        position: 'absolute',
-        top: 16,
-        right: 16,
-        zIndex: 10,
-        textAlign: 'right',
-        transition: 'right 0.2s',
-      }}>
-        <div style={{ fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'rgba(255,255,255,0.6)' }}>
-          Memory Explorer
-        </div>
-        <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginTop: 2 }}>
-          {filteredNodes.length}
-        </div>
-        <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)' }}>
-          nodes
-        </div>
-      </div>
 
       {/* Loading state */}
       {loading && (
