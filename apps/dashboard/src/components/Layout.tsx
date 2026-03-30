@@ -86,26 +86,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </NavLink>
           ))}
           {hasUploadAccess && (
-            <>
-              <NavLink
-                to="/file-memory"
-                className={({ isActive }) =>
-                  `${styles.navItem} ${isActive ? styles.navItemActive : ''}`
-                }
-              >
-                <span className={styles.navIcon}>▧</span>
-                File Memory
-              </NavLink>
-              <NavLink
-                to="/explore"
-                className={({ isActive }) =>
-                  `${styles.navItem} ${isActive ? styles.navItemActive : ''}`
-                }
-              >
-                <span className={styles.navIcon}>◆</span>
-                Explore
-              </NavLink>
-            </>
+            <NavLink
+              to="/file-memory"
+              className={({ isActive }) =>
+                `${styles.navItem} ${isActive ? styles.navItemActive : ''}`
+              }
+            >
+              <span className={styles.navIcon}>▧</span>
+              File Memory
+            </NavLink>
           )}
         </nav>
 

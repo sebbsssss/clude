@@ -23,7 +23,7 @@ function AuthenticatedApp() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/timeline" element={<Timeline />} />
           <Route path="/entities" element={<EntityMap />} />
-          <Route path="/brain" element={<BrainView />} />
+          <Route path="/brain" element={<Explore />} />
           <Route path="/decay" element={<DecayHeatmap />} />
           <Route path="/packs" element={<MemoryPacks />} />
           <Route path="/file-memory" element={<FileMemory />} />
