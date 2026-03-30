@@ -26,6 +26,7 @@ import { requirePrivyAuth, optionalPrivyAuth } from './privy-auth';
 import { traceMemory, explainMemory } from '../features/memory-trace';
 import { dashboardRoutes, autoRegisterClude } from './dashboard-routes';
 import { compoundRoutes } from './compound-routes';
+// import { recoverStalled, drainPending } from '../batch/upload-processor';
 
 const log = createChildLogger('server');
 
@@ -1247,6 +1248,12 @@ ${sections.join('\n')}` },
   const publicDir = path.join(serverRoot, 'src', 'verify-app', 'public');
   const distPublicDir = path.join(serverRoot, 'dist', 'verify-app', 'public');
 
+  // Landing page
+  const landingPage = path.join(serverRoot, 'src', 'landing', 'index.html');
+  app.get('/', (_req: Request, res: Response) => {
+    res.sendFile(landingPage);
+  });
+
   // Serve campaign page at /10days (hidden from nav, direct link only)
   app.get('/campaign.html', (_req: Request, res: Response) => {
     res.redirect('/10days');
@@ -1397,12 +1404,6 @@ ${sections.join('\n')}` },
     }
   });
 
-  // Brain visualization at /brain
-  app.get('/brain', (req: Request, _res: Response, next: express.NextFunction) => {
-    req.url = '/brain.html';
-    next();
-  });
-
   // Documentation at /docs
   app.get('/docs', (req: Request, _res: Response, next: express.NextFunction) => {
     req.url = '/docs.html';
@@ -1443,6 +1444,8 @@ export function startServer(): Promise<void> {
       log.info({ port: config.server.port }, 'Server started');
       // Auto-register Clude as the first dashboard agent
       autoRegisterClude().catch(err => log.warn({ err }, 'Auto-register Clude failed'));
+      // TODO: uncomment when batch/ is committed
+      // recoverStalled().then(() => drainPending()).catch(err => log.warn({ err }, 'Upload recovery failed'));
       resolve();
     });
   });

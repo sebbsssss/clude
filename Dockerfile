@@ -43,6 +43,7 @@ RUN pnpm install --frozen-lockfile --prod
 
 COPY --from=builder /app/apps/server/dist/ ./apps/server/dist/
 COPY --from=builder /app/apps/server/src/verify-app/public/ ./apps/server/dist/verify-app/public/
+COPY --from=builder /app/apps/server/src/landing/ ./apps/server/src/landing/
 
 ENV NODE_ENV=production
 EXPOSE 3000
