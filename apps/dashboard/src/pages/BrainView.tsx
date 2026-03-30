@@ -721,7 +721,7 @@ export function BrainView() {
       const newIds   = new Set(rawNodes.map((r: any) => r.id as string));
       const added: BrainNode[] = [];
 
-      rawNodes.forEach((r: any, i: number) => {
+      rawNodes.forEach((r: any, _i: number) => {
         if (existing.has(r.id)) {
           // Update mutable fields
           const node = existing.get(r.id)!;

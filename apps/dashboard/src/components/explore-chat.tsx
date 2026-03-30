@@ -10,21 +10,6 @@ interface ChatMessage {
   entities?: string[]; // entity filters active when this message was sent
 }
 
-/** Extract ordered Memory #ID references from LLM text */
-function extractNarrativeChain(text: string): number[] {
-  const ids: number[] = [];
-  const seen = new Set<number>();
-  const matches = text.matchAll(/\[Memory #(\d+)\]/g);
-  for (const m of matches) {
-    const id = parseInt(m[1]);
-    if (!seen.has(id)) {
-      ids.push(id);
-      seen.add(id);
-    }
-  }
-  return ids;
-}
-
 interface Props {
   onHighlight: (ids: Set<number>) => void;
   onMemoryClick: (id: number) => void;
@@ -125,7 +110,6 @@ export function ExploreChat({ onHighlight, onMemoryClick, onFocusNode, onEntityC
           if (rafRef.current) cancelAnimationFrame(rafRef.current);
 
           const cleanContent = data.clean_content || contentRef.current.replace(/\n?MEMORY_IDS:\s*\[[^\]]*\]\s*$/, '').trim();
-          const chain = extractNarrativeChain(cleanContent);
 
           setMessages(prev =>
             prev.map(m =>
