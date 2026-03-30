@@ -27,17 +27,15 @@ function extractNarrativeChain(text: string): number[] {
 
 interface Props {
   onHighlight: (ids: Set<number>) => void;
-  onNarrativeChain: (chain: number[]) => void;
   onMemoryClick: (id: number) => void;
+  onFocusNode: (id: number) => void;
   onEntityClick?: (entity: string) => void;
   activeEntity: string | null;
   onClearEntity: () => void;
   knownEntities: Set<string>;
-  searchResults: Array<{ id: number; _score?: number; [key: string]: any }>;
-  setSearchResults: (results: Array<{ id: number; _score?: number; [key: string]: any }>) => void;
 }
 
-export function ExploreChat({ onHighlight, onNarrativeChain, onMemoryClick, onEntityClick, activeEntity, onClearEntity, knownEntities, setSearchResults }: Props) {
+export function ExploreChat({ onHighlight, onMemoryClick, onFocusNode, onEntityClick, activeEntity, onClearEntity, knownEntities }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
 
@@ -137,16 +135,7 @@ export function ExploreChat({ onHighlight, onNarrativeChain, onMemoryClick, onEn
             ),
           );
 
-          // All highlighting happens here at the end — no mid-stream jank
-          if (chain.length > 0) {
-            onHighlight(new Set(chain));
-            onNarrativeChain(chain);
-            setSearchResults(chain.map(id => ({ id })));
-          } else if (data.memory_ids?.length > 0) {
-            onHighlight(new Set(data.memory_ids));
-            onNarrativeChain(data.memory_ids);
-            setSearchResults(data.memory_ids.map(id => ({ id })));
-          }
+          // Don't highlight on completion — only highlight when user clicks a mention
         },
         abort.signal,
       );
@@ -164,7 +153,7 @@ export function ExploreChat({ onHighlight, onNarrativeChain, onMemoryClick, onEn
       setStreaming(false);
       abortRef.current = null;
     }
-  }, [input, streaming, messages, onHighlight, setSearchResults]);
+  }, [input, streaming, messages, onHighlight]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -177,12 +166,10 @@ export function ExploreChat({ onHighlight, onNarrativeChain, onMemoryClick, onEn
     setMessages([]);
     setExpanded(false);
     onHighlight(new Set());
-    onNarrativeChain([]);
-    setSearchResults([]);
     contentRef.current = '';
   };
 
-  const renderContent = (text: string, isStreaming?: boolean) => {
+  const renderContent = (text: string, isStreaming?: boolean, allMentionedIds?: number[]) => {
     // During streaming: only highlight Memory #IDs (fast), skip entity matching
     const memParts = text.split(/(\[Memory #\d+\])/g);
 
@@ -193,7 +180,14 @@ export function ExploreChat({ onHighlight, onNarrativeChain, onMemoryClick, onEn
         return (
           <span
             key={`m${i}`}
-            onClick={() => onMemoryClick(id)}
+            onClick={() => {
+              // Highlight all mentioned IDs in this message (siblings glow dimmer), focus on clicked one
+              if (allMentionedIds && allMentionedIds.length > 0) {
+                onHighlight(new Set(allMentionedIds));
+              }
+              onMemoryClick(id);
+              onFocusNode(id);
+            }}
             style={{
               display: 'inline-block',
               padding: '0px 5px',
@@ -332,9 +326,9 @@ export function ExploreChat({ onHighlight, onNarrativeChain, onMemoryClick, onEn
                     ))}
                   </div>
                 )}
-                {msg.role === 'assistant' ? renderContent(msg.content, msg.streaming) : msg.content}
+                {msg.role === 'assistant' ? renderContent(msg.content, msg.streaming, msg.memoryIds) : msg.content}
                 {msg.streaming && !msg.content && (
-                  <span style={{ color: 'var(--text-faint)', letterSpacing: 2 }}>
+                  <span style={{ color: 'rgba(255,255,255,0.8)', letterSpacing: 2, fontSize: 14 }}>
                     <span style={{ animation: 'dotPulse 1.4s infinite', animationDelay: '0s' }}>.</span>
                     <span style={{ animation: 'dotPulse 1.4s infinite', animationDelay: '0.2s' }}>.</span>
                     <span style={{ animation: 'dotPulse 1.4s infinite', animationDelay: '0.4s' }}>.</span>
@@ -391,7 +385,7 @@ export function ExploreChat({ onHighlight, onNarrativeChain, onMemoryClick, onEn
         gap: 0,
         background: 'var(--bg-card)',
         borderRadius: 14,
-        border: '1px solid var(--border-strong)',
+        border: '1px solid rgba(255,255,255,0.2)',
         overflow: 'hidden',
         boxShadow: '0 4px 24px rgba(0,0,0,0.15)',
       }}>
@@ -409,7 +403,7 @@ export function ExploreChat({ onHighlight, onNarrativeChain, onMemoryClick, onEn
             fontFamily: 'var(--mono)',
             background: 'transparent',
             border: 'none',
-            color: 'var(--text)',
+            color: '#fff',
             outline: 'none',
           }}
         />
@@ -424,7 +418,7 @@ export function ExploreChat({ onHighlight, onNarrativeChain, onMemoryClick, onEn
             letterSpacing: 1,
             textTransform: 'uppercase',
             background: 'transparent',
-            color: streaming ? '#f87171' : !input.trim() ? 'rgba(255,255,255,0.2)' : 'var(--blue)',
+            color: streaming ? '#f87171' : !input.trim() ? 'rgba(255,255,255,0.35)' : '#4488ff',
             border: 'none',
             borderLeft: '1px solid var(--border)',
             cursor: !streaming && !input.trim() ? 'default' : 'pointer',
