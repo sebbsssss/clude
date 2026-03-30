@@ -26,7 +26,7 @@ export function useExploreData() {
     setLoading(true);
     setError(null);
     try {
-      const result = await api.getMemoryGraph({ limit: 1000 });
+      const result = await api.getMemoryGraph({ limit: 50000 });
       setNodes(result.nodes);
       setLinks(result.links);
     } catch (err: any) {

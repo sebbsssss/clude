@@ -428,7 +428,7 @@ class CludeAPI {
     links: Array<{ source_id: number; target_id: number; link_type: string; strength: number }>;
     total: number;
   }> {
-    const limit = opts?.limit || 500;
+    const limit = opts?.limit || 50000;
     if (this.mode === 'cortex') {
       return this.fetch(`/api/cortex/brain/graph?limit=${limit}`);
     }

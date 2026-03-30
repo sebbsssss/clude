@@ -305,7 +305,7 @@ export function graphRoutes(): Router {
   router.get('/memory-graph', async (req: Request, res: Response) => {
     try {
       const wallet = req.query.wallet as string;
-      const limit = Math.min(parseInt(req.query.limit as string) || 500, 2000);
+      const limit = parseInt(req.query.limit as string) || 50000;
 
       const db = getDb();
 

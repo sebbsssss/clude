@@ -418,10 +418,10 @@ export function cortexRoutes(): Router {
   router.get('/brain/graph', async (req: Request, res: Response) => {
     try {
       const cortexReq = req as CortexRequest;
-      const limit = Math.min(parseInt(req.query.limit as string) || 500, 2000);
+      const limit = parseInt(req.query.limit as string) || 50000;
 
       const memories = await withOwnerWallet(cortexReq.ownerWallet!, async () => {
-        return getRecentMemories(8760, undefined, limit);
+        return getRecentMemories(8760 * 10, undefined, limit);
       });
 
       const memoryIds = memories.map(m => m.id);
