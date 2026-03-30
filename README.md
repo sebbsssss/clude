@@ -4,6 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **Persistent memory for AI agents.** Two commands. Your agent remembers everything.
+
 **Public Wallet: CA1HYUXZXKc7CasRGpQotMM9RiYJbVuPJq3n8Ar9oQZb**
 
 ```bash
