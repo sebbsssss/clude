@@ -1,9 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/refs */
-import { useEffect, useRef, useCallback } from 'react';
-// @ts-ignore 3d-force-graph callable vs new mismatch
-import ForceGraph3D from '3d-force-graph';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import type { MemoryLink } from '../types/memory';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 
 interface GraphNode {
   id: number;
@@ -19,515 +19,335 @@ interface GraphNode {
   createdAt: string;
 }
 
-interface FGNode extends GraphNode {
-  x?: number;
-  y?: number;
-  z?: number;
-  fx?: number | null;
-  fy?: number | null;
-  fz?: number | null;
-}
-
-interface FGLink extends MemoryLink {
-  source: any;
-  target: any;
-}
-
-// Softer palette — works on light (#f5f5f0) and dark (#0a0a0f) backgrounds
-const TYPE_COLORS_CSS: Record<string, string> = {
-  episodic: '#6680cc',     // soft blue-gray
-  semantic: '#5aaa8a',     // muted teal
-  procedural: '#c49550',   // warm amber
-  self_model: '#9580c4',   // soft purple
+// Type → hue mapping for particle colors
+const TYPE_HUE: Record<string, number> = {
+  episodic: 0.6,
+  semantic: 0.42,
+  procedural: 0.12,
+  self_model: 0.75,
 };
 
-// Highlighted versions — richer, used for chain/selected states
-const TYPE_COLORS_ACTIVE: Record<string, string> = {
-  episodic: '#4466ff',
-  semantic: '#10b981',
-  procedural: '#f59e0b',
-  self_model: '#8b5cf6',
+const TYPE_HUE_ACTIVE: Record<string, number> = {
+  episodic: 0.62,
+  semantic: 0.4,
+  procedural: 0.1,
+  self_model: 0.78,
 };
-
-const LINK_COLORS: Record<string, string> = {
-  supports: 'rgba(16, 185, 129, 0.6)',
-  contradicts: 'rgba(239, 68, 68, 0.6)',
-  elaborates: 'rgba(68, 102, 255, 0.55)',
-  causes: 'rgba(245, 158, 11, 0.6)',
-  follows: 'rgba(6, 182, 212, 0.55)',
-  relates: 'rgba(120, 120, 140, 0.35)',
-  resolves: 'rgba(139, 92, 246, 0.55)',
-  happens_before: 'rgba(167, 139, 250, 0.5)',
-  happens_after: 'rgba(167, 139, 250, 0.5)',
-  concurrent_with: 'rgba(236, 72, 153, 0.5)',
-};
-
-interface SearchResult {
-  id: number;
-  _score?: number;
-  [key: string]: any;
-}
 
 interface Props {
   nodes: GraphNode[];
-  links: MemoryLink[];
   highlightedIds: Set<number>;
-  searchResults: SearchResult[];
-  narrativeChain: number[];
   selectedId: number | null;
+  focusNodeId: number | null;
   onNodeClick: (node: GraphNode) => void;
   onBackgroundClick: () => void;
 }
 
-export function MemoryGraph3D({ nodes, links, highlightedIds, searchResults, narrativeChain, selectedId, onNodeClick, onBackgroundClick }: Props) {
+export function MemoryGraph3D({ nodes, highlightedIds, selectedId, focusNodeId, onNodeClick, onBackgroundClick }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const graphRef = useRef<any>(null);
+  const swarmRef = useRef<any>(null);
+  const nodesRef = useRef<GraphNode[]>(nodes);
   const highlightRef = useRef<Set<number>>(highlightedIds);
   const selectedRef = useRef<number | null>(selectedId);
-  const pinnedNodesRef = useRef<Set<number>>(new Set());
+  const prevSelectedRef = useRef<number | null>(null);
 
+  nodesRef.current = nodes;
   highlightRef.current = highlightedIds;
   selectedRef.current = selectedId;
-  const narrativeRef = useRef<number[]>(narrativeChain);
-  narrativeRef.current = narrativeChain;
 
-  // Initialize graph
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || graphRef.current) return;
+    if (!container || swarmRef.current) return;
 
-    // Wait a frame for layout to compute
-    requestAnimationFrame(() => {
-      const w = container.clientWidth;
-      const h = container.clientHeight;
-      if (w === 0 || h === 0) return;
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+    if (w === 0 || h === 0) return;
 
-      const graph = (ForceGraph3D as any)()(container)
-        .width(w)
-        .height(h)
-        .backgroundColor('rgba(0,0,0,0)')
-        .showNavInfo(false)
-        .nodeId('id')
-        .linkSource('source_id')
-        .linkTarget('target_id')
-        // ── Nodes ──
-        .nodeColor((node: any) => {
-          const n = node as FGNode;
-          const hl = highlightRef.current;
-          const sel = selectedRef.current;
-          // Selected: bright accent color
-          if (n.id === sel) return TYPE_COLORS_ACTIVE[n.type] || '#4466ff';
-          // Highlighted (in chain): richer color
-          if (hl.size > 0 && hl.has(n.id)) return TYPE_COLORS_ACTIVE[n.type] || '#4466ff';
-          // Dimmed (search active but not in results): ghostlike
-          if (hl.size > 0) return 'rgba(180, 180, 185, 0.18)';
-          // Default: visible, solid
-          return TYPE_COLORS_CSS[n.type] || '#9098a8';
-        })
-        .nodeVal((node: any) => {
-          const n = node as FGNode;
-          const sel = selectedRef.current;
-          const hl = highlightRef.current;
-          if (n.id === sel) return 3 + n.importance * 10;
-          if (hl.size > 0 && hl.has(n.id)) return 2.5 + n.importance * 8;
-          if (hl.size > 0) return 0.5 + n.importance * 2;
-          return 1.5 + n.importance * 6;
-        })
-        .nodeOpacity(1)
-        .nodeResolution(16)
-        .nodeLabel((node: any) => {
-          const n = node as FGNode;
-          const s = n.summary || '';
-          return `<div style="max-width:260px;font-size:10px;font-family:'JetBrains Mono',monospace;padding:5px 8px;background:rgba(255,255,252,0.95);border:1px solid rgba(0,0,0,0.08);border-radius:6px;color:#333;box-shadow:0 2px 12px rgba(0,0,0,0.08);line-height:1.4">${s.length > 100 ? s.slice(0, 100) + '...' : s}</div>`;
-        })
-        // ── Links ──
-        .linkColor((link: any) => {
-          const l = link as FGLink;
-          const hl = highlightRef.current;
-          // Narrative chain: clean accent line
-          if (l.link_type === '__narrative__') return 'rgba(68, 102, 255, 0.6)';
-          if (hl.size > 0) {
-            const srcId = typeof l.source === 'object' ? l.source.id : l.source;
-            const tgtId = typeof l.target === 'object' ? l.target.id : l.target;
-            // Both ends highlighted: show link with moderate opacity
-            if (hl.has(srcId) && hl.has(tgtId)) return LINK_COLORS[l.link_type]?.replace('0.4', '0.6') || 'rgba(100,100,120,0.3)';
-            // Dimmed: nearly invisible
-            return 'rgba(180,180,185,0.04)';
-          }
-          // Default: clearly visible
-          return LINK_COLORS[l.link_type] || 'rgba(120,120,140,0.45)';
-        })
-        .linkWidth((link: any) => {
-          const l = link as FGLink;
-          if (l.link_type === '__narrative__') return 2;
-          const hl = highlightRef.current;
-          if (hl.size > 0) {
-            const srcId = typeof l.source === 'object' ? l.source.id : l.source;
-            const tgtId = typeof l.target === 'object' ? l.target.id : l.target;
-            if (hl.has(srcId) && hl.has(tgtId)) return 1 + l.strength * 2;
-          }
-          return 0.5 + l.strength * 1;
-        })
-        .linkOpacity(0.8)
-        .linkDirectionalArrowLength((link: any) => {
-          return (link as FGLink).link_type === '__narrative__' ? 3 : 0;
-        })
-        .linkDirectionalArrowRelPos(1)
-        .linkDirectionalArrowColor((link: any) => {
-          return (link as FGLink).link_type === '__narrative__' ? 'rgba(68, 102, 255, 0.5)' : 'transparent';
-        })
-        .linkDirectionalParticles((link: any) => {
-          const l = link as FGLink;
-          // Narrative chain: small subtle particles
-          if (l.link_type === '__narrative__') return 2;
-          return 0;
-        })
-        .linkDirectionalParticleWidth(0.8)
-        .linkDirectionalParticleSpeed(0.005)
-        .linkDirectionalParticleColor((link: any) => {
-          return (link as FGLink).link_type === '__narrative__' ? 'rgba(68, 102, 255, 0.7)' : 'transparent';
-        })
-        // ── Interaction ──
-        .onNodeClick((node: any) => onNodeClick(node as GraphNode))
-        .onBackgroundClick(() => onBackgroundClick())
-        .onNodeHover((node: any) => {
-          if (container) container.style.cursor = node ? 'pointer' : 'default';
-        })
-        .onNodeDragEnd((node: any) => {
-          // Keep pinned chain nodes fixed after drag
-          const n = node as FGNode;
-          if (pinnedNodesRef.current.has(n.id)) {
-            n.fx = n.x;
-            n.fy = n.y;
-            n.fz = n.z;
-          }
-        })
-        .enableNodeDrag(true)
-        // ── Physics — keep simulation alive so nodes drift ──
-        .d3AlphaDecay(0.005)    // very slow decay — nodes keep moving longer
-        .d3VelocityDecay(0.15)  // less damping — more momentum
-        .warmupTicks(80)
-        .cooldownTime(15000);   // 15s before settling
+    // ── Scene — exact same as reference ──
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x000000, 0.01);
+    const camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 2000);
+    camera.position.set(0, 0, 100);
 
-      // Tune forces
-      const charge = graph.d3Force('charge');
-      if (charge && typeof charge.strength === 'function') {
-        charge.strength(-40);
-      }
-      const link = graph.d3Force('link');
-      if (link && typeof link.distance === 'function') {
-        link.distance(30);
-      }
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(w, h);
+    container.appendChild(renderer.domElement);
 
-      // Slow auto-rotate when user isn't interacting
-      const controls = graph.controls();
-      if (controls) {
-        controls.autoRotate = true;
-        controls.autoRotateSpeed = 0.5;
-        // Stop auto-rotate when user drags, resume after
-        controls.addEventListener('start', () => { controls.autoRotate = false; });
-        controls.addEventListener('end', () => {
-          setTimeout(() => { controls.autoRotate = true; }, 3000);
-        });
-      }
+    // ── Post processing — exact same as reference ──
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    const bloomPass = new UnrealBloomPass(new THREE.Vector2(w, h), 1.5, 0.4, 0.85);
+    bloomPass.strength = 1.8;
+    bloomPass.radius = 0.4;
+    bloomPass.threshold = 0;
+    composer.addPass(bloomPass);
 
-      // Subtle fog — warm tint matching light background
-      const scene = graph.scene();
-      scene.fog = new THREE.FogExp2(0xf5f5f0, 0.0004);
+    // ── Instanced mesh — 20k particles like reference ──
+    const PARTICLE_COUNT = 20000;
+    const count = PARTICLE_COUNT;
+    const geometry = new THREE.TetrahedronGeometry(0.25);
+    const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const mesh = new THREE.InstancedMesh(geometry, material, count);
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    scene.add(mesh);
 
-      // Ambient dust — very faint, warm gray dots for depth
-      const dustGeo = new THREE.BufferGeometry();
-      const dustPos = new Float32Array(200 * 3);
-      for (let i = 0; i < 200; i++) {
-        dustPos[i * 3] = (Math.random() - 0.5) * 400;
-        dustPos[i * 3 + 1] = (Math.random() - 0.5) * 400;
-        dustPos[i * 3 + 2] = (Math.random() - 0.5) * 400;
-      }
-      dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
-      const dustMat = new THREE.PointsMaterial({
-        size: 0.3,
-        color: 0xaaaaaa,
-        transparent: true,
-        opacity: 0.15,
-        depthWrite: false,
-      });
-      scene.add(new THREE.Points(dustGeo, dustMat));
+    const positions: THREE.Vector3[] = [];
+    const dummy = new THREE.Object3D();
+    const targetVec = new THREE.Vector3();
+    const pColor = new THREE.Color();
+    const clock = new THREE.Clock();
 
-      graphRef.current = graph;
+    for (let i = 0; i < count; i++) {
+      positions.push(new THREE.Vector3(
+        (Math.random() - 0.5) * 100,
+        (Math.random() - 0.5) * 100,
+        (Math.random() - 0.5) * 100,
+      ));
+      mesh.setColorAt(i, pColor.setHex(0x00ff88));
+    }
 
-      // Set initial data if available
-      if (nodes.length > 0) {
-        graph.graphData({
-          nodes: nodes.map(n => ({ ...n })),
-          links: links.map(l => ({ ...l })),
-        });
-      }
+    // ── Raycaster for hover + click ──
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
 
-      // ── Fire/wave state per node ──
-      const fireMap = new Map<number, number>(); // nodeId -> fire level (0-1)
-
-      // Build adjacency map for wave propagation
-      const buildAdjacency = () => {
-        const adj = new Map<number, number[]>();
-        const gd = graph.graphData();
-        for (const link of gd.links) {
-          const srcId = typeof link.source === 'object' ? link.source.id : link.source_id || link.source;
-          const tgtId = typeof link.target === 'object' ? link.target.id : link.target_id || link.target;
-          if (!adj.has(srcId)) adj.set(srcId, []);
-          if (!adj.has(tgtId)) adj.set(tgtId, []);
-          adj.get(srcId)!.push(tgtId);
-          adj.get(tgtId)!.push(srcId);
+    const handleClick = (e: MouseEvent) => {
+      const rect = container.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      const hits = raycaster.intersectObject(mesh);
+      if (hits.length > 0 && hits[0].instanceId !== undefined) {
+        const idx = hits[0].instanceId;
+        const currentNodes = nodesRef.current;
+        if (idx < currentNodes.length) {
+          onNodeClick(currentNodes[idx]);
+          return;
         }
-        return adj;
-      };
+      }
+      onBackgroundClick();
+    };
+    container.addEventListener('click', handleClick);
 
-      // Random fire event every 2-4 seconds — only when idle (no search active)
-      const fireInterval = setInterval(() => {
-        if (highlightRef.current.size > 0) return; // skip during search
-        const gd = graph.graphData();
-        if (gd.nodes.length === 0) return;
-        const randomNode = gd.nodes[Math.floor(Math.random() * gd.nodes.length)];
-        fireMap.set((randomNode as any).id, 1.0);
 
-        // Propagate wave to neighbors with delay
-        const adj = buildAdjacency();
-        const neighbors = adj.get((randomNode as any).id) || [];
-        neighbors.forEach((nId, i) => {
-          setTimeout(() => {
-            fireMap.set(nId, 0.6);
-            // Second hop
-            const hop2 = adj.get(nId) || [];
-            hop2.forEach((n2Id) => {
-              setTimeout(() => {
-                if ((fireMap.get(n2Id) || 0) < 0.3) fireMap.set(n2Id, 0.3);
-              }, 150);
-            });
-          }, 100 + i * 50);
-        });
-      }, 2500 + Math.random() * 1500);
+    // ── Mouse drag rotates the whole scene ──
+    let isDragging = false;
+    let prevMouseX = 0;
+    let prevMouseY = 0;
+    let userRotX = 0; // horizontal drag rotation
+    let userRotY = 0; // vertical drag rotation
 
-      // Periodically reheat physics so nodes keep gently drifting
-      const reheatInterval = setInterval(() => {
-        graph.d3ReheatSimulation();
-      }, 12000);
+    const onMouseDown = (e: MouseEvent) => {
+      isDragging = true;
+      prevMouseX = e.clientX;
+      prevMouseY = e.clientY;
+    };
+    const onMouseUp = () => { isDragging = false; };
+    const onMouseDrag = (e: MouseEvent) => {
+      if (!isDragging) return;
+      const dx = e.clientX - prevMouseX;
+      const dy = e.clientY - prevMouseY;
+      userRotX += dx * 0.005;
+      userRotY += dy * 0.003;
+      userRotY = Math.max(-1.2, Math.min(1.2, userRotY)); // clamp vertical
+      prevMouseX = e.clientX;
+      prevMouseY = e.clientY;
+    };
+    container.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('mousemove', onMouseDrag);
 
-      // ── Standalone animation loop ──
-      let animId = 0;
-      const animate = () => {
-        animId = requestAnimationFrame(animate);
-        const t = performance.now() * 0.001;
-        const renderer = graph.renderer();
-        const gScene = graph.scene();
-        const cam = graph.camera();
+    // Scroll to zoom
+    container.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const newZ = camera.position.z + e.deltaY * 0.05;
+      camera.position.z = Math.max(30, Math.min(300, newZ));
+    }, { passive: false });
 
-        const gd = graph.graphData();
-        for (const node of gd.nodes) {
-          const obj = (node as any).__threeObj;
-          if (!obj) continue;
-          const id = (node as any).id;
-          const phase = (id * 0.17) % (Math.PI * 2);
+    // ── Camera follow state ──
+    let followIndex = -1;
+    let followLookAt = new THREE.Vector3(0, 0, 0);
+    let followTargetDist = 100;
+    let followCurrentDist = 100;
 
-          // Fire decay
-          const fire = fireMap.get(id) || 0;
-          if (fire > 0) {
-            fireMap.set(id, fire * 0.96); // decay per frame
-            if (fire < 0.01) fireMap.delete(id);
+    // ── Animation — matches reference exactly ──
+    const PARAMS = { scale: 70, flow: 0.6, complexity: 3, tension: 25 };
+    let animId = 0;
+
+    const animate = () => {
+      animId = requestAnimationFrame(animate);
+      const time = clock.getElapsedTime();
+      const nodeCount = nodesRef.current.length;
+      const hl = highlightRef.current;
+      const sel = selectedRef.current;
+
+      mesh.count = PARTICLE_COUNT;
+
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const node = i < nodeCount ? nodesRef.current[i] : null;
+
+        // ── Particle position — identical to reference ──
+        const t = time * PARAMS.flow;
+        const normalized = i / PARTICLE_COUNT;
+        const p = 3;
+        const q = Math.floor(PARAMS.complexity) + 0.01;
+        const phi = normalized * Math.PI * 2 * 60;
+        const r = PARAMS.scale + PARAMS.tension * Math.cos(q * phi + t * 0.5);
+
+        const x = r * Math.cos(p * phi) * (1 + 0.05 * Math.sin(t + normalized * 50));
+        const y = r * Math.sin(p * phi) * (1 + 0.05 * Math.cos(t + normalized * 50));
+        const z = PARAMS.tension * Math.sin(q * phi + t * 0.5) + Math.sin(phi * 8) * 8;
+
+        const rotY = t * 0.15;
+        const finalX = x * Math.cos(rotY) - z * Math.sin(rotY);
+        const finalZ = x * Math.sin(rotY) + z * Math.cos(rotY);
+
+        const tilt = 0.3;
+        const tiltY = y * Math.cos(tilt) - finalZ * Math.sin(tilt);
+        const tiltZ = y * Math.sin(tilt) + finalZ * Math.cos(tilt);
+
+        targetVec.set(finalX, tiltY, tiltZ);
+
+        // ── Color — reference default + memory type overlay ──
+        const dataPacket = Math.pow(Math.abs(Math.sin(phi * 4 - t * 2)), 20);
+
+        if (node) {
+          const isSelected = node.id === sel;
+          const isHighlighted = hl.size > 0 && hl.has(node.id);
+          const hasFocus = sel !== null || hl.size > 0;
+          const isDimmed = hasFocus && !isHighlighted && !isSelected;
+
+          if (isSelected) {
+            // Focused node — full bright glow
+            const hue = TYPE_HUE_ACTIVE[node.type] ?? 0.42;
+            pColor.setHSL(hue, 1.0, 0.55 + dataPacket * 0.4);
+          } else if (isHighlighted && sel !== null) {
+            // Sibling mentions — visible but dimmer than focused
+            const hue = TYPE_HUE[node.type] ?? 0.42;
+            pColor.setHSL(hue, 0.7, 0.2 + dataPacket * 0.25);
+          } else if (isHighlighted) {
+            // Highlighted without a specific selection
+            const hue = TYPE_HUE_ACTIVE[node.type] ?? 0.42;
+            pColor.setHSL(hue, 0.95, 0.4 + dataPacket * 0.5);
+          } else if (isDimmed) {
+            pColor.setHSL(0, 0, 0.08 + dataPacket * 0.05);
+          } else {
+            const hue = 0.58 + Math.sin(normalized * Math.PI * 4) * 0.05;
+            const lightness = 0.25 + dataPacket * 0.65;
+            pColor.setHSL(hue, 0.9, lightness);
           }
-
-          // Breathing — subtle when search active, more when idle
-          const hasSearch = highlightRef.current.size > 0;
-          const breathAmount = hasSearch ? 0.03 : 0.1;
-          const breath = 1 + Math.sin(t * 1.0 + phase) * breathAmount;
-          const fireScale = 1 + fire * 0.4;
-          obj.scale.setScalar(breath * fireScale);
-
-          // Fire glow: brighten the material
-          if (obj.material) {
-            if (fire > 0.05) {
-              obj.material.emissive = obj.material.emissive || new THREE.Color();
-              obj.material.emissive.setHex(0xffffff);
-              obj.material.emissiveIntensity = fire * 0.4;
-            } else if (obj.material.emissiveIntensity > 0) {
-              obj.material.emissiveIntensity = 0;
-            }
+        } else {
+          // Filler particles — also dim when focused
+          const hasFocus = sel !== null || hl.size > 0;
+          if (hasFocus) {
+            pColor.setHSL(0, 0, 0.05 + Math.pow(Math.abs(Math.sin(phi * 4 - time * PARAMS.flow * 2)), 20) * 0.03);
+          } else {
+            const hue = 0.58 + Math.sin(normalized * Math.PI * 4) * 0.05;
+            pColor.setHSL(hue, 0.9, 0.25 + dataPacket * 0.65);
           }
-
-          // Floating drift
-          const driftX = Math.sin(t * 0.3 + phase) * 0.15;
-          const driftY = Math.cos(t * 0.25 + phase * 1.3) * 0.15;
-          const driftZ = Math.sin(t * 0.2 + phase * 0.7) * 0.15;
-          obj.position.x = (node.x || 0) + driftX;
-          obj.position.y = (node.y || 0) + driftY;
-          obj.position.z = (node.z || 0) + driftZ;
         }
 
-        // Auto-rotate only when idle (no search, no selection)
-        const ctrl = graph.controls();
-        if (ctrl) {
-          const idle = highlightRef.current.size === 0 && !selectedRef.current;
-          ctrl.autoRotate = idle;
-          if (ctrl.update) ctrl.update();
-        }
+        // ── Update — identical to reference ──
+        positions[i].lerp(targetVec, 0.1);
+        dummy.position.copy(positions[i]);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+        mesh.setColorAt(i, pColor);
+      }
 
-        // Render
-        if (renderer && gScene && cam) {
-          renderer.render(gScene, cam);
-        }
-      };
-      animate();
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
 
-      // Store for cleanup
-      (graph as any).__animId = animId;
-      (graph as any).__fireInterval = fireInterval;
-      (graph as any).__reheatInterval = reheatInterval;
-      (graph as any).__fireMap = fireMap;
-    });
+      // ── Camera: follow selected node or stay at origin ──
+      if (followIndex >= 0 && followIndex < PARTICLE_COUNT && positions[followIndex]) {
+        followLookAt.lerp(positions[followIndex], 0.08);
+      } else {
+        followLookAt.lerp(new THREE.Vector3(0, 0, 0), 0.05);
+      }
+      followCurrentDist += (followTargetDist - followCurrentDist) * 0.05;
 
+      // Apply user drag rotation on top of the fixed camera distance
+      camera.position.x = followLookAt.x + Math.sin(userRotX) * Math.cos(userRotY) * followCurrentDist;
+      camera.position.y = followLookAt.y + Math.sin(userRotY) * followCurrentDist;
+      camera.position.z = followLookAt.z + Math.cos(userRotX) * Math.cos(userRotY) * followCurrentDist;
+      camera.lookAt(followLookAt);
+
+      composer.render();
+    };
+    animate();
+
+    // ── Resize ──
     const handleResize = () => {
-      if (graphRef.current && container) {
-        graphRef.current.width(container.clientWidth);
-        graphRef.current.height(container.clientHeight);
-      }
+      const cw = container.clientWidth;
+      const ch = container.clientHeight;
+      camera.aspect = cw / ch;
+      camera.updateProjectionMatrix();
+      renderer.setSize(cw, ch);
+      composer.setSize(cw, ch);
     };
     window.addEventListener('resize', handleResize);
 
+    swarmRef.current = {
+      animId,
+      setFollowIndex: (idx: number) => { followIndex = idx; },
+      setFollowDist: (d: number) => { followTargetDist = d; },
+      cleanup: () => {
+        window.removeEventListener('resize', handleResize);
+        container.removeEventListener('click', handleClick);
+        container.removeEventListener('mousedown', onMouseDown);
+        window.removeEventListener('mouseup', onMouseUp);
+        window.removeEventListener('mousemove', onMouseDrag);
+        cancelAnimationFrame(animId);
+        geometry.dispose();
+        material.dispose();
+        renderer.dispose();
+        if (container.contains(renderer.domElement)) {
+          container.removeChild(renderer.domElement);
+        }
+      },
+    };
+
     return () => {
-      window.removeEventListener('resize', handleResize);
-      if (graphRef.current) {
-        const g = graphRef.current as any;
-        if (g.__animId) cancelAnimationFrame(g.__animId);
-        if (g.__fireInterval) clearInterval(g.__fireInterval);
-        if (g.__reheatInterval) clearInterval(g.__reheatInterval);
-        graphRef.current._destructor();
-        graphRef.current = null;
+      if (swarmRef.current) {
+        swarmRef.current.cleanup();
+        swarmRef.current = null;
       }
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Update data when nodes/links/chain change
+  // Update mesh count when nodes change
   useEffect(() => {
-    if (!graphRef.current || nodes.length === 0) return;
+    if (!swarmRef.current) return;
+    // mesh count is set each frame from nodesRef.current.length
+  }, [nodes]);
 
-    // Build narrative chain links (directional, bright)
-    const chainLinks: any[] = [];
-    for (let i = 0; i < narrativeChain.length - 1; i++) {
-      chainLinks.push({
-        source_id: narrativeChain[i],
-        target_id: narrativeChain[i + 1],
-        link_type: '__narrative__',
-        strength: 1,
-      });
-    }
-
-    graphRef.current.graphData({
-      nodes: nodes.map(n => ({ ...n })),
-      links: [...links.map(l => ({ ...l })), ...chainLinks],
-    });
-  }, [nodes, links, narrativeChain]);
-
-  // Refresh visuals on search change + clear fire
+  // Zoom to selected node / zoom out on deselect
   useEffect(() => {
-    if (!graphRef.current) return;
-    const g = graphRef.current;
-    // Clear fire effects when search is active
-    const fm = (g as any).__fireMap as Map<number, number> | undefined;
-    if (fm && highlightedIds.size > 0) fm.clear();
-    g.nodeColor(g.nodeColor())
-     .linkColor(g.linkColor())
-     .linkWidth(g.linkWidth())
-     .linkDirectionalParticles(g.linkDirectionalParticles())
-     .refresh();
-  }, [highlightedIds]);
+    if (!swarmRef.current) return;
+    const s = swarmRef.current;
 
-  // ── Search chain: pin results in narrative order horizontally ──
-  const arrangeChain = useCallback(() => {
-    if (!graphRef.current) return;
-    const chain = narrativeRef.current;
-    if (chain.length === 0) return;
-    const g = graphRef.current;
-    const graphData = g.graphData();
-
-    // Use narrative chain order (as LLM referenced them)
-    const ids = new Set(chain);
-
-    // Horizontal layout along X axis, centered at origin, fixed Y=0
-    const spacing = 30;
-    const totalWidth = (chain.length - 1) * spacing;
-    const startX = -totalWidth / 2;
-
-    for (const node of graphData.nodes) {
-      const n = node as FGNode;
-      if (ids.has(n.id)) {
-        const idx = chain.indexOf(n.id);
-        n.fx = startX + idx * spacing;
-        n.fy = 0; // flat horizontal plane
-        n.fz = 0;
-        pinnedNodesRef.current.add(n.id);
-      } else if (pinnedNodesRef.current.has(n.id)) {
-        n.fx = null; n.fy = null; n.fz = null;
-        pinnedNodesRef.current.delete(n.id);
+    if (selectedId !== null) {
+      const idx = nodes.findIndex(n => n.id === selectedId);
+      if (idx >= 0) {
+        s.setFollowIndex(idx);
+        s.setFollowDist(40);
       }
+    } else if (prevSelectedRef.current !== null) {
+      s.setFollowIndex(-1);
+      s.setFollowDist(100);
     }
+    prevSelectedRef.current = selectedId;
+  }, [selectedId, nodes]);
 
-    g.d3ReheatSimulation();
-
-    // Camera: pull back enough to see the full chain comfortably
-    const viewDist = Math.max(totalWidth * 1.5, 200);
-    g.cameraPosition(
-      { x: 0, y: viewDist * 0.4, z: viewDist * 0.7 }, // further back, slightly above
-      { x: 0, y: 0, z: 0 },
-      1200,
-    );
-  }, []);
-
-  const releaseChain = useCallback(() => {
-    if (!graphRef.current) return;
-    const graphData = graphRef.current.graphData();
-    for (const node of graphData.nodes) {
-      const n = node as FGNode;
-      if (pinnedNodesRef.current.has(n.id)) {
-        n.fx = null; n.fy = null; n.fz = null;
-      }
+  // Zoom to focused node (chat mention click)
+  useEffect(() => {
+    if (!swarmRef.current || !focusNodeId) return;
+    const s = swarmRef.current;
+    const idx = nodes.findIndex(n => n.id === focusNodeId);
+    if (idx >= 0) {
+      s.setFollowIndex(idx);
+      s.setFollowDist(35);
     }
-    pinnedNodesRef.current.clear();
-    graphRef.current.d3ReheatSimulation();
-  }, []);
-
-  useEffect(() => {
-    if (!graphRef.current) return;
-    if (searchResults.length > 0) {
-      setTimeout(() => arrangeChain(), 300);
-    } else {
-      releaseChain();
-    }
-  }, [searchResults, arrangeChain, releaseChain]);
-
-  // Highlight nodes during streaming (just update colors, no graph rebuild)
-  useEffect(() => {
-    if (!graphRef.current) return;
-    const g = graphRef.current;
-    g.nodeColor(g.nodeColor()).refresh();
-  }, [highlightedIds]);
-
-  // Focus on selected node + refresh visuals
-  useEffect(() => {
-    if (!graphRef.current) return;
-    const g = graphRef.current;
-    // Refresh colors/sizes to reflect new selection
-    g.nodeColor(g.nodeColor())
-     .nodeVal(g.nodeVal())
-     .refresh();
-
-    if (!selectedId) return;
-    const graphData = g.graphData();
-    const node = graphData.nodes.find((n: any) => n.id === selectedId);
-    if (!node) return;
-    g.cameraPosition(
-      { x: (node.x || 0) + 50, y: (node.y || 0) + 30, z: (node.z || 0) + 50 },
-      { x: node.x || 0, y: node.y || 0, z: node.z || 0 },
-      800,
-    );
-  }, [selectedId]);
+  }, [focusNodeId, nodes]);
 
   return (
     <div

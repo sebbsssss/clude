@@ -4,10 +4,10 @@ const STORAGE_KEY = 'clude-theme';
 
 export function useTheme() {
   const [isDark, setIsDark] = useState(() => {
-    if (typeof window === 'undefined') return false;
+    if (typeof window === 'undefined') return true;
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) return saved === 'dark';
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return true; // default to dark mode
   });
 
   useEffect(() => {
