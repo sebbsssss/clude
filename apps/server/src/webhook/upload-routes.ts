@@ -4,26 +4,21 @@
  * Flow:
  *   1. User uploads a file (PDF, TXT, MD)
  *   2. Text extracted (unpdf for PDF, raw for text)
- *   3. Text split into chunks → LLM extracts scenes + characters per chunk
- *   4. Each scene stored as a memory (episodic, source='file-upload')
- *   5. Memories embedded by Voyage AI (async, handled by storeMemory pipeline)
+ *   3. Text split into chunks, inserted as 'pending' rows in llm_outputs
+ *   4. Background processor (batch/upload-processor) drains pending chunks
+ *   5. Each scene stored as a memory (episodic, source='file-upload')
  *
  * Auth: Owner wallet only (ALLOWED_WALLETS).
- * Tables: llm_outputs (processing log), memories (scene storage).
+ * Tables: llm_outputs (processing log + chunk text), memories (scene storage).
  */
 import { Router, Request, Response } from "express";
 import multer from "multer";
 import { randomUUID } from "crypto";
-import { withOwnerWallet } from "../core/owner-context";
-import { storeMemory } from "../core/memory";
 import { getDb } from "../core/database";
 import { createChildLogger } from "../core/logger";
 import { config } from "../config";
-import {
-  generateOpenRouterResponse,
-  isOpenRouterEnabled,
-  OPENROUTER_MODELS,
-} from "../core/openrouter-client";
+import { isOpenRouterEnabled } from "../core/openrouter-client";
+import { drainPending } from "../batch/upload-processor";
 
 const log = createChildLogger("upload");
 
@@ -80,8 +75,8 @@ async function extractText(buffer: Buffer, filename: string): Promise<string> {
 
 // ---- Text chunking ---- //
 
-/** Max chars per chunk — ~2000 tokens, well within any model's context */
-const CHUNK_MAX_CHARS = 8000;
+/** Max chars per chunk — Llama 70B handles 128K context, ~8000 tokens per chunk */
+const CHUNK_MAX_CHARS = 32000;
 
 function chunkText(text: string): string[] {
   const chunks: string[] = [];
@@ -122,72 +117,6 @@ function chunkText(text: string): string[] {
   if (current.trim()) chunks.push(current.trim());
 
   return chunks;
-}
-
-// ---- LLM memory node extraction ---- //
-
-const EXTRACTION_PROMPT = `You are a knowledge extractor. Given a text chunk from a document, extract distinct memory nodes. Each node should be a self-contained piece of knowledge important enough to remember on its own.
-
-For narratives: each node is a distinct event, scene, or turning point.
-For technical content: each node is a distinct concept, process, or decision.
-For conversations/interviews: each node is a distinct topic or exchange.
-
-For each memory node, provide:
-- title: short descriptive title (max 60 chars)
-- content: A faithful summary of what the source text says. Do NOT invent details, embellish, or add information not present in the original. Always name people/characters explicitly — never use pronouns without naming who. Keep it as long or short as the source material warrants.
-- entities: array of ALL people, characters, organizations, or key concepts involved
-- original_text: the COMPLETE original text from the source that this node covers. Copy it verbatim — do not truncate, summarize, or paraphrase. This should be the full passage, not just a highlight.
-
-CRITICAL: Output ONLY a raw JSON array. No markdown, no code fences, no explanation text before or after. Start your response with [ and end with ].
-
-Example:
-[
-  {
-    "title": "Elena and Marcus discover the assassination plot",
-    "content": "Elena encounters Marcus at the crossroads at dawn. Marcus, a former soldier, recognizes the Order's sigil on Elena's cloak and reveals he intercepted a coded message about an assassination plot against the Council. Elena agrees to collaborate after Marcus produces a sealed letter in Aldric's handwriting.",
-    "entities": ["Elena", "Marcus", "Aldric", "the Council", "the Order"],
-    "original_text": "The sun had barely risen when Elena spotted the tall figure waiting by the stone marker. His hand rested on the pommel of a short sword, but his posture spoke of weariness, not aggression. 'You bear the sigil of the Order,' he said without preamble. 'My name is Marcus. I was a soldier once, before I turned to trade.' He reached into his coat and produced a sealed letter. 'I intercepted a coded message three days ago — an assassination plot against the Council. This letter is from Aldric. He sent me to find you.'"
-  }
-]
-
-If the text is too short or has no meaningful content, return an empty array [].`;
-
-interface ExtractedNode {
-  title: string;
-  content: string;
-  entities: string[];
-  original_text: string;
-}
-
-async function extractNodes(
-  chunk: string,
-  chunkIndex: number,
-  nodeOffset: number,
-): Promise<{ nodes: ExtractedNode[]; rawResponse: string }> {
-  const rawResponse = await generateOpenRouterResponse({
-    systemPrompt: EXTRACTION_PROMPT,
-    messages: [
-      {
-        role: "user",
-        content: `Extract memory nodes from this text chunk (#${chunkIndex + 1}, start numbering from ${nodeOffset + 1}):\n\n${chunk}`,
-      },
-    ],
-    model: OPENROUTER_MODELS["llama-70b"],
-    maxTokens: 4096,
-    temperature: 0.2,
-  });
-
-  let nodes: ExtractedNode[] = [];
-  try {
-    const jsonMatch = rawResponse.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      nodes = JSON.parse(jsonMatch[0]);
-    }
-  } catch (err) {
-    log.warn({ err, chunkIndex }, "Failed to parse node extraction response");
-  }
-
-  return { nodes, rawResponse };
 }
 
 // ---- Route factory ---- //
@@ -293,167 +222,69 @@ export function uploadRoutes(): Router {
       const batchId = randomUUID();
       const db = getDb();
 
-      // Respond immediately with batch_id, process in background
-      res.json({
-        batch_id: batchId,
-        status: "processing",
-        file_name: file.originalname,
-        document_title: docTitle,
-      });
+      try {
+        // 1. Extract text from file
+        log.info(
+          { batchId, file: file.originalname, size: file.size },
+          "Starting file processing",
+        );
+        const fullText = await extractText(file.buffer, file.originalname);
 
-      // Background processing
-      (async () => {
-        try {
-          // 1. Extract text from file
-          log.info(
-            { batchId, file: file.originalname, size: file.size },
-            "Starting file processing",
-          );
-          const fullText = await extractText(file.buffer, file.originalname);
-
-          if (!fullText.trim()) {
-            await db.from("llm_outputs").insert({
-              batch_id: batchId,
-              document_title: docTitle,
-              chunk_index: 0,
-              raw_response: "",
-              parsed_node_count: 0,
-              owner_wallet: wallet,
-              file_name: file.originalname,
-              file_size_bytes: file.size,
-              status: "failed",
-              error_message: "No text content extracted from file",
-            });
-            return;
-          }
-
-          // 2. Chunk the text
-          const chunks = chunkText(fullText);
-          log.info(
-            { batchId, chunks: chunks.length, totalChars: fullText.length },
-            "Text chunked",
-          );
-
-          // 3. Insert ALL chunk rows upfront as 'pending' so frontend can track progress
-          await db.from("llm_outputs").insert(
-            chunks.map((_, i) => ({
-              batch_id: batchId,
-              document_title: docTitle,
-              chunk_index: i,
-              raw_response: "",
-              parsed_node_count: 0,
-              owner_wallet: wallet,
-              file_name: file.originalname,
-              file_size_bytes: file.size,
-              status: "pending",
-            })),
-          );
-
-          // 4. Process each chunk through LLM
-          let globalNodeCounter = 0;
-
-          for (let i = 0; i < chunks.length; i++) {
-            try {
-              // Mark chunk as processing
-              await db
-                .from("llm_outputs")
-                .update({ status: "processing" })
-                .eq("batch_id", batchId)
-                .eq("chunk_index", i);
-
-              // Run LLM node extraction
-              const { nodes, rawResponse } = await extractNodes(chunks[i], i, globalNodeCounter);
-
-              // 4. Store each node as a memory
-              const memoryIds: number[] = [];
-              for (const node of nodes) {
-                globalNodeCounter++;
-                const memoryId = await withOwnerWallet(wallet, () =>
-                  storeMemory({
-                    type: "episodic",
-                    content: `${node.title}\n\n${node.content}\n\nEntities: ${node.entities.join(", ") || "None"}\n\nOriginal text: ${node.original_text}`,
-                    summary: node.content,
-                    tags: [
-                      "file-upload",
-                      `doc:${docTitle}`,
-                      ...node.entities.map((e: string) => `entity:${e}`),
-                    ],
-                    importance: 0.6,
-                    source: "file-upload",
-                    sourceId: `${batchId}:${globalNodeCounter}`,
-                    metadata: {
-                      batch_id: batchId,
-                      node_index: globalNodeCounter,
-                      chunk_index: i,
-                      entities: node.entities,
-                      document_title: docTitle,
-                      original_text: node.original_text,
-                    },
-                  }),
-                );
-                if (memoryId)
-                  memoryIds.push(
-                    typeof memoryId === "number"
-                      ? memoryId
-                      : parseInt(String(memoryId)),
-                  );
-              }
-
-              // Update llm_output row with results
-              await db
-                .from("llm_outputs")
-                .update({
-                  raw_response: rawResponse,
-                  parsed_node_count: nodes.length,
-                  status: "completed",
-                })
-                .eq("batch_id", batchId)
-                .eq("chunk_index", i);
-
-              log.info(
-                {
-                  batchId,
-                  chunk: i,
-                  nodes: nodes.length,
-                  memories: memoryIds.length,
-                },
-                "Chunk processed",
-              );
-            } catch (chunkErr) {
-              log.error(
-                { err: chunkErr, batchId, chunk: i },
-                "Chunk processing failed",
-              );
-              await db
-                .from("llm_outputs")
-                .update({
-                  status: "failed",
-                  error_message:
-                    chunkErr instanceof Error
-                      ? chunkErr.message
-                      : "Unknown error",
-                })
-                .eq("batch_id", batchId)
-                .eq("chunk_index", i);
-            }
-          }
-
-          log.info(
-            { batchId, totalNodes: globalNodeCounter, chunks: chunks.length },
-            "File processing complete",
-          );
-        } catch (err) {
-          log.error({ err, batchId }, "File processing pipeline failed");
-          await db
-            .from("llm_outputs")
-            .update({
-              status: "failed",
-              error_message:
-                err instanceof Error ? err.message : "Pipeline failed",
-            })
-            .eq("batch_id", batchId);
+        if (!fullText.trim()) {
+          await db.from("llm_outputs").insert({
+            batch_id: batchId,
+            document_title: docTitle,
+            chunk_index: 0,
+            chunk_text: "",
+            raw_response: "",
+            parsed_node_count: 0,
+            owner_wallet: wallet,
+            file_name: file.originalname,
+            file_size_bytes: file.size,
+            status: "failed",
+            error_message: "No text content extracted from file",
+          });
+          res.json({ batch_id: batchId, status: "failed", file_name: file.originalname, document_title: docTitle });
+          return;
         }
-      })();
+
+        // 2. Chunk the text
+        const chunks = chunkText(fullText);
+        log.info(
+          { batchId, chunks: chunks.length, totalChars: fullText.length },
+          "Text chunked",
+        );
+
+        // 3. Insert ALL chunk rows as 'pending' with chunk text for the background processor
+        await db.from("llm_outputs").insert(
+          chunks.map((text, i) => ({
+            batch_id: batchId,
+            document_title: docTitle,
+            chunk_index: i,
+            chunk_text: text,
+            raw_response: "",
+            parsed_node_count: 0,
+            owner_wallet: wallet,
+            file_name: file.originalname,
+            file_size_bytes: file.size,
+            status: "pending",
+          })),
+        );
+
+        // 4. Respond and kick the background processor
+        res.json({
+          batch_id: batchId,
+          status: "pending",
+          chunks: chunks.length,
+          file_name: file.originalname,
+          document_title: docTitle,
+        });
+
+        drainPending();
+      } catch (err) {
+        log.error({ err, batchId }, "File upload failed");
+        res.status(500).json({ error: "File processing failed" });
+      }
     },
   );
 
@@ -481,7 +312,7 @@ export function uploadRoutes(): Router {
         return;
       }
 
-      // Fetch memories created by this batch (source_id is "batchId:nodeIndex")
+      // Fetch memories created by this batch (source_id is "batchId:chunkIndex:nodeIndex")
       const { data: memories } = await db
         .from("memories")
         .select("id, summary, tags, importance, created_at, metadata")

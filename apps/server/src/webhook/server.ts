@@ -26,7 +26,7 @@ import { requirePrivyAuth, optionalPrivyAuth } from './privy-auth';
 import { traceMemory, explainMemory } from '../features/memory-trace';
 import { dashboardRoutes, autoRegisterClude } from './dashboard-routes';
 import { compoundRoutes } from './compound-routes';
-// import { recoverStalled, drainPending } from '../batch/upload-processor';
+import { recoverStalled, drainPending } from '../batch/upload-processor';
 
 const log = createChildLogger('server');
 
@@ -1426,6 +1426,12 @@ ${sections.join('\n')}` },
     res.redirect('/dashboard/');
   });
 
+  // In dev mode, proxy /chat and /dashboard to Vite dev servers
+  if (process.env.NODE_ENV !== 'production') {
+    import('./dev-proxy').then(({ setupDevProxy }) => setupDevProxy(app))
+      .catch(err => log.warn({ err }, 'Dev proxy not available (install http-proxy-middleware)'));
+  }
+
   // Sample memory packs
   const samplesDir = path.join(publicDir, 'samples');
   app.use('/samples', express.static(samplesDir));
@@ -1444,8 +1450,7 @@ export function startServer(): Promise<void> {
       log.info({ port: config.server.port }, 'Server started');
       // Auto-register Clude as the first dashboard agent
       autoRegisterClude().catch(err => log.warn({ err }, 'Auto-register Clude failed'));
-      // TODO: uncomment when batch/ is committed
-      // recoverStalled().then(() => drainPending()).catch(err => log.warn({ err }, 'Upload recovery failed'));
+      recoverStalled().then(() => drainPending()).catch(err => log.warn({ err }, 'Upload recovery failed'));
       resolve();
     });
   });
