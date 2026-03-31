@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
-import { useWallets } from '@privy-io/react-auth/solana';
+import { useSolanaWallets } from '@privy-io/react-auth/solana';
 import { api } from '../lib/api';
 import type { AuthState } from './AuthContext';
 
@@ -42,24 +42,14 @@ export function useAuth(): AuthState {
     const savedKey = localStorage.getItem(STORAGE_KEYS.cortexKey);
     const savedWallet = localStorage.getItem(STORAGE_KEYS.wallet);
     if (savedKey) {
-      cortexInitRef.current = true;
+      // Trust the key optimistically — if invalid, the first real API call
+      // will 401 and the auth-expired handler will logout.
       api.setKey(savedKey);
-      api.validateKey().then((valid) => {
-        if (valid) {
-          setCortexKey(savedKey);
-          setWalletAddress(savedWallet);
-          setAuthMode(savedWallet ? 'privy' : 'cortex');
-        } else {
-          localStorage.removeItem(STORAGE_KEYS.cortexKey);
-          localStorage.removeItem(STORAGE_KEYS.wallet);
-          api.setKey(null);
-        }
-        setReady(true);
-        cortexInitRef.current = false;
-      });
-    } else {
-      setReady(true);
+      setCortexKey(savedKey);
+      setWalletAddress(savedWallet);
+      setAuthMode(savedWallet ? 'privy' : 'cortex');
     }
+    setReady(true);
   }, [privyReady]);
 
   // Privy auth → auto-register
