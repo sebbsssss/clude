@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
-import { useWallets } from '@privy-io/react-auth/solana';
+import { useSolanaWallets } from '@privy-io/react-auth/solana';
 import { api } from '../lib/api';
 import type { AuthState } from './AuthContext';
 
@@ -17,7 +17,7 @@ const LEGACY_KEYS = {
 
 export function useAuth(): AuthState {
   const { ready: privyReady, authenticated: privyAuth, login: privyLogin, logout: privyLogout, getAccessToken } = usePrivy();
-  const { wallets } = useWallets();
+  const { wallets } = useSolanaWallets();
 
   const [cortexKey, setCortexKey] = useState<string | null>(null);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
