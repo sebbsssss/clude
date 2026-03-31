@@ -50,7 +50,7 @@ export function useAuth(): AuthState {
       setAuthMode(savedWallet ? 'privy' : 'cortex');
     }
     setReady(true);
-  }, [privyReady]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- only needs to run once on mount
 
   // Privy auth → auto-register
   useEffect(() => {
