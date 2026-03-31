@@ -31,36 +31,24 @@ export function useAuth(): AuthState {
   }, [user]);
 
   // On mount: check localStorage for saved cortex API key
+  // Trust the key optimistically — if it's invalid, the first real API call
+  // will 401 and the existing auth-expired handler will log the user out.
   useEffect(() => {
     const savedKey = localStorage.getItem('cortex_api_key');
     const savedEndpoint = localStorage.getItem('cortex_endpoint');
     if (savedKey) {
-      // Block Privy from overriding while we validate
       cortexInitRef.current = true;
       api.setToken(savedKey);
       if (savedEndpoint) api.setAgentEndpoint(savedEndpoint);
       api.setMode('cortex');
       api.setWalletAddress(null);
-      api.validateApiKey().then(valid => {
-        if (valid) {
-          setCortexAuth(true);
-          setAuthMode('cortex');
-          setTokenReady(true);
-          if (!hasRefreshed.current) {
-            hasRefreshed.current = true;
-            api.emitRefresh();
-          }
-        } else {
-          cortexInitRef.current = false;
-          localStorage.removeItem('cortex_api_key');
-          localStorage.removeItem('cortex_endpoint');
-          api.setMode('legacy');
-        }
-        setCortexReady(true);
-      });
-    } else {
-      setCortexReady(true);
+      setCortexAuth(true);
+      setAuthMode('cortex');
+      setTokenReady(true);
+      hasRefreshed.current = true;
+      api.emitRefresh();
     }
+    setCortexReady(true);
   }, []);
 
   // Privy auth: ONLY if cortex is not active or initializing
