@@ -78,7 +78,7 @@ async function extractNodes(
         content: `Extract memory nodes from this text chunk (#${chunkIndex + 1}):\n\n${chunk}`,
       },
     ],
-    model: OPENROUTER_MODELS["llama-70b"],
+    model: OPENROUTER_MODELS["claude-haiku-4.5"],
     maxTokens: 4096,
     temperature: 0.2,
   });
