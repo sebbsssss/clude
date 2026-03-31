@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@paper-design/shaders-react": "latest",
-    "@privy-io/react-auth": "^3.18.0",
+    "@privy-io/react-auth": "^2.0.0",
     "@radix-ui/react-select": "latest",
     "@radix-ui/react-slot": "1.1.1",
     "@solana-program/memo": "^0.10.0",

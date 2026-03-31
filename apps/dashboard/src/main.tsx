@@ -22,7 +22,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         appearance: {
           theme: 'light',
           accentColor: '#2244ff',
-          walletList: ['phantom', 'solflare', 'backpack', 'detected_solana_wallets'],
+          walletList: ['phantom', 'solflare', 'backpack'],
           walletChainType: 'solana-only',
         },
         loginMethods: ['wallet'],

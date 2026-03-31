@@ -23,7 +23,7 @@ createRoot(document.getElementById('root')!).render(
           theme: 'dark',
           accentColor: '#2244ff',
           showWalletLoginFirst: true,
-          walletList: ['phantom', 'solflare', 'backpack', 'detected_solana_wallets'],
+          walletList: ['phantom', 'solflare', 'backpack'],
         },
         loginMethods: ['wallet'],
         walletChainType: 'solana-only',

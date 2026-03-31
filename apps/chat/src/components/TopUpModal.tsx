@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronDown, CheckCircle, AlertCircle, Copy, Loader2, QrCode, Smartphone } from 'lucide-react';
-import { useWallets } from '@privy-io/react-auth/solana';
+import { useSolanaWallets } from '@privy-io/react-auth/solana';
 import { Connection, PublicKey, Transaction, TransactionInstruction } from '@solana/web3.js';
 import { createQR } from '@solana/pay';
 import bs58 from 'bs58';
@@ -111,7 +111,7 @@ async function buildSolanaUsdcTx(senderAddress: string, destAddress: string, amo
 
 export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) {
   const { walletAddress } = useAuthContext();
-  const { wallets } = useWallets();
+  const { wallets } = useSolanaWallets();
 
   const [selectedAmount, setSelectedAmount] = useState<number | null>(10);
   const [customAmount, setCustomAmount] = useState('');
