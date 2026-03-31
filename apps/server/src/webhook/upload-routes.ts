@@ -75,8 +75,8 @@ async function extractText(buffer: Buffer, filename: string): Promise<string> {
 
 // ---- Text chunking ---- //
 
-/** Max chars per chunk — Llama 70B handles 128K context, ~8000 tokens per chunk */
-const CHUNK_MAX_CHARS = 32000;
+/** Max chars per chunk — ~2000 tokens, keeps extraction thorough (~5 nodes per chunk) */
+const CHUNK_MAX_CHARS = 8000;
 
 function chunkText(text: string): string[] {
   const chunks: string[] = [];
