@@ -75,7 +75,7 @@ export function ModelSelector({ selectedModel, onModelChange }: Props) {
     <div className="relative" ref={containerRef}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-white text-[13px] rounded-full px-3 h-8 min-w-[150px] transition-colors"
+        className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-white text-[13px] rounded-full px-3 h-11 sm:h-8 min-w-[120px] sm:min-w-[150px] transition-colors"
       >
         <Zap className="h-3.5 w-3.5 text-blue-400" />
         <span className="truncate">{current?.name || 'Select model'}</span>
@@ -89,7 +89,7 @@ export function ModelSelector({ selectedModel, onModelChange }: Props) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-            className="absolute bottom-full mb-2 left-0 w-72 bg-zinc-900 border border-zinc-700 rounded-lg shadow-2xl z-50 overflow-hidden"
+            className="absolute bottom-full mb-2 left-0 w-[calc(100vw-2rem)] sm:w-72 max-w-72 bg-zinc-900 border border-zinc-700 rounded-lg shadow-2xl z-50 overflow-hidden"
           >
             <div className="px-3 py-1.5 text-[11px] tracking-widest uppercase text-zinc-400 border-b border-zinc-800 flex items-center gap-1.5">
               <Shield className="h-3.5 w-3.5" /> Private — Zero Data Retention

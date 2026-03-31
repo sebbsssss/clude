@@ -186,7 +186,7 @@ export function ChatHeader() {
           </span>
           <button
             onClick={logout}
-            className="text-zinc-500 hover:text-zinc-300 transition-colors"
+            className="text-zinc-500 hover:text-zinc-300 transition-colors p-2"
             title="Sign out"
           >
             <LogOut className="h-3.5 w-3.5" />
@@ -195,7 +195,7 @@ export function ChatHeader() {
       ) : (
         <button
           onClick={login}
-          className="text-[12px] text-blue-400 hover:text-blue-300 transition-colors px-3 py-1 border border-blue-500/30 rounded-full"
+          className="text-[12px] text-blue-400 hover:text-blue-300 transition-colors px-3 py-2 border border-blue-500/30 rounded-full"
         >
           Sign in
         </button>
@@ -203,7 +203,7 @@ export function ChatHeader() {
 
       <button
         onClick={() => setShowSettings(!showSettings)}
-        className="text-zinc-500 hover:text-zinc-300 transition-colors"
+        className="text-zinc-500 hover:text-zinc-300 transition-colors p-2"
       >
         <Settings className="h-4 w-4" />
       </button>

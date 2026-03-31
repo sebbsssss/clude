@@ -282,7 +282,7 @@ export function TransactionHistory({ open, onClose, messages }: {
   return (
     <>
       <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
-      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[360px] max-h-[70vh] bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl z-50 p-5 flex flex-col">
+      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] sm:w-[360px] max-w-[360px] max-h-[70vh] bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl z-50 p-5 flex flex-col">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2 text-sm text-white font-medium">
             <Clock className="h-4 w-4 text-blue-400" /> Transaction History

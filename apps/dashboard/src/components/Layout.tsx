@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthContext } from '../hooks/AuthContext';
 import { AgentSelector } from './AgentSelector';
 import { useTheme } from '../hooks/useTheme';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { api } from '../lib/api';
 import styles from './Layout.module.css';
 
@@ -19,10 +20,17 @@ const NAV_ITEMS = [
 export function Layout({ children }: { children: React.ReactNode }) {
   const { walletAddress, email, logout } = useAuthContext();
   const navigate = useNavigate();
+  const location = useLocation();
   const { isDark, toggle } = useTheme();
+  const isMobile = useIsMobile();
   const [chatOpen, setChatOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [hasUploadAccess, setHasUploadAccess] = useState(false);
 
+  // Close sidebar on route change (mobile)
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [location.pathname]);
 
   // Check if wallet has access to file upload feature
   useEffect(() => {
@@ -39,7 +47,25 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className={styles.layout}>
-      <aside className={styles.sidebar}>
+      {/* Mobile header with hamburger */}
+      <div className={styles.mobileHeader}>
+        <button
+          className={styles.hamburger}
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          aria-label="Toggle menu"
+        >
+          {sidebarOpen ? '✕' : '☰'}
+        </button>
+        <span className={styles.mobileHeaderLogo}>CLUDE</span>
+        <div style={{ width: 44 }} />
+      </div>
+
+      {/* Overlay when sidebar is open on mobile */}
+      {isMobile && sidebarOpen && (
+        <div className={styles.overlay} onClick={() => setSidebarOpen(false)} />
+      )}
+
+      <aside className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : ''}`}>
         <div className={styles.logo}>
           <a href="https://clude.io" target="_blank" rel="noopener">CLUDE</a>
           <span className={styles.badge}>Dashboard</span>
@@ -163,7 +189,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Chat slide-out panel */}
       {chatOpen && (
         <div
-          style={{
+          style={isMobile ? {
+            position: 'fixed',
+            inset: 0,
+            top: 0,
+            overflow: 'hidden',
+            zIndex: 1000,
+          } : {
             position: 'fixed',
             bottom: 84,
             right: 24,

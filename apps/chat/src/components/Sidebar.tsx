@@ -62,14 +62,14 @@ export function Sidebar({ conversations, activeId, stats, recentMemories, onSele
                 <div className="flex items-center justify-between px-3 py-3 border-b border-zinc-800">
                   <button
                     onClick={handleNewChat}
-                    className="flex items-center gap-1.5 text-[11px] text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-lg transition-colors"
+                    className="flex items-center gap-1.5 text-[11px] text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 px-4 py-2.5 rounded-lg transition-colors"
                   >
                     <Plus className="h-3 w-3" /> New Chat
                   </button>
                   <div className="flex items-center gap-1">
                     <button
                       onClick={onMobileClose}
-                      className="text-zinc-600 hover:text-zinc-400 transition-colors p-1"
+                      className="text-zinc-600 hover:text-zinc-400 transition-colors p-2.5"
                     >
                       <X className="h-4 w-4" />
                     </button>

@@ -233,7 +233,7 @@ export function ExploreChat({ onHighlight, onMemoryClick, onFocusNode, onEntityC
       left: '50%',
       transform: 'translateX(-50%)',
       zIndex: 20,
-      width: '100%',
+      width: 'calc(100% - 32px)',
       maxWidth: 800,
       display: 'flex',
       flexDirection: 'column',
@@ -312,7 +312,7 @@ export function ExploreChat({ onHighlight, onMemoryClick, onFocusNode, onEntityC
                 )}
                 {msg.role === 'assistant' ? renderContent(msg.content, msg.streaming, msg.memoryIds) : msg.content}
                 {msg.streaming && !msg.content && (
-                  <span style={{ color: 'rgba(255,255,255,0.8)', letterSpacing: 2, fontSize: 14 }}>
+                  <span style={{ color: 'var(--text-muted)', letterSpacing: 2, fontSize: 14 }}>
                     <span style={{ animation: 'dotPulse 1.4s infinite', animationDelay: '0s' }}>.</span>
                     <span style={{ animation: 'dotPulse 1.4s infinite', animationDelay: '0.2s' }}>.</span>
                     <span style={{ animation: 'dotPulse 1.4s infinite', animationDelay: '0.4s' }}>.</span>
@@ -369,7 +369,7 @@ export function ExploreChat({ onHighlight, onMemoryClick, onFocusNode, onEntityC
         gap: 0,
         background: 'var(--bg-card)',
         borderRadius: 14,
-        border: '1px solid rgba(255,255,255,0.2)',
+        border: '1px solid var(--border)',
         overflow: 'hidden',
         boxShadow: '0 4px 24px rgba(0,0,0,0.15)',
       }}>
@@ -387,7 +387,7 @@ export function ExploreChat({ onHighlight, onMemoryClick, onFocusNode, onEntityC
             fontFamily: 'var(--mono)',
             background: 'transparent',
             border: 'none',
-            color: '#fff',
+            color: 'var(--text)',
             outline: 'none',
           }}
         />
@@ -402,7 +402,7 @@ export function ExploreChat({ onHighlight, onMemoryClick, onFocusNode, onEntityC
             letterSpacing: 1,
             textTransform: 'uppercase',
             background: 'transparent',
-            color: streaming ? '#f87171' : !input.trim() ? 'rgba(255,255,255,0.35)' : '#4488ff',
+            color: streaming ? '#f87171' : !input.trim() ? 'var(--text-faint)' : '#4488ff',
             border: 'none',
             borderLeft: '1px solid var(--border)',
             cursor: !streaming && !input.trim() ? 'default' : 'pointer',

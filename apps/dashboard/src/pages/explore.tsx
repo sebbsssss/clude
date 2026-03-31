@@ -69,7 +69,7 @@ export function Explore() {
   }, []);
 
   return (
-    <div style={{
+    <div className="explore-container" style={{
       height: 'calc(100vh - 80px)',
       position: 'relative',
       overflow: 'hidden',

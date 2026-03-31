@@ -309,8 +309,9 @@ export function FileMemory() {
                 onClick={() => handleExpandBatch(batch.batch_id)}
                 style={{
                   display: 'flex',
+                  flexWrap: 'wrap',
                   alignItems: 'center',
-                  gap: 12,
+                  gap: '8px 12px',
                   padding: '12px 16px',
                   background: expandedBatch === batch.batch_id ? 'var(--hover-bg-strong)' : 'var(--bg-card)',
                   borderRadius: expandedBatch === batch.batch_id ? '8px 8px 0 0' : 8,
@@ -334,10 +335,10 @@ export function FileMemory() {
 
                 {/* Title + progress bar */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {batch.document_title}
                   </div>
-                  <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 2 }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {batch.file_name}
                   </div>
                   {batch.total_chunks > 0 && batch.status !== 'completed' && (
@@ -353,30 +354,29 @@ export function FileMemory() {
                   )}
                 </div>
 
-                {/* Stats */}
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'right' as const, flexShrink: 0 }}>
-                  <div>{batch.total_nodes} nodes</div>
-                  <div style={{ color: 'var(--text-faint)' }}>{batch.chunks_completed}/{batch.total_chunks} chunks</div>
-                </div>
+                {/* Stats + Status + Date row */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'right' as const }}>
+                    <div>{batch.total_nodes} nodes</div>
+                    <div style={{ color: 'var(--text-faint)' }}>{batch.chunks_completed}/{batch.total_chunks} chunks</div>
+                  </div>
 
-                {/* Status badge */}
-                <div style={{
-                  fontSize: 9,
-                  letterSpacing: 1,
-                  textTransform: 'uppercase' as const,
-                  padding: '2px 8px',
-                  borderRadius: 2,
-                  background: `${STATUS_COLORS[batch.status]}20`,
-                  color: STATUS_COLORS[batch.status],
-                  fontWeight: 600,
-                  flexShrink: 0,
-                }}>
-                  {batch.status}
-                </div>
+                  <div style={{
+                    fontSize: 9,
+                    letterSpacing: 1,
+                    textTransform: 'uppercase' as const,
+                    padding: '2px 8px',
+                    borderRadius: 2,
+                    background: `${STATUS_COLORS[batch.status]}20`,
+                    color: STATUS_COLORS[batch.status],
+                    fontWeight: 600,
+                  }}>
+                    {batch.status}
+                  </div>
 
-                {/* Date */}
-                <div style={{ fontSize: 10, color: 'var(--text-faint)', flexShrink: 0, width: 100, textAlign: 'right' as const }}>
-                  {formatDate(batch.created_at)}
+                  <div style={{ fontSize: 10, color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>
+                    {formatDate(batch.created_at)}
+                  </div>
                 </div>
               </div>
 

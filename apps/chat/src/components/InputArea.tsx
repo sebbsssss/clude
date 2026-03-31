@@ -162,7 +162,7 @@ export const InputArea = memo(function InputArea({
                 variant="ghost"
                 size="sm"
                 onClick={onToggleMemoryPills}
-                className={`h-7 w-7 rounded-full bg-zinc-800 hover:bg-zinc-700 p-0 ${showMemoryPills ? 'text-blue-400 hover:text-blue-300' : 'text-zinc-100 hover:text-white'}`}
+                className={`h-11 w-11 sm:h-7 sm:w-7 rounded-full bg-zinc-800 hover:bg-zinc-700 p-0 ${showMemoryPills ? 'text-blue-400 hover:text-blue-300' : 'text-zinc-100 hover:text-white'}`}
               >
                 <Brain className="h-3.5 w-3.5" />
               </Button>
@@ -175,14 +175,14 @@ export const InputArea = memo(function InputArea({
                   variant="ghost"
                   size="sm"
                   onClick={onStop}
-                  className="h-8 w-8 rounded-full bg-red-600/25 hover:bg-red-600/35 text-red-400 p-0"
+                  className="h-11 w-11 sm:h-8 sm:w-8 rounded-full bg-red-600/25 hover:bg-red-600/35 text-red-400 p-0"
                 >
                   <Square className="h-4 w-4" />
                 </Button>
               ) : balance !== null && balance <= 0 ? (
                 <button
                   onClick={() => {}}
-                  className="h-8 px-3 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-xs font-medium transition-colors"
+                  className="h-11 sm:h-8 px-3 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-xs font-medium transition-colors"
                 >
                   Top Up to continue
                 </button>
@@ -192,7 +192,7 @@ export const InputArea = memo(function InputArea({
                   size="sm"
                   onClick={handleSend}
                   disabled={!inputValue.trim()}
-                  className="h-8 w-8 rounded-full bg-blue-600/25 hover:bg-blue-600/35 text-blue-500 p-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="h-11 w-11 sm:h-8 sm:w-8 rounded-full bg-blue-600/25 hover:bg-blue-600/35 text-blue-500 p-0 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Send className="h-4 w-4" />
                 </Button>

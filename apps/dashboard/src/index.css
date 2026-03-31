@@ -160,8 +160,36 @@ button {
   animation: processingDots 1.2s infinite;
 }
 
-/* Responsive helpers */
-@media (max-width: 900px) {
-  .bento-grid { grid-template-columns: 1fr !important; }
-  .bento-grid > * { grid-column: span 1 !important; }
+/* ─── Responsive: Tablet ─── */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .bento-grid { grid-template-columns: repeat(2, 1fr) !important; grid-template-areas: none !important; grid-template-rows: auto !important; }
+  .bento-grid > * { grid-column: span 1 !important; grid-row: auto !important; grid-area: unset !important; }
+
+  .brain-container,
+  .explore-container {
+    margin: -24px !important;
+    margin-top: -64px !important;
+    width: calc(100% + 48px) !important;
+    height: 100vh !important;
+  }
+}
+
+/* ─── Responsive: Mobile ─── */
+@media (max-width: 767px) {
+  .bento-grid { grid-template-columns: 1fr !important; grid-template-areas: none !important; grid-template-rows: auto !important; }
+  .bento-grid > * { grid-column: span 1 !important; grid-row: auto !important; grid-area: unset !important; }
+
+  .brain-container {
+    margin: -16px !important;
+    margin-top: -64px !important;
+    width: calc(100% + 32px) !important;
+    height: 100vh !important;
+  }
+
+  .explore-container {
+    margin: -16px !important;
+    margin-top: -64px !important;
+    width: calc(100% + 32px) !important;
+    height: 100vh !important;
+  }
 }

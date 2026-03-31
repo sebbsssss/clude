@@ -391,7 +391,8 @@ export function BrainView() {
 
     // Scene
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0xf5f5f0, 0.0006);
+    const bgColor = document.documentElement.classList.contains('dark') ? 0x0a0a0f : 0xf5f5f0;
+    scene.fog = new THREE.FogExp2(bgColor, 0.0006);
     sceneRef.current = scene;
 
     // Camera
@@ -403,7 +404,7 @@ export function BrainView() {
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(W, H);
-    renderer.setClearColor(0xf5f5f0, 1);
+    renderer.setClearColor(bgColor, 1);
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
@@ -1348,15 +1349,17 @@ export function BrainView() {
   // Render
   // ---------------------------------------------------------------------------
 
+  const isDark = document.documentElement.classList.contains('dark');
+
   const panelBase: React.CSSProperties = {
     position: 'absolute',
-    background: 'rgba(255,255,255,0.92)',
+    background: isDark ? 'rgba(22,22,30,0.92)' : 'rgba(255,255,255,0.92)',
     backdropFilter: 'blur(20px)',
     WebkitBackdropFilter: 'blur(20px)',
-    border: '1px solid rgba(0,0,0,0.08)',
+    border: isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(0,0,0,0.08)',
     borderRadius: 4,
     fontFamily: "'JetBrains Mono', monospace",
-    color: '#1a1a2e',
+    color: isDark ? '#e8e8e8' : '#1a1a2e',
     fontSize: 11,
     pointerEvents: 'auto',
   };
@@ -1365,12 +1368,12 @@ export function BrainView() {
     fontSize: 8,
     letterSpacing: 3,
     textTransform: 'uppercase',
-    color: '#999',
+    color: isDark ? '#777' : '#999',
     fontWeight: 700,
   };
 
   return (
-    <div style={{ position: 'relative', width: 'calc(100% + 80px)', height: 'calc(100vh - 80px)', overflow: 'hidden', background: '#f5f5f0', margin: '-40px' }}>
+    <div className="brain-container" style={{ position: 'relative', width: 'calc(100% + 80px)', height: 'calc(100vh - 80px)', overflow: 'hidden', background: isDark ? '#0a0a0f' : '#f5f5f0', margin: '-40px' }}>
 
       {/* Three.js canvas mount */}
       <div ref={mountRef} style={{ position: 'absolute', inset: 0 }} />
@@ -1380,9 +1383,9 @@ export function BrainView() {
         <div style={{
           position: 'absolute', inset: 0,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: '#f5f5f0',
+          background: isDark ? '#0a0a0f' : '#f5f5f0',
           fontFamily: "'JetBrains Mono', monospace",
-          color: '#888', fontSize: 12, letterSpacing: 2, textTransform: 'uppercase',
+          color: isDark ? '#777' : '#888', fontSize: 12, letterSpacing: 2, textTransform: 'uppercase',
           pointerEvents: 'none',
         }}>
           Loading neural network…
@@ -1427,7 +1430,7 @@ export function BrainView() {
             </div>
           ))}
         </div>
-        <div style={{ marginTop: 10, borderTop: '1px solid rgba(0,0,0,0.07)', paddingTop: 8 }}>
+        <div style={{ marginTop: 10, borderTop: isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(0,0,0,0.07)', paddingTop: 8 }}>
           <div style={labelStyle}>Bond types</div>
           <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
             {Object.entries(BOND_COLORS)
@@ -1469,9 +1472,9 @@ export function BrainView() {
         <button
           onClick={() => setAutoRotate(r => !r)}
           style={{
-            background: autoRotate ? '#1a1a2e' : 'transparent',
-            color: autoRotate ? '#f5f5f0' : '#1a1a2e',
-            border: '1px solid #1a1a2e',
+            background: autoRotate ? (isDark ? '#e8e8e8' : '#1a1a2e') : 'transparent',
+            color: autoRotate ? (isDark ? '#0a0a0f' : '#f5f5f0') : (isDark ? '#e8e8e8' : '#1a1a2e'),
+            border: isDark ? '1px solid rgba(255,255,255,0.2)' : '1px solid #1a1a2e',
             borderRadius: 3,
             padding: '4px 10px',
             fontSize: 9,
@@ -1487,8 +1490,8 @@ export function BrainView() {
           onClick={resetCamera}
           style={{
             background: 'transparent',
-            color: '#1a1a2e',
-            border: '1px solid #1a1a2e',
+            color: isDark ? '#e8e8e8' : '#1a1a2e',
+            border: isDark ? '1px solid rgba(255,255,255,0.2)' : '1px solid #1a1a2e',
             borderRadius: 3,
             padding: '4px 10px',
             fontSize: 9,
@@ -1506,13 +1509,13 @@ export function BrainView() {
       {psyche && (
         <div style={{ ...panelBase, bottom: 16, left: 16, padding: '12px 16px', maxWidth: 260 }}>
           <div style={labelStyle}>psyche</div>
-          <div style={{ marginTop: 6, fontSize: 11, lineHeight: 1.5, fontStyle: 'italic', color: '#2a2a4a' }}>
+          <div style={{ marginTop: 6, fontSize: 11, lineHeight: 1.5, fontStyle: 'italic', color: isDark ? '#b0b0c0' : '#2a2a4a' }}>
             {psyche.feeling}
           </div>
           {psyche.latestThought && (
             <>
               <div style={{ ...labelStyle, marginTop: 8 }}>latest thought</div>
-              <div style={{ marginTop: 4, fontSize: 10, lineHeight: 1.4, color: '#444', maxHeight: 48, overflow: 'hidden' }}>
+              <div style={{ marginTop: 4, fontSize: 10, lineHeight: 1.4, color: isDark ? '#999' : '#444', maxHeight: 48, overflow: 'hidden' }}>
                 {psyche.latestThought}
               </div>
             </>
@@ -1522,7 +1525,7 @@ export function BrainView() {
               <div style={{ ...labelStyle, marginTop: 8 }}>shaping patterns</div>
               <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {psyche.shapingPatterns.map((p, i) => (
-                  <div key={i} style={{ fontSize: 9, color: '#666', lineHeight: 1.3 }}>— {p}</div>
+                  <div key={i} style={{ fontSize: 9, color: isDark ? '#888' : '#666', lineHeight: 1.3 }}>— {p}</div>
                 ))}
               </div>
             </>

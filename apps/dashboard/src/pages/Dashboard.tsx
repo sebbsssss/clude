@@ -419,7 +419,7 @@ export function Dashboard() {
       {/* ── Top Status Bar ── */}
       <div className="fade-in" style={{
         display: 'flex', alignItems: 'center', gap: 14,
-        marginBottom: 20, padding: '0 2px',
+        marginBottom: 20, padding: '0 2px', flexWrap: 'wrap',
       }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 7,
@@ -454,7 +454,7 @@ export function Dashboard() {
       </div>
 
       {/* ── Bento Grid ── */}
-      <div style={{
+      <div className="bento-grid" style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(4, 1fr)',
         gridTemplateRows: 'auto auto auto auto',

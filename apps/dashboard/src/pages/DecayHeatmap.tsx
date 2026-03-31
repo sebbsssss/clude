@@ -141,7 +141,7 @@ export function DecayHeatmap() {
       {loading ? (
         <div style={{ color: 'var(--text-faint)', padding: 40, textAlign: 'center' }}>Loading...</div>
       ) : (
-        <div style={{ border: '1px solid var(--border)' }}>
+        <div style={{ border: '1px solid var(--border)', overflowX: 'auto' }}>
           {sorted.map((memory) => {
             const color = TYPE_COLORS[memory.memory_type];
             const opacity = Math.max(0.08, memory.decay_factor);

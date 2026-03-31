@@ -38,7 +38,7 @@ export const ConversationList = memo(function ConversationList({ conversations, 
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: i * 0.03, type: 'spring', stiffness: 300, damping: 25 }}
               onClick={() => onSelect(conv.id)}
-              className={`group w-full flex items-center gap-2 px-2 py-2 rounded-lg text-left transition-colors text-[13px] ${
+              className={`group w-full flex items-center gap-2 px-2 py-3 sm:py-2 rounded-lg text-left transition-colors text-[13px] ${
                 conv.id === activeId
                   ? 'bg-blue-600/15 text-white border-l-2 border-blue-500'
                   : 'text-zinc-300 hover:bg-zinc-800/50 hover:text-zinc-200'
@@ -48,7 +48,7 @@ export const ConversationList = memo(function ConversationList({ conversations, 
               <span className="truncate flex-1">{conv.title || 'New conversation'}</span>
               <button
                 onClick={(e) => { e.stopPropagation(); onDelete(conv.id); }}
-                className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:text-red-400"
+                className="opacity-70 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity p-2 sm:p-0.5 hover:text-red-400"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>

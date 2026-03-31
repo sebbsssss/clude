@@ -142,3 +142,99 @@
   max-width: calc(100vw - 220px);
   overflow-x: hidden;
 }
+
+/* ─── Mobile header (hamburger bar) ─── */
+.mobileHeader {
+  display: none;
+}
+
+.hamburger {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 8px;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+.mobileHeaderLogo {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.overlay {
+  display: none;
+}
+
+/* ─── Tablet + Mobile (< 1024px) ─── */
+@media (max-width: 1023px) {
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    z-index: 100;
+    width: 280px;
+  }
+
+  .sidebarOpen {
+    transform: translateX(0);
+  }
+
+  .main {
+    margin-left: 0;
+    max-width: 100vw;
+    padding: 24px;
+    padding-top: 64px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .mobileHeader {
+    display: flex;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 52px;
+    background: var(--bg-warm);
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    z-index: 90;
+  }
+
+  .overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 99;
+  }
+
+  .navItem {
+    padding: 14px 12px;
+  }
+
+  .navItemActive {
+    padding-left: 12px;
+  }
+
+  .logoutBtn {
+    padding: 12px;
+  }
+}
+
+/* ─── Mobile only (< 768px) ─── */
+@media (max-width: 767px) {
+  .main {
+    padding: 16px;
+    padding-top: 64px;
+  }
+}
