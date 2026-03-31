@@ -16,7 +16,7 @@ import { z } from "zod";
 
 const log = createChildLogger("batch-upload");
 
-const MAX_CONCURRENT = 5;
+const MAX_CONCURRENT = 10;
 let active = 0;
 let draining = false;
 
