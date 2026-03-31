@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
-import { useSolanaWallets } from '@privy-io/react-auth/solana';
+import { useWallets } from '@privy-io/react-auth/solana';
 import { api } from '../lib/api';
 import type { AuthState } from './AuthContext';
 
@@ -17,7 +17,7 @@ const LEGACY_KEYS = {
 
 export function useAuth(): AuthState {
   const { ready: privyReady, authenticated: privyAuth, login: privyLogin, logout: privyLogout, getAccessToken } = usePrivy();
-  const { wallets } = useSolanaWallets();
+  const { wallets } = useWallets();
 
   const [cortexKey, setCortexKey] = useState<string | null>(null);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
@@ -66,7 +66,10 @@ export function useAuth(): AuthState {
   useEffect(() => {
     if (cortexInitRef.current || loggingOutRef.current || !privyReady || !privyAuth || cortexKey) return;
 
-    const wallet = wallets?.[0]?.address;
+    // Prefer the wallet already selected in dashboard (shared via localStorage)
+    const savedWallet = localStorage.getItem(STORAGE_KEYS.wallet);
+    const wallet = (savedWallet && wallets?.find(w => w.address === savedWallet)?.address)
+      || wallets?.[0]?.address;
     if (!wallet) return;
 
     (async () => {

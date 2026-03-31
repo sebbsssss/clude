@@ -20,9 +20,11 @@ export function useAuth(): AuthState {
   // Track whether cortex init is in progress — blocks Privy from overriding
   const cortexInitRef = useRef(false);
 
-  // Extract Solana wallet address
+  // Extract Solana wallet address — prefer the one already selected in chat/dashboard
   const walletAddress = useMemo(() => {
     if (!solanaWallets || solanaWallets.length === 0) return null;
+    const saved = localStorage.getItem('cortex_wallet');
+    if (saved && solanaWallets.find(w => w.address === saved)) return saved;
     return solanaWallets[0]?.address || null;
   }, [solanaWallets]);
 
