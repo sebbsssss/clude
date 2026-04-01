@@ -1,0 +1,2977 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clude Mobile — Wireframe Prototype</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ===== RESET & BASE ===== */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --bg-alt: #0e0e14;
+    --surface: #16161e;
+    --surface-2: #1e1e28;
+    --surface-3: #121218;
+    --accent: #4466ff;
+    --accent-hover: #5577ff;
+    --accent-dim: rgba(68, 102, 255, 0.12);
+    --accent-border: rgba(68, 102, 255, 0.25);
+    --border: rgba(255, 255, 255, 0.06);
+    --border-strong: rgba(255, 255, 255, 0.12);
+    --text: #e8e8e8;
+    --text-secondary: #9a9a9a;
+    --text-muted: #666666;
+    --text-dim: #555555;
+    --green: #34d399;
+    --green-bg: rgba(52, 211, 153, 0.08);
+    --green-border: rgba(52, 211, 153, 0.2);
+    --yellow: #fbbf24;
+    --yellow-bg: rgba(251, 191, 36, 0.08);
+    --yellow-border: rgba(251, 191, 36, 0.3);
+    --red: #f87171;
+    --red-bg: rgba(248, 113, 113, 0.1);
+    --red-border: rgba(248, 113, 113, 0.3);
+    --violet: #a78bfa;
+    --violet-bg: rgba(167, 139, 250, 0.1);
+    --violet-border: rgba(167, 139, 250, 0.4);
+    --episodic: #4466ff;
+    --semantic: #34d399;
+    --procedural: #fbbf24;
+    --self-model: #a78bfa;
+    --radius: 3px;
+    --radius-sm: 3px;
+    --radius-input: 12px;
+    --radius-full: 9999px;
+    --font: 'JetBrains Mono', monospace;
+    --bottom-nav-h: 56px;
+    --header-h: 52px;
+  }
+
+  body {
+    font-family: var(--font);
+    background: #050508;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ===== PHONE FRAME ===== */
+  #phone-frame {
+    width: 390px;
+    height: 844px;
+    background: var(--bg);
+    border-radius: 40px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 25px 80px rgba(0,0,0,0.6);
+  }
+
+  /* Notch */
+  #phone-frame::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 126px;
+    height: 34px;
+    background: #0a0a0f;
+    border-radius: 0 0 20px 20px;
+    z-index: 100;
+  }
+
+  /* ===== SCREENS ===== */
+  .screen {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    background: var(--bg);
+    overflow: hidden;
+  }
+  .screen.active { display: flex; }
+
+  /* ===== SHARED: HEADER ===== */
+  .header {
+    height: var(--header-h);
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    margin-top: 48px;
+    background: var(--bg);
+    z-index: 10;
+  }
+  .header-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .header-back {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+  }
+  .header-back:hover { background: var(--surface); }
+
+  /* ===== SHARED: BOTTOM NAV ===== */
+  .bottom-nav {
+    height: var(--bottom-nav-h);
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    border-top: 1px solid var(--border);
+    background: var(--bg-alt);
+    flex-shrink: 0;
+    padding-bottom: 4px;
+  }
+  .nav-tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    cursor: pointer;
+    padding: 6px 20px;
+    border-radius: var(--radius-sm);
+    transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+  .nav-tab:hover { color: var(--text-secondary); }
+  .nav-tab.active { color: var(--accent); }
+  .nav-tab svg { width: 20px; height: 20px; }
+
+  /* ===== SHARED: BOTTOM SHEET ===== */
+  .sheet-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 50;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .sheet-overlay.open { opacity: 1; pointer-events: auto; }
+
+  .bottom-sheet {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    border-radius: 16px 16px 0 0;
+    z-index: 51;
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    max-height: 70%;
+    overflow-y: auto;
+  }
+  .bottom-sheet.open { transform: translateY(0); }
+
+  .sheet-handle {
+    width: 36px;
+    height: 4px;
+    background: var(--text-dim);
+    border-radius: 2px;
+    margin: 10px auto 16px;
+  }
+
+  /* ===== SHARED: COMPONENTS ===== */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: var(--radius-full);
+    font-size: 11px;
+    font-weight: 500;
+    border: 1px solid;
+  }
+  .badge-green { color: var(--green); background: var(--green-bg); border-color: var(--green-border); }
+  .badge-yellow { color: var(--yellow); background: var(--yellow-bg); border-color: var(--yellow-border); }
+  .badge-red { color: var(--red); background: var(--red-bg); border-color: var(--red-border); }
+  .badge-violet { color: var(--violet); background: var(--violet-bg); border-color: var(--violet-border); }
+  .badge-blue { color: #60a5fa; background: rgba(96,165,250,0.1); border-color: rgba(96,165,250,0.2); }
+
+  .btn {
+    height: 44px;
+    padding: 0 20px;
+    border-radius: var(--radius-input);
+    font-size: 13px;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+    font-family: var(--font);
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-ghost { background: var(--surface); color: var(--text-secondary); border: 1px solid var(--border); }
+  .btn-ghost:hover { background: var(--surface-2); color: var(--text); }
+  .btn-danger { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
+  .btn-danger:hover { background: rgba(248,113,113,0.18); }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: var(--radius-full);
+    font-size: 11px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .chip:hover { border-color: var(--accent-border); color: var(--text); }
+
+  .scrollable {
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* ===== SCREEN 1: LOGIN ===== */
+  #screen-login {
+    justify-content: center;
+    align-items: center;
+    padding: 40px 32px;
+    gap: 32px;
+  }
+
+  .login-logo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .login-logo-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, var(--accent), #4466ff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -1px;
+  }
+  .login-logo-text {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: -0.5px;
+  }
+  .login-logo-sub {
+    font-size: 13px;
+    color: var(--text-muted);
+    text-align: center;
+    line-height: 1.5;
+  }
+
+  .login-section {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .wallet-btn {
+    width: 100%;
+    height: 52px;
+    border-radius: var(--radius-input);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    font-family: var(--font);
+  }
+  .wallet-btn:hover {
+    border-color: var(--accent-border);
+    background: var(--surface-2);
+  }
+  .wallet-icons {
+    display: flex;
+    gap: 6px;
+  }
+  .wallet-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff;
+  }
+
+  .login-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--text-dim);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .login-divider::before, .login-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .login-input {
+    width: 100%;
+    height: 44px;
+    border-radius: var(--radius-input);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0 14px;
+    font-size: 13px;
+    font-family: var(--font);
+    outline: none;
+    transition: border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .login-input:focus { border-color: var(--accent); }
+  .login-input::placeholder { color: var(--text-dim); }
+
+  .login-guest {
+    color: var(--text-muted);
+    font-size: 13px;
+    cursor: pointer;
+    text-align: center;
+    padding: 8px;
+    transition: color 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .login-guest:hover { color: var(--text-secondary); }
+
+  /* ===== SCREEN 2: CONVERSATION LIST ===== */
+  .conv-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+  }
+  .conv-row {
+    display: flex;
+    align-items: center;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: background 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+    gap: 12px;
+    border-bottom: 1px solid rgba(39,39,42,0.3);
+  }
+  .conv-row:hover { background: var(--surface); }
+  .conv-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: var(--accent-dim);
+    border: 1px solid var(--accent-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .conv-avatar svg { width: 16px; height: 16px; color: var(--accent); }
+  .conv-info { flex: 1; min-width: 0; }
+  .conv-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .conv-preview {
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 2px;
+  }
+  .conv-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .conv-time { font-size: 11px; color: var(--text-dim); }
+  .conv-model {
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: var(--radius-full);
+    background: var(--surface-2);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+
+  .fab {
+    position: absolute;
+    bottom: calc(var(--bottom-nav-h) + 16px);
+    right: 16px;
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    background: var(--accent);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 20px rgba(68, 102, 255, 0.4);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 5;
+  }
+  .fab:hover { background: var(--accent-hover); transform: scale(1.05); }
+  .fab svg { width: 22px; height: 22px; color: #fff; }
+
+  /* Empty state */
+  .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 40px;
+  }
+  .empty-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-dim);
+  }
+  .empty-icon svg { width: 24px; height: 24px; }
+  .empty-title { font-size: 14px; color: var(--text-secondary); font-weight: 500; }
+  .empty-sub { font-size: 12px; color: var(--text-dim); text-align: center; }
+
+  /* ===== SCREEN 3: ACTIVE CHAT ===== */
+  .chat-header {
+    height: var(--header-h);
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    margin-top: 48px;
+    background: var(--bg);
+    z-index: 10;
+  }
+  .chat-header-back {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
+    flex-shrink: 0;
+  }
+  .chat-header-back:hover { background: var(--surface); }
+  .chat-header-title {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .msg {
+    display: flex;
+    flex-direction: column;
+    max-width: 82%;
+  }
+  .msg-user { align-self: flex-end; align-items: flex-end; }
+  .msg-assistant { align-self: flex-start; align-items: flex-start; }
+
+  .msg-bubble {
+    padding: 10px 14px;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--text);
+  }
+  .msg-user .msg-bubble {
+    background: rgba(68, 102, 255, 0.15);
+    border: 1px solid rgba(68, 102, 255, 0.3);
+    border-radius: 10px 10px 4px 10px;
+  }
+  .msg-assistant .msg-bubble {
+    background: var(--surface);
+    border: 1px solid rgba(68, 102, 255, 0.12);
+    border-radius: 10px 10px 10px 4px;
+    cursor: pointer;
+  }
+  .msg-assistant .msg-bubble:hover {
+    border-color: rgba(68, 102, 255, 0.25);
+  }
+
+  .msg-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    padding: 0 4px;
+  }
+  .msg-time { font-size: 10px; color: var(--text-dim); }
+
+  .memory-pills {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+  }
+  .memory-pill {
+    padding: 2px 7px;
+    border-radius: var(--radius-full);
+    font-size: 10px;
+    font-weight: 500;
+    border: 1px solid;
+  }
+  .pill-episodic { color: var(--episodic); background: rgba(68,102,255,0.1); border-color: rgba(68,102,255,0.25); }
+  .pill-semantic { color: var(--semantic); background: rgba(52,211,153,0.1); border-color: rgba(52,211,153,0.25); }
+  .pill-procedural { color: var(--procedural); background: rgba(251,191,36,0.1); border-color: rgba(251,191,36,0.25); }
+
+  /* Streaming indicator */
+  .streaming-dots {
+    display: flex;
+    gap: 4px;
+    padding: 4px 0;
+  }
+  .streaming-dots span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(68, 102, 255, 0.5);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  .streaming-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .streaming-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.3; transform: scale(0.85); }
+    50% { opacity: 1; transform: scale(1); }
+  }
+
+  /* Input bar */
+  .input-bar {
+    padding: 8px 12px 12px;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+    flex-shrink: 0;
+  }
+  .input-wrapper {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-input);
+    padding: 8px 12px;
+    transition: border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .input-wrapper:focus-within { border-color: var(--accent); }
+  .input-field {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-size: 13px;
+    font-family: var(--font);
+    outline: none;
+    min-height: 24px;
+    resize: none;
+    line-height: 1.4;
+  }
+  .input-field::placeholder { color: var(--text-dim); }
+  .send-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: var(--accent);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .send-btn:hover { background: var(--accent-hover); }
+  .send-btn svg { width: 16px; height: 16px; color: #fff; }
+
+  /* Guest banner */
+  .guest-banner {
+    padding: 10px 16px;
+    background: var(--yellow-bg);
+    border-bottom: 1px solid var(--yellow-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--yellow);
+  }
+  .guest-banner-cta {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .guest-banner-cta:hover { text-decoration: underline; }
+
+  /* ===== SCREEN 4: MODEL SELECTOR (bottom sheet) ===== */
+  .model-section-label {
+    padding: 12px 20px 6px;
+    font-size: 8px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+  }
+  .model-row {
+    display: flex;
+    align-items: center;
+    padding: 12px 20px;
+    cursor: pointer;
+    transition: background 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+    gap: 10px;
+  }
+  .model-row:hover { background: var(--surface-2); }
+  .model-row.selected { background: rgba(68, 102, 255, 0.1); }
+  .model-info { flex: 1; }
+  .model-name { font-size: 13px; color: var(--text); font-weight: 500; }
+  .model-detail { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+  .model-cost { font-size: 11px; color: var(--text-dim); text-align: right; }
+  .model-badge {
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: var(--radius-full);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .badge-private { background: rgba(52,211,153,0.1); color: var(--semantic); border: 1px solid rgba(52,211,153,0.2); }
+  .badge-anon { background: rgba(251,191,36,0.1); color: var(--procedural); border: 1px solid rgba(251,191,36,0.2); }
+
+  /* ===== SCREEN 5: MESSAGE DETAIL (bottom sheet) ===== */
+  .detail-section {
+    padding: 0 20px 16px;
+  }
+  .detail-label {
+    font-size: 8px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+  .detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    font-size: 12px;
+  }
+  .detail-key { color: var(--text-muted); }
+  .detail-val { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .detail-val-green { color: var(--green); }
+  .detail-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 12px 20px;
+  }
+
+  /* ===== SCREEN 7: MEMORY PANEL ===== */
+  .memory-content { padding: 16px; }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+    animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .stat-card-full { grid-column: 1 / -1; }
+  .stat-label {
+    font-size: 8px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    font-weight: 700;
+  }
+  .stat-value {
+    font-size: 40px;
+    font-weight: 800;
+    letter-spacing: -2px;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .type-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .type-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .type-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .type-name { font-size: 12px; color: var(--text-secondary); flex: 1; }
+  .type-count { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .type-bar {
+    width: 48px;
+    height: 4px;
+    background: var(--surface-2);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .type-bar-fill { height: 100%; border-radius: 2px; }
+
+  .progress-bar {
+    width: 100%;
+    height: 4px;
+    background: var(--surface-2);
+    border-radius: 2px;
+    margin-top: 8px;
+    overflow: hidden;
+  }
+  .progress-fill { height: 100%; border-radius: 2px; background: var(--accent); }
+
+  .section-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .memory-item {
+    display: flex;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(39,39,42,0.3);
+    animation: slideInLeft 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .memory-item .memory-type-badge {
+    box-shadow: 0 0 6px currentColor;
+  }
+  .memory-type-badge {
+    padding: 2px 7px;
+    border-radius: var(--radius-full);
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    height: fit-content;
+    margin-top: 2px;
+  }
+  .memory-body { flex: 1; min-width: 0; }
+  .memory-summary {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .memory-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .memory-importance {
+    display: flex;
+    gap: 2px;
+  }
+  .importance-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+  }
+
+  /* ===== SCREEN 8: TOP-UP ===== */
+  .topup-content { padding: 20px 16px; }
+
+  .topup-balance {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+  .topup-balance-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 4px;
+  }
+  .topup-balance-value {
+    font-size: 36px;
+    font-weight: 600;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .topup-balance-value span { color: var(--text-muted); font-size: 18px; }
+
+  .topup-section-label {
+    font-size: 8px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    margin-bottom: 10px;
+    font-weight: 700;
+  }
+
+  .amount-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .amount-btn {
+    height: 44px;
+    border-radius: var(--radius);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+    font-family: var(--font);
+  }
+  .amount-btn:hover { border-color: var(--accent-border); }
+  .amount-btn.selected {
+    background: var(--accent-dim);
+    border-color: var(--accent-border);
+    color: var(--accent);
+  }
+
+  .chain-toggle {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .chain-btn {
+    flex: 1;
+    height: 40px;
+    border-radius: var(--radius);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+    font-family: var(--font);
+  }
+  .chain-btn.selected {
+    background: var(--accent-dim);
+    border-color: var(--accent-border);
+    color: var(--text);
+  }
+
+  .qr-placeholder {
+    width: 160px;
+    height: 160px;
+    margin: 20px auto;
+    background: var(--surface);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-dim);
+    font-size: 11px;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .qr-placeholder.visible { display: flex; }
+  .qr-placeholder svg { width: 28px; height: 28px; }
+
+  /* ===== SCREEN 9: SETTINGS ===== */
+  .settings-content { padding: 16px; }
+
+  .settings-group {
+    margin-bottom: 20px;
+  }
+  .settings-group-label {
+    font-size: 8px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    margin-bottom: 8px;
+    font-weight: 700;
+  }
+  .settings-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: background 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .settings-item:hover { background: var(--surface-2); }
+  .settings-item-left { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+  .settings-item-label { font-size: 13px; color: var(--text); }
+  .settings-item-value {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .settings-item-action {
+    color: var(--text-dim);
+    flex-shrink: 0;
+    margin-left: 8px;
+  }
+  .settings-item-action svg { width: 16px; height: 16px; }
+
+  .settings-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: background 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+    font-size: 13px;
+    color: var(--text);
+  }
+  .settings-link:hover { background: var(--surface-2); }
+  .settings-link svg { width: 16px; height: 16px; color: var(--text-dim); }
+
+  /* ===== SCREEN 10: USAGE HISTORY ===== */
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    padding: 0 16px;
+  }
+  .tab {
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+    font-weight: 500;
+  }
+  .tab:hover { color: var(--text-secondary); }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+
+  .history-list { padding: 8px 16px; }
+  .history-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(39,39,42,0.3);
+  }
+  .history-left { display: flex; flex-direction: column; gap: 2px; }
+  .history-primary { font-size: 13px; color: var(--text); }
+  .history-secondary { font-size: 11px; color: var(--text-dim); }
+  .history-right { text-align: right; }
+  .history-amount { font-size: 13px; font-weight: 500; color: var(--text); font-variant-numeric: tabular-nums; }
+  .history-status {
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  /* ===== NEW CHAT WELCOME ===== */
+  .welcome-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 40px 32px;
+  }
+  .welcome-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, var(--accent), #4466ff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: 700;
+    color: #fff;
+  }
+  .welcome-text {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text);
+    text-align: center;
+  }
+  .welcome-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+    line-height: 1.5;
+  }
+
+  /* ===== TOGGLE LINK ===== */
+  .toggle-link {
+    font-size: 10px;
+    color: var(--text-dim);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .toggle-link:hover { color: var(--text-muted); background: var(--surface); }
+
+  /* ===== IMPORT BUTTON ===== */
+  .import-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    padding: 10px;
+    margin-top: 16px;
+    border-radius: var(--radius);
+    background: var(--surface);
+    border: 1px dashed var(--border);
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+    font-family: var(--font);
+  }
+  .import-btn:hover { border-color: var(--accent-border); color: var(--text-secondary); }
+  .import-btn svg { width: 14px; height: 14px; }
+
+  /* ===== ANIMATIONS ===== */
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes slideInLeft {
+    from { opacity: 0; transform: translateX(-12px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes pulseGlow {
+    0%, 100% { box-shadow: 0 0 4px currentColor; }
+    50% { box-shadow: 0 0 12px currentColor; }
+  }
+  @keyframes centralPulse {
+    0%, 100% { r: 14; opacity: 0.9; }
+    50% { r: 16; opacity: 1; }
+  }
+
+  /* ===== BALANCE CHIP ANIMATIONS ===== */
+  @keyframes balanceDeduct {
+    0%   { box-shadow: 0 0 0 0 rgba(248,113,113,0); transform: translateX(0); }
+    15%  { box-shadow: 0 0 0 4px rgba(248,113,113,0.35); transform: translateX(-2px); }
+    30%  { transform: translateX(2px); }
+    45%  { transform: translateX(-1px); box-shadow: 0 0 0 6px rgba(248,113,113,0.2); }
+    60%  { transform: translateX(1px); }
+    100% { box-shadow: 0 0 0 0 rgba(248,113,113,0); transform: translateX(0); }
+  }
+  @keyframes balanceAdd {
+    0%   { box-shadow: 0 0 0 0 rgba(52,211,153,0); transform: scale(1); }
+    25%  { box-shadow: 0 0 0 5px rgba(52,211,153,0.35); transform: scale(1.12); }
+    55%  { box-shadow: 0 0 0 8px rgba(52,211,153,0.15); transform: scale(0.97); }
+    80%  { box-shadow: 0 0 0 3px rgba(52,211,153,0.08); transform: scale(1.02); }
+    100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); transform: scale(1); }
+  }
+  .balance-deduct {
+    animation: balanceDeduct 300ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+    color: var(--red) !important;
+    border-color: var(--red-border) !important;
+  }
+  .balance-add {
+    animation: balanceAdd 400ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    color: var(--green) !important;
+    border-color: var(--green-border) !important;
+  }
+
+  /* ===== GREETING META BAR ===== */
+  .greeting-meta-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 16px 16px;
+    justify-content: center;
+  }
+  .greeting-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    font-size: 10px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .greeting-chip-accent {
+    border-color: var(--accent-border);
+    color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  /* ===== ONBOARDING SPOTLIGHT ===== */
+  .spotlight-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(5,5,8,0.82);
+    z-index: 50;
+    pointer-events: all;
+  }
+  .spotlight-hole {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 280px;
+    height: 52px;
+    top: 210px;
+    border-radius: 12px;
+    box-shadow: 0 0 0 9999px rgba(5,5,8,0.82);
+    background: transparent;
+    pointer-events: none;
+  }
+  .spotlight-tooltip {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    top: 282px;
+    width: 260px;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    padding: 14px 16px;
+    z-index: 51;
+  }
+  .spotlight-tooltip-text {
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.5;
+    margin-bottom: 12px;
+  }
+  .spotlight-tooltip-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .spotlight-step {
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+  .spotlight-next-btn {
+    padding: 5px 14px;
+    background: var(--accent);
+    border: none;
+    border-radius: var(--radius);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: var(--font);
+    cursor: pointer;
+  }
+  .spotlight-skip {
+    display: block;
+    text-align: center;
+    margin-top: 10px;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    top: 360px;
+    font-size: 11px;
+    color: var(--text-dim);
+    cursor: pointer;
+    z-index: 51;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .spotlight-skip:hover { color: var(--text-muted); }
+
+  /* ===== PROVIDER TOGGLE (model selector) ===== */
+  .provider-toggle {
+    display: flex;
+    gap: 6px;
+    margin: 4px 0 16px;
+    padding: 0 2px;
+  }
+  .provider-btn {
+    flex: 1;
+    height: 36px;
+    border-radius: var(--radius);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+    font-family: var(--font);
+  }
+  .provider-btn.selected {
+    background: var(--accent-dim);
+    border-color: var(--accent-border);
+    color: var(--text);
+  }
+  .provider-coming-soon {
+    font-size: 9px;
+    color: var(--text-dim);
+    display: block;
+    margin-top: 1px;
+  }
+</style>
+</head>
+<body>
+
+<div id="phone-frame">
+
+  <!-- ==================== SCREEN: LOGIN ==================== -->
+  <div class="screen active" id="screen-login">
+    <div class="login-logo">
+      <div class="login-logo-icon">C</div>
+      <div class="login-logo-text">Clude</div>
+      <div class="login-logo-sub">Persistent memory for your AI agents</div>
+    </div>
+
+    <div class="login-section">
+      <button class="wallet-btn" onclick="showScreen('conversations')">
+        <span class="wallet-icons">
+          <span class="wallet-icon" style="background:#AB9FF2;">P</span>
+          <span class="wallet-icon" style="background:#FC822B;">S</span>
+          <span class="wallet-icon" style="background:#E33E3F;">B</span>
+        </span>
+        Connect Wallet
+      </button>
+
+      <div class="login-divider">or</div>
+
+      <input class="login-input" placeholder="clk_•••••••••••••••" type="text">
+      <button class="btn btn-primary" style="width:100%;" onclick="showScreen('conversations')">Sign In</button>
+    </div>
+
+    <div class="login-guest" onclick="showScreen('guest-chat')">Continue as guest</div>
+    <div style="text-align:center;margin-top:10px;">
+      <span style="font-size:10px;color:var(--text-dim);cursor:pointer;text-decoration:underline;text-underline-offset:2px;" onclick="startOnboarding()">See how it works</span>
+    </div>
+  </div>
+
+  <!-- ==================== SCREEN: CONVERSATION LIST ==================== -->
+  <div class="screen" id="screen-conversations">
+    <div class="header">
+      <div class="header-title">Conversations</div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span class="toggle-link" onclick="toggleConvEmpty()">Toggle empty</span>
+        <div class="chip" onclick="toggleSheet('model-selector')" style="font-size:10px;padding:3px 8px;white-space:nowrap;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:10px;height:10px;flex-shrink:0;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          Sonnet 4
+        </div>
+        <div class="badge badge-green" onclick="navigateToTopup('conversations')" style="cursor:pointer;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><path d="M21 12V7H5a2 2 0 010-4h14v4"/><path d="M3 5v14a2 2 0 002 2h16v-5"/><path d="M18 12a2 2 0 100 4 2 2 0 000-4z"/></svg>
+          $12.48
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty state -->
+    <div class="empty-state" id="conv-empty" style="display:none;">
+      <div class="empty-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+      </div>
+      <div class="empty-title">No conversations yet</div>
+      <div class="empty-sub">Start a new chat to begin exploring<br>your AI's memory.</div>
+    </div>
+
+    <div class="conv-list" id="conv-list">
+      <div class="conv-row" onclick="showScreen('chat')">
+        <div class="conv-avatar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        </div>
+        <div class="conv-info">
+          <div class="conv-title">Memory architecture deep dive</div>
+          <div class="conv-preview">Let me explain how the decay system works...</div>
+        </div>
+        <div class="conv-meta">
+          <span class="conv-time">2m ago</span>
+          <span class="conv-model">Sonnet 4</span>
+        </div>
+      </div>
+
+      <div class="conv-row" onclick="showScreen('chat')">
+        <div class="conv-avatar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        </div>
+        <div class="conv-info">
+          <div class="conv-title">Solana integration planning</div>
+          <div class="conv-preview">The token distribution should follow a vesting schedule...</div>
+        </div>
+        <div class="conv-meta">
+          <span class="conv-time">1h ago</span>
+          <span class="conv-model">GPT-4o</span>
+        </div>
+      </div>
+
+      <div class="conv-row" onclick="showScreen('chat')">
+        <div class="conv-avatar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        </div>
+        <div class="conv-info">
+          <div class="conv-title">Dream cycle optimization</div>
+          <div class="conv-preview">I've been thinking about the consolidation phase...</div>
+        </div>
+        <div class="conv-meta">
+          <span class="conv-time">3h ago</span>
+          <span class="conv-model">Sonnet 4</span>
+        </div>
+      </div>
+
+      <div class="conv-row" onclick="showScreen('chat')">
+        <div class="conv-avatar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        </div>
+        <div class="conv-info">
+          <div class="conv-title">Campaign strategy for launch</div>
+          <div class="conv-preview">Here's a breakdown of the 7-day campaign arc...</div>
+        </div>
+        <div class="conv-meta">
+          <span class="conv-time">Yesterday</span>
+          <span class="conv-model">Haiku 3.5</span>
+        </div>
+      </div>
+    </div>
+
+    <button class="fab" onclick="showScreen('new-chat')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </button>
+
+    <div class="bottom-nav">
+      <div class="nav-tab active" onclick="showScreen('conversations')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        Chat
+      </div>
+      <div class="nav-tab" onclick="showScreen('memory')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 017 7c0 5.25-7 13-7 13S5 14.25 5 9a7 7 0 017-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+        Memory
+      </div>
+      <div class="nav-tab" onclick="navigateToTopup('conversations')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 11a2 2 0 100 4 2 2 0 000-4z"/><path d="M6 7V5a2 2 0 012-2h8a2 2 0 012 2v2"/></svg>
+        Wallet
+      </div>
+      <div class="nav-tab" onclick="showScreen('settings')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        Settings
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SCREEN: ACTIVE CHAT ==================== -->
+  <div class="screen" id="screen-chat">
+    <div class="chat-header">
+      <div class="chat-header-back" onclick="showScreen('conversations')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      </div>
+      <div class="chat-header-title">Memory architecture deep dive</div>
+      <div class="chip" onclick="toggleSheet('model-selector')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        Private
+      </div>
+      <div class="badge badge-green" onclick="navigateToTopup('chat')" style="cursor:pointer;font-size:10px;">$12.48</div>
+    </div>
+
+    <div class="messages">
+      <div class="msg msg-user">
+        <div class="msg-bubble">Can you explain how the memory decay system works in the cortex?</div>
+        <div class="msg-meta"><span class="msg-time">2:14 PM</span></div>
+      </div>
+
+      <div class="msg msg-assistant">
+        <div class="msg-bubble" onclick="toggleSheet('message-detail')">
+          The memory decay system uses type-specific rates to model natural forgetting. Each memory type decays at a different rate:
+
+          <br><br><strong>Episodic</strong> memories decay at 7% per day — event-based, fade fastest.<br>
+          <strong>Semantic</strong> knowledge decays at 2% per day — facts are more stable.<br>
+          <strong>Procedural</strong> patterns at 3% per day — learned behaviors persist well.<br>
+          <strong>Self-model</strong> insights at just 1% per day — identity is most stable.
+
+          <br><br>The decay factor is a float between 0 and 1. Dream cycles can strengthen or consolidate memories, effectively resetting their decay.
+        </div>
+        <div class="memory-pills">
+          <span class="memory-pill pill-semantic">semantic</span>
+          <span class="memory-pill pill-procedural">procedural</span>
+        </div>
+        <div class="msg-meta"><span class="msg-time">2:14 PM</span></div>
+      </div>
+
+      <div class="msg msg-user">
+        <div class="msg-bubble">How does the dream cycle consolidation work exactly?</div>
+        <div class="msg-meta"><span class="msg-time">2:15 PM</span></div>
+      </div>
+
+      <div class="msg msg-assistant">
+        <div class="msg-bubble" onclick="toggleSheet('message-detail')">
+          The dream cycle runs four phases:
+
+          <br><br><strong>1. Consolidation</strong> — clusters related memories and strengthens their bonds<br>
+          <strong>2. Compaction</strong> — merges near-duplicate memories into summaries<br>
+          <strong>3. Reflection</strong> — generates insights about patterns across memories<br>
+          <strong>4. Emergence</strong> — produces novel connections between distant concepts
+
+          <br><br>Each phase produces its own memory artifacts. The consolidation phase is the most impactful for decay — it resets the decay factor of strengthened memories.
+        </div>
+        <div class="memory-pills">
+          <span class="memory-pill pill-episodic">episodic</span>
+          <span class="memory-pill pill-semantic">semantic</span>
+        </div>
+        <div class="msg-meta"><span class="msg-time">2:15 PM</span></div>
+      </div>
+
+      <div class="msg msg-user">
+        <div class="msg-bubble">What triggers a dream cycle?</div>
+        <div class="msg-meta"><span class="msg-time">2:16 PM</span></div>
+      </div>
+
+      <div class="msg msg-assistant">
+        <div class="msg-bubble">
+          <div class="streaming-dots">
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-bar">
+      <div class="input-wrapper">
+        <input class="input-field" placeholder="Message Clude..." type="text">
+        <button class="send-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ==================== SCREEN: NEW CHAT (empty) ==================== -->
+  <div class="screen" id="screen-new-chat">
+    <div class="chat-header">
+      <div class="chat-header-back" onclick="showScreen('conversations')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      </div>
+      <div class="chat-header-title">New Conversation</div>
+      <div class="chip" onclick="toggleSheet('model-selector')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        Private
+      </div>
+      <div class="badge badge-green" onclick="navigateToTopup('new-chat')" style="cursor:pointer;font-size:10px;">$12.48</div>
+    </div>
+
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;overflow-y:auto;padding-top:8px;">
+      <!-- Personalized greeting bubble -->
+      <div style="padding:0 16px 12px;">
+        <div class="msg msg-assistant" style="animation:fadeInUp 0.35s cubic-bezier(0.16,1,0.3,1) both;">
+          <div class="msg-bubble" style="background:var(--surface-2);border:1px solid var(--border);">
+            Hi <strong>8xK2</strong>, we spoke about <strong>memory architecture</strong> and <strong>Solana integrations</strong> previously. You have <strong>1,247 memories</strong> spanning <strong>6 weeks</strong>.
+          </div>
+        </div>
+      </div>
+
+      <!-- Greeting meta bar -->
+      <div class="greeting-meta-bar">
+        <span class="greeting-chip greeting-chip-accent">1,247 memories · 6w</span>
+        <span class="greeting-chip">memory decay</span>
+        <span class="greeting-chip">solana</span>
+        <span class="greeting-chip">dream cycle</span>
+      </div>
+
+      <!-- Balance animation demo -->
+      <div style="display:flex;justify-content:center;gap:12px;padding:4px 16px 16px;">
+        <span id="balance-chip-demo" class="badge badge-green" style="cursor:pointer;font-size:10px;transition:color 0.2s,border-color 0.2s;display:inline-flex;align-items:center;gap:4px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><path d="M21 12V7H5a2 2 0 010-4h14v4"/><path d="M3 5v14a2 2 0 002 2h16v-5"/><path d="M18 12a2 2 0 100 4 2 2 0 000-4z"/></svg>
+          $12.48
+        </span>
+        <span style="font-size:10px;color:var(--text-dim);cursor:pointer;text-decoration:underline;text-underline-offset:2px;" onclick="demoBalanceDeduct()">Simulate deduct</span>
+        <span style="font-size:10px;color:var(--text-dim);cursor:pointer;text-decoration:underline;text-underline-offset:2px;" onclick="demoBalanceAdd()">Simulate add</span>
+      </div>
+    </div>
+
+    <div class="input-bar">
+      <div class="input-wrapper">
+        <input class="input-field" placeholder="Message Clude..." type="text">
+        <button class="send-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== ONBOARDING OVERLAY (sits on top of real screens) ==================== -->
+  <div id="onboarding-overlay" style="display:none;position:absolute;inset:0;z-index:200;">
+    <!-- Dim layer with clip-path cutout for spotlight -->
+    <div id="ob-dim" style="position:absolute;inset:0;background:rgba(5,5,8,0.85);"></div>
+    <!-- Tooltip -->
+    <div id="ob-tooltip" class="spotlight-tooltip" style="z-index:202;">
+      <div id="ob-text" class="spotlight-tooltip-text"></div>
+      <div class="spotlight-tooltip-footer">
+        <span id="ob-step" class="spotlight-step"></span>
+        <button class="spotlight-next-btn" onclick="onboardingNext();" id="ob-next-btn">Next</button>
+      </div>
+    </div>
+    <span class="spotlight-skip" id="ob-skip" onclick="onboardingEnd();" style="z-index:202;">Skip</span>
+  </div>
+
+  <!-- ==================== SCREEN: GUEST CHAT ==================== -->
+  <div class="screen" id="screen-guest-chat">
+    <div class="chat-header">
+      <div class="chat-header-back" onclick="showScreen('login')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      </div>
+      <div class="chat-header-title">Guest Chat</div>
+    </div>
+
+    <div class="guest-banner">
+      <span>7/10 free messages remaining</span>
+      <span class="guest-banner-cta" onclick="showScreen('login')">Sign in</span>
+    </div>
+
+    <div class="messages">
+      <div class="msg msg-user">
+        <div class="msg-bubble">What is Clude?</div>
+        <div class="msg-meta"><span class="msg-time">Now</span></div>
+      </div>
+
+      <div class="msg msg-assistant">
+        <div class="msg-bubble">
+          Clude is a persistent cognitive memory system for AI agents. It gives your AI a long-term memory that persists across conversations, with features like:
+
+          <br><br>&#8226; <strong>Memory types</strong> — episodic, semantic, procedural, and self-model<br>
+          &#8226; <strong>Decay & dream cycles</strong> — natural forgetting with consolidation<br>
+          &#8226; <strong>Knowledge graph</strong> — entity relationships and associations<br>
+          &#8226; <strong>On-chain verification</strong> — Solana signatures for memory integrity
+        </div>
+        <div class="msg-meta"><span class="msg-time">Now</span></div>
+      </div>
+
+      <div class="msg msg-user">
+        <div class="msg-bubble">How does it compare to just using a long context window?</div>
+        <div class="msg-meta"><span class="msg-time">Now</span></div>
+      </div>
+
+      <div class="msg msg-assistant">
+        <div class="msg-bubble">
+          <div class="streaming-dots">
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-bar">
+      <div class="input-wrapper">
+        <input class="input-field" placeholder="Message Clude..." type="text">
+        <button class="send-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SCREEN: MEMORY PANEL ==================== -->
+  <div class="screen" id="screen-memory">
+    <div class="header">
+      <div class="header-title">Memory</div>
+      <span class="toggle-link" onclick="toggleMemoryEmpty()">Toggle empty</span>
+    </div>
+
+    <!-- Sub-navigation tabs -->
+    <div class="tabs" style="padding:0 12px;">
+      <div class="tab active" style="font-size:12px;padding:10px 12px;">Feed</div>
+      <div class="tab" style="font-size:12px;padding:10px 12px;" onclick="showScreen('memory-graph')">Graph</div>
+      <div class="tab" style="font-size:12px;padding:10px 12px;" onclick="showScreen('memory-entities')">Entities</div>
+      <div class="tab" style="font-size:12px;padding:10px 12px;" onclick="showScreen('memory-decay')">Health</div>
+    </div>
+
+    <!-- Empty state -->
+    <div class="empty-state" id="memory-empty" style="display:none;">
+      <div class="empty-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 017 7c0 5.25-7 13-7 13S5 14.25 5 9a7 7 0 017-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+      </div>
+      <div class="empty-title">No memories yet</div>
+      <div class="empty-sub">Start chatting to build up your AI's<br>long-term memory.</div>
+    </div>
+
+    <div id="memory-content-wrapper" style="flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;">
+      <!-- Quick stats bar -->
+      <div style="display:flex;gap:6px;padding:10px 16px;border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0;">
+        <div style="display:flex;align-items:center;gap:5px;padding:4px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-full);white-space:nowrap;">
+          <span style="font-size:13px;font-weight:600;color:var(--text);">1,247</span>
+          <span style="font-size:10px;color:var(--text-dim);">memories</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;padding:4px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-full);white-space:nowrap;">
+          <div class="type-dot" style="background:var(--episodic);width:6px;height:6px;"></div>
+          <span style="font-size:10px;color:var(--text-muted);">487</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;padding:4px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-full);white-space:nowrap;">
+          <div class="type-dot" style="background:var(--semantic);width:6px;height:6px;"></div>
+          <span style="font-size:10px;color:var(--text-muted);">412</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;padding:4px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-full);white-space:nowrap;">
+          <div class="type-dot" style="background:var(--procedural);width:6px;height:6px;"></div>
+          <span style="font-size:10px;color:var(--text-muted);">218</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;padding:4px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-full);white-space:nowrap;">
+          <div class="type-dot" style="background:var(--self-model);width:6px;height:6px;"></div>
+          <span style="font-size:10px;color:var(--text-muted);">130</span>
+        </div>
+      </div>
+
+      <!-- Search -->
+      <div style="padding:10px 16px 0;flex-shrink:0;">
+        <div style="display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-input);padding:0 12px;height:38px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;color:var(--text-dim);flex-shrink:0;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" placeholder="Search memories..." style="background:transparent;border:none;color:var(--text);font-size:12px;font-family:var(--font);outline:none;width:100%;height:100%;">
+        </div>
+      </div>
+
+      <!-- Type filter pills -->
+      <div style="display:flex;gap:6px;padding:10px 16px;overflow-x:auto;flex-shrink:0;">
+        <button class="chip" style="background:var(--accent-dim);border-color:var(--accent-border);color:var(--text);">All</button>
+        <button class="chip" onclick="this.style.borderColor=this.style.borderColor?'':'rgba(68,102,255,0.4)'">
+          <div class="type-dot" style="background:var(--episodic);width:6px;height:6px;"></div> Episodic
+        </button>
+        <button class="chip" onclick="this.style.borderColor=this.style.borderColor?'':'rgba(52,211,153,0.4)'">
+          <div class="type-dot" style="background:var(--semantic);width:6px;height:6px;"></div> Semantic
+        </button>
+        <button class="chip" onclick="this.style.borderColor=this.style.borderColor?'':'rgba(251,191,36,0.4)'">
+          <div class="type-dot" style="background:var(--procedural);width:6px;height:6px;"></div> Procedural
+        </button>
+        <button class="chip" onclick="this.style.borderColor=this.style.borderColor?'':'rgba(167,139,250,0.4)'">
+          <div class="type-dot" style="background:var(--self-model);width:6px;height:6px;"></div> Self
+        </button>
+      </div>
+
+      <!-- Time range -->
+      <div style="display:flex;gap:4px;padding:0 16px 8px;flex-shrink:0;">
+        <button style="padding:4px 10px;border-radius:var(--radius-full);background:var(--accent-dim);border:1px solid var(--accent-border);color:var(--text);font-size:10px;font-family:var(--font);cursor:pointer;">24h</button>
+        <button style="padding:4px 10px;border-radius:var(--radius-full);background:transparent;border:1px solid var(--border);color:var(--text-muted);font-size:10px;font-family:var(--font);cursor:pointer;">3d</button>
+        <button style="padding:4px 10px;border-radius:var(--radius-full);background:transparent;border:1px solid var(--border);color:var(--text-muted);font-size:10px;font-family:var(--font);cursor:pointer;">1w</button>
+        <button style="padding:4px 10px;border-radius:var(--radius-full);background:transparent;border:1px solid var(--border);color:var(--text-muted);font-size:10px;font-family:var(--font);cursor:pointer;">30d</button>
+      </div>
+
+      <!-- Memory feed -->
+      <div class="scrollable" style="padding:0 16px;">
+        <div class="memory-item" style="animation-delay:0ms;">
+          <div class="memory-type-badge" style="color:var(--episodic);background:rgba(68,102,255,0.1);border:1px solid rgba(68,102,255,0.2);">EPI</div>
+          <div class="memory-body">
+            <div class="memory-summary">Discussed memory architecture with user — covered decay rates, dream cycles, and consolidation phases in detail</div>
+            <div class="memory-footer">
+              <span style="font-size:10px;color:var(--text-dim);background:var(--surface);padding:1px 6px;border-radius:var(--radius-full);">0.72</span>
+              <span class="msg-time">2m ago</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="memory-item" style="animation-delay:50ms;">
+          <div class="memory-type-badge" style="color:var(--semantic);background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);">SEM</div>
+          <div class="memory-body">
+            <div class="memory-summary">Episodic memories decay at 7%/day, semantic at 2%/day, procedural at 3%/day, self_model at 1%/day</div>
+            <div class="memory-footer">
+              <span style="font-size:10px;color:var(--text-dim);background:var(--surface);padding:1px 6px;border-radius:var(--radius-full);">0.89</span>
+              <span class="msg-time">5m ago</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="memory-item" style="animation-delay:100ms;">
+          <div class="memory-type-badge" style="color:var(--procedural);background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.2);">PRO</div>
+          <div class="memory-body">
+            <div class="memory-summary">Dream cycle follows four phases: consolidation, compaction, reflection, emergence — each produces distinct memory artifacts</div>
+            <div class="memory-footer">
+              <span style="font-size:10px;color:var(--text-dim);background:var(--surface);padding:1px 6px;border-radius:var(--radius-full);">0.85</span>
+              <span class="msg-time">8m ago</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="memory-item" style="animation-delay:150ms;">
+          <div class="memory-type-badge" style="color:var(--self-model);background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.2);">SLF</div>
+          <div class="memory-body">
+            <div class="memory-summary">I tend to give thorough technical explanations — users appreciate depth over brevity in architecture discussions</div>
+            <div class="memory-footer">
+              <span style="font-size:10px;color:var(--text-dim);background:var(--surface);padding:1px 6px;border-radius:var(--radius-full);">0.45</span>
+              <span class="msg-time">1h ago</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="memory-item" style="animation-delay:200ms;">
+          <div class="memory-type-badge" style="color:var(--episodic);background:rgba(68,102,255,0.1);border:1px solid rgba(68,102,255,0.2);">EPI</div>
+          <div class="memory-body">
+            <div class="memory-summary">User asked about Solana token distribution and vesting schedules for the upcoming launch</div>
+            <div class="memory-footer">
+              <span style="font-size:10px;color:var(--text-dim);background:var(--surface);padding:1px 6px;border-radius:var(--radius-full);">0.68</span>
+              <span class="msg-time">2h ago</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="memory-item" style="animation-delay:250ms;">
+          <div class="memory-type-badge" style="color:var(--semantic);background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);">SEM</div>
+          <div class="memory-body">
+            <div class="memory-summary">Campaign arc consists of 7 days with escalating engagement mechanics and daily token distribution</div>
+            <div class="memory-footer">
+              <span style="font-size:10px;color:var(--text-dim);background:var(--surface);padding:1px 6px;border-radius:var(--radius-full);">0.76</span>
+              <span class="msg-time">3h ago</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="height:8px;"></div>
+      </div>
+    </div>
+
+    <div style="padding:6px 16px;border-top:1px solid var(--border);flex-shrink:0;">
+      <button class="import-btn" style="margin-top:0;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Import Memory Pack
+      </button>
+    </div>
+
+    <div class="bottom-nav">
+      <div class="nav-tab" onclick="showScreen('conversations')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        Chat
+      </div>
+      <div class="nav-tab active" onclick="showScreen('memory')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 017 7c0 5.25-7 13-7 13S5 14.25 5 9a7 7 0 017-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+        Memory
+      </div>
+      <div class="nav-tab" onclick="navigateToTopup('memory')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 11a2 2 0 100 4 2 2 0 000-4z"/><path d="M6 7V5a2 2 0 012-2h8a2 2 0 012 2v2"/></svg>
+        Wallet
+      </div>
+      <div class="nav-tab" onclick="showScreen('settings')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        Settings
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SCREEN: MEMORY GRAPH (2D) ==================== -->
+  <div class="screen" id="screen-memory-graph">
+    <div class="header">
+      <div class="header-title">Memory</div>
+      <span class="toggle-link" onclick="toggleGraphEmpty()">Toggle empty</span>
+    </div>
+
+    <div class="tabs" style="padding:0 12px;">
+      <div class="tab" style="font-size:12px;padding:10px 12px;" onclick="showScreen('memory')">Feed</div>
+      <div class="tab active" style="font-size:12px;padding:10px 12px;">Graph</div>
+      <div class="tab" style="font-size:12px;padding:10px 12px;" onclick="showScreen('memory-entities')">Entities</div>
+      <div class="tab" style="font-size:12px;padding:10px 12px;" onclick="showScreen('memory-decay')">Health</div>
+    </div>
+
+    <!-- Empty state -->
+    <div class="empty-state" id="graph-empty" style="display:none;">
+      <div class="empty-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="4" cy="6" r="2"/><circle cx="20" cy="6" r="2"/><circle cx="4" cy="18" r="2"/><circle cx="20" cy="18" r="2"/><line x1="9.5" y1="10.5" x2="5.5" y2="7.5"/><line x1="14.5" y1="10.5" x2="18.5" y2="7.5"/><line x1="9.5" y1="13.5" x2="5.5" y2="16.5"/><line x1="14.5" y1="13.5" x2="18.5" y2="16.5"/></svg>
+      </div>
+      <div class="empty-title">No memory graph yet</div>
+      <div class="empty-sub">Memories and their connections will<br>appear here as they're created.</div>
+    </div>
+
+    <!-- 2D Force Graph placeholder -->
+    <div id="graph-content" style="flex:1;position:relative;overflow:hidden;background:var(--bg-alt);">
+      <!-- Simulated graph nodes -->
+      <svg viewBox="0 0 390 500" style="width:100%;height:100%;" filter="url(#glow)">
+        <defs>
+          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="3" result="blur"/>
+            <feMerge>
+              <feMergeNode in="blur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+        </defs>
+        <!-- Edges -->
+        <line x1="195" y1="200" x2="120" y2="130" stroke="rgba(68,102,255,0.08)" stroke-width="1"/>
+        <line x1="195" y1="200" x2="280" y2="150" stroke="rgba(68,102,255,0.08)" stroke-width="1"/>
+        <line x1="195" y1="200" x2="160" y2="310" stroke="rgba(52,211,153,0.08)" stroke-width="1"/>
+        <line x1="195" y1="200" x2="290" y2="280" stroke="rgba(251,191,36,0.08)" stroke-width="1"/>
+        <line x1="195" y1="200" x2="90" y2="260" stroke="rgba(167,139,250,0.08)" stroke-width="1"/>
+        <line x1="120" y1="130" x2="60" y2="80" stroke="rgba(68,102,255,0.08)" stroke-width="1"/>
+        <line x1="120" y1="130" x2="180" y2="70" stroke="rgba(68,102,255,0.08)" stroke-width="1"/>
+        <line x1="280" y1="150" x2="340" y2="100" stroke="rgba(52,211,153,0.08)" stroke-width="1"/>
+        <line x1="280" y1="150" x2="330" y2="220" stroke="rgba(52,211,153,0.08)" stroke-width="1"/>
+        <line x1="160" y1="310" x2="100" y2="370" stroke="rgba(251,191,36,0.08)" stroke-width="1"/>
+        <line x1="160" y1="310" x2="220" y2="380" stroke="rgba(251,191,36,0.08)" stroke-width="1"/>
+        <line x1="290" y1="280" x2="340" y2="340" stroke="rgba(251,191,36,0.08)" stroke-width="1"/>
+        <line x1="90" y1="260" x2="40" y2="330" stroke="rgba(167,139,250,0.08)" stroke-width="1"/>
+        <line x1="90" y1="260" x2="50" y2="180" stroke="rgba(167,139,250,0.08)" stroke-width="1"/>
+
+        <!-- Leaf nodes (smaller) -->
+        <circle cx="60" cy="80" r="5" fill="rgba(68,102,255,0.3)" stroke="rgba(68,102,255,0.5)" stroke-width="1"/>
+        <circle cx="180" cy="70" r="4" fill="rgba(68,102,255,0.3)" stroke="rgba(68,102,255,0.5)" stroke-width="1"/>
+        <circle cx="340" cy="100" r="5" fill="rgba(52,211,153,0.3)" stroke="rgba(52,211,153,0.5)" stroke-width="1"/>
+        <circle cx="330" cy="220" r="4" fill="rgba(52,211,153,0.3)" stroke="rgba(52,211,153,0.5)" stroke-width="1"/>
+        <circle cx="100" cy="370" r="5" fill="rgba(251,191,36,0.3)" stroke="rgba(251,191,36,0.5)" stroke-width="1"/>
+        <circle cx="220" cy="380" r="4" fill="rgba(251,191,36,0.3)" stroke="rgba(251,191,36,0.5)" stroke-width="1"/>
+        <circle cx="340" cy="340" r="4" fill="rgba(251,191,36,0.3)" stroke="rgba(251,191,36,0.5)" stroke-width="1"/>
+        <circle cx="40" cy="330" r="5" fill="rgba(167,139,250,0.3)" stroke="rgba(167,139,250,0.5)" stroke-width="1"/>
+        <circle cx="50" cy="180" r="4" fill="rgba(167,139,250,0.3)" stroke="rgba(167,139,250,0.5)" stroke-width="1"/>
+
+        <!-- Hub nodes (larger) -->
+        <circle cx="120" cy="130" r="10" fill="rgba(68,102,255,0.2)" stroke="rgba(68,102,255,0.6)" stroke-width="1.5"/>
+        <circle cx="280" cy="150" r="9" fill="rgba(52,211,153,0.2)" stroke="rgba(52,211,153,0.6)" stroke-width="1.5"/>
+        <circle cx="160" cy="310" r="10" fill="rgba(251,191,36,0.2)" stroke="rgba(251,191,36,0.6)" stroke-width="1.5"/>
+        <circle cx="290" cy="280" r="8" fill="rgba(251,191,36,0.2)" stroke="rgba(251,191,36,0.6)" stroke-width="1.5"/>
+        <circle cx="90" cy="260" r="9" fill="rgba(167,139,250,0.2)" stroke="rgba(167,139,250,0.6)" stroke-width="1.5"/>
+
+        <!-- Central node (pulsing) -->
+        <circle cx="195" cy="200" r="14" fill="rgba(68,102,255,0.15)" stroke="rgba(68,102,255,0.7)" stroke-width="2">
+          <animate attributeName="r" values="14;16;14" dur="2.5s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" values="0.9;1;0.9" dur="2.5s" repeatCount="indefinite"/>
+        </circle>
+        <text x="195" y="204" text-anchor="middle" fill="white" font-size="8" font-weight="600">C</text>
+
+        <!-- Node labels -->
+        <text x="120" y="115" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-size="8">decay</text>
+        <text x="280" y="136" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-size="8">solana</text>
+        <text x="160" y="330" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-size="8">dream cycle</text>
+        <text x="290" y="300" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-size="8">campaign</text>
+        <text x="90" y="245" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-size="8">self-model</text>
+      </svg>
+
+      <!-- Hint overlay -->
+      <div style="position:absolute;bottom:16px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-full);padding:6px 14px;font-size:10px;color:var(--text-muted);white-space:nowrap;">
+        Pinch to zoom &middot; Tap a node to inspect
+      </div>
+    </div>
+
+    <div class="bottom-nav">
+      <div class="nav-tab" onclick="showScreen('conversations')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        Chat
+      </div>
+      <div class="nav-tab active" onclick="showScreen('memory')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 017 7c0 5.25-7 13-7 13S5 14.25 5 9a7 7 0 017-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+        Memory
+      </div>
+      <div class="nav-tab" onclick="navigateToTopup('memory-graph')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 11a2 2 0 100 4 2 2 0 000-4z"/><path d="M6 7V5a2 2 0 012-2h8a2 2 0 012 2v2"/></svg>
+        Wallet
+      </div>
+      <div class="nav-tab" onclick="showScreen('settings')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        Settings
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SCREEN: MEMORY ENTITIES ==================== -->
+  <div class="screen" id="screen-memory-entities">
+    <div class="header">
+      <div class="header-title">Memory</div>
+      <span class="toggle-link" onclick="toggleEntitiesEmpty()">Toggle empty</span>
+    </div>
+
+    <div class="tabs" style="padding:0 12px;">
+      <div class="tab" style="font-size:12px;padding:10px 12px;" onclick="showScreen('memory')">Feed</div>
+      <div class="tab" style="font-size:12px;padding:10px 12px;" onclick="showScreen('memory-graph')">Graph</div>
+      <div class="tab active" style="font-size:12px;padding:10px 12px;">Entities</div>
+      <div class="tab" style="font-size:12px;padding:10px 12px;" onclick="showScreen('memory-decay')">Health</div>
+    </div>
+
+    <!-- Empty state -->
+    <div class="empty-state" id="entities-empty" style="display:none;">
+      <div class="empty-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </div>
+      <div class="empty-title">No entities yet</div>
+      <div class="empty-sub">People, projects, and concepts will<br>appear here as memories are created.</div>
+    </div>
+
+    <!-- Search -->
+    <div id="entities-content" style="flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;">
+      <div style="padding:10px 16px 0;flex-shrink:0;">
+        <div style="display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-input);padding:0 12px;height:38px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;color:var(--text-dim);flex-shrink:0;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" placeholder="Search entities..." style="background:transparent;border:none;color:var(--text);font-size:12px;font-family:var(--font);outline:none;width:100%;height:100%;">
+        </div>
+      </div>
+
+      <div class="scrollable" style="padding:8px 16px;">
+      <!-- Person group -->
+      <div style="margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:6px;padding:8px 0;font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.06em;font-weight:500;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          People <span style="color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0;">3</span>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border);">
+            <div>
+              <div style="font-size:13px;color:var(--text);font-weight:500;">@sebbsssss</div>
+              <div style="font-size:10px;color:var(--text-dim);margin-top:1px;">42 mentions &middot; last seen 2m ago</div>
+            </div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;color:var(--text-dim);"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border);">
+            <div>
+              <div style="font-size:13px;color:var(--text);font-weight:500;">@CludeBot</div>
+              <div style="font-size:10px;color:var(--text-dim);margin-top:1px;">128 mentions &middot; last seen now</div>
+            </div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;color:var(--text-dim);"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;">
+            <div>
+              <div style="font-size:13px;color:var(--text);font-weight:500;">Jason</div>
+              <div style="font-size:10px;color:var(--text-dim);margin-top:1px;">15 mentions &middot; last seen 1h ago</div>
+            </div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;color:var(--text-dim);"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Project group -->
+      <div style="margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:6px;padding:8px 0;font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.06em;font-weight:500;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+          Projects <span style="color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0;">2</span>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border);">
+            <div>
+              <div style="font-size:13px;color:var(--text);font-weight:500;">Clude Bot</div>
+              <div style="font-size:10px;color:var(--text-dim);margin-top:1px;">89 mentions &middot; last seen 5m ago</div>
+            </div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;color:var(--text-dim);"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;">
+            <div>
+              <div style="font-size:13px;color:var(--text);font-weight:500;">Campaign Launch</div>
+              <div style="font-size:10px;color:var(--text-dim);margin-top:1px;">31 mentions &middot; last seen 3h ago</div>
+            </div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;color:var(--text-dim);"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Concept group -->
+      <div style="margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:6px;padding:8px 0;font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.06em;font-weight:500;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="8"/></svg>
+          Concepts <span style="color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0;">4</span>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border);">
+            <div>
+              <div style="font-size:13px;color:var(--text);font-weight:500;">Memory Decay</div>
+              <div style="font-size:10px;color:var(--text-dim);margin-top:1px;">24 mentions</div>
+            </div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;color:var(--text-dim);"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border);">
+            <div>
+              <div style="font-size:13px;color:var(--text);font-weight:500;">Dream Cycle</div>
+              <div style="font-size:10px;color:var(--text-dim);margin-top:1px;">18 mentions</div>
+            </div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;color:var(--text-dim);"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border);">
+            <div>
+              <div style="font-size:13px;color:var(--text);font-weight:500;">Consolidation</div>
+              <div style="font-size:10px;color:var(--text-dim);margin-top:1px;">12 mentions</div>
+            </div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;color:var(--text-dim);"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;">
+            <div>
+              <div style="font-size:13px;color:var(--text);font-weight:500;">Token Distribution</div>
+              <div style="font-size:10px;color:var(--text-dim);margin-top:1px;">9 mentions</div>
+            </div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;color:var(--text-dim);"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Token group -->
+      <div style="margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:6px;padding:8px 0;font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.06em;font-weight:500;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M6 12h12"/></svg>
+          Tokens <span style="color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0;">2</span>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border);">
+            <div>
+              <div style="font-size:13px;color:var(--text);font-weight:500;">SOL</div>
+              <div style="font-size:10px;color:var(--text-dim);margin-top:1px;">16 mentions</div>
+            </div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;color:var(--text-dim);"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;">
+            <div>
+              <div style="font-size:13px;color:var(--text);font-weight:500;">USDC</div>
+              <div style="font-size:10px;color:var(--text-dim);margin-top:1px;">11 mentions</div>
+            </div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;color:var(--text-dim);"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div>
+
+    <div class="bottom-nav">
+      <div class="nav-tab" onclick="showScreen('conversations')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        Chat
+      </div>
+      <div class="nav-tab active" onclick="showScreen('memory')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 017 7c0 5.25-7 13-7 13S5 14.25 5 9a7 7 0 017-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+        Memory
+      </div>
+      <div class="nav-tab" onclick="navigateToTopup('memory-entities')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 11a2 2 0 100 4 2 2 0 000-4z"/><path d="M6 7V5a2 2 0 012-2h8a2 2 0 012 2v2"/></svg>
+        Wallet
+      </div>
+      <div class="nav-tab" onclick="showScreen('settings')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        Settings
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SCREEN: MEMORY HEALTH (Decay) ==================== -->
+  <div class="screen" id="screen-memory-decay">
+    <div class="header">
+      <div class="header-title">Memory</div>
+    </div>
+
+    <div class="tabs" style="padding:0 12px;">
+      <div class="tab" style="font-size:12px;padding:10px 12px;" onclick="showScreen('memory')">Feed</div>
+      <div class="tab" style="font-size:12px;padding:10px 12px;" onclick="showScreen('memory-graph')">Graph</div>
+      <div class="tab" style="font-size:12px;padding:10px 12px;" onclick="showScreen('memory-entities')">Entities</div>
+      <div class="tab active" style="font-size:12px;padding:10px 12px;">Health</div>
+    </div>
+
+    <!-- Summary -->
+    <div style="display:flex;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border);">
+      <div style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;">
+        <div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Avg Decay</div>
+        <div style="font-size:18px;font-weight:600;color:var(--text);">0.84</div>
+        <div style="width:100%;height:3px;background:var(--surface-2);border-radius:2px;margin-top:6px;overflow:hidden;">
+          <div style="width:84%;height:100%;background:var(--semantic);border-radius:2px;"></div>
+        </div>
+      </div>
+      <div style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;">
+        <div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Avg Importance</div>
+        <div style="font-size:18px;font-weight:600;color:var(--text);">0.72</div>
+        <div style="width:100%;height:3px;background:var(--surface-2);border-radius:2px;margin-top:6px;overflow:hidden;">
+          <div style="width:72%;height:100%;background:var(--accent);border-radius:2px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding:10px 16px 4px;display:flex;justify-content:space-between;align-items:center;">
+      <div style="font-size:11px;color:var(--text-dim);font-weight:500;">Weakest memories first</div>
+      <div style="font-size:10px;color:var(--text-muted);">decay &lt; 0.5 need attention</div>
+    </div>
+
+    <div class="scrollable" style="padding:0 16px;">
+      <!-- Critical (red) -->
+      <div class="memory-item" style="animation-delay:0ms;background:rgba(248,113,113,0.04);margin:0 -16px;padding:10px 16px;">
+        <div style="width:4px;border-radius:2px;background:var(--red);flex-shrink:0;align-self:stretch;"></div>
+        <div class="memory-body">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+            <span class="memory-type-badge" style="color:var(--episodic);background:rgba(68,102,255,0.1);border:1px solid rgba(68,102,255,0.2);margin:0;">EPI</span>
+            <span style="font-size:10px;color:var(--red);font-weight:500;">0.12</span>
+            <span style="font-size:10px;color:var(--text-dim);">decay</span>
+          </div>
+          <div class="memory-summary" style="opacity:0.45;">Initial conversation about project goals and timeline estimates from two weeks ago</div>
+          <div style="font-size:10px;color:var(--text-dim);margin-top:3px;">14d ago &middot; importance 0.45</div>
+        </div>
+      </div>
+
+      <div class="memory-item" style="animation-delay:50ms;background:rgba(248,113,113,0.04);margin:0 -16px;padding:10px 16px;">
+        <div style="width:4px;border-radius:2px;background:var(--red);flex-shrink:0;align-self:stretch;"></div>
+        <div class="memory-body">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+            <span class="memory-type-badge" style="color:var(--episodic);background:rgba(68,102,255,0.1);border:1px solid rgba(68,102,255,0.2);margin:0;">EPI</span>
+            <span style="font-size:10px;color:var(--red);font-weight:500;">0.18</span>
+            <span style="font-size:10px;color:var(--text-dim);">decay</span>
+          </div>
+          <div class="memory-summary" style="opacity:0.5;">Debugging session — found issue with owner_wallet scoping returning null on first load</div>
+          <div style="font-size:10px;color:var(--text-dim);margin-top:3px;">12d ago &middot; importance 0.62</div>
+        </div>
+      </div>
+
+      <!-- Warning (yellow) -->
+      <div class="memory-item" style="animation-delay:100ms;background:rgba(251,191,36,0.04);margin:0 -16px;padding:10px 16px;">
+        <div style="width:4px;border-radius:2px;background:var(--yellow);flex-shrink:0;align-self:stretch;"></div>
+        <div class="memory-body">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+            <span class="memory-type-badge" style="color:var(--procedural);background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.2);margin:0;">PRO</span>
+            <span style="font-size:10px;color:var(--yellow);font-weight:500;">0.38</span>
+            <span style="font-size:10px;color:var(--text-dim);">decay</span>
+          </div>
+          <div class="memory-summary" style="opacity:0.65;">Workflow: always run typecheck before committing to avoid CI failures</div>
+          <div style="font-size:10px;color:var(--text-dim);margin-top:3px;">8d ago &middot; importance 0.71</div>
+        </div>
+      </div>
+
+      <div class="memory-item" style="animation-delay:150ms;background:rgba(251,191,36,0.04);margin:0 -16px;padding:10px 16px;">
+        <div style="width:4px;border-radius:2px;background:var(--yellow);flex-shrink:0;align-self:stretch;"></div>
+        <div class="memory-body">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+            <span class="memory-type-badge" style="color:var(--semantic);background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);margin:0;">SEM</span>
+            <span style="font-size:10px;color:var(--yellow);font-weight:500;">0.44</span>
+            <span style="font-size:10px;color:var(--text-dim);">decay</span>
+          </div>
+          <div class="memory-summary" style="opacity:0.7;">Privy auth requires JWKS verification — tokens expire, must handle refresh silently</div>
+          <div style="font-size:10px;color:var(--text-dim);margin-top:3px;">6d ago &middot; importance 0.78</div>
+        </div>
+      </div>
+
+      <!-- Healthy (green) -->
+      <div class="memory-item" style="animation-delay:200ms;margin:0 -16px;padding:10px 16px;">
+        <div style="width:4px;border-radius:2px;background:var(--green);flex-shrink:0;align-self:stretch;"></div>
+        <div class="memory-body">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+            <span class="memory-type-badge" style="color:var(--semantic);background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);margin:0;">SEM</span>
+            <span style="font-size:10px;color:var(--green);font-weight:500;">0.91</span>
+            <span style="font-size:10px;color:var(--text-dim);">decay</span>
+          </div>
+          <div class="memory-summary" style="opacity:1;">Episodic memories decay at 7%/day, semantic at 2%/day, procedural at 3%/day</div>
+          <div style="font-size:10px;color:var(--text-dim);margin-top:3px;">1h ago &middot; importance 0.89</div>
+        </div>
+      </div>
+
+      <div class="memory-item" style="animation-delay:250ms;margin:0 -16px;padding:10px 16px;">
+        <div style="width:4px;border-radius:2px;background:var(--green);flex-shrink:0;align-self:stretch;"></div>
+        <div class="memory-body">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+            <span class="memory-type-badge" style="color:var(--self-model);background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.2);margin:0;">SLF</span>
+            <span style="font-size:10px;color:var(--green);font-weight:500;">0.97</span>
+            <span style="font-size:10px;color:var(--text-dim);">decay</span>
+          </div>
+          <div class="memory-summary" style="opacity:1;">I tend to give thorough technical explanations — users appreciate depth</div>
+          <div style="font-size:10px;color:var(--text-dim);margin-top:3px;">1h ago &middot; importance 0.45</div>
+        </div>
+      </div>
+      <div style="height:8px;"></div>
+    </div>
+
+    <div class="bottom-nav">
+      <div class="nav-tab" onclick="showScreen('conversations')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        Chat
+      </div>
+      <div class="nav-tab active" onclick="showScreen('memory')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 017 7c0 5.25-7 13-7 13S5 14.25 5 9a7 7 0 017-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+        Memory
+      </div>
+      <div class="nav-tab" onclick="navigateToTopup('memory-decay')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 11a2 2 0 100 4 2 2 0 000-4z"/><path d="M6 7V5a2 2 0 012-2h8a2 2 0 012 2v2"/></svg>
+        Wallet
+      </div>
+      <div class="nav-tab" onclick="showScreen('settings')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        Settings
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SCREEN: TOP-UP ==================== -->
+  <div class="screen" id="screen-topup">
+    <div class="header">
+      <div class="header-back" onclick="showScreen(topupOrigin || 'chat')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      </div>
+      <div class="header-title">Top Up</div>
+      <div style="width:32px;"></div>
+    </div>
+
+    <div class="scrollable">
+      <div class="topup-content">
+        <!-- Idle state -->
+        <div id="topup-idle">
+          <div class="topup-balance">
+            <div class="topup-balance-label">Current Balance</div>
+            <div class="topup-balance-value"><span>$</span>12.48</div>
+          </div>
+
+          <div class="topup-section-label">Amount (USDC)</div>
+          <div class="amount-grid" style="grid-template-columns:repeat(3,1fr);">
+            <button class="amount-btn" onclick="selectAmount(this)">$5</button>
+            <button class="amount-btn selected" onclick="selectAmount(this)">$10</button>
+            <button class="amount-btn" onclick="selectAmount(this)">$50</button>
+          </div>
+          <input class="login-input" placeholder="Custom (min $1)" type="number" style="margin-bottom:16px;font-size:12px;">
+
+          <div class="topup-section-label">Network</div>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleSheet('chain-selector')">
+            <span style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary);">
+              <span style="color:#AB9FF2;">&#9670;</span> Solana (recommended)
+            </span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;color:var(--text-dim);"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+
+          <button class="btn btn-primary" style="width:100%;" onclick="showTopupState('confirming')" id="topup-action-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M21 12V7H5a2 2 0 010-4h14v4"/><path d="M3 5v14a2 2 0 002 2h16v-5"/><path d="M18 12a2 2 0 100 4 2 2 0 000-4z"/></svg>
+            Pay $10.00 with Wallet
+          </button>
+
+          <p style="font-size:9px;color:var(--text-dim);text-align:center;margin-top:6px;letter-spacing:0.01em;">
+            Sending to: <span style="font-family:'SF Mono','Fira Code',monospace;color:var(--text-dim);">81MV...iqFu</span>
+          </p>
+
+          <p style="font-size:9px;color:var(--text-dim);text-align:center;margin-top:6px;">Minimum $1 USDC &middot; Transfers are non-refundable</p>
+        </div>
+
+        <!-- Confirming state: waiting for wallet deep-link return -->
+        <div id="topup-confirming" style="display:none;">
+          <div style="text-align:center;padding:32px 0;">
+            <div style="width:48px;height:48px;border-radius:12px;background:var(--accent-dim);border:1px solid var(--accent-border);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:22px;height:22px;color:var(--accent);"><path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+            </div>
+            <div style="font-size:14px;font-weight:500;color:var(--text);margin-bottom:4px;">Complete in your wallet</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:20px;line-height:1.5;">Your wallet app should have opened.<br>Approve the $10.00 USDC transfer to continue.</div>
+            <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:20px;">
+              <div class="streaming-dots" style="padding:0;"><span></span><span></span><span></span></div>
+              <span style="font-size:11px;color:#60a5fa;">Waiting for confirmation...</span>
+            </div>
+            <button class="btn btn-ghost" style="width:100%;" onclick="showTopupState('success')">Simulate: Payment confirmed</button>
+            <button class="btn btn-ghost" style="width:100%;margin-top:8px;" onclick="showTopupState('idle')">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Success state -->
+        <div id="topup-success" style="display:none;">
+          <div style="text-align:center;padding:40px 0;">
+            <div style="width:48px;height:48px;border-radius:50%;background:var(--green-bg);border:1px solid var(--green-border);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;color:var(--green);"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:4px;">Top-up submitted!</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">Your USDC transfer has been received.<br>Balance will update shortly.</div>
+            <div style="background:var(--surface);border-radius:var(--radius-sm);padding:8px 12px;font-size:9px;color:var(--text-dim);font-family:'SF Mono','Fira Code',monospace;word-break:break-all;margin-bottom:20px;">4sGjMW1s...Bk7Rq2xN</div>
+            <button class="btn btn-primary" style="width:100%;" onclick="showTopupState('idle');showScreen(topupOrigin || 'chat');">Done</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SCREEN: SETTINGS ==================== -->
+  <div class="screen" id="screen-settings">
+    <div class="header">
+      <div class="header-title">Settings</div>
+    </div>
+
+    <div class="scrollable">
+      <div class="settings-content">
+        <div class="settings-group">
+          <div class="settings-group-label">Account</div>
+          <div class="settings-item">
+            <div class="settings-item-left">
+              <div class="settings-item-label">API Key</div>
+              <div class="settings-item-value">clk_••••••••••••1a3f</div>
+            </div>
+            <div class="settings-item-action">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            </div>
+          </div>
+          <div class="settings-item">
+            <div class="settings-item-left">
+              <div class="settings-item-label">Wallet</div>
+              <div class="settings-item-value">7xKp...4mNw</div>
+            </div>
+            <div class="settings-item-action">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <div class="settings-group-label">Billing</div>
+          <div class="settings-link" onclick="navigateToTopup('settings')">
+            <span>Top Up Balance</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+          <div class="settings-link" onclick="showScreen('usage-history')">
+            <span>Usage History</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <div class="settings-group-label">App</div>
+          <div class="settings-item" style="cursor:default;">
+            <div class="settings-item-left">
+              <div class="settings-item-label">Version</div>
+              <div class="settings-item-value" style="font-family:var(--font);">1.0.0 (build 1)</div>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn btn-danger" style="width:100%;margin-top:12px;" onclick="showScreen('login')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Log Out
+        </button>
+      </div>
+    </div>
+
+    <div class="bottom-nav">
+      <div class="nav-tab" onclick="showScreen('conversations')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        Chat
+      </div>
+      <div class="nav-tab" onclick="showScreen('memory')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 017 7c0 5.25-7 13-7 13S5 14.25 5 9a7 7 0 017-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+        Memory
+      </div>
+      <div class="nav-tab" onclick="navigateToTopup('settings')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 11a2 2 0 100 4 2 2 0 000-4z"/><path d="M6 7V5a2 2 0 012-2h8a2 2 0 012 2v2"/></svg>
+        Wallet
+      </div>
+      <div class="nav-tab active" onclick="showScreen('settings')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        Settings
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SCREEN: USAGE HISTORY ==================== -->
+  <div class="screen" id="screen-usage-history">
+    <div class="header">
+      <div class="header-back" onclick="showScreen('settings')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      </div>
+      <div class="header-title">Usage History</div>
+      <div style="width:32px;"></div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab(this, 'usage-tab')">Usage</div>
+      <div class="tab" onclick="switchTab(this, 'topups-tab')">Top-ups</div>
+    </div>
+
+    <div class="scrollable">
+      <div id="usage-tab" class="history-list">
+        <div class="history-item">
+          <div class="history-left">
+            <div class="history-primary">Today</div>
+            <div class="history-secondary">14,320 tokens</div>
+          </div>
+          <div class="history-right">
+            <div class="history-amount">$0.24</div>
+          </div>
+        </div>
+        <div class="history-item">
+          <div class="history-left">
+            <div class="history-primary">Yesterday</div>
+            <div class="history-secondary">28,910 tokens</div>
+          </div>
+          <div class="history-right">
+            <div class="history-amount">$0.48</div>
+          </div>
+        </div>
+        <div class="history-item">
+          <div class="history-left">
+            <div class="history-primary">Mar 29</div>
+            <div class="history-secondary">42,100 tokens</div>
+          </div>
+          <div class="history-right">
+            <div class="history-amount">$0.71</div>
+          </div>
+        </div>
+        <div class="history-item">
+          <div class="history-left">
+            <div class="history-primary">Mar 28</div>
+            <div class="history-secondary">8,450 tokens</div>
+          </div>
+          <div class="history-right">
+            <div class="history-amount">$0.14</div>
+          </div>
+        </div>
+        <div class="history-item">
+          <div class="history-left">
+            <div class="history-primary">Mar 27</div>
+            <div class="history-secondary">35,200 tokens</div>
+          </div>
+          <div class="history-right">
+            <div class="history-amount">$0.59</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="topups-tab" class="history-list" style="display:none;">
+        <div class="history-item">
+          <div class="history-left">
+            <div class="history-primary">$10.00 USDC</div>
+            <div class="history-secondary">Solana &middot; 3xKp...8mNw</div>
+          </div>
+          <div class="history-right">
+            <div class="history-status" style="color:var(--green);">Confirmed</div>
+            <div class="history-secondary">Mar 28</div>
+          </div>
+        </div>
+        <div class="history-item">
+          <div class="history-left">
+            <div class="history-primary">$25.00 USDC</div>
+            <div class="history-secondary">Solana &middot; 9aFb...2kLm</div>
+          </div>
+          <div class="history-right">
+            <div class="history-status" style="color:var(--green);">Confirmed</div>
+            <div class="history-secondary">Mar 21</div>
+          </div>
+        </div>
+        <div class="history-item">
+          <div class="history-left">
+            <div class="history-primary">$5.00 USDC</div>
+            <div class="history-secondary">Base &middot; 0x4a...f8c1</div>
+          </div>
+          <div class="history-right">
+            <div class="history-status" style="color:var(--green);">Confirmed</div>
+            <div class="history-secondary">Mar 15</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== GLOBAL SHEETS (overlay any screen) ==================== -->
+
+  <!-- Model Selector Sheet -->
+  <div class="sheet-overlay" id="model-selector-overlay" onclick="toggleSheet('model-selector')"></div>
+  <div class="bottom-sheet" id="model-selector-sheet">
+    <div class="sheet-handle"></div>
+
+    <!-- Provider toggle -->
+    <div class="provider-toggle">
+      <button class="provider-btn selected" onclick="selectProvider(this)">OpenRouter</button>
+      <button class="provider-btn" onclick="selectProvider(this)">
+        Vercel AI
+        <span class="provider-coming-soon">Coming soon</span>
+      </button>
+    </div>
+
+    <div class="model-section-label">Private Models <span style="color:var(--semantic);">&#9679;</span> Zero data retention</div>
+
+    <div class="model-row selected">
+      <div class="model-info">
+        <div class="model-name">Claude Sonnet 4</div>
+        <div class="model-detail">200K context</div>
+      </div>
+      <span class="model-badge badge-private">Private</span>
+      <div class="model-cost">$3 / $15</div>
+    </div>
+
+    <div class="model-row">
+      <div class="model-info">
+        <div class="model-name">Claude Haiku 3.5</div>
+        <div class="model-detail">200K context</div>
+      </div>
+      <span class="model-badge badge-private">Private</span>
+      <div class="model-cost">$0.25 / $1.25</div>
+    </div>
+
+    <div class="model-section-label" style="margin-top:8px;">Anonymized Models <span style="color:var(--procedural);">&#9679;</span> No identity attached</div>
+
+    <div class="model-row">
+      <div class="model-info">
+        <div class="model-name">GPT-4o</div>
+        <div class="model-detail">128K context</div>
+      </div>
+      <span class="model-badge badge-anon">Anon</span>
+      <div class="model-cost">$2.50 / $10</div>
+    </div>
+
+    <div class="model-row">
+      <div class="model-info">
+        <div class="model-name">Gemini 2.0 Flash</div>
+        <div class="model-detail">1M context</div>
+      </div>
+      <span class="model-badge badge-anon">Anon</span>
+      <div class="model-cost">$0.075 / $0.30</div>
+    </div>
+
+    <div class="model-section-label" style="margin-top:8px;">Free Tier</div>
+
+    <div class="model-row">
+      <div class="model-info">
+        <div class="model-name">Llama 3.3 70B</div>
+        <div class="model-detail">128K context</div>
+      </div>
+      <span class="model-badge badge-anon">Anon</span>
+      <div class="model-cost" style="color:var(--green);">Free</div>
+    </div>
+    <div style="height:20px;"></div>
+  </div>
+
+  <!-- Message Detail Sheet -->
+  <div class="sheet-overlay" id="message-detail-overlay" onclick="toggleSheet('message-detail')"></div>
+  <div class="bottom-sheet" id="message-detail-sheet">
+    <div class="sheet-handle"></div>
+
+    <div class="detail-section">
+      <div class="detail-label">Model</div>
+      <div class="detail-row">
+        <span class="detail-key">Provider</span>
+        <span class="detail-val">Claude Sonnet 4 <span class="model-badge badge-private" style="margin-left:4px;">Private</span></span>
+      </div>
+    </div>
+
+    <div class="detail-divider"></div>
+
+    <div class="detail-section">
+      <div class="detail-label">Tokens</div>
+      <div class="detail-row">
+        <span class="detail-key">Input (prompt)</span>
+        <span class="detail-val">1,247</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-key">Output (completion)</span>
+        <span class="detail-val">384</span>
+      </div>
+    </div>
+
+    <div class="detail-divider"></div>
+
+    <div class="detail-section">
+      <div class="detail-label">Cost</div>
+      <div class="detail-row">
+        <span class="detail-key">This message</span>
+        <span class="detail-val">$0.0095</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-key">Direct API equivalent</span>
+        <span class="detail-val" style="text-decoration:line-through;color:var(--text-dim);">$0.0195</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-key">You saved</span>
+        <span class="detail-val detail-val-green">51%</span>
+      </div>
+    </div>
+
+    <div class="detail-divider"></div>
+
+    <div class="detail-section">
+      <div class="detail-label">Memories Used</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <span class="memory-pill pill-semantic">semantic #421</span>
+        <span class="memory-pill pill-procedural">procedural #89</span>
+      </div>
+    </div>
+    <div style="height:16px;"></div>
+  </div>
+
+</div><!-- /phone-frame -->
+
+<script>
+  // ===== STATE =====
+  let topupOrigin = 'chat';
+
+  // ===== NAVIGATION =====
+  function showScreen(id) {
+    // Close any open sheets first
+    document.querySelectorAll('.sheet-overlay.open').forEach(el => el.classList.remove('open'));
+    document.querySelectorAll('.bottom-sheet.open').forEach(el => el.classList.remove('open'));
+
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    const target = document.getElementById('screen-' + id);
+    if (target) target.classList.add('active');
+
+    // Scroll chat messages to bottom
+    if (id === 'chat' || id === 'guest-chat') {
+      setTimeout(() => {
+        const msgs = target.querySelector('.messages');
+        if (msgs) msgs.scrollTop = msgs.scrollHeight;
+      }, 10);
+    }
+
+    // Update bottom nav active state across all screens
+    const navMap = {
+      'conversations': 'conversations',
+      'chat': 'conversations',
+      'new-chat': 'conversations',
+      'memory': 'memory',
+      'memory-graph': 'memory',
+      'memory-entities': 'memory',
+      'memory-decay': 'memory',
+      'settings': 'settings',
+      'usage-history': 'settings',
+      'topup': 'wallet',
+      'guest-chat': null,
+      'login': null,
+      'onboarding': null
+    };
+    const activeTab = navMap[id];
+    if (activeTab !== undefined) {
+      document.querySelectorAll('.bottom-nav .nav-tab').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      // Find tabs that navigate to the active section and highlight them
+      document.querySelectorAll('.bottom-nav .nav-tab').forEach(tab => {
+        const onclick = tab.getAttribute('onclick') || '';
+        if (activeTab === 'conversations' && onclick.includes("'conversations'")) tab.classList.add('active');
+        else if (activeTab === 'memory' && onclick.includes("'memory'")) tab.classList.add('active');
+        else if (activeTab === 'settings' && onclick.includes("'settings'")) tab.classList.add('active');
+        else if (activeTab === 'wallet' && onclick.includes('navigateToTopup')) tab.classList.add('active');
+      });
+    }
+  }
+
+  function navigateToTopup(origin) {
+    topupOrigin = origin;
+    showScreen('topup');
+  }
+
+  // ===== BOTTOM SHEETS =====
+  function toggleSheet(id) {
+    const overlay = document.getElementById(id + '-overlay');
+    const sheet = document.getElementById(id + '-sheet');
+    if (overlay && sheet) {
+      overlay.classList.toggle('open');
+      sheet.classList.toggle('open');
+    }
+  }
+
+  // ===== EMPTY STATE TOGGLES =====
+  function toggleConvEmpty() {
+    const empty = document.getElementById('conv-empty');
+    const list = document.getElementById('conv-list');
+    const fab = document.querySelector('#screen-conversations .fab');
+    if (empty.style.display === 'none') {
+      empty.style.display = 'flex';
+      list.style.display = 'none';
+      if (fab) fab.style.display = 'none';
+    } else {
+      empty.style.display = 'none';
+      list.style.display = 'block';
+      if (fab) fab.style.display = 'flex';
+    }
+  }
+
+  function toggleMemoryEmpty() {
+    const empty = document.getElementById('memory-empty');
+    const content = document.getElementById('memory-content-wrapper');
+    if (empty.style.display === 'none') {
+      empty.style.display = 'flex';
+      content.style.display = 'none';
+    } else {
+      empty.style.display = 'none';
+      content.style.display = 'block';
+    }
+  }
+
+  function toggleGraphEmpty() {
+    const empty = document.getElementById('graph-empty');
+    const content = document.getElementById('graph-content');
+    if (empty.style.display === 'none') {
+      empty.style.display = 'flex';
+      content.style.display = 'none';
+    } else {
+      empty.style.display = 'none';
+      content.style.display = 'block';
+    }
+  }
+
+  function toggleEntitiesEmpty() {
+    const empty = document.getElementById('entities-empty');
+    const content = document.getElementById('entities-content');
+    if (empty.style.display === 'none') {
+      empty.style.display = 'flex';
+      content.style.display = 'none';
+    } else {
+      empty.style.display = 'none';
+      content.style.display = 'flex';
+    }
+  }
+
+  function toggleHealthEmpty() {
+    const empty = document.getElementById('health-empty');
+    const content = document.getElementById('health-content');
+    if (empty.style.display === 'none') {
+      empty.style.display = 'flex';
+      content.style.display = 'none';
+    } else {
+      empty.style.display = 'none';
+      content.style.display = 'flex';
+    }
+  }
+
+  function toggleUsageEmpty() {
+    const empty = document.getElementById('usage-empty');
+    const content = document.getElementById('usage-content');
+    if (empty.style.display === 'none') {
+      empty.style.display = 'flex';
+      content.style.display = 'none';
+    } else {
+      empty.style.display = 'none';
+      content.style.display = 'flex';
+    }
+  }
+
+  // ===== TOP-UP HELPERS =====
+  function selectAmount(btn) {
+    btn.closest('.amount-grid, [style*="display:flex"]').querySelectorAll('.amount-btn, .chain-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+  }
+
+  function selectChain(btn) {
+    const parent = btn.parentElement;
+    parent.querySelectorAll('.chain-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+  }
+
+  function showTopupState(state) {
+    ['topup-idle', 'topup-confirming', 'topup-success'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+    const target = document.getElementById('topup-' + state);
+    if (target) target.style.display = 'block';
+  }
+
+  // ===== PROVIDER TOGGLE (model selector) =====
+  function selectProvider(btn) {
+    const parent = btn.parentElement;
+    parent.querySelectorAll('.provider-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+  }
+
+  // ===== BALANCE CHIP ANIMATION DEMO =====
+  function demoBalanceDeduct() {
+    const chip = document.getElementById('balance-chip-demo');
+    if (!chip) return;
+    chip.classList.remove('balance-deduct', 'balance-add');
+    void chip.offsetWidth; // reflow to restart animation
+    chip.classList.add('balance-deduct');
+    chip.addEventListener('animationend', () => chip.classList.remove('balance-deduct'), { once: true });
+  }
+
+  function demoBalanceAdd() {
+    const chip = document.getElementById('balance-chip-demo');
+    if (!chip) return;
+    chip.classList.remove('balance-deduct', 'balance-add');
+    void chip.offsetWidth;
+    chip.classList.add('balance-add');
+    chip.addEventListener('animationend', () => chip.classList.remove('balance-add'), { once: true });
+  }
+
+  // ===== TABS =====
+  function switchTab(tabEl, contentId) {
+    const tabBar = tabEl.closest('.tabs');
+    tabBar.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tabEl.classList.add('active');
+
+    const container = tabBar.nextElementSibling;
+    container.querySelectorAll('.history-list').forEach(l => l.style.display = 'none');
+    document.getElementById(contentId).style.display = 'block';
+  }
+
+  // ===== ONBOARDING OVERLAY SYSTEM =====
+  const onboardingSteps = [
+    {
+      screen: 'login',
+      text: 'Your wallet is your identity. Connect to get started.',
+      target: '#screen-login .wallet-btn',
+      btnLabel: 'Next',
+    },
+    {
+      screen: 'new-chat',
+      text: 'Clude remembers your past conversations. This is your personalized greeting with memory recap.',
+      target: '#screen-new-chat .msg-assistant',
+      btnLabel: 'Next',
+    },
+    {
+      screen: 'new-chat',
+      text: 'Choose your AI model. Free and pro tiers available — tap the model chip to switch.',
+      target: '#screen-new-chat .chip',
+      btnLabel: 'Next',
+    },
+    {
+      screen: 'chat',
+      text: 'Try sending a message. Your conversation becomes part of your memory.',
+      target: '#screen-chat .input-bar',
+      btnLabel: 'Next',
+    },
+    {
+      screen: 'chat',
+      text: 'These memory pills show which memories were recalled. This conversation is now stored in your memory.',
+      target: '#screen-chat .memory-pills',
+      btnLabel: 'Next',
+    },
+    {
+      screen: 'chat',
+      text: 'Your USDC balance. Tap to top up anytime. Pro models deduct from your balance per message.',
+      target: '#screen-chat .badge-green',
+      btnLabel: 'Got it',
+    },
+  ];
+
+  let obStep = 0;
+
+  function startOnboarding() {
+    obStep = 0;
+    renderOnboardingStep();
+  }
+
+  function onboardingNext() {
+    obStep++;
+    if (obStep >= onboardingSteps.length) {
+      onboardingEnd();
+      return;
+    }
+    renderOnboardingStep();
+  }
+
+  function onboardingEnd() {
+    document.getElementById('onboarding-overlay').style.display = 'none';
+    showScreen('conversations');
+  }
+
+  function renderOnboardingStep() {
+    const step = onboardingSteps[obStep];
+    const overlay = document.getElementById('onboarding-overlay');
+    const tooltip = document.getElementById('ob-tooltip');
+    const skip = document.getElementById('ob-skip');
+    const text = document.getElementById('ob-text');
+    const stepLabel = document.getElementById('ob-step');
+    const nextBtn = document.getElementById('ob-next-btn');
+
+    // Navigate to the real screen first
+    overlay.style.display = 'none';
+    showScreen(step.screen);
+
+    // Measure target element position relative to phone-frame
+    const frame = document.getElementById('phone-frame').getBoundingClientRect();
+    const dim = document.getElementById('ob-dim');
+    const el = document.querySelector(step.target);
+    const r = el.getBoundingClientRect();
+    const pad = 8;
+    const holeTop = r.top - frame.top - pad;
+    const holeLeft = r.left - frame.left - pad;
+    const holeW = r.width + pad * 2;
+    const holeH = r.height + pad * 2;
+    const holeRight = holeLeft + holeW;
+    const holeBottom = holeTop + holeH;
+    const frameW = 390;
+    const frameH = 844;
+    const rx = 14; // border-radius in px
+
+    // Use an SVG inline to create a dim overlay with a transparent rounded-rect hole
+    // Replace dim div content with an SVG
+    dim.innerHTML = '<svg width="' + frameW + '" height="' + frameH + '" style="position:absolute;top:0;left:0;">' +
+      '<defs><mask id="ob-mask">' +
+      '<rect width="100%" height="100%" fill="white"/>' +
+      '<rect x="' + holeLeft + '" y="' + holeTop + '" width="' + holeW + '" height="' + holeH + '" rx="' + rx + '" fill="black"/>' +
+      '</mask></defs>' +
+      '<rect width="100%" height="100%" fill="rgba(5,5,8,0.85)" mask="url(#ob-mask)"/>' +
+      '</svg>';
+    dim.style.background = 'none';
+    dim.style.clipPath = '';
+
+    // Position tooltip below or above the hole
+    const tooltipH = 120; // approximate
+    let tipTop;
+    if (holeBottom + tooltipH + 40 < frameH) {
+      tipTop = holeBottom + 16;
+    } else {
+      tipTop = holeTop - tooltipH - 16;
+    }
+    tooltip.style.top = tipTop + 'px';
+    tooltip.style.bottom = 'auto';
+
+    // Position skip below tooltip
+    skip.style.top = (tipTop + tooltipH - 10) + 'px';
+    skip.style.bottom = 'auto';
+
+    // Set tooltip content
+    text.textContent = step.text;
+    stepLabel.textContent = 'Step ' + (obStep + 1) + ' of ' + onboardingSteps.length;
+    nextBtn.textContent = step.btnLabel || 'Next';
+
+    overlay.style.display = 'block';
+  }
+</script>
+
+</body>
+</html>
