@@ -39,6 +39,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
     }
   }, [walletAddress]);
 
+  const hideChatWidget = ['/brain', '/explore'].includes(location.pathname);
+
   const displayName = email
     ? email
     : walletAddress
@@ -158,8 +160,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
-      {/* Floating chat button */}
-      <button
+      {/* Floating chat button — hidden on brain/explore (has its own chat) */}
+      {!hideChatWidget && <button
         onClick={() => setChatOpen(!chatOpen)}
         style={{
           position: 'fixed',
@@ -184,10 +186,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
         title={chatOpen ? 'Close chat' : 'Chat with Clude'}
       >
         {chatOpen ? '✕' : '💬'}
-      </button>
+      </button>}
 
       {/* Chat slide-out panel */}
-      {chatOpen && (
+      {!hideChatWidget && chatOpen && (
         <div
           style={isMobile ? {
             position: 'fixed',
