@@ -2,9 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'config/theme.dart';
+import 'core/auth/auth_provider.dart';
 import 'core/router.dart';
 
-void main() => runApp(const ProviderScope(child: CludeMobileApp()));
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final container = ProviderContainer();
+  await container.read(authNotifierProvider.notifier).restoreSession();
+  runApp(
+    UncontrolledProviderScope(
+      container: container,
+      child: const CludeMobileApp(),
+    ),
+  );
+}
 
 class CludeMobileApp extends ConsumerWidget {
   const CludeMobileApp({super.key});

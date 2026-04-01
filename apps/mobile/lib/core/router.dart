@@ -1,25 +1,24 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../features/auth/login_screen.dart';
 import '../features/billing/topup_screen.dart';
 import '../features/chat/chat_screen.dart';
+import '../features/login/login_screen.dart';
 import '../features/memory/memory_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../shared/widgets/bottom_nav.dart';
-
-/// Stub auth state — always unauthenticated until spec 006.
-final authStateProvider = StateProvider<bool>((ref) => false);
+import 'auth/auth_provider.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final isAuth = ref.watch(authStateProvider);
+  final auth = ref.watch(authNotifierProvider);
 
   return GoRouter(
     initialLocation: '/chat',
     redirect: (context, state) {
       final isLoginRoute = state.matchedLocation == '/login';
-      if (!isAuth && !isLoginRoute) return '/login';
-      if (isAuth && isLoginRoute) return '/chat';
+      final hasAccess = auth.isAuthenticated || auth.isGuest;
+      if (!hasAccess && !isLoginRoute) return '/login';
+      if (hasAccess && isLoginRoute) return '/chat';
       return null;
     },
     routes: [
