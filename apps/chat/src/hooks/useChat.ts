@@ -150,7 +150,7 @@ export function useChat() {
 
   const sendMessage = useCallback(async (
     content: string,
-    conversationId: string | null,
+    conversationIdOrPromise: string | null | Promise<string | null>,
     model: string,
   ) => {
     setError(null);
@@ -175,6 +175,11 @@ export function useChat() {
     renderer.start();
 
     try {
+      // Resolve the conversation ID (might have been a promise from ChatInterface)
+      const conversationId = await (typeof conversationIdOrPromise === 'object' && conversationIdOrPromise !== null
+        ? conversationIdOrPromise
+        : Promise.resolve(conversationIdOrPromise));
+
       if (!authenticated || !conversationId) {
         // Guest mode — read history from ref (no dependency on settled state)
         const history = settledRef.current.slice(-10).map(m => ({ role: m.role, content: m.content }));

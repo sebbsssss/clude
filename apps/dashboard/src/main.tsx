@@ -23,15 +23,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           theme: 'light',
           accentColor: '#2244ff',
           walletList: ['phantom', 'solflare', 'backpack'],
-          walletChainType: 'solana-only',
         },
         loginMethods: ['wallet'],
-        solanaClusters: [
-          { name: 'mainnet-beta', rpcUrl: 'https://api.mainnet-beta.solana.com' },
-        ],
-        embeddedWallets: {
-          createOnLogin: 'off',
-        },
+        walletChainType: 'solana-only',
+        embeddedWallets: { solana: { createOnLogin: 'off' } },
         externalWallets: {
           solana: { connectors: solanaConnectors },
         },

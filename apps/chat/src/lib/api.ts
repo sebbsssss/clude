@@ -1,4 +1,4 @@
-import type { ChatModel, Conversation, Message, MemoryStats, MemorySummary, CompoundMarketsResponse, CompoundAccuracy, CompoundTimeline, MarketCategory, MarketDetailResponse, CompoundPredictionsResponse } from './types';
+import type { ChatModel, Conversation, Message, MemoryStats, MemorySummary, CompoundMarketsResponse, CompoundAccuracy, CompoundTimeline, MarketCategory, MarketDetailResponse, CompoundPredictionsResponse, BYOKProvider } from './types';
 
 const API_BASE = '';
 
@@ -14,6 +14,8 @@ export class AuthExpiredError extends Error {
 class ChatAPI {
   private cortexKey: string | null = null;
   private authExpiredCallback: (() => void) | null = null;
+  private byokKeys: Partial<Record<BYOKProvider, string>> = {};
+  private _modelsCache: ChatModel[] = [];
 
   setKey(key: string | null) {
     this.cortexKey = key;
@@ -21,6 +23,31 @@ class ChatAPI {
 
   onAuthExpired(fn: (() => void) | null) {
     this.authExpiredCallback = fn;
+  }
+
+  /** Store a decrypted BYOK key for a provider (null to remove). */
+  setBYOKKey(provider: BYOKProvider, key: string | null) {
+    if (key) this.byokKeys[provider] = key;
+    else delete this.byokKeys[provider];
+  }
+
+  /** Remove all BYOK keys from memory. */
+  clearBYOKKeys() {
+    this.byokKeys = {};
+  }
+
+  /** Get the decrypted BYOK key for a provider, if any. */
+  getBYOKKey(provider: BYOKProvider): string | undefined {
+    return this.byokKeys[provider];
+  }
+
+  /** Resolve a BYOK API key for a given model ID (returns undefined for non-BYOK models). */
+  private resolveBYOKKey(modelId: string): { key: string; provider: BYOKProvider } | undefined {
+    const model = this._modelsCache.find(m => m.id === modelId);
+    if (!model?.requiresByok || !model.byokProvider) return undefined;
+    const key = this.byokKeys[model.byokProvider];
+    if (!key) return undefined;
+    return { key, provider: model.byokProvider };
   }
 
   private headers(): Record<string, string> {
@@ -63,7 +90,9 @@ class ChatAPI {
   async getModels(): Promise<ChatModel[]> {
     const res = await fetch(`${API_BASE}/api/chat/models`);
     if (!res.ok) throw new Error('Failed to fetch models');
-    return res.json();
+    const models = await res.json();
+    this._modelsCache = models;
+    return models;
   }
 
   async autoRegister(privyToken: string, wallet: string): Promise<{ api_key: string; agent_id: string; created: boolean }> {
@@ -124,8 +153,15 @@ class ChatAPI {
   }
 
   async sendMessage(conversationId: string, content: string, model: string, onChunk: (text: string) => void, onDone: (data: any) => void, signal?: AbortSignal): Promise<void> {
+    const extraHeaders: Record<string, string> = {};
+    const byok = this.resolveBYOKKey(model);
+    if (byok) {
+      extraHeaders['X-BYOK-Key'] = byok.key;
+      extraHeaders['X-BYOK-Provider'] = byok.provider;
+    }
     const res = await this.fetchStream(`${API_BASE}/api/chat/conversations/${conversationId}/messages`, {
       method: 'POST',
+      headers: extraHeaders,
       body: JSON.stringify({ content, model }),
       signal,
     });
