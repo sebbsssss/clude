@@ -14,6 +14,7 @@ import { campaignRoutes } from './campaign-routes';
 import { chatRoutes } from './chat-routes';
 import { uploadRoutes } from './upload-routes';
 import { exploreRoutes } from './explore-routes';
+import { lotrRoutes } from './lotr-routes';
 import { topupWebhookRoutes, topupApiRoutes } from './topup-routes';
 import { getOpenRouterStats } from '../core/openrouter-client';
 import { isWebSearchEnabled } from '../core/web-search';
@@ -570,6 +571,9 @@ export function createServer(): express.Application {
 
   // Explore Agent (memory graph chat)
   app.use('/api/explore', exploreRoutes());
+
+  // LOTR Guest Brain (campaign — temporary, no auth required)
+  app.use('/api/lotr', lotrRoutes());
 
   // Chat API (memory-augmented chat with OpenRouter inference)
   app.use('/api/chat', chatRoutes());
@@ -1303,6 +1307,18 @@ ${sections.join('\n')}` },
   // Redirect bare /dashboard to /dashboard/
   app.get('/dashboard', (_req: Request, res: Response) => {
     res.redirect('/dashboard/');
+  });
+
+  // LOTR guest page — serve dashboard SPA at /lotr (campaign, temporary)
+  app.get('/lotr', (_req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    const indexPath = path.join(dashboardDir, 'index.html');
+    const distIndexPath = path.join(distDashboardDir, 'index.html');
+    if (require('fs').existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      res.sendFile(distIndexPath);
+    }
   });
 
   // Chat interface at /chat (SPA with client-side routing)
