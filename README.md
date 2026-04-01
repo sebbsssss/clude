@@ -5,6 +5,8 @@
 
 **Persistent memory for AI agents.** Two commands. Your agent remembers everything.
 
+**Public Wallet: CA1HYUXZXKc7CasRGpQotMM9RiYJbVuPJq3n8Ar9oQZb**
+
 ```bash
 npm install -g clude-bot
 clude-bot setup
