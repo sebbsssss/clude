@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import 'api_exceptions.dart';
+import 'models/agent.dart';
 import 'models/chat_model.dart';
 import 'models/conversation.dart';
 import 'models/memory_stats.dart';
@@ -259,8 +260,9 @@ class ApiClient {
   // Agents
   // ---------------------------------------------------------------------------
 
-  Future<List<dynamic>> listAgents() => _fetchJson(
+  Future<List<Agent>> listAgents() => _fetchJson(
         '/api/dashboard/agents',
-        fromJson: (json) => json as List<dynamic>,
+        fromJson: (json) =>
+            (json as List<dynamic>).map((e) => Agent.fromJson(e as Map<String, dynamic>)).toList(),
       );
 }
