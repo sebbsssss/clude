@@ -5,6 +5,7 @@ import { Brain, Send, Square } from 'lucide-react';
 import { Button } from './ui/button.tsx';
 import { Textarea } from './ui/textarea.tsx';
 import { ModelSelector } from './ModelSelector';
+import type { BYOKProvider } from '../lib/types';
 
 const MODEL_STORAGE_KEY = 'chat_selected_model';
 
@@ -16,6 +17,8 @@ interface Props {
   onToggleMemoryPills: () => void;
   onSend: (content: string, model: string) => void;
   onStop: () => void;
+  byokProviders: Set<BYOKProvider>;
+  onOpenBYOK: () => void;
 }
 
 export const InputArea = memo(function InputArea({
@@ -26,6 +29,8 @@ export const InputArea = memo(function InputArea({
   onToggleMemoryPills,
   onSend,
   onStop,
+  byokProviders,
+  onOpenBYOK,
 }: Props) {
   const [isFocused, setIsFocused] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -166,7 +171,7 @@ export const InputArea = memo(function InputArea({
               >
                 <Brain className="h-3.5 w-3.5" />
               </Button>
-              <ModelSelector selectedModel={selectedModel} onModelChange={handleModelChange} />
+              <ModelSelector selectedModel={selectedModel} onModelChange={handleModelChange} byokProviders={byokProviders} onOpenBYOK={onOpenBYOK} />
             </div>
 
             <div className="flex items-center gap-2">

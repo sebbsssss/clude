@@ -2,7 +2,6 @@ import express, { Request, Response } from 'express';
 import path from 'path';
 import { config } from '../config';
 import { verifyRoutes } from '../verify-app/routes';
-import { getMarketSnapshot } from '../core/allium-client';
 import { getMemoryStats, getRecentMemories, storeMemory, recallMemories } from '../core/memory';
 import { getDb, checkRateLimit } from '../core/database';
 import { writeMemo, solscanTxUrl, verifyMemoTransaction } from '../core/solana-client';
@@ -86,7 +85,7 @@ export function createServer(): express.Application {
   app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-BYOK-Key, X-BYOK-Provider');
     if (req.method === 'OPTIONS') {
       res.sendStatus(204);
       return;
@@ -543,16 +542,6 @@ export function createServer(): express.Application {
     }
   });
 
-  // Market data API (Allium-powered)
-  app.get('/api/market-data', async (_req: Request, res: Response) => {
-    try {
-      const snapshot = await getMarketSnapshot();
-      res.json(snapshot);
-    } catch (err) {
-      log.error({ err }, 'Market data endpoint error');
-      res.status(500).json({ error: 'Failed to fetch market data' });
-    }
-  });
 
   // Agent API (authenticated endpoints for other AI agents)
   app.use('/api/agent', agentRoutes());

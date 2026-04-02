@@ -67,6 +67,8 @@ export interface ChatModel {
   default?: boolean;
   tier: ModelTier;
   cost: { input: number; output: number };
+  requiresByok?: boolean;
+  byokProvider?: BYOKProvider;
 }
 
 export interface Conversation {
@@ -253,6 +255,28 @@ export interface CompoundPredictionsResponse {
   offset: number;
   timestamp: string;
 }
+
+// ---- BYOK (Bring Your Own Key) ---- //
+
+export type BYOKProvider = 'anthropic' | 'openai' | 'google' | 'xai' | 'deepseek' | 'minimax';
+
+export interface BYOKProviderInfo {
+  name: string;
+  placeholder: string;
+  prefix: string;
+  docsUrl: string;
+}
+
+export const BYOK_PROVIDERS: Record<BYOKProvider, BYOKProviderInfo> = {
+  anthropic: { name: 'Anthropic', placeholder: 'sk-ant-...', prefix: 'sk-ant-', docsUrl: 'https://console.anthropic.com/settings/keys' },
+  openai:    { name: 'OpenAI',    placeholder: 'sk-...',     prefix: 'sk-',     docsUrl: 'https://platform.openai.com/api-keys' },
+  google:    { name: 'Google AI', placeholder: 'AIza...',    prefix: 'AIza',    docsUrl: 'https://aistudio.google.com/apikey' },
+  xai:       { name: 'xAI',       placeholder: 'xai-...',    prefix: 'xai-',    docsUrl: 'https://console.x.ai' },
+  deepseek:  { name: 'DeepSeek',  placeholder: 'sk-...',     prefix: 'sk-',     docsUrl: 'https://platform.deepseek.com/api_keys' },
+  minimax:   { name: 'MiniMax',   placeholder: 'eyJ...',     prefix: 'eyJ',     docsUrl: 'https://platform.minimaxi.com/user-center/basic-information/interface-key' },
+};
+
+// ---- Guest / Auth types ---- //
 
 export interface GuestResponse {
   content: string;

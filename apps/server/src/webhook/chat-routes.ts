@@ -18,6 +18,13 @@ import { config } from '../config';
 import { detectTemporalConstraints, matchMemoriesTemporal } from '../experimental/temporal-bonds';
 import { generateQueryEmbedding, isEmbeddingEnabled } from '../core/embeddings';
 import { isOpenRouterEnabled, getOpenRouterConfig, OPENROUTER_MODELS } from '../core/openrouter-client';
+import { streamText } from 'ai';
+import { createAnthropic } from '@ai-sdk/anthropic';
+import { createOpenAI } from '@ai-sdk/openai';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { createXai } from '@ai-sdk/xai';
+import { createMinimax } from 'vercel-minimax-ai-provider';
+import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 
 const log = createChildLogger('chat-api');
 
@@ -40,6 +47,79 @@ export const CHAT_MODELS = [
 ];
 
 const DEFAULT_MODEL = CHAT_MODELS.find(m => (m as any).default)?.id || 'kimi-k2-thinking';
+
+// ---- BYOK Model Registry ---- //
+
+type BYOKProviderName = 'anthropic' | 'openai' | 'google' | 'xai' | 'deepseek' | 'minimax';
+
+interface BYOKModelDef {
+  id: string;
+  name: string;
+  provider: BYOKProviderName;
+  providerModelId: string;
+  context: number;
+}
+
+const BYOK_MODELS: BYOKModelDef[] = [
+  { id: 'byok-claude-sonnet-4.6', name: 'Claude Sonnet 4.6', provider: 'anthropic', providerModelId: 'claude-sonnet-4-6', context: 200000 },
+  { id: 'byok-claude-opus-4.6',   name: 'Claude Opus 4.6',   provider: 'anthropic', providerModelId: 'claude-opus-4-6',   context: 200000 },
+  { id: 'byok-gpt-5.4',           name: 'GPT-5.4',           provider: 'openai',    providerModelId: 'gpt-5.4',                     context: 1000000 },
+  { id: 'byok-gpt-4.1',           name: 'GPT-4.1 (Coding)',  provider: 'openai',    providerModelId: 'gpt-4.1',                     context: 1000000 },
+  { id: 'byok-o3',                name: 'o3',                 provider: 'openai',    providerModelId: 'o3',                          context: 200000 },
+  { id: 'byok-gemini-3.1-pro',    name: 'Gemini 3.1 Pro',    provider: 'google',    providerModelId: 'gemini-3.1-pro-preview', context: 2000000 },
+  { id: 'byok-gemini-2.5-pro',    name: 'Gemini 2.5 Pro',    provider: 'google',    providerModelId: 'gemini-2.5-pro',        context: 1000000 },
+  { id: 'byok-grok-3',            name: 'Grok 3',            provider: 'xai',       providerModelId: 'grok-3',                      context: 131072 },
+  { id: 'byok-deepseek-v3',       name: 'DeepSeek V3',       provider: 'deepseek',  providerModelId: 'deepseek-chat',               context: 64000 },
+  { id: 'byok-deepseek-r1',       name: 'DeepSeek R1',       provider: 'deepseek',  providerModelId: 'deepseek-reasoner',           context: 64000 },
+  { id: 'byok-minimax-m2.1',      name: 'MiniMax-M2.1',      provider: 'minimax',   providerModelId: 'MiniMax-M2.1',                context: 204800 },
+  { id: 'byok-minimax-m2.1-fast', name: 'MiniMax-M2.1 Fast', provider: 'minimax',   providerModelId: 'MiniMax-M2.1-highspeed',      context: 204800 },
+  { id: 'byok-minimax-m2',        name: 'MiniMax-M2',        provider: 'minimax',   providerModelId: 'MiniMax-M2',                  context: 204800 },
+];
+
+function resolveBYOKModel(modelId: string): BYOKModelDef | null {
+  return BYOK_MODELS.find(m => m.id === modelId) || null;
+}
+
+/** 
+ * Public model list for the frontend. 
+ * Includes standard models (using app top-up) and BYOK models.
+ */
+export function getAvailableChatModels() {
+  return [
+    ...CHAT_MODELS.map(m => ({ ...m, requiresByok: false })),
+    ...BYOK_MODELS.map(m => ({
+      id: m.id,
+      name: m.name,
+      privacy: 'private' as const,
+      context: m.context,
+      tier: 'pro' as const,
+      cost: { input: 0, output: 0 },
+      requiresByok: true,
+      byokProvider: m.provider,
+    })),
+  ];
+}
+
+/** Create a Vercel AI SDK provider instance from a BYOK key + provider name. */
+function createBYOKProvider(provider: BYOKProviderName, apiKey: string) {
+  switch (provider) {
+    case 'anthropic':
+      return createAnthropic({ apiKey });
+    case 'openai':
+      return createOpenAI({ apiKey });
+    case 'google':
+      return createGoogleGenerativeAI({ apiKey });
+    case 'xai':
+      return createXai({ apiKey });
+    case 'deepseek':
+      // DeepSeek uses OpenAI-compatible API
+      return createOpenAI({ apiKey, baseURL: 'https://api.deepseek.com/v1' });
+    case 'minimax':
+      return createMinimax({ apiKey });
+    default:
+      throw new Error(`Unknown BYOK provider: ${provider}`);
+  }
+}
 
 // ---- Request type ---- //
 
@@ -228,7 +308,7 @@ export function chatRoutes(): Router {
   // GET /models — public, no auth, static data cached aggressively
   router.get('/models', (_req: Request, res: Response) => {
     res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
-    res.json(CHAT_MODELS);
+    res.json(getAvailableChatModels());
   });
 
   // POST /guest — free tier, no auth, no memory, kimi-k2-thinking, 10 msgs/day per IP
@@ -783,10 +863,22 @@ export function chatRoutes(): Router {
         return;
       }
 
-      // 3b. Balance pre-check for pro models — reject before calling LLM if insufficient funds
+      // 3b. Detect BYOK headers
       const requestModelId = model || conversation.model || DEFAULT_MODEL;
+      const byokKey = req.headers['x-byok-key'] as string | undefined;
+      const byokProvider = req.headers['x-byok-provider'] as BYOKProviderName | undefined;
+      const byokModel = resolveBYOKModel(requestModelId);
+      const isBYOK = !!(byokKey && byokModel);
+
+      // BYOK model selected but key not provided — reject early
+      if (byokModel && !byokKey) {
+        res.status(400).json({ error: 'This model requires your own API key. Open "Manage Keys" to add one.' });
+        return;
+      }
+
+      // 3c. Balance pre-check for pro models — skip for BYOK (user pays provider directly)
       const selectedModel = CHAT_MODELS.find(m => m.id === requestModelId);
-      if (selectedModel && selectedModel.tier !== 'free' && chatReq.ownerWallet) {
+      if (!isBYOK && selectedModel && selectedModel.tier !== 'free' && chatReq.ownerWallet) {
         const { data: bal } = await db
           .from('chat_balances')
           .select('balance_usdc')
@@ -914,94 +1006,16 @@ export function chatRoutes(): Router {
           budgetTokens: config.chat.maxContextTokens,
         }, 'Context trimmed to fit token budget');
       }
-      const openrouterModelId = resolveOpenRouterModel(modelId);
-      if (!openrouterModelId) {
-        res.status(400).json({ error: `Unknown model: ${modelId}` });
-        return;
-      }
-
-      const openrouterApiKey = config.openrouter?.apiKey || process.env.OPENROUTER_API_KEY;
-      if (!openrouterApiKey) {
-        res.status(500).json({ error: 'OpenRouter API not configured' });
-        return;
-      }
-
       // 8. Set SSE headers
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
       res.flushHeaders();
 
-      // 9. Call OpenRouter streaming API
-      const llmRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${openrouterApiKey}`,
-          'HTTP-Referer': 'https://clude.fun',
-          'X-Title': 'Clude Chat',
-        },
-        body: JSON.stringify({
-          model: openrouterModelId,
-          messages: messagesArray,
-          max_tokens: (CHAT_MODELS.find(m => m.id === modelId)?.tier === 'pro') ? 16384 : 8192,
-          temperature: 0.7,
-          stream: true,
-          stream_options: { include_usage: true },
-        }),
-        signal: abortController.signal,
-      });
-
-      if (!llmRes.ok) {
-        const errBody = await llmRes.text().catch(() => 'Unknown error');
-        log.error({ status: llmRes.status, body: errBody, model: openrouterModelId }, 'OpenRouter API error');
-        const modelName = CHAT_MODELS.find(m => m.id === modelId)?.name || modelId;
-        // Parse OpenRouter error detail if available
-        let providerDetail = '';
-        try {
-          const parsed = JSON.parse(errBody);
-          providerDetail = parsed?.error?.message || parsed?.message || '';
-        } catch { /* not JSON */ }
-        let userMsg: string;
-        if (llmRes.status === 401) {
-          userMsg = 'API authentication failed. Please contact support.';
-        } else if (llmRes.status === 402) {
-          userMsg = 'Insufficient balance for this model. Top up to continue.';
-        } else if (llmRes.status === 403) {
-          userMsg = `${modelName} is not available on this account. Try a different model.`;
-        } else if (llmRes.status === 404) {
-          userMsg = `Model ${modelName} was not found. It may have been renamed or removed.`;
-        } else if (llmRes.status === 429) {
-          userMsg = 'Rate limit reached. Please wait a moment and try again.';
-        } else if (llmRes.status === 503 || errBody.includes('overloaded')) {
-          userMsg = `${modelName} is currently overloaded. Try a different model.`;
-        } else if (llmRes.status >= 500) {
-          userMsg = 'The model provider is temporarily unavailable. Try again or switch models.';
-        } else {
-          userMsg = providerDetail
-            ? `${modelName} error: ${providerDetail}`
-            : `Something went wrong with ${modelName} (HTTP ${llmRes.status}). Try a different model.`;
-        }
-        res.write(`data: ${JSON.stringify({ error: userMsg, status: llmRes.status })}\n\n`);
-        res.end();
-        return;
-      }
-
-      // 10. Stream response to client
       let fullContent = '';
       let tokensPrompt = 0;
       let tokensCompletion = 0;
       let usageReceived = false;
-
-      const reader = llmRes.body?.getReader();
-      if (!reader) {
-        res.write(`data: ${JSON.stringify({ error: 'No response stream' })}\n\n`);
-        res.end();
-        return;
-      }
-
-      const decoder = new TextDecoder();
-      let buffer = '';
 
       // SSE keepalive: send comment every 15s to prevent proxy/CDN idle timeouts
       const keepaliveInterval = setInterval(() => {
@@ -1009,52 +1023,126 @@ export function chatRoutes(): Router {
       }, 15000);
 
       try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+      if (isBYOK && byokModel) {
+        // ---- BYOK path: Vercel AI SDK direct-to-provider ---- //
+        log.info({ model: byokModel.providerModelId, provider: byokModel.provider }, 'BYOK streaming request');
+        try {
+          const provider = createBYOKProvider(byokModel.provider, byokKey!);
+          // DeepSeek uses createOpenAI with custom baseURL — must use .chat() to
+          // hit /chat/completions instead of the OpenAI Responses API (/responses)
+          const model = byokModel.provider === 'deepseek' && 'chat' in provider
+            ? provider.chat(byokModel.providerModelId)
+            : provider(byokModel.providerModelId);
+          const result = streamText({
+            model,
+            messages: messagesArray.map(m => ({
+              role: m.role as 'system' | 'user' | 'assistant',
+              content: m.content,
+            })),
+            maxOutputTokens: 16384,
+            temperature: 0.7,
+            abortSignal: abortController.signal,
+          });
 
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
+          for await (const textPart of result.textStream) {
+            fullContent += textPart;
+            res.write(`data: ${JSON.stringify({ content: textPart })}\n\n`);
+            if (typeof (res as any).flush === 'function') (res as any).flush();
+          }
 
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || !trimmed.startsWith('data: ')) continue;
-
-            const data = trimmed.slice(6);
-            if (data === '[DONE]') continue;
-
-            try {
-              const parsed = JSON.parse(data);
-              const delta = parsed.choices?.[0]?.delta?.content;
-              if (delta) {
-                fullContent += delta;
-                tokensCompletion++;
-                res.write(`data: ${JSON.stringify({ content: delta })}\n\n`);
-              }
-
-              // Capture usage if provided
-              if (parsed.usage) {
-                tokensPrompt = parsed.usage.prompt_tokens || 0;
-                tokensCompletion = parsed.usage.completion_tokens || tokensCompletion;
-                usageReceived = true;
-              }
-            } catch {
-              // Skip malformed JSON chunks
+          // Collect usage from Vercel AI SDK
+          const usage = await result.usage;
+          if (usage) {
+            tokensPrompt = usage.inputTokens || 0;
+            tokensCompletion = usage.outputTokens || 0;
+            usageReceived = true;
+          }
+        } catch (err: any) {
+          if (err.name === 'AbortError') {
+            log.debug({ conversationId }, 'BYOK stream aborted');
+            if (!res.writableEnded) {
+              res.write(`data: ${JSON.stringify({ error: 'Response was interrupted.' })}\n\n`);
+              res.end();
             }
+            return;
           }
-        }
-      } catch (err: any) {
-        if (err.name === 'AbortError') {
-          // Client disconnected or timeout — send descriptive error if stream was active
-          log.debug({ conversationId }, 'Stream aborted during streaming');
-          if (!res.writableEnded) {
-            res.write(`data: ${JSON.stringify({ error: 'Response was interrupted — try a shorter question or start a new conversation.' })}\n\n`);
-            res.end();
-          }
+          const errMsg = err.message || 'Provider error';
+          log.error({ err, provider: byokModel.provider }, 'BYOK provider error');
+          res.write(`data: ${JSON.stringify({ error: `Your ${byokModel.provider} key returned an error: ${errMsg}` })}\n\n`);
+          res.end();
           return;
         }
-        throw err;
+      } else {
+        // ---- OpenRouter path (via Vercel AI SDK) ---- //
+        const openrouterModelId = resolveOpenRouterModel(modelId);
+        if (!openrouterModelId) {
+          res.write(`data: ${JSON.stringify({ error: `Unknown model: ${modelId}` })}\n\n`);
+          res.end();
+          return;
+        }
+
+        const openrouterApiKey = config.openrouter?.apiKey || process.env.OPENROUTER_API_KEY;
+        if (!openrouterApiKey) {
+          res.write(`data: ${JSON.stringify({ error: 'OpenRouter API not configured' })}\n\n`);
+          res.end();
+          return;
+        }
+
+        const start = Date.now();
+        log.info({ model: openrouterModelId, modelId }, 'OpenRouter streaming request started');
+        try {
+          const openrouter = createOpenRouter({ 
+            apiKey: openrouterApiKey,
+            headers: {
+              'HTTP-Referer': 'https://clude.fun',
+              'X-Title': 'Clude Chat',
+            }
+          });
+
+          const result = streamText({
+            model: openrouter.chat(openrouterModelId, { usage: { include: true } }),
+            messages: messagesArray.map(m => ({
+              role: m.role as 'system' | 'user' | 'assistant',
+              content: m.content,
+            })),
+            maxOutputTokens: (CHAT_MODELS.find(m => m.id === modelId)?.tier === 'pro') ? 16384 : 8192,
+            temperature: 0.7,
+            abortSignal: abortController.signal,
+          });
+
+          // Stream chunks immediately to UI as they arrive
+          for await (const textPart of result.textStream) {
+            if (fullContent === '') {
+              log.info({ ttfb: Date.now() - start }, 'OpenRouter First Token received');
+            }
+            fullContent += textPart;
+            res.write(`data: ${JSON.stringify({ content: textPart })}\n\n`);
+            if (typeof (res as any).flush === 'function') (res as any).flush();
+          }
+
+          const usage = await result.usage;
+          if (usage) {
+            tokensPrompt = usage.inputTokens || 0;
+            tokensCompletion = usage.outputTokens || 0;
+            usageReceived = true;
+          }
+        } catch (err: any) {
+          if (err.name === 'AbortError') {
+            log.debug({ conversationId }, 'OpenRouter stream aborted');
+            if (!res.writableEnded) {
+              res.write(`data: ${JSON.stringify({ error: 'Response was interrupted — try a shorter question or start a new conversation.' })}\n\n`);
+              res.end();
+            }
+            return;
+          }
+          const modelName = CHAT_MODELS.find(m => m.id === modelId)?.name || modelId;
+          const errMsg = err.message || 'Unknown error';
+          log.error({ err, model: openrouterModelId }, 'OpenRouter API error');
+          res.write(`data: ${JSON.stringify({ error: `${modelName} error: ${errMsg}` })}\n\n`);
+          res.end();
+          return;
+        }
+      } // end OpenRouter path
       } finally {
         clearInterval(keepaliveInterval);
       }
@@ -1080,10 +1168,10 @@ export function chatRoutes(): Router {
       const equivalentDirectCost = (tokensPrompt / 1_000_000) * OPUS_RATE.input + (tokensCompletion / 1_000_000) * OPUS_RATE.output;
       const savingsPct = equivalentDirectCost > 0 ? Math.round(((equivalentDirectCost - totalCost) / equivalentDirectCost) * 100) : 0;
 
-      // 11b. Deduct usage from balance (pro models only, skip free models)
+      // 11b. Deduct usage from balance (pro models only, skip free and BYOK models)
       let remainingBalance: number | null = null;
       const isFreeModel = modelDef?.tier === 'free';
-      if (!isFreeModel && totalCost > 0 && chatReq.ownerWallet) {
+      if (!isBYOK && !isFreeModel && totalCost > 0 && chatReq.ownerWallet) {
         try {
           const { data: bal } = await db
             .from('chat_balances')
@@ -1139,8 +1227,8 @@ export function chatRoutes(): Router {
           .update({ updated_at: new Date().toISOString() })
           .eq('id', conversationId),
       ];
-      // Record usage for non-free models
-      if (!isFreeModel && totalCost > 0 && chatReq.ownerWallet) {
+      // Record usage for non-free, non-BYOK models
+      if (!isBYOK && !isFreeModel && totalCost > 0 && chatReq.ownerWallet) {
         dbOps.push(
           db.from('chat_usage').insert({
             wallet_address: chatReq.ownerWallet,
@@ -1156,7 +1244,8 @@ export function chatRoutes(): Router {
       await Promise.all(dbOps);
 
       // 14. Auto-generate title if null (fire-and-forget)
-      autoGenerateTitle(conversationId, content, openrouterApiKey).catch(err =>
+      const titleApiKey = config.openrouter?.apiKey || process.env.OPENROUTER_API_KEY || '';
+      autoGenerateTitle(conversationId, content, titleApiKey).catch(err =>
         log.warn({ err, conversationId }, 'Auto-title generation failed')
       );
 

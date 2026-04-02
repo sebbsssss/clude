@@ -76,10 +76,7 @@ export const config = {
       10,
     ),
   },
-  allium: {
-    apiKey: optional("ALLIUM_API_KEY", ""),
-    pollIntervalMs: parseInt(optional("MARKET_MONITOR_POLL_MS", "300000"), 10),
-  },
+
   agent: {
     rateLimitPerMin: parseInt(optional("AGENT_RATE_LIMIT", "10"), 10),
   },

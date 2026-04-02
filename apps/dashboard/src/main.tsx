@@ -1,28 +1,31 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
-import { PrivyProvider } from '@privy-io/react-auth';
-import { toSolanaWalletConnectors } from '@privy-io/react-auth/solana';
-import App from './App';
-import { LotrExplore } from './pages/lotr-explore';
-import './index.css';
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
+import { PrivyProvider } from "@privy-io/react-auth";
+import { toSolanaWalletConnectors } from "@privy-io/react-auth/solana";
+import App from "./App";
+import { LotrExplore } from "./pages/lotr-explore";
+import "./index.css";
 
 const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID;
 
 if (!PRIVY_APP_ID) {
-  throw new Error('VITE_PRIVY_APP_ID is required. Set it in dashboard/.env');
+  throw new Error("VITE_PRIVY_APP_ID is required. Set it in dashboard/.env");
 }
 
 const solanaConnectors = toSolanaWalletConnectors({ shouldAutoConnect: true });
 
-const root = ReactDOM.createRoot(document.getElementById('root')!);
+const root = ReactDOM.createRoot(document.getElementById("root")!);
 
 // Guest route — no Privy, no BrowserRouter (campaign, temporary)
-if (window.location.pathname === '/lotr' || window.location.pathname === '/dashboard/lotr') {
+if (
+  window.location.pathname === "/lotr" ||
+  window.location.pathname === "/dashboard/lotr"
+) {
   root.render(
     <React.StrictMode>
       <LotrExplore />
-    </React.StrictMode>
+    </React.StrictMode>,
   );
 } else {
   root.render(
@@ -31,17 +34,19 @@ if (window.location.pathname === '/lotr' || window.location.pathname === '/dashb
         appId={PRIVY_APP_ID}
         config={{
           appearance: {
-            theme: 'light',
-            accentColor: '#2244ff',
-            walletList: ['phantom', 'solflare', 'backpack'],
-            walletChainType: 'solana-only',
+            theme: "light",
+            accentColor: "#2244ff",
+            walletList: ["phantom", "solflare", "backpack"],
           },
-          loginMethods: ['wallet'],
-          solanaClusters: [
-            { name: 'mainnet-beta', rpcUrl: 'https://api.mainnet-beta.solana.com' },
-          ],
+          loginMethods: ["wallet"],
+          solana: {
+            rpcs: {
+              'solana:mainnet': { rpc: "https://api.mainnet-beta.solana.com" },
+            } as any,
+          },
           embeddedWallets: {
-            createOnLogin: 'off',
+            ethereum: { createOnLogin: "off" },
+            solana: { createOnLogin: "off" },
           },
           externalWallets: {
             solana: { connectors: solanaConnectors },
@@ -52,6 +57,6 @@ if (window.location.pathname === '/lotr' || window.location.pathname === '/dashb
           <App />
         </BrowserRouter>
       </PrivyProvider>
-    </React.StrictMode>
+    </React.StrictMode>,
   );
 }

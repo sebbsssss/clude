@@ -1,10 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronDown, CheckCircle, AlertCircle, Copy, Loader2, QrCode, Smartphone } from 'lucide-react';
-import { useSolanaWallets } from '@privy-io/react-auth/solana';
+import { useSolanaWallet } from '../hooks/use-solana-wallet';
 import { Connection, PublicKey, Transaction, TransactionInstruction } from '@solana/web3.js';
 import { createQR } from '@solana/pay';
-import bs58 from 'bs58';
 import { api } from '../lib/api';
 import { SOLANA_RPC_URL, USDC_MINT_ADDRESS, SOLANA_CHAIN } from '../lib/solana-config';
 import { useAuthContext } from '../hooks/AuthContext';
@@ -111,7 +110,7 @@ async function buildSolanaUsdcTx(senderAddress: string, destAddress: string, amo
 
 export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) {
   const { walletAddress } = useAuthContext();
-  const { wallets } = useSolanaWallets();
+  const { wallets, signAndSendTransaction } = useSolanaWallet();
 
   const [selectedAmount, setSelectedAmount] = useState<number | null>(10);
   const [customAmount, setCustomAmount] = useState('');
@@ -284,14 +283,7 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
     console.log('[TopUp] Requesting wallet sign & send...');
     let hash: string;
     try {
-      const { signature } = await wallet.signAndSendTransaction({
-        transaction: txBytes,
-        chain: SOLANA_CHAIN,
-      });
-      // Privy may return string or Uint8Array depending on wallet adapter
-      hash = typeof signature === 'string'
-        ? signature
-        : bs58.encode(signature as Uint8Array);
+      hash = await signAndSendTransaction(txBytes, walletAddress, SOLANA_CHAIN);
     } catch (sigErr: unknown) {
       console.error('[TopUp] Wallet sign/send failed:', sigErr);
       if (isWalletRejection(sigErr)) {
@@ -322,7 +314,7 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
       // Start polling as fallback — the Helius webhook or next status check should credit it
       startStatusPolling(currentBalance ?? 0, intent.id);
     }
-  }, [walletAddress, wallets, effectiveAmount, isValidAmount, currentBalance, onSuccess, startStatusPolling]);
+  }, [walletAddress, wallets, signAndSendTransaction, effectiveAmount, isValidAmount, currentBalance, onSuccess, startStatusPolling]);
 
   const handleBaseManualConfirm = useCallback(async (manualTxHash: string) => {
     if (!manualTxHash.trim()) return;

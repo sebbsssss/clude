@@ -7,6 +7,7 @@ import { useConversations } from '../hooks/useConversations';
 import { useMemory } from '../hooks/useMemory';
 import { useBalance } from '../hooks/useBalance';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { useBYOK } from '../hooks/use-byok';
 import { Sidebar } from './Sidebar';
 import { ChatHeader } from './ChatHeader';
 import { GuestRateLimit } from './GuestRateLimit';
@@ -14,6 +15,7 @@ import { CostComparison } from './CostComparison';
 import { SettledBubble, StreamingBubble, TransactionHistory } from './MessageBubble';
 import { InputArea } from './InputArea';
 import { PromoSlideout } from './PromoSlideout';
+import { BYOKModal } from './byok-modal';
 
 export function ChatInterface() {
   const { authenticated } = useAuthContext();
@@ -23,7 +25,9 @@ export function ChatInterface() {
   } = useChat();
   const { balance: balanceInfo } = useBalance();
   const isMobile = useIsMobile();
+  const byok = useBYOK();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [byokOpen, setBYOKOpen] = useState(false);
   const greetedRef = useRef(false);
   const {
     conversations, activeId, hasMoreMessages,
@@ -113,14 +117,16 @@ export function ChatInterface() {
     if (!authenticated) {
       sendMessage(content, null, model);
     } else if (!activeId) {
-      try {
-        const convId = await createConversation(model);
+      // Optimistic create: start the message stream immediately with a promise for the ID
+      const convPromise = createConversation(model).then((id) => {
         isFirstResponseRef.current = true;
-        pendingConvIdRef.current = convId;
-        sendMessage(content, convId, model);
-      } catch (err: any) {
+        pendingConvIdRef.current = id;
+        return id;
+      }).catch((err) => {
         console.error('Failed to create conversation:', err);
-      }
+        return null;
+      });
+      sendMessage(content, convPromise, model);
     } else {
       sendMessage(content, activeId, model);
     }
@@ -142,6 +148,12 @@ export function ChatInterface() {
   const openComparison = useCallback(() => setShowCostModal(true), []);
   const openHistory = useCallback(() => setShowTransactions(true), []);
   const toggleMemoryPills = useCallback(() => setShowMemoryPills(v => !v), []);
+  const openBYOK = useCallback(() => setBYOKOpen(true), []);
+
+  const byokProviders = useMemo(
+    () => new Set(byok.storedProviders),
+    [byok.storedProviders],
+  );
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -263,12 +275,22 @@ export function ChatInterface() {
             onToggleMemoryPills={toggleMemoryPills}
             onSend={handleSend}
             onStop={stopStreaming}
+            byokProviders={byokProviders}
+            onOpenBYOK={openBYOK}
           />
         </div>
       </div>
 
       <CostComparison open={showCostModal} onClose={() => setShowCostModal(false)} />
       <TransactionHistory open={showTransactions} onClose={() => setShowTransactions(false)} messages={settled} />
+      <BYOKModal
+        open={byokOpen}
+        onClose={() => setBYOKOpen(false)}
+        keys={byok.keys}
+        loading={byok.loading}
+        onSave={byok.saveKey}
+        onRemove={byok.removeKey}
+      />
       {/* First-time promo slideout — shows once per device for signed-in users with an active promo */}
       <PromoSlideout show={authenticated && !!balanceInfo?.promo} />
     </div>
