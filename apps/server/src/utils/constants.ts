@@ -110,7 +110,6 @@ export type MemoryLinkType = 'supports' | 'contradicts' | 'elaborates' | 'causes
 
 // Embedding system
 export const EMBEDDING_DIMENSIONS = 1024;
-export const EMBEDDING_FRAGMENT_MAX_LENGTH = 2000;       // Max chars per fragment for granular decomposition
 
 // Event-driven reflection triggers
 export const REFLECTION_IMPORTANCE_THRESHOLD = 2.0;     // Cumulative importance to trigger reflection (3-4 interactions)
