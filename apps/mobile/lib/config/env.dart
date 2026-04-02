@@ -8,8 +8,8 @@ class Env {
   static String get apiBaseUrl =>
       const bool.fromEnvironment('dart.vm.product') ? baseUrl : devBaseUrl;
 
-  static const String privyAppId = String.fromEnvironment(
-    'PRIVY_APP_ID',
-    defaultValue: 'cmm8y16dq037y0cjr4nsqjtaa',
+  static const String solanaCluster = String.fromEnvironment(
+    'SOLANA_CLUSTER',
+    defaultValue: 'mainnet-beta',
   );
 }
