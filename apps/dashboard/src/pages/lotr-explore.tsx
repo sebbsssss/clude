@@ -405,53 +405,110 @@ function LotrExploreChat({
         </div>
       )}
 
-      <div style={{
-        width: '100%',
-        display: 'flex',
-        gap: 0,
-        background: 'var(--bg-card)',
-        borderRadius: 14,
-        border: '1px solid var(--border)',
-        overflow: 'hidden',
-        boxShadow: '0 4px 24px rgba(0,0,0,0.15)',
-      }}>
-        <input
-          type="text"
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={activeEntity ? `Ask from ${activeEntity}'s perspective...` : 'Ask about Lord of the Rings...'}
-          disabled={streaming}
+      {/* Input row: chat box + Clude Chat CTA side by side */}
+      <div style={{ width: '100%', display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          gap: 0,
+          background: 'var(--bg-card)',
+          borderRadius: 14,
+          border: '1px solid var(--border)',
+          overflow: 'hidden',
+          boxShadow: '0 4px 24px rgba(0,0,0,0.15)',
+        }}>
+          <input
+            type="text"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={activeEntity ? `Ask from ${activeEntity}'s perspective...` : 'Ask about Lord of the Rings...'}
+            disabled={streaming}
+            style={{
+              flex: 1,
+              padding: '12px 18px',
+              fontSize: 12,
+              fontFamily: 'var(--mono)',
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text)',
+              outline: 'none',
+            }}
+          />
+          <button
+            onClick={streaming ? () => abortRef.current?.abort() : handleSend}
+            disabled={!streaming && !input.trim()}
+            style={{
+              padding: '12px 18px',
+              fontSize: 10,
+              fontFamily: 'var(--mono)',
+              fontWeight: 700,
+              letterSpacing: 1,
+              textTransform: 'uppercase',
+              background: 'transparent',
+              color: streaming ? '#f87171' : !input.trim() ? 'var(--text-faint)' : '#4488ff',
+              border: 'none',
+              borderLeft: '1px solid var(--border)',
+              cursor: !streaming && !input.trim() ? 'default' : 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            {streaming ? 'Stop' : 'Send'}
+          </button>
+        </div>
+
+        {/* Clude Chat CTA */}
+        <a
+          href="https://clude.io/chat/"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Open Clude Chat"
           style={{
-            flex: 1,
-            padding: '12px 18px',
-            fontSize: 12,
-            fontFamily: 'var(--mono)',
-            background: 'transparent',
-            border: 'none',
-            color: 'var(--text)',
-            outline: 'none',
+            display: 'inline-flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 2,
+            padding: '8px 13px',
+            borderRadius: 14,
+            background: 'rgba(68,136,255,0.08)',
+            border: '1px solid rgba(68,136,255,0.2)',
+            textDecoration: 'none',
+            flexShrink: 0,
+            height: '100%',
+            minHeight: 46,
+            transition: 'background 0.15s, border-color 0.15s, box-shadow 0.15s',
+            boxShadow: '0 0 0 0 rgba(68,136,255,0)',
           }}
-        />
-        <button
-          onClick={streaming ? () => abortRef.current?.abort() : handleSend}
-          disabled={!streaming && !input.trim()}
-          style={{
-            padding: '12px 18px',
-            fontSize: 10,
-            fontFamily: 'var(--mono)',
-            fontWeight: 700,
-            letterSpacing: 1,
-            textTransform: 'uppercase',
-            background: 'transparent',
-            color: streaming ? '#f87171' : !input.trim() ? 'var(--text-faint)' : '#4488ff',
-            border: 'none',
-            borderLeft: '1px solid var(--border)',
-            cursor: !streaming && !input.trim() ? 'default' : 'pointer',
+          onMouseEnter={e => {
+            const el = e.currentTarget as HTMLAnchorElement;
+            el.style.background = 'rgba(68,136,255,0.15)';
+            el.style.borderColor = 'rgba(68,136,255,0.4)';
+            el.style.boxShadow = '0 0 16px rgba(68,136,255,0.15)';
+          }}
+          onMouseLeave={e => {
+            const el = e.currentTarget as HTMLAnchorElement;
+            el.style.background = 'rgba(68,136,255,0.08)';
+            el.style.borderColor = 'rgba(68,136,255,0.2)';
+            el.style.boxShadow = '0 0 0 0 rgba(68,136,255,0)';
           }}
         >
-          {streaming ? 'Stop' : 'Send'}
-        </button>
+          {/* Chat bubble icon */}
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M7 1.5C4 1.5 1.5 3.5 1.5 6c0 1 .4 2 1.1 2.8L2 12l3.3-1.2C5.8 11 6.4 11.1 7 11.1c3 0 5.5-2 5.5-4.6S10 1.5 7 1.5z" stroke="#4488ff" strokeWidth="1.2" fill="none" strokeLinejoin="round"/>
+          </svg>
+          <span style={{
+            fontSize: 8,
+            fontFamily: 'var(--mono)',
+            fontWeight: 700,
+            letterSpacing: 0.5,
+            color: '#4488ff',
+            textTransform: 'uppercase',
+            whiteSpace: 'nowrap',
+          }}>
+            Chat
+          </span>
+        </a>
       </div>
     </div>
   );
@@ -530,37 +587,94 @@ export function LotrExplore() {
       overflow: 'hidden',
       background: 'var(--bg)',
     }}>
-      {/* Header badge */}
+      {/* Top-left: Clude home button + page label */}
       <div style={{
         position: 'absolute',
         top: 16,
-        left: 20,
+        left: 16,
         zIndex: 30,
         display: 'flex',
         alignItems: 'center',
-        gap: 8,
+        gap: 10,
       }}>
-        <span style={{
-          fontSize: 11,
-          fontFamily: 'var(--mono)',
-          fontWeight: 700,
-          letterSpacing: 1,
-          color: 'var(--text-muted)',
-          textTransform: 'uppercase',
-        }}>
-          Lord of the Rings
-        </span>
-        <span style={{
-          fontSize: 9,
-          fontFamily: 'var(--mono)',
-          padding: '2px 8px',
-          background: 'var(--blue-light)',
-          color: 'var(--blue)',
-          borderRadius: 6,
-          fontWeight: 600,
-        }}>
-          Memory Library
-        </span>
+        {/* Clude home button */}
+        <a
+          href="https://clude.io/"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Back to Clude"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '5px 11px',
+            borderRadius: 8,
+            background: 'rgba(255,255,255,0.05)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            backdropFilter: 'blur(8px)',
+            textDecoration: 'none',
+            transition: 'background 0.15s, border-color 0.15s',
+            cursor: 'pointer',
+          }}
+          onMouseEnter={e => {
+            (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(255,255,255,0.1)';
+            (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(255,255,255,0.2)';
+          }}
+          onMouseLeave={e => {
+            (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(255,255,255,0.05)';
+            (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(255,255,255,0.1)';
+          }}
+        >
+          {/* Arrow left icon */}
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ opacity: 0.5 }}>
+            <path d="M6.5 2L3.5 5L6.5 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <span style={{
+            fontSize: 13,
+            fontWeight: 700,
+            letterSpacing: '-0.3px',
+            color: 'rgba(255,255,255,0.9)',
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+          }}>
+            clude
+          </span>
+          <span style={{
+            width: 5,
+            height: 5,
+            borderRadius: '50%',
+            background: '#4488ff',
+            boxShadow: '0 0 6px #4488ff',
+            flexShrink: 0,
+          }} />
+        </a>
+
+        {/* Separator */}
+        <span style={{ width: 1, height: 16, background: 'rgba(255,255,255,0.1)', flexShrink: 0 }} />
+
+        {/* Page label */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          <span style={{
+            fontSize: 11,
+            fontFamily: 'var(--mono)',
+            fontWeight: 600,
+            letterSpacing: 0.5,
+            color: 'rgba(255,255,255,0.45)',
+          }}>
+            Lord of the Rings
+          </span>
+          <span style={{
+            fontSize: 9,
+            fontFamily: 'var(--mono)',
+            padding: '2px 7px',
+            background: 'var(--blue-light)',
+            color: 'var(--blue)',
+            borderRadius: 5,
+            fontWeight: 700,
+            letterSpacing: 0.5,
+          }}>
+            Memory Library
+          </span>
+        </div>
       </div>
 
       {loading && (
