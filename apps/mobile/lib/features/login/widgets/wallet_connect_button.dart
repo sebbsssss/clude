@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/auth/auth_provider.dart';
-import '../../../core/auth/privy_auth_service.dart';
+import '../../../core/auth/wallet_auth_service.dart';
 
 class WalletConnectButton extends ConsumerStatefulWidget {
   const WalletConnectButton({super.key});
@@ -14,7 +14,7 @@ class WalletConnectButton extends ConsumerStatefulWidget {
 }
 
 class _WalletConnectButtonState extends ConsumerState<WalletConnectButton> {
-  PrivyAuthService? _service;
+  WalletAuthService? _service;
   bool _isLoading = false;
 
   @override
@@ -29,8 +29,8 @@ class _WalletConnectButtonState extends ConsumerState<WalletConnectButton> {
     setState(() => _isLoading = true);
 
     try {
-      _service = PrivyAuthService();
-      final result = await _service!.startOAuthFlow();
+      _service = WalletAuthService();
+      final result = await _service!.connectAndSign();
 
       if (!mounted) return;
 
