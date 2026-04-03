@@ -110,9 +110,15 @@ export function useAuth(): AuthState {
     return valid;
   }, [privyAuth, logout]);
 
-  const handleLogin = useCallback(() => {
+  const handleLogin = useCallback(async () => {
+    // If Privy already has an active session but the app considers the user
+    // unauthenticated (e.g. cortex key cleared), logout first to avoid the
+    // "already logged in" error, then re-open the login modal cleanly.
+    if (privyAuth) {
+      await logout();
+    }
     login();
-  }, [login]);
+  }, [privyAuth, login, logout]);
 
   const handleLogout = useCallback(() => {
     // Clear everything

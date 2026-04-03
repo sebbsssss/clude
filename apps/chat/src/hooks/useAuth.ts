@@ -93,9 +93,15 @@ export function useAuth(): AuthState {
     })();
   }, [privyReady, privyAuth, wallets, cortexKey, getAccessToken]);
 
-  const login = useCallback(() => {
+  const login = useCallback(async () => {
+    // If Privy already has an active session but we have no cortex key
+    // (e.g. auto-register failed or key expired), logout first to clear
+    // the stale Privy session, then re-login cleanly.
+    if (privyAuth) {
+      await privyLogout();
+    }
     privyLogin();
-  }, [privyLogin]);
+  }, [privyAuth, privyLogin, privyLogout]);
 
   const logout = useCallback(() => {
     api.onAuthExpired(null);
