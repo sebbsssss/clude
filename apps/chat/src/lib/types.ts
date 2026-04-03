@@ -2,7 +2,7 @@ export type MemoryType = 'episodic' | 'semantic' | 'procedural' | 'self_model';
 export type ModelTier = 'free' | 'pro';
 export type ModelPrivacy = 'private' | 'anonymized';
 
-// --- Cost/token types (moved from useChat.ts) ---
+// --- Cost/token types (moved from use-chat.ts) ---
 
 export interface MessageCost {
   total: number;
@@ -30,9 +30,28 @@ export interface GreetingMeta {
   greeting_cost: number;
 }
 
-// --- Hot/cold message types ---
+// --- AI SDK UI message metadata ---
 
-/** Immutable message from history or completed stream. */
+import type { UIMessage } from 'ai';
+
+/** Custom metadata attached to assistant messages via AI SDK messageMetadata. */
+export interface ChatMessageMetadata {
+  message_id?: string;
+  model?: string;
+  memories_used?: number;
+  memory_ids?: number[];
+  tokens?: MessageTokens;
+  cost?: MessageCost;
+  receipt?: MessageReceipt;
+  // Greeting-specific
+  isGreeting?: boolean;
+  greetingMeta?: GreetingMeta;
+}
+
+export type CludeChatMessage = UIMessage<ChatMessageMetadata>;
+
+// --- Legacy types (used by guest chat + greeting which still use custom SSE) ---
+
 export interface SettledMessage {
   readonly kind: 'settled';
   readonly id: string;
@@ -47,7 +66,6 @@ export interface SettledMessage {
   readonly greetingMeta?: GreetingMeta;
 }
 
-/** Actively streaming message — content mutates via ref, rendered separately. */
 export interface StreamingState {
   readonly kind: 'streaming';
   readonly id: string;
@@ -56,7 +74,6 @@ export interface StreamingState {
   readonly isGreeting?: boolean;
 }
 
-/** Union for rendering — components discriminate on `kind`. */
 export type DisplayMessage = SettledMessage | StreamingState;
 
 export interface ChatModel {

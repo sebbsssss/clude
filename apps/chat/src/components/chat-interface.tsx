@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Menu } from 'lucide-react';
 import { useAuthContext } from '../hooks/AuthContext';
-import { useChat } from '../hooks/useChat';
+import { useChat } from '../hooks/use-chat';
 import { useConversations } from '../hooks/useConversations';
 import { useMemory } from '../hooks/useMemory';
 import { useBalance } from '../hooks/useBalance';
