@@ -397,8 +397,6 @@ async function main() {
     let deletedMemories = 0;
     let deletedLinks = 0;
     let deletedEntities = 0;
-    let deletedFragments = 0;
-
     try {
       // Get all benchmark memory IDs (including any created by dream cycle)
       const { data: allBenchmark } = await db
@@ -422,13 +420,6 @@ async function main() {
           .or(`source_id.in.(${allIds.join(',')}),target_id.in.(${allIds.join(',')})`);
         deletedLinks = linkCount ?? 0;
 
-        // Delete memory fragments
-        const { count: fragCount } = await db
-          .from('memory_fragments')
-          .delete({ count: 'exact' })
-          .in('memory_id', allIds);
-        deletedFragments = fragCount ?? 0;
-
         // Delete dream logs referencing benchmark memories
         // (dream_logs use array overlap, but we can clean by time proximity)
 
@@ -450,7 +441,7 @@ async function main() {
       console.log(`  Cleanup warning: ${err.message}`);
     }
 
-    console.log(`  Deleted: ${deletedMemories} memories, ${deletedLinks} links, ${deletedFragments} fragments, ${deletedEntities} entities`);
+    console.log(`  Deleted: ${deletedMemories} memories, ${deletedLinks} links, ${deletedEntities} entities`);
     console.log();
 
     cortex.destroy();

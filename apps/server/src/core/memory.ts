@@ -16,7 +16,6 @@ import {
   VECTOR_MATCH_THRESHOLD,
   KNOWLEDGE_TYPE_BOOST,
   DECAY_RATES,
-  EMBEDDING_FRAGMENT_MAX_LENGTH,
   LINK_SIMILARITY_THRESHOLD,
   MAX_AUTO_LINKS,
   LINK_CO_RETRIEVAL_BOOST,
@@ -389,53 +388,15 @@ async function commitMemoryToChain(memoryId: number, opts: StoreMemoryOptions): 
 // ---- EMBEDDING & GRANULAR DECOMPOSITION ---- //
 
 /**
- * Generate vector embedding for a memory and decompose into semantic fragments.
- * Each fragment gets its own embedding for precise sub-memory retrieval.
- *
- * Fragment types:
- *   summary     — the memory's summary (always stored)
- *   content_chunk — content split at natural boundaries
- *   tag_context — tags + concepts as a descriptive sentence
+ * Generate vector embedding for a memory's summary and store it.
  */
 async function embedMemory(memoryId: number, opts: StoreMemoryOptions): Promise<void> {
   if (!isEmbeddingEnabled()) return;
 
   const db = getDb();
-
-  // Build fragment texts for granular decomposition
-  const fragments: { type: string; text: string }[] = [];
-
-  // Fragment 1: Summary (always)
-  fragments.push({ type: 'summary', text: opts.summary });
-
-  // Fragment 2+: Content chunks (split at sentence/paragraph boundaries)
-  const content = opts.content.slice(0, MEMORY_MAX_CONTENT_LENGTH);
-  if (content.length > EMBEDDING_FRAGMENT_MAX_LENGTH) {
-    const sentences = content.match(/[^.!?\n]+[.!?\n]+/g) || [content];
-    let chunk = '';
-    for (const sentence of sentences) {
-      if (chunk.length + sentence.length > EMBEDDING_FRAGMENT_MAX_LENGTH && chunk.length > 0) {
-        fragments.push({ type: 'content_chunk', text: chunk.trim() });
-        chunk = '';
-      }
-      chunk += sentence;
-    }
-    if (chunk.trim()) fragments.push({ type: 'content_chunk', text: chunk.trim() });
-  } else {
-    fragments.push({ type: 'content_chunk', text: content });
-  }
-
-  // Fragment 3: Tag/concept context as natural language
-  const allLabels = [...(opts.tags || []), ...(opts.concepts || inferConcepts(opts.summary, opts.source, opts.tags || []))];
-  if (allLabels.length > 0) {
-    fragments.push({ type: 'tag_context', text: `Context: ${allLabels.join(', ')}. ${opts.summary}` });
-  }
-
-  // Batch-generate all embeddings
-  const embeddings = await generateEmbeddings(fragments.map(f => f.text));
-
-  // Store primary embedding on the memory itself (summary embedding)
+  const embeddings = await generateEmbeddings([opts.summary]);
   const summaryEmbedding = embeddings[0];
+
   if (summaryEmbedding) {
     await db
       .from('memories')
@@ -443,22 +404,7 @@ async function embedMemory(memoryId: number, opts: StoreMemoryOptions): Promise<
       .eq('id', memoryId);
   }
 
-  // Store all fragments with their embeddings
-  const fragmentRows = fragments.map((f, i) => ({
-    memory_id: memoryId,
-    fragment_type: f.type,
-    content: f.text.slice(0, EMBEDDING_FRAGMENT_MAX_LENGTH),
-    embedding: embeddings[i] ? JSON.stringify(embeddings[i]) : null,
-  })).filter(r => r.embedding !== null);
-
-  if (fragmentRows.length > 0) {
-    const { error } = await db.from('memory_fragments').insert(fragmentRows);
-    if (error) {
-      log.warn({ error: error.message, memoryId }, 'Failed to store memory fragments');
-    }
-  }
-
-  log.debug({ memoryId, fragments: fragmentRows.length }, 'Memory embedded with fragments');
+  log.debug({ memoryId }, 'Memory embedded');
 }
 
 // ---- RECALL ---- //
@@ -552,60 +498,26 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
         }
 
         try {
-          // Memory-level search only (skip fragments for speed when skipExpansion is set)
-          const allSearches = validEmbeddings.flatMap(emb => {
-            const searches: Promise<any[]>[] = [
-              Promise.resolve(db.rpc('match_memories', {
-                query_embedding: JSON.stringify(emb),
-                match_threshold: VECTOR_MATCH_THRESHOLD,
-                match_count: limit * (opts.skipExpansion ? 12 : 4),
-                filter_types: opts.memoryTypes || null,
-                filter_user: opts.relatedUser || null,
-                min_decay: minDecay,
-                filter_owner: getOwnerWallet() || null,
-                filter_tags: opts.tags && opts.tags.length > 0 ? opts.tags : null,
-              })).then(r => r.data || []),
-            ];
-            // Only search fragments when not in fast mode
-            if (!opts.skipExpansion) {
-              searches.push(
-                Promise.resolve(db.rpc('match_memory_fragments', {
-                  query_embedding: JSON.stringify(emb),
-                  match_threshold: VECTOR_MATCH_THRESHOLD,
-                  match_count: limit * 2,
-                  filter_owner: getOwnerWallet() || null,
-                })).then(r => r.data || []),
-              );
-            }
-            return searches;
-          });
+          const allSearches = validEmbeddings.map(emb =>
+            Promise.resolve(db.rpc('match_memories', {
+              query_embedding: JSON.stringify(emb),
+              match_threshold: VECTOR_MATCH_THRESHOLD,
+              match_count: limit * (opts.skipExpansion ? 12 : 4),
+              filter_types: opts.memoryTypes || null,
+              filter_user: opts.relatedUser || null,
+              min_decay: minDecay,
+              filter_owner: getOwnerWallet() || null,
+              filter_tags: opts.tags && opts.tags.length > 0 ? opts.tags : null,
+            })).then(r => r.data || []),
+          );
 
           const results = await Promise.all(allSearches);
-          
-          // Merge: take highest similarity per memory_id across ALL queries
-          if (opts.skipExpansion) {
-            // All results are memory-level matches (no fragments)
-            for (const batch of results) {
-              for (const m of batch) {
-                const current = vectorScores.get(m.id) || 0;
-                vectorScores.set(m.id, Math.max(current, m.similarity));
-              }
-            }
-          } else {
-            for (let i = 0; i < results.length; i++) {
-              const hasFragments = validEmbeddings.length > 0;
-              const step = hasFragments ? 2 : 1;
-              if (i % step === 0) {
-                for (const m of results[i]) {
-                  const current = vectorScores.get(m.id) || 0;
-                  vectorScores.set(m.id, Math.max(current, m.similarity));
-                }
-              } else {
-                for (const f of results[i]) {
-                  const current = vectorScores.get(f.memory_id) || 0;
-                  vectorScores.set(f.memory_id, Math.max(current, f.max_similarity));
-                }
-              }
+
+          // Merge: take highest similarity per memory_id across all query variants
+          for (const batch of results) {
+            for (const m of batch) {
+              const current = vectorScores.get(m.id) || 0;
+              vectorScores.set(m.id, Math.max(current, m.similarity));
             }
           }
 
@@ -649,40 +561,6 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
       importanceQuery = importanceQuery.overlaps('tags', opts.tags);
     }
 
-    // Text search: find memories whose summary/tags contain query keywords
-    const textSearchPromise = (opts.query && opts.query.length > 3) ? (async () => {
-      try {
-        // Extract meaningful keywords (skip short/common words)
-        const stopWords = new Set(['the','a','an','is','are','was','were','be','been','and','or','but','in','on','at','to','for','of','with','by','from','how','what','who','why','when','where','does','do','did','can','will','about','that','this','it']);
-        const keywords = opts.query!.toLowerCase().split(/\s+/)
-          .filter(w => w.length > 2 && !stopWords.has(w))
-          .slice(0, 8);
-        
-        if (keywords.length === 0) return [];
-        
-        // Search summary AND content with ilike for each keyword
-        let textQuery = db
-          .from('memories')
-          .select('*')
-          .gte('decay_factor', minDecay)
-          .not('source', 'in', '("demo","demo-maas")')
-          .or(keywords.map(k => `summary.ilike.%${k}%,content.ilike.%${k}%`).join(','))
-          .order('importance', { ascending: false })
-          .limit(limit * 2);
-        textQuery = scopeToOwner(textQuery);
-        if (opts.memoryTypes && opts.memoryTypes.length > 0) {
-          textQuery = textQuery.in('memory_type', opts.memoryTypes);
-        }
-        if (opts.tags && opts.tags.length > 0) {
-          textQuery = textQuery.overlaps('tags', opts.tags);
-        }
-        const { data: textData } = await textQuery;
-        return textData || [];
-      } catch {
-        return [];
-      }
-    })() : Promise.resolve([]);
-
     // Phase 2c: BM25 full-text search (Exp 8) — stemming + TF-IDF ranking
     const expConfig = getExperimentalConfig();
     const bm25Promise = (expConfig.bm25Search && opts.query && opts.query.length > 3) ? (async () => {
@@ -711,9 +589,8 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
       knowledgeSeedQuery = knowledgeSeedQuery.in('memory_type', opts.memoryTypes);
     }
 
-    const [importanceResult, textResults, knowledgeSeeds, , bm25Results] = await Promise.all([
+    const [importanceResult, knowledgeSeeds, , bm25Results] = await Promise.all([
       importanceQuery,
-      textSearchPromise,
       (async () => { try { const r = await knowledgeSeedQuery; return (r as any).data || []; } catch { return []; } })(),
       vectorSearchPromise, // Ensure vector search completes before merge
       bm25Promise,
@@ -721,18 +598,9 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
 
     const { data, error } = importanceResult as { data: any; error: any };
     
-    // Merge text search results + knowledge seeds into data
+    // Merge knowledge seeds into data
     if (data) {
       const existingIds = new Set((data as any[]).map((m: any) => m.id));
-      if (Array.isArray(textResults) && textResults.length > 0) {
-        for (const m of textResults) {
-          if (!existingIds.has(m.id)) {
-            (data as any[]).push(m);
-            existingIds.add(m.id);
-          }
-        }
-        log.debug({ textHits: textResults.length }, 'Text search added candidates');
-      }
       if (Array.isArray(knowledgeSeeds) && knowledgeSeeds.length > 0) {
         let seedsAdded = 0;
         for (const m of knowledgeSeeds) {

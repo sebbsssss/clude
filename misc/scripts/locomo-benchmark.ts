@@ -324,10 +324,6 @@ async function cleanupBenchmarkData(db: SupabaseClient): Promise<void> {
       .or(`source_id.in.(${allIds.join(',')}),target_id.in.(${allIds.join(',')})`);
   } catch { /* table may not exist */ }
 
-  try {
-    await db.from('memory_fragments').delete().in('memory_id', allIds);
-  } catch { /* table may not exist */ }
-
   await db.from('memories').delete().eq('owner_wallet', BENCHMARK_OWNER_WALLET);
 
   // Clean orphaned entities

@@ -7,14 +7,6 @@ export interface JupiterPriceResponse {
   data: Record<string, { id: string; type: string; price: string } | undefined>;
 }
 
-// Allium SOL stats (Solana)
-export interface AlliumSolStats {
-  items?: Array<{
-    latest_price?: number;
-    percent_change_1h?: number;
-    percent_change_24h?: number;
-  }>;
-}
 
 // DexScreener Price API (dormant — kept for Base chain switch-back)
 export interface DexScreenerResponse {
@@ -73,27 +65,4 @@ export interface BasescanTokenTxResponse {
   }>;
 }
 
-// Allium API responses
-export interface AlliumTokenData {
-  info?: { symbol?: string; name?: string };
-  price?: number;
-  attributes?: {
-    price_diff_pct_1h?: number;
-    price_diff_pct_1d?: number;
-    volume_usd_1h?: number;
-    volume_usd_1d?: number;
-    trade_count_1h?: number;
-    trade_count_1d?: number;
-    all_time_high?: number;
-    holders_count?: number;
-  };
-}
-
-export interface AlliumNativeStats {
-  items?: Array<{
-    latest_price?: number;
-    percent_change_1h?: number;
-    percent_change_24h?: number;
-  }>;
-}
 

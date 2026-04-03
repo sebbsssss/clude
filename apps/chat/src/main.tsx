@@ -3,8 +3,8 @@ import { createRoot } from 'react-dom/client'
 import { PrivyProvider } from '@privy-io/react-auth'
 import { toSolanaWalletConnectors } from '@privy-io/react-auth/solana'
 import { BrowserRouter } from 'react-router-dom'
+import { MAINNET_RPC, DEVNET_RPC } from './lib/solana-config'
 import { App } from './App'
-import { SOLANA_NETWORK, SOLANA_RPC_URL } from './lib/solana-config'
 import './index.css'
 
 const solanaConnectors = toSolanaWalletConnectors({
@@ -26,13 +26,17 @@ createRoot(document.getElementById('root')!).render(
           walletList: ['phantom', 'solflare', 'backpack'],
         },
         loginMethods: ['wallet'],
-        walletChainType: 'solana-only',
-        embeddedWallets: { createOnLogin: 'off' },
-        solanaClusters: [{ name: SOLANA_NETWORK, rpcUrl: SOLANA_RPC_URL }],
+        embeddedWallets: { solana: { createOnLogin: 'off' } },
         externalWallets: {
           solana: { connectors: solanaConnectors },
         },
-      } as any}
+        solana: {
+          rpcs: {
+            'solana:mainnet': { rpc: MAINNET_RPC },
+            'solana:devnet': { rpc: DEVNET_RPC },
+          } as any
+        }
+      }}
     >
       <BrowserRouter basename="/chat">
         <App />

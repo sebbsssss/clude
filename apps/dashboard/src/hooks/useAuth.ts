@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
-import { useSolanaWallets } from '@privy-io/react-auth/solana';
+import { useWallets } from '@privy-io/react-auth/solana';
 import { api } from '../lib/api';
 import type { AuthState, AuthMode } from './AuthContext';
 
 export function useAuth(): AuthState {
   const { ready, authenticated: privyAuth, login, logout, user, getAccessToken } = usePrivy();
-  const { wallets: solanaWallets } = useSolanaWallets();
+  const { wallets: solanaWallets } = useWallets();
   const [cortexAuth, setCortexAuth] = useState(false);
   const [cortexReady, setCortexReady] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>(null);

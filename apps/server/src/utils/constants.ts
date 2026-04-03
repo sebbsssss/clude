@@ -110,7 +110,6 @@ export type MemoryLinkType = 'supports' | 'contradicts' | 'elaborates' | 'causes
 
 // Embedding system
 export const EMBEDDING_DIMENSIONS = 1024;
-export const EMBEDDING_FRAGMENT_MAX_LENGTH = 2000;       // Max chars per fragment for granular decomposition
 
 // Event-driven reflection triggers
 export const REFLECTION_IMPORTANCE_THRESHOLD = 2.0;     // Cumulative importance to trigger reflection (3-4 interactions)
@@ -128,8 +127,6 @@ export const BASESCAN_TX_BASE_URL = 'https://basescan.org/tx';
 export const BASESCAN_API_BASE_URL = 'https://api.basescan.org/api';
 export const DEXSCREENER_PRICE_URL = 'https://api.dexscreener.com/latest/dex/tokens';
 
-// Allium API
-export const ALLIUM_BASE_URL = 'https://api.allium.so/api/v1/developer';
 
 // WETH on Base (dormant — kept for future switch-back)
 export const BASE_WETH_ADDRESS = '0x4200000000000000000000000000000000000006';

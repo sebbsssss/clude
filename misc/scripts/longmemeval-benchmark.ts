@@ -386,7 +386,6 @@ async function cleanupBenchmarkData(db: SupabaseClient): Promise<void> {
         await db.from('memory_links').delete()
           .or(`source_id.in.(${chunk.join(',')}),target_id.in.(${chunk.join(',')})`);
       } catch {}
-      try { await db.from('memory_fragments').delete().in('memory_id', chunk); } catch {}
       await db.from('memories').delete().in('id', chunk);
     }
 
