@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { createChildLogger } from '../core/logger';
+import { createChildLogger } from '@clude/shared/core/logger';
 import {
   getKnowledgeGraph,
   getGraphStats,
@@ -7,10 +7,10 @@ import {
   getMemoriesByEntity,
   findSimilarEntities,
   type EntityType,
-} from '../memory/graph';
-import { getDb } from '../core/database';
-import { requirePrivyAuth } from '../auth/privy-auth';
-import { optionalOwnership } from '../auth/require-ownership';
+} from '@clude/brain/memory/graph';
+import { getDb } from '@clude/shared/core/database';
+import { requirePrivyAuth } from '@clude/brain/auth/privy-auth';
+import { optionalOwnership } from '@clude/brain/auth/require-ownership';
 
 const log = createChildLogger('graph-routes');
 
@@ -276,8 +276,8 @@ export function graphRoutes(): Router {
       const { query, limit: rawLimit, memoryTypes } = req.body;
       const effectiveLimit = Math.min(Number(rawLimit) || 10, 50);
 
-      const { withOwnerWallet } = await import('../core/owner-context');
-      const { recallMemories } = await import('../memory');
+      const { withOwnerWallet } = await import('@clude/shared/core/owner-context');
+      const { recallMemories } = await import('@clude/brain/memory');
 
       const memories = await withOwnerWallet(wallet, async () => {
         return recallMemories({

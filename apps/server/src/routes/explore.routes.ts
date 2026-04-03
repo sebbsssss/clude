@@ -8,17 +8,17 @@
  * Returns SSE: text chunks + final event with memory_ids for graph highlighting.
  */
 import { Router, Request, Response } from "express";
-import { withOwnerWallet } from "../core/owner-context";
-import { recallMemories } from "../memory";
-import { getDb } from "../core/database";
-import { createChildLogger } from "../core/logger";
-import { config } from "../config";
-import { requirePrivyAuth } from "../auth/privy-auth";
-import { requireOwnership } from "../auth/require-ownership";
+import { withOwnerWallet } from "@clude/shared/core/owner-context";
+import { recallMemories } from "@clude/brain/memory";
+import { getDb } from "@clude/shared/core/database";
+import { createChildLogger } from "@clude/shared/core/logger";
+import { config } from "@clude/shared/config";
+import { requirePrivyAuth } from "@clude/brain/auth/privy-auth";
+import { requireOwnership } from "@clude/brain/auth/require-ownership";
 import {
   generateOpenRouterResponse,
   OPENROUTER_MODELS,
-} from "../core/openrouter-client";
+} from "@clude/shared/core/openrouter-client";
 
 const log = createChildLogger("explore-agent");
 

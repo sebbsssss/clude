@@ -7,18 +7,18 @@
  */
 import { Router, Request, Response, NextFunction } from 'express';
 import { createHash } from 'crypto';
-import { authenticateAgent, type AgentRegistration, findOrCreateAgentForWallet } from '../features/agent-tier';
-import { requirePrivyAuth } from '../auth/privy-auth';
-import { withOwnerWallet } from '../core/owner-context';
-import { recallMemories, storeMemory } from '../memory';
-import { checkInputContent } from '../core/guardrails';
-import { checkRateLimit, getDb } from '../core/database';
-import { createChildLogger } from '../core/logger';
-import { config } from '../config';
-import { detectTemporalConstraints, matchMemoriesTemporal } from '../experimental/temporal-bonds';
-import { generateQueryEmbedding, isEmbeddingEnabled } from '../core/embeddings';
-import { isOpenRouterEnabled, getOpenRouterConfig, OPENROUTER_MODELS } from '../core/openrouter-client';
-import { streamText } from 'ai';
+import { authenticateAgent, type AgentRegistration, findOrCreateAgentForWallet } from '@clude/brain/features/agent-tier';
+import { requirePrivyAuth } from '@clude/brain/auth/privy-auth';
+import { withOwnerWallet } from '@clude/shared/core/owner-context';
+import { recallMemories, storeMemory } from '@clude/brain/memory';
+import { checkInputContent } from '@clude/shared/core/guardrails';
+import { checkRateLimit, getDb } from '@clude/shared/core/database';
+import { createChildLogger } from '@clude/shared/core/logger';
+import { config } from '@clude/shared/config';
+import { detectTemporalConstraints, matchMemoriesTemporal } from '@clude/brain/experimental/temporal-bonds';
+import { generateQueryEmbedding, isEmbeddingEnabled } from '@clude/shared/core/embeddings';
+import { isOpenRouterEnabled, getOpenRouterConfig, OPENROUTER_MODELS } from '@clude/shared/core/openrouter-client';
+import { streamText, smoothStream } from 'ai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
@@ -818,9 +818,9 @@ export function chatRoutes(): Router {
   });
 
   // POST /conversations/:id/messages — send message (SSE streaming)
-  router.post('/conversations/:id/messages', async (req: Request, res: Response) => {
+  router.post('/messages', async (req: Request, res: Response) => {
     const chatReq = req as ChatRequest;
-    const conversationId = req.params.id;
+    const { conversationId } = req.body;
     const { content, model } = req.body;
     const abortController = new AbortController();
     const llmTimeout = setTimeout(() => abortController.abort(), config.chat.llmTimeoutSec * 1000);
@@ -1006,171 +1006,102 @@ export function chatRoutes(): Router {
           budgetTokens: config.chat.maxContextTokens,
         }, 'Context trimmed to fit token budget');
       }
-      // 8. Set SSE headers
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
-      res.flushHeaders();
-
-      let fullContent = '';
-      let tokensPrompt = 0;
-      let tokensCompletion = 0;
-      let usageReceived = false;
-
-      // SSE keepalive: send comment every 15s to prevent proxy/CDN idle timeouts
-      const keepaliveInterval = setInterval(() => {
-        if (!res.writableEnded) res.write(': keepalive\n\n');
-      }, 15000);
-
-      try {
+      // 8. Resolve LLM model for streamText
+      let llmModel: any;
       if (isBYOK && byokModel) {
-        // ---- BYOK path: Vercel AI SDK direct-to-provider ---- //
         log.info({ model: byokModel.providerModelId, provider: byokModel.provider }, 'BYOK streaming request');
-        try {
-          const provider = createBYOKProvider(byokModel.provider, byokKey!);
-          // DeepSeek uses createOpenAI with custom baseURL — must use .chat() to
-          // hit /chat/completions instead of the OpenAI Responses API (/responses)
-          const model = byokModel.provider === 'deepseek' && 'chat' in provider
-            ? provider.chat(byokModel.providerModelId)
-            : provider(byokModel.providerModelId);
-          const result = streamText({
-            model,
-            messages: messagesArray.map(m => ({
-              role: m.role as 'system' | 'user' | 'assistant',
-              content: m.content,
-            })),
-            maxOutputTokens: 16384,
-            temperature: 0.7,
-            abortSignal: abortController.signal,
-          });
-
-          for await (const textPart of result.textStream) {
-            fullContent += textPart;
-            res.write(`data: ${JSON.stringify({ content: textPart })}\n\n`);
-            if (typeof (res as any).flush === 'function') (res as any).flush();
-          }
-
-          // Collect usage from Vercel AI SDK
-          const usage = await result.usage;
-          if (usage) {
-            tokensPrompt = usage.inputTokens || 0;
-            tokensCompletion = usage.outputTokens || 0;
-            usageReceived = true;
-          }
-        } catch (err: any) {
-          if (err.name === 'AbortError') {
-            log.debug({ conversationId }, 'BYOK stream aborted');
-            if (!res.writableEnded) {
-              res.write(`data: ${JSON.stringify({ error: 'Response was interrupted.' })}\n\n`);
-              res.end();
-            }
-            return;
-          }
-          const errMsg = err.message || 'Provider error';
-          log.error({ err, provider: byokModel.provider }, 'BYOK provider error');
-          res.write(`data: ${JSON.stringify({ error: `Your ${byokModel.provider} key returned an error: ${errMsg}` })}\n\n`);
-          res.end();
-          return;
-        }
+        const provider = createBYOKProvider(byokModel.provider, byokKey!);
+        llmModel = byokModel.provider === 'deepseek' && 'chat' in provider
+          ? provider.chat(byokModel.providerModelId)
+          : provider(byokModel.providerModelId);
       } else {
-        // ---- OpenRouter path (via Vercel AI SDK) ---- //
         const openrouterModelId = resolveOpenRouterModel(modelId);
         if (!openrouterModelId) {
-          res.write(`data: ${JSON.stringify({ error: `Unknown model: ${modelId}` })}\n\n`);
-          res.end();
+          res.status(400).json({ error: `Unknown model: ${modelId}` });
           return;
         }
-
         const openrouterApiKey = config.openrouter?.apiKey || process.env.OPENROUTER_API_KEY;
         if (!openrouterApiKey) {
-          res.write(`data: ${JSON.stringify({ error: 'OpenRouter API not configured' })}\n\n`);
-          res.end();
+          res.status(500).json({ error: 'OpenRouter API not configured' });
           return;
         }
-
-        const start = Date.now();
         log.info({ model: openrouterModelId, modelId }, 'OpenRouter streaming request started');
-        try {
-          const openrouter = createOpenRouter({ 
-            apiKey: openrouterApiKey,
-            headers: {
-              'HTTP-Referer': 'https://clude.fun',
-              'X-Title': 'Clude Chat',
-            }
-          });
-
-          const result = streamText({
-            model: openrouter.chat(openrouterModelId, { usage: { include: true } }),
-            messages: messagesArray.map(m => ({
-              role: m.role as 'system' | 'user' | 'assistant',
-              content: m.content,
-            })),
-            maxOutputTokens: (CHAT_MODELS.find(m => m.id === modelId)?.tier === 'pro') ? 16384 : 8192,
-            temperature: 0.7,
-            abortSignal: abortController.signal,
-          });
-
-          // Stream chunks immediately to UI as they arrive
-          for await (const textPart of result.textStream) {
-            if (fullContent === '') {
-              log.info({ ttfb: Date.now() - start }, 'OpenRouter First Token received');
-            }
-            fullContent += textPart;
-            res.write(`data: ${JSON.stringify({ content: textPart })}\n\n`);
-            if (typeof (res as any).flush === 'function') (res as any).flush();
-          }
-
-          const usage = await result.usage;
-          if (usage) {
-            tokensPrompt = usage.inputTokens || 0;
-            tokensCompletion = usage.outputTokens || 0;
-            usageReceived = true;
-          }
-        } catch (err: any) {
-          if (err.name === 'AbortError') {
-            log.debug({ conversationId }, 'OpenRouter stream aborted');
-            if (!res.writableEnded) {
-              res.write(`data: ${JSON.stringify({ error: 'Response was interrupted — try a shorter question or start a new conversation.' })}\n\n`);
-              res.end();
-            }
-            return;
-          }
-          const modelName = CHAT_MODELS.find(m => m.id === modelId)?.name || modelId;
-          const errMsg = err.message || 'Unknown error';
-          log.error({ err, model: openrouterModelId }, 'OpenRouter API error');
-          res.write(`data: ${JSON.stringify({ error: `${modelName} error: ${errMsg}` })}\n\n`);
-          res.end();
-          return;
-        }
-      } // end OpenRouter path
-      } finally {
-        clearInterval(keepaliveInterval);
+        const openrouter = createOpenRouter({
+          apiKey: openrouterApiKey,
+          headers: { 'HTTP-Referer': 'https://clude.fun', 'X-Title': 'Clude Chat' },
+        });
+        llmModel = openrouter.chat(openrouterModelId, { usage: { include: true } });
       }
 
-      // 10b. Fallback token estimation when provider omits usage metadata
-      if (!usageReceived && tokensPrompt === 0) {
-        const promptChars = messagesArray.reduce((sum, m) => sum + m.content.length, 0);
-        tokensPrompt = Math.ceil(promptChars / 4);
-        tokensCompletion = Math.ceil(fullContent.length / 4);
-        log.warn({ modelId, estimatedPrompt: tokensPrompt, estimatedCompletion: tokensCompletion },
-          'Provider did not return token usage — cost estimated from character count');
-      }
-
-      // 11. Send done event with cost + receipt data
+      // 9. Stream via Vercel AI SDK → pipe to Express response
       const assistantMsgId = crypto.randomUUID();
       const modelDef = CHAT_MODELS.find(m => m.id === modelId);
+      const maxTokens = isBYOK ? 16384 : (modelDef?.tier === 'pro' ? 16384 : 8192);
+
+      const result = streamText({
+        model: llmModel,
+        messages: messagesArray.map(m => ({
+          role: m.role as 'system' | 'user' | 'assistant',
+          content: m.content,
+        })),
+        maxOutputTokens: maxTokens,
+        temperature: 0.7,
+        abortSignal: abortController.signal,
+        experimental_transform: smoothStream({ chunking: 'word' }),
+      });
+
+      result.pipeUIMessageStreamToResponse(res, {
+        messageMetadata: ({ part }) => {
+          if (part.type === 'finish') {
+            const usage = part.totalUsage || {};
+            let tokensPrompt = usage.inputTokens || 0;
+            let tokensCompletion = usage.outputTokens || 0;
+            let usageReceived = tokensPrompt > 0 || tokensCompletion > 0;
+
+            // Fallback token estimation
+            if (!usageReceived) {
+              const promptChars = messagesArray.reduce((sum, m) => sum + m.content.length, 0);
+              tokensPrompt = Math.ceil(promptChars / 4);
+              tokensCompletion = 500; // rough estimate; exact count computed post-stream
+            }
+
+            const costInput = modelDef ? (tokensPrompt / 1_000_000) * modelDef.cost.input : 0;
+            const costOutput = modelDef ? (tokensCompletion / 1_000_000) * modelDef.cost.output : 0;
+            const totalCost = costInput + costOutput;
+
+            const OPUS_RATE = { input: 15, output: 75 };
+            const equivalentDirectCost = (tokensPrompt / 1_000_000) * OPUS_RATE.input + (tokensCompletion / 1_000_000) * OPUS_RATE.output;
+            const savingsPct = equivalentDirectCost > 0 ? Math.round(((equivalentDirectCost - totalCost) / equivalentDirectCost) * 100) : 0;
+
+            return {
+              message_id: assistantMsgId,
+              model: modelId,
+              memories_used: memoryIds.length,
+              memory_ids: memoryIds,
+              tokens: { prompt: tokensPrompt, completion: tokensCompletion },
+              cost: { total: totalCost, input: costInput, output: costOutput, estimated: !usageReceived },
+              receipt: {
+                cost_usdc: totalCost,
+                equivalent_direct_cost: equivalentDirectCost,
+                savings_pct: savingsPct,
+                remaining_balance: null, // balance deducted async after stream
+              },
+            };
+          }
+        },
+      });
+
+      // 10. After stream completes: DB writes + balance deduction (async, doesn't block response)
+      const fullContent = await result.text;
+      const usage = await result.usage;
+      const tokensPrompt = usage?.inputTokens || Math.ceil(messagesArray.reduce((sum, m) => sum + m.content.length, 0) / 4);
+      const tokensCompletion = usage?.outputTokens || Math.ceil(fullContent.length / 4);
       const costInput = modelDef ? (tokensPrompt / 1_000_000) * modelDef.cost.input : 0;
       const costOutput = modelDef ? (tokensCompletion / 1_000_000) * modelDef.cost.output : 0;
       const totalCost = costInput + costOutput;
-
-      // Receipt: equivalent direct API cost (Claude Opus 4.6 as benchmark)
-      const OPUS_RATE = { input: 15, output: 75 }; // $/M tokens
-      const equivalentDirectCost = (tokensPrompt / 1_000_000) * OPUS_RATE.input + (tokensCompletion / 1_000_000) * OPUS_RATE.output;
-      const savingsPct = equivalentDirectCost > 0 ? Math.round(((equivalentDirectCost - totalCost) / equivalentDirectCost) * 100) : 0;
-
-      // 11b. Deduct usage from balance (pro models only, skip free and BYOK models)
-      let remainingBalance: number | null = null;
       const isFreeModel = modelDef?.tier === 'free';
+
+      // Balance deduction (pro models only, skip free and BYOK)
       if (!isBYOK && !isFreeModel && totalCost > 0 && chatReq.ownerWallet) {
         try {
           const { data: bal } = await db
@@ -1187,29 +1118,11 @@ export function chatRoutes(): Router {
               total_spent: newSpent,
               updated_at: new Date().toISOString(),
             }).eq('wallet_address', chatReq.ownerWallet);
-            remainingBalance = newBalance;
           }
         } catch (balErr) {
           log.error({ err: balErr, wallet: chatReq.ownerWallet, amount: totalCost, model: modelId }, 'Balance deduction failed — message still delivered');
         }
       }
-
-      res.write(`data: ${JSON.stringify({
-        done: true,
-        message_id: assistantMsgId,
-        model: modelId,
-        memories_used: memoryIds.length,
-        memory_ids: memoryIds,
-        tokens: { prompt: tokensPrompt, completion: tokensCompletion },
-        cost: { total: totalCost, input: costInput, output: costOutput, estimated: !usageReceived },
-        receipt: {
-          cost_usdc: totalCost,
-          equivalent_direct_cost: equivalentDirectCost,
-          savings_pct: savingsPct,
-          remaining_balance: remainingBalance,
-        },
-      })}\n\n`);
-      res.end();
 
       // 12+13+14. Insert assistant message + update conversation + record usage IN PARALLEL
       const dbOps: PromiseLike<any>[] = [

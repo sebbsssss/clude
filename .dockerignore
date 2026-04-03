@@ -6,8 +6,8 @@ dist/
 !.env.example
 
 # Frontend built assets (rebuilt in Docker)
-src/verify-app/public/chat/
-src/verify-app/public/dashboard/
+apps/chat/dist/
+apps/dashboard/dist/
 
 # Dev tooling
 .claude/

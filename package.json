@@ -2,28 +2,28 @@
   "name": "clude-bot",
   "version": "2.7.8",
   "description": "Persistent memory SDK for AI agents — Stanford Generative Agents architecture on Supabase + pgvector",
-  "main": "apps/server/dist/sdk/index.js",
-  "types": "apps/server/dist/sdk/index.d.ts",
+  "main": "packages/brain/dist/sdk/index.js",
+  "types": "packages/brain/dist/sdk/index.d.ts",
   "exports": {
     ".": {
-      "require": "./apps/server/dist/sdk/index.js",
-      "types": "./apps/server/dist/sdk/index.d.ts"
+      "require": "./packages/brain/dist/sdk/index.js",
+      "types": "./packages/brain/dist/sdk/index.d.ts"
     },
     "./schema": "./packages/database/supabase-schema.sql",
     "./local": {
-      "require": "./apps/server/dist/mcp/local-store.js",
-      "types": "./apps/server/dist/mcp/local-store.d.ts"
+      "require": "./packages/brain/dist/mcp/local-store.js",
+      "types": "./packages/brain/dist/mcp/local-store.d.ts"
     },
     "./mcp": {
-      "require": "./apps/server/dist/mcp/server.js",
-      "types": "./apps/server/dist/mcp/server.d.ts"
+      "require": "./packages/brain/dist/mcp/server.js",
+      "types": "./packages/brain/dist/mcp/server.d.ts"
     }
   },
   "bin": {
-    "clude-bot": "apps/server/dist/cli/index.js"
+    "clude-bot": "packages/brain/dist/cli/index.js"
   },
   "files": [
-    "apps/server/dist",
+    "packages/brain/dist",
     "packages/database/supabase-schema.sql",
     "README.md",
     "LICENSE"
@@ -31,17 +31,19 @@
   "scripts": {
     "dev": "turbo dev",
     "dev:server": "turbo dev --filter=@clude/server",
+    "dev:workers": "turbo dev --filter=@clude/workers",
     "dev:chat": "turbo dev --filter=@clude/chat",
     "dev:dashboard": "turbo dev --filter=@clude/dashboard",
     "build": "turbo build",
-    "build:sdk": "pnpm --filter @clude/server build:sdk",
+    "build:sdk": "pnpm --filter @clude/brain build",
     "start": "pnpm --filter @clude/server start",
+    "start:workers": "pnpm --filter @clude/workers start",
     "typecheck": "turbo typecheck",
-    "prepublishOnly": "pnpm --filter @clude/server build:sdk",
-    "mcp": "pnpm --filter @clude/server mcp",
+    "prepublishOnly": "pnpm --filter @clude/brain build",
+    "mcp": "pnpm --filter @clude/brain mcp",
     "test": "turbo test",
-    "test:watch": "pnpm --filter @clude/server test:watch",
-    "clean": "rimraf node_modules apps/chat/node_modules apps/dashboard/node_modules apps/server/node_modules apps/server/dist packages/database/node_modules packages/tsconfig/node_modules .turbo apps/chat/.turbo apps/dashboard/.turbo apps/server/.turbo",
+    "test:watch": "pnpm --filter @clude/brain test:watch",
+    "clean": "rimraf --glob node_modules .turbo \"apps/*/node_modules\" \"apps/*/dist\" \"apps/*/.turbo\" \"packages/*/node_modules\" \"packages/*/dist\" \"packages/*/.turbo\"",
     "clean:install": "pnpm clean && pnpm install"
   },
   "keywords": [

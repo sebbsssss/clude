@@ -14,11 +14,11 @@
 import { Router, Request, Response } from "express";
 import multer from "multer";
 import { randomUUID } from "crypto";
-import { getDb } from "../core/database";
-import { createChildLogger } from "../core/logger";
-import { config } from "../config";
-import { isOpenRouterEnabled } from "../core/openrouter-client";
-import { drainPending } from "../workers/upload-processor";
+import { getDb } from "@clude/shared/core/database";
+import { createChildLogger } from "@clude/shared/core/logger";
+import { config } from "@clude/shared/config";
+import { isOpenRouterEnabled } from "@clude/shared/core/openrouter-client";
+import { drainPending } from "@clude/brain/services/upload-processor";
 
 const log = createChildLogger("upload");
 

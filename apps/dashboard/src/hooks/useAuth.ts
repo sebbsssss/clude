@@ -150,6 +150,12 @@ export function useAuth(): AuthState {
     if (!privyAuth && !cortexAuth) return;
 
     api.onAuthExpired(() => {
+      // Cortex API keys can't be refreshed — a 401 means the key is invalid
+      if (cortexAuth) {
+        handleLogoutRef.current();
+        return;
+      }
+
       if (refreshingRef.current) return;
 
       refreshingRef.current = getAccessTokenRef.current()

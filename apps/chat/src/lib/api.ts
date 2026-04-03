@@ -17,6 +17,10 @@ class ChatAPI {
   private byokKeys: Partial<Record<BYOKProvider, string>> = {};
   private _modelsCache: ChatModel[] = [];
 
+  getCachedModels(): ChatModel[] {
+    return this._modelsCache;
+  }
+
   setKey(key: string | null) {
     this.cortexKey = key;
   }

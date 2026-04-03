@@ -96,7 +96,7 @@ vi.mock('../../core/database', () => ({
   checkRateLimit: (...args: any[]) => mockCheckRateLimit(...args),
 }));
 
-import { chatRoutes } from '../chat.routes';
+import { chatRoutes } from '../chat.routes.js';
 
 // ---- Test infrastructure ----
 

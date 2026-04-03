@@ -1,9 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { createChildLogger } from '../core/logger';
-import { getAccuracyStats, isCompoundRunning } from '../features/compound';
-import { createAdapters, fetchAllMarkets } from '../features/compound/market-adapters';
-import { hydrateMemories, recallMemories } from '../memory';
-import { getDb } from '../core/database';
+import { createChildLogger } from '@clude/shared/core/logger';
+import { getAccuracyStats, isCompoundRunning } from '@clude/brain/features/compound';
+import { createAdapters, fetchAllMarkets } from '@clude/brain/features/compound/market-adapters';
+import { hydrateMemories, recallMemories } from '@clude/brain/memory';
+import { getDb } from '@clude/shared/core/database';
 
 const log = createChildLogger('compound-routes');
 

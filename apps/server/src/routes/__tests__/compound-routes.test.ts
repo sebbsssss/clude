@@ -36,7 +36,7 @@ vi.mock('../../features/compound/market-adapters', () => ({
   fetchAllMarkets: vi.fn().mockResolvedValue([]),
 }));
 
-import { compoundRoutes } from '../compound.routes';
+import { compoundRoutes } from '../compound.routes.js';
 
 // Simple HTTP test helper (no supertest needed)
 function createTestServer() {

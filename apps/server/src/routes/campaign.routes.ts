@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
-import { createChildLogger } from '../core/logger';
-import { getDb } from '../core/database';
+import { createChildLogger } from '@clude/shared/core/logger';
+import { getDb } from '@clude/shared/core/database';
 import { randomInt } from 'crypto';
 import rateLimit from 'express-rate-limit';
 
