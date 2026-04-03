@@ -1,10 +1,5 @@
-<<<<<<<< HEAD:packages/brain/src/memory/dream/cycle.ts
 import { generateResponse } from '@clude/shared/core/claude-client';
 import { checkRateLimit, getDb } from '@clude/shared/core/database';
-========
-import { generateResponse } from '../../core/claude-client';
-import { checkRateLimit, getDb } from '../../core/database';
->>>>>>>> main:apps/server/src/memory/dream/cycle.ts
 import {
   getRecentMemories,
   getSelfModel,
@@ -20,22 +15,13 @@ import {
   type Memory,
   type MemoryStats,
 } from '../memory';
-<<<<<<<< HEAD:packages/brain/src/memory/dream/cycle.ts
 import { createChildLogger } from '@clude/shared/core/logger';
-========
-import { createChildLogger } from '../../core/logger';
->>>>>>>> main:apps/server/src/memory/dream/cycle.ts
 import {
   REFLECTION_IMPORTANCE_THRESHOLD,
   REFLECTION_MIN_INTERVAL_MS,
   TWEET_MAX_LENGTH,
-<<<<<<<< HEAD:packages/brain/src/memory/dream/cycle.ts
 } from '@clude/shared/utils/constants';
 import { timeAgo } from '@clude/shared/utils/format';
-========
-} from '../../utils/constants';
-import { timeAgo } from '../../utils/format';
->>>>>>>> main:apps/server/src/memory/dream/cycle.ts
 
 const log = createChildLogger('dream-cycle');
 
@@ -800,11 +786,7 @@ async function runContradictionResolution(): Promise<void> {
 async function runLearning(): Promise<void> {
   log.info('--- Learning phase: tracking outcomes & refining strategies ---');
   try {
-<<<<<<<< HEAD:packages/brain/src/memory/dream/cycle.ts
     const { trackSocialOutcomes, refineStrategies } = await import('../action-learning.js');
-========
-    const { trackSocialOutcomes, refineStrategies } = await import('../action-learning');
->>>>>>>> main:apps/server/src/memory/dream/cycle.ts
 
     // Step 1: Check outcomes of recent actions
     const tracked = await trackSocialOutcomes();

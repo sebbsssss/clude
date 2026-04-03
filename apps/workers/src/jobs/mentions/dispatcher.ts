@@ -1,27 +1,17 @@
 import { TweetV2 } from 'twitter-api-v2';
 import { classifyMention } from './classifier';
-<<<<<<<< HEAD:apps/workers/src/jobs/mentions/dispatcher.ts
 import { handleOnchainOpinion } from '@clude/brain/features/onchain-opinion';
 import { claimForProcessing, markProcessed } from '@clude/shared/core/database';
 import { getCurrentMood } from '@clude/brain/core-ext/price-oracle';
 import { getTierModifier, type HolderTier } from '@clude/brain/character/tier-modifiers';
 import { getTweetWithContext, getUsernameOrId } from '@clude/shared/core/x-client';
 import { config } from '@clude/shared/config';
-========
-import { handleOnchainOpinion } from '../../features/onchain-opinion';
-import { claimForProcessing, markProcessed } from '../../core/database';
-import { getCurrentMood } from '../../core/price-oracle';
-import { getTierModifier, type HolderTier } from '../../character/tier-modifiers';
-import { getTweetWithContext, getUsernameOrId } from '../../core/x-client';
-import { config } from '../../config';
->>>>>>>> main:apps/server/src/workers/mentions/dispatcher.ts
 import {
   storeMemory,
   recallMemories,
   formatMemoryContext,
   scoreImportanceWithLLM,
   moodToValence,
-<<<<<<<< HEAD:apps/workers/src/jobs/mentions/dispatcher.ts
 } from '@clude/brain/memory';
 import { createChildLogger } from '@clude/shared/core/logger';
 import { cleanMentionText, extractTokenMentions } from '@clude/shared/utils/text';
@@ -32,18 +22,6 @@ import { getVestingInfo, getCAResponse, CLUDE_CA, getTokenStatus } from '@clude/
 import { checkInput, getCASpoofResponse, getTokenDeployResponse } from '@clude/shared/core/guardrails';
 import { webSearch, isWebSearchEnabled } from '@clude/shared/core/web-search';
 import { checkRateLimit, getDb } from '@clude/shared/core/database';
-========
-} from '../../memory';
-import { createChildLogger } from '../../core/logger';
-import { cleanMentionText, extractTokenMentions } from '../../utils/text';
-import { buildAndGenerate } from '../../services/response.service';
-import { replyAndMark } from '../../services/social.service';
-import { loadInstruction } from '../../utils/env-persona';
-import { getVestingInfo, getCAResponse, CLUDE_CA, getTokenStatus } from '../../knowledge/tokenomics';
-import { checkInput, getCASpoofResponse, getTokenDeployResponse } from '../../core/guardrails';
-import { webSearch, isWebSearchEnabled } from '../../core/web-search';
-import { checkRateLimit, getDb } from '../../core/database';
->>>>>>>> main:apps/server/src/workers/mentions/dispatcher.ts
 
 const log = createChildLogger('dispatcher');
 
@@ -502,11 +480,7 @@ async function storeInteractionMemory(
   tier: HolderTier
 ): Promise<void> {
   // Deduplicate: skip if we already stored a memory for this tweet
-<<<<<<<< HEAD:apps/workers/src/jobs/mentions/dispatcher.ts
   const { getDb } = await import('@clude/shared/core/database');
-========
-  const { getDb } = await import('../../core/database');
->>>>>>>> main:apps/server/src/workers/mentions/dispatcher.ts
   const { data: existing } = await getDb()
     .from('memories')
     .select('id')

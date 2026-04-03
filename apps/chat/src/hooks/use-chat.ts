@@ -28,11 +28,30 @@ export function useChat() {
     transport: new DefaultChatTransport({
       api: '/api/chat/messages',
       headers: () => cortexKey ? { Authorization: `Bearer ${cortexKey}` } : ({} as Record<string, string>),
-      prepareSendMessagesRequest: ({ id, messages, body }) => ({
-        body: { ...body, id, messages },
-      }),
+      prepareSendMessagesRequest: ({ id, messages, body }) => {
+        // Build headers: auth + optional BYOK
+        const reqHeaders: Record<string, string> = {};
+        if (cortexKey) reqHeaders['Authorization'] = `Bearer ${cortexKey}`;
+
+        const modelId = (body as any)?.model;
+        if (modelId) {
+          const models = api.getCachedModels();
+          const modelDef = models.find(m => m.id === modelId);
+          if (modelDef?.requiresByok && modelDef.byokProvider) {
+            const key = api.getBYOKKey(modelDef.byokProvider);
+            if (key) {
+              reqHeaders['X-BYOK-Key'] = key;
+              reqHeaders['X-BYOK-Provider'] = modelDef.byokProvider;
+            }
+          }
+        }
+        return {
+          headers: reqHeaders,
+          body: { ...body, id, messages },
+        };
+      },
     }),
-    experimental_throttle: 66, // ~15fps, matches old RAF throttle
+    experimental_throttle: 33, // ~30fps for smooth streaming
     onFinish: ({ message }) => {
       const meta = message.metadata as ChatMessageMetadata | undefined;
       if (meta?.receipt?.remaining_balance !== null && meta?.receipt?.remaining_balance !== undefined) {
@@ -164,11 +183,10 @@ export function useChat() {
 
     setError(null);
 
-    // AI SDK's sendMessage — the transport handles streaming
+    // AI SDK's sendMessage — transport handles BYOK headers via prepareSendMessagesRequest
     aiSendMessage(
       { text: content },
       {
-        headers: { Authorization: `Bearer ${cortexKey}` },
         body: { model, content, conversationId },
       },
     );

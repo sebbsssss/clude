@@ -1,14 +1,7 @@
-<<<<<<<< HEAD:apps/workers/src/jobs/mentions/poller.ts
 import { getMentions } from '@clude/shared/core/x-client';
 import { dispatchMention, MAX_PER_CYCLE } from './dispatcher';
 import { config } from '@clude/shared/config';
 import { createChildLogger } from '@clude/shared/core/logger';
-========
-import { getMentions } from '../../core/x-client';
-import { dispatchMention, MAX_PER_CYCLE } from './dispatcher';
-import { config } from '../../config';
-import { createChildLogger } from '../../core/logger';
->>>>>>>> main:apps/server/src/workers/mentions/poller.ts
 
 const log = createChildLogger('poller');
 

@@ -26,13 +26,8 @@ import {
   type Memory,
   type RecallOptions,
 } from './memory';
-<<<<<<<< HEAD:packages/brain/src/memory/clinamen.ts
 import { generateQueryEmbedding, getCachedEmbedding, setCachedEmbedding, isEmbeddingEnabled } from '@clude/shared/core/embeddings';
 import { createChildLogger } from '@clude/shared/core/logger';
-========
-import { generateQueryEmbedding, getCachedEmbedding, setCachedEmbedding, isEmbeddingEnabled } from '../core/embeddings';
-import { createChildLogger } from '../core/logger';
->>>>>>>> main:apps/server/src/memory/clinamen.ts
 
 const log = createChildLogger('clinamen');
 

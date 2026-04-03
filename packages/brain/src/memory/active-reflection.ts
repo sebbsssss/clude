@@ -29,13 +29,8 @@ import {
   getOwnerWallet,
   type Memory,
 } from './memory';
-<<<<<<<< HEAD:packages/brain/src/memory/active-reflection.ts
 import { createChildLogger } from '@clude/shared/core/logger';
 import { TWEET_MAX_LENGTH } from '@clude/shared/utils/constants';
-========
-import { createChildLogger } from '../core/logger';
-import { TWEET_MAX_LENGTH } from '../utils/constants';
->>>>>>>> main:apps/server/src/memory/active-reflection.ts
 import { findClinamen } from './clinamen';
 
 const log = createChildLogger('active-reflection');

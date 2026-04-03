@@ -7,16 +7,10 @@
 
 import type { Request, Response, NextFunction } from 'express';
 import { verifyAccessToken, type VerifyAccessTokenResponse } from '@privy-io/node';
-<<<<<<<< HEAD:packages/brain/src/auth/privy-auth.ts
 // @ts-ignore — jose is ESM-only, works at runtime via Node CJS/ESM interop
 import { createRemoteJWKSet } from 'jose';
 import { config } from '@clude/shared/config';
 import { createChildLogger } from '@clude/shared/core/logger';
-========
-import { createRemoteJWKSet } from 'jose';
-import { config } from '../config';
-import { createChildLogger } from '../core/logger';
->>>>>>>> main:apps/server/src/auth/privy-auth.ts
 
 const log = createChildLogger('privy-auth');
 

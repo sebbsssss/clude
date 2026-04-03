@@ -19,13 +19,8 @@ import {
   createMemoryLink,
   type MemoryType,
 } from './memory';
-<<<<<<<< HEAD:packages/brain/src/memory/hosted-dreams.ts
 import { isOpenRouterEnabled, generateOpenRouterResponse } from '@clude/shared/core/openrouter-client';
 import { createChildLogger } from '@clude/shared/core/logger';
-========
-import { isOpenRouterEnabled, generateOpenRouterResponse } from '../core/openrouter-client';
-import { createChildLogger } from '../core/logger';
->>>>>>>> main:apps/server/src/memory/hosted-dreams.ts
 
 const log = createChildLogger('hosted-dreams');
 

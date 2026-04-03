@@ -7,19 +7,11 @@
  * 3. timeline(id) — chronological view of how a memory evolved
  */
 
-<<<<<<<< HEAD:packages/brain/src/memory/trace.ts
 import { getDb } from '@clude/shared/core/database';
 import { scopeToOwner } from './memory';
 import { generateResponse } from '@clude/shared/core/claude-client';
 import type { CognitiveFunction } from '@clude/shared/core/openrouter-client';
 import { createChildLogger } from '@clude/shared/core/logger';
-========
-import { getDb } from '../core/database';
-import { scopeToOwner } from './memory';
-import { generateResponse } from '../core/claude-client';
-import type { CognitiveFunction } from '../core/openrouter-client';
-import { createChildLogger } from '../core/logger';
->>>>>>>> main:apps/server/src/memory/trace.ts
 
 const log = createChildLogger('memory-trace');
 

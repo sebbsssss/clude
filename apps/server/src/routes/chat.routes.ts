@@ -18,7 +18,7 @@ import { config } from '@clude/shared/config';
 import { detectTemporalConstraints, matchMemoriesTemporal } from '@clude/brain/experimental/temporal-bonds';
 import { generateQueryEmbedding, isEmbeddingEnabled } from '@clude/shared/core/embeddings';
 import { isOpenRouterEnabled, getOpenRouterConfig, OPENROUTER_MODELS } from '@clude/shared/core/openrouter-client';
-import { streamText } from 'ai';
+import { streamText, smoothStream } from 'ai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
@@ -1047,6 +1047,7 @@ export function chatRoutes(): Router {
         maxOutputTokens: maxTokens,
         temperature: 0.7,
         abortSignal: abortController.signal,
+        experimental_transform: smoothStream({ chunking: 'word' }),
       });
 
       result.pipeUIMessageStreamToResponse(res, {

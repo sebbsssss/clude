@@ -1,10 +1,5 @@
-<<<<<<<< HEAD:packages/brain/src/memory/memory.ts
 import { getDb } from '@clude/shared/core/database';
 import { createChildLogger } from '@clude/shared/core/logger';
-========
-import { getDb } from '../core/database';
-import { createChildLogger } from '../core/logger';
->>>>>>>> main:apps/server/src/memory/memory.ts
 import {
   clamp,
   timeAgo,
@@ -27,7 +22,6 @@ import {
   INTERNAL_MEMORY_SOURCES,
   INTERNAL_IMPORTANCE_BOOST,
   BOND_TYPE_WEIGHTS,
-<<<<<<<< HEAD:packages/brain/src/memory/memory.ts
 } from '@clude/shared/utils';
 import type { MemoryLinkType } from '@clude/shared/utils/constants';
 import { generateImportanceScore } from '@clude/shared/core/claude-client';
@@ -37,17 +31,6 @@ import { getExperimentalConfig } from '../experimental/config';
 import { bm25SearchMemories } from '../experimental/bm25-search';
 import { generateOpenRouterResponse, isOpenRouterEnabled } from '@clude/shared/core/openrouter-client';
 import { isEncryptionEnabled, getEncryptionPubkey, encryptContent, decryptMemoryBatch } from '@clude/shared/core/encryption';
-========
-} from '../utils';
-import type { MemoryLinkType } from '../utils/constants';
-import { generateImportanceScore } from '../core/claude-client';
-import { writeMemo, isRegistryEnabled, registerMemoryOnChain } from '../core/solana-client';
-import { generateEmbedding, generateQueryEmbedding, generateEmbeddings, isEmbeddingEnabled } from '../core/embeddings';
-import { getExperimentalConfig } from '../experimental/config';
-import { bm25SearchMemories } from '../experimental/bm25-search';
-import { generateOpenRouterResponse, isOpenRouterEnabled } from '../core/openrouter-client';
-import { isEncryptionEnabled, getEncryptionPubkey, encryptContent, decryptMemoryBatch } from '../core/encryption';
->>>>>>>> main:apps/server/src/memory/memory.ts
 import { eventBus } from '../events/event-bus';
 
 // ---- EMBEDDING CACHE ---- //
@@ -71,11 +54,7 @@ function setCachedEmbedding(query: string, embedding: number[]): void {
 }
 import { createHash, randomBytes } from 'crypto';
 import { extractAndLinkEntities, findSimilarEntities, getMemoriesByEntity, getEntityCooccurrences } from './graph';
-<<<<<<<< HEAD:packages/brain/src/memory/memory.ts
 import { getContextOwnerWallet } from '@clude/shared/core/owner-context';
-========
-import { getContextOwnerWallet } from '../core/owner-context';
->>>>>>>> main:apps/server/src/memory/memory.ts
 
 // ---- OWNER WALLET ---- //
 let _ownerWallet: string | null = null;

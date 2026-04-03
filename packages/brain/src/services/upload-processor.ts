@@ -4,17 +4,10 @@
  * The database is the queue: upload-routes inserts rows as 'pending',
  * this module claims and processes them with bounded concurrency.
  */
-<<<<<<<< HEAD:packages/brain/src/services/upload-processor.ts
 import { getDb } from "@clude/shared/core/database";
 import { withOwnerWallet } from "@clude/shared/core/owner-context";
 import { storeMemory } from "../memory";
 import { createChildLogger } from "@clude/shared/core/logger";
-========
-import { getDb } from "../core/database";
-import { withOwnerWallet } from "../core/owner-context";
-import { storeMemory } from "../memory";
-import { createChildLogger } from "../core/logger";
->>>>>>>> main:apps/server/src/workers/upload-processor.ts
 import {
   generateOpenRouterResponse,
   OPENROUTER_MODELS,

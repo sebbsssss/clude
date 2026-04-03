@@ -1,10 +1,5 @@
-<<<<<<<< HEAD:apps/workers/src/jobs/mentions/classifier.ts
 import { extractWalletAddress, isQuestion, cleanMentionText } from '@clude/shared/utils/text';
 import { isVestingQuestion, isCAQuestion } from '@clude/brain/knowledge/tokenomics';
-========
-import { extractWalletAddress, isQuestion, cleanMentionText } from '../../utils/text';
-import { isVestingQuestion, isCAQuestion } from '../../knowledge/tokenomics';
->>>>>>>> main:apps/server/src/workers/mentions/classifier.ts
 
 export type MentionType = 'question' | 'memory-recall' | 'vesting' | 'ca' | 'web-search' | 'general';
 
