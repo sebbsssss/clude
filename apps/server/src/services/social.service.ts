@@ -1,6 +1,6 @@
 import { postReply, postTweet, postThread } from '../core/x-client';
 import { markProcessed } from '../core/database';
-import { logAction } from '../features/action-learning';
+import { logAction } from '../memory/action-learning';
 import { createChildLogger } from '../core/logger';
 import { randomBytes } from 'crypto';
 

@@ -282,7 +282,7 @@ async function storeMemories(memories: ImportedMemory[]): Promise<void> {
     }
   } else {
     // Self-hosted: use local store
-    const { storeMemory } = require('../core/memory');
+    const { storeMemory } = require('../memory');
     for (let i = 0; i < memories.length; i++) {
       const m = memories[i];
       try {

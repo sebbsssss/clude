@@ -70,13 +70,13 @@ export class Cortex {
 
       // Set owner wallet if provided
       if (config.ownerWallet) {
-        const { _setOwnerWallet } = require('../core/memory');
+        const { _setOwnerWallet } = require('../memory');
         _setOwnerWallet(config.ownerWallet);
       }
 
       // Wire event bus for importance-driven dream triggers
       const { eventBus } = require('../events/event-bus');
-      const { accumulateImportance } = require('../features/dream-cycle');
+      const { accumulateImportance } = require('../memory/dream/cycle');
       eventBus.on('memory:stored', (payload: { importance: number; memoryType: string }) => {
         if (payload.memoryType === 'episodic') {
           accumulateImportance(payload.importance);
@@ -146,7 +146,7 @@ export class Cortex {
       );
       return result.memory_id;
     }
-    const { storeMemory } = require('../core/memory');
+    const { storeMemory } = require('../memory');
     return storeMemory(opts);
   }
 
@@ -171,7 +171,7 @@ export class Cortex {
       );
       return result.memories;
     }
-    const { recallMemories } = require('../core/memory');
+    const { recallMemories } = require('../memory');
     return recallMemories(opts);
   }
 
@@ -192,7 +192,7 @@ export class Cortex {
       );
       return result.summaries;
     }
-    const { recallMemorySummaries } = require('../core/memory');
+    const { recallMemorySummaries } = require('../memory');
     return recallMemorySummaries(opts);
   }
 
@@ -206,7 +206,7 @@ export class Cortex {
       );
       return result.memories;
     }
-    const { hydrateMemories } = require('../core/memory');
+    const { hydrateMemories } = require('../memory');
     return hydrateMemories(ids);
   }
 
@@ -214,7 +214,7 @@ export class Cortex {
   async decay(): Promise<number> {
     this.guard();
     this.requireSelfHosted('decay');
-    const { decayMemories } = require('../core/memory');
+    const { decayMemories } = require('../memory');
     return decayMemories();
   }
 
@@ -224,7 +224,7 @@ export class Cortex {
     if (this.hostedMode) {
       return this.http!.get<MemoryStats>('/api/cortex/stats');
     }
-    const { getMemoryStats } = require('../core/memory');
+    const { getMemoryStats } = require('../memory');
     return getMemoryStats();
   }
 
@@ -242,7 +242,7 @@ export class Cortex {
       );
       return result.memories;
     }
-    const { getRecentMemories } = require('../core/memory');
+    const { getRecentMemories } = require('../memory');
     return getRecentMemories(hours, types, limit);
   }
 
@@ -253,7 +253,7 @@ export class Cortex {
       const result = await this.http!.get<{ memories: Memory[] }>('/api/cortex/self-model');
       return result.memories;
     }
-    const { getSelfModel } = require('../core/memory');
+    const { getSelfModel } = require('../memory');
     return getSelfModel();
   }
 
@@ -269,7 +269,7 @@ export class Cortex {
       });
       return;
     }
-    const { createMemoryLink } = require('../core/memory');
+    const { createMemoryLink } = require('../memory');
     return createMemoryLink(sourceId, targetId, type, strength);
   }
 
@@ -281,7 +281,7 @@ export class Cortex {
       throw new Error('Cortex.dream() requires anthropic config');
     }
 
-    const { setEmergenceHandler, runDreamCycleOnce } = require('../features/dream-cycle');
+    const { setEmergenceHandler, runDreamCycleOnce } = require('../memory/dream/cycle');
 
     if (opts?.onEmergence) {
       setEmergenceHandler(opts.onEmergence);
@@ -303,7 +303,7 @@ export class Cortex {
     if (!this.config.anthropic?.apiKey) {
       throw new Error('Dream schedule requires anthropic config');
     }
-    const { startDreamCycle } = require('../features/dream-cycle');
+    const { startDreamCycle } = require('../memory/dream/cycle');
     startDreamCycle();
     this.dreamActive = true;
   }
@@ -311,7 +311,7 @@ export class Cortex {
   /** Stop the dream schedule. */
   stopDreamSchedule(): void {
     if (this.hostedMode) return; // no-op in hosted mode
-    const { stopDreamCycle } = require('../features/dream-cycle');
+    const { stopDreamCycle } = require('../memory/dream/cycle');
     stopDreamCycle();
     this.dreamActive = false;
   }
@@ -324,7 +324,7 @@ export class Cortex {
       throw new Error('Cortex.reflect() requires anthropic config');
     }
 
-    const { setReflectionHandler, runReflectionOnce } = require('../features/active-reflection');
+    const { setReflectionHandler, runReflectionOnce } = require('../memory/active-reflection');
 
     if (opts?.onReflection) {
       setReflectionHandler(opts.onReflection);
@@ -346,14 +346,14 @@ export class Cortex {
     if (!this.config.anthropic?.apiKey) {
       throw new Error('Reflection schedule requires anthropic config');
     }
-    const { startActiveReflection } = require('../features/active-reflection');
+    const { startActiveReflection } = require('../memory/active-reflection');
     startActiveReflection();
   }
 
   /** Stop the active reflection schedule. */
   stopReflectionSchedule(): void {
     if (this.hostedMode) return;
-    const { stopActiveReflection } = require('../features/active-reflection');
+    const { stopActiveReflection } = require('../memory/active-reflection');
     stopActiveReflection();
   }
 
@@ -361,19 +361,19 @@ export class Cortex {
   async scoreImportance(description: string): Promise<number> {
     this.guard();
     this.requireSelfHosted('scoreImportance');
-    const { scoreImportanceWithLLM } = require('../core/memory');
+    const { scoreImportanceWithLLM } = require('../memory');
     return scoreImportanceWithLLM(description);
   }
 
   /** Format memories into context string for LLM prompts. Works in both modes. */
   formatContext(memories: Memory[]): string {
-    const { formatMemoryContext } = require('../core/memory');
+    const { formatMemoryContext } = require('../memory');
     return formatMemoryContext(memories);
   }
 
   /** Infer structured concepts from memory content. Works in both modes. */
   inferConcepts(summary: string, source: string, tags: string[]): string[] {
-    const { inferConcepts } = require('../core/memory');
+    const { inferConcepts } = require('../memory');
     return inferConcepts(summary, source, tags);
   }
 
@@ -390,7 +390,7 @@ export class Cortex {
   async verifyOnChain(memoryId: number): Promise<boolean> {
     this.guard();
     this.requireSelfHosted('verifyOnChain');
-    const { hydrateMemories } = require('../core/memory');
+    const { hydrateMemories } = require('../memory');
     const { verifyMemoryOnChain } = require('../core/solana-client');
     const { createHash } = require('crypto');
 

@@ -8,7 +8,7 @@
 
 import type Anthropic from '@anthropic-ai/sdk';
 import { postTweet, postThread } from '../core/x-client';
-import { recallMemorySummaries, storeMemory } from '../core/memory';
+import { recallMemorySummaries, storeMemory } from '../memory';
 import { getPriceState, getCurrentMood } from '../core/price-oracle';
 import { getDb } from '../core/database';
 import { createChildLogger } from '../core/logger';

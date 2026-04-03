@@ -33,7 +33,7 @@ async function generatePrompt(format: 'chatgpt' | 'gemini'): Promise<string> {
       memories = pack.memories || [];
     }
   } else {
-    const { getRecentMemories } = require('../core/memory');
+    const { getRecentMemories } = require('../memory');
     const raw = await getRecentMemories(8760, undefined, 10000);
     memories = (raw || []).map((m: any) => ({
       content: m.content,

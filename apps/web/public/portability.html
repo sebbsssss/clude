@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Export & Import | Clude</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'JetBrains Mono', monospace; background: #f5f5f0; color: #1a1a1a; line-height: 1.7; }
+    
+    nav { padding: 20px 40px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; }
+    nav a { color: #1a1a1a; text-decoration: none; margin-left: 24px; font-size: 14px; }
+    nav a:hover { text-decoration: underline; }
+    nav .logo { font-weight: 700; font-size: 18px; letter-spacing: -0.5px; }
+    nav .register-btn { background: #455cfa; color: white; padding: 6px 16px; border-radius: 6px; font-size: 13px; }
+    nav .register-btn:hover { background: #3448d4; text-decoration: none; }
+    
+    .container { max-width: 780px; margin: 0 auto; padding: 60px 24px; }
+    h1 { font-size: 32px; font-weight: 700; margin-bottom: 8px; letter-spacing: -1px; }
+    .subtitle { color: #666; font-size: 15px; margin-bottom: 48px; }
+    h2 { font-size: 22px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.5px; }
+    h3 { font-size: 17px; font-weight: 700; margin: 32px 0 12px; }
+    p { margin-bottom: 16px; font-size: 15px; }
+    
+    .platform { border: 1px solid #ddd; border-radius: 12px; padding: 32px; margin-bottom: 24px; background: white; }
+    .platform-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .platform-icon { font-size: 28px; }
+    .platform-name { font-size: 20px; font-weight: 700; }
+    .platform-tag { font-size: 12px; background: #e8e8e4; padding: 2px 8px; border-radius: 4px; color: #666; }
+    
+    code { background: #e8e8e4; padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: 'JetBrains Mono', monospace; }
+    pre { background: #1a1a1a; color: #e0e0e0; padding: 20px; border-radius: 8px; overflow-x: auto; margin: 16px 0; font-size: 13px; line-height: 1.6; }
+    pre .cmd { color: #7ec8e3; }
+    pre .flag { color: #a8d8a8; }
+    pre .comment { color: #666; }
+    pre .string { color: #f0c674; }
+    
+    .steps { counter-reset: step; list-style: none; padding: 0; }
+    .steps li { counter-increment: step; padding: 8px 0 8px 36px; position: relative; font-size: 14px; }
+    .steps li::before { content: counter(step); position: absolute; left: 0; width: 24px; height: 24px; background: #455cfa; color: white; border-radius: 50%; font-size: 12px; display: flex; align-items: center; justify-content: center; top: 10px; }
+    
+    .note { background: #f0f0ea; border-left: 3px solid #455cfa; padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 14px; }
+    .note strong { color: #455cfa; }
+    
+    .formats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+    .format-card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; background: white; }
+    .format-card code { font-size: 14px; font-weight: 700; }
+    .format-card p { font-size: 13px; color: #666; margin-top: 4px; margin-bottom: 0; }
+    
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+    th { text-align: left; padding: 10px 12px; background: #e8e8e4; font-weight: 700; }
+    td { padding: 10px 12px; border-bottom: 1px solid #eee; }
+    
+    footer { text-align: center; padding: 40px; color: #999; font-size: 13px; border-top: 1px solid #eee; margin-top: 60px; }
+    footer a { color: #666; }
+    
+    @media (max-width: 600px) {
+      .formats-grid { grid-template-columns: 1fr; }
+      nav { padding: 16px 20px; }
+      .container { padding: 40px 16px; }
+    }
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<nav>
+  <a href="/" class="logo">clude</a>
+  <div>
+    <a href="/chat">Chat</a>
+    <a href="/docs.html">Docs</a>
+    <a href="/brain.html">Brain</a>
+    <a href="/explore">Explorer</a>
+    <a href="/dashboard">Dashboard</a>
+  </div>
+</nav>
+
+<div class="container">
+  <h1>Export & Import</h1>
+  <p class="subtitle">Move your memories anywhere. Clude doesn't lock you in.</p>
+
+  <!-- Export Formats -->
+  <h2>Export Formats</h2>
+  <p>Export your Clude memories to use in other AI platforms, or as a portable backup.</p>
+  
+  <div class="formats-grid">
+    <div class="format-card">
+      <code>chatgpt</code>
+      <p>Custom Instructions format. Paste into ChatGPT's memory or system prompt.</p>
+    </div>
+    <div class="format-card">
+      <code>gemini</code>
+      <p>Structured for Gemini Gems. Optimized for Google's context format.</p>
+    </div>
+    <div class="format-card">
+      <code>md</code>
+      <p>Markdown file. Works with Claude Projects, Cursor, or any AI that accepts files.</p>
+    </div>
+    <div class="format-card">
+      <code>json</code>
+      <p>Full structured export. All metadata, scores, timestamps. For developers.</p>
+    </div>
+    <div class="format-card">
+      <code>clipboard</code>
+      <p>Copies to clipboard. Quick paste into any conversation.</p>
+    </div>
+  </div>
+
+  <!-- ChatGPT -->
+  <div class="platform">
+    <div class="platform-header">
+      <span class="platform-icon">🟢</span>
+      <span class="platform-name">ChatGPT</span>
+      <span class="platform-tag">Export + Import</span>
+    </div>
+    
+    <h3>Export to ChatGPT</h3>
+    <ol class="steps">
+      <li>Run the export command:
+        <pre><span class="cmd">npx clude-bot export</span> <span class="flag">--format chatgpt</span></pre>
+      </li>
+      <li>Open <strong>ChatGPT</strong> → Settings → Personalization → Custom Instructions</li>
+      <li>Paste the output into the <strong>"What would you like ChatGPT to know about you?"</strong> field</li>
+      <li>Save. ChatGPT now has your Clude memories as context.</li>
+    </ol>
+    
+    <div class="note">
+      <strong>Tip:</strong> The ChatGPT format automatically prioritizes your most important memories and stays under the character limit. It groups them by type: facts, behaviors, and recent context.
+    </div>
+
+    <h3>Import from ChatGPT</h3>
+    <ol class="steps">
+      <li>In ChatGPT, go to Settings → Data Controls → Export Data</li>
+      <li>Download the ZIP file (contains <code>conversations.json</code>)</li>
+      <li>Run:
+        <pre><span class="cmd">npx clude-bot import</span> <span class="string">chatgpt-export.zip</span></pre>
+      </li>
+    </ol>
+    <p>Clude will extract key facts, preferences, and context from your ChatGPT conversations and store them as structured memories.</p>
+  </div>
+
+  <!-- Claude -->
+  <div class="platform">
+    <div class="platform-header">
+      <span class="platform-icon">🟠</span>
+      <span class="platform-name">Claude</span>
+      <span class="platform-tag">Export + MCP</span>
+    </div>
+    
+    <h3>Option A: Export as Project Knowledge</h3>
+    <ol class="steps">
+      <li>Run:
+        <pre><span class="cmd">npx clude-bot export</span> <span class="flag">--format md</span></pre>
+      </li>
+      <li>Open <strong>Claude</strong> → Create a Project</li>
+      <li>Upload the exported <code>.md</code> file as Project Knowledge</li>
+      <li>Claude now has your full memory context in every conversation within that project.</li>
+    </ol>
+
+    <h3>Option B: MCP Integration (recommended)</h3>
+    <p>Connect Clude directly to Claude Desktop or Claude Code as a persistent memory layer.</p>
+    <ol class="steps">
+      <li>Run:
+        <pre><span class="cmd">npx clude-bot mcp-install</span></pre>
+      </li>
+      <li>Restart Claude Desktop</li>
+      <li>Claude can now <code>store_memory</code> and <code>recall_memories</code> directly. No manual export needed.</li>
+    </ol>
+    
+    <div class="note">
+      <strong>MCP gives Claude live access to your memory.</strong> It can store new memories during conversations and recall relevant ones automatically. This is the deepest integration available.
+    </div>
+
+    <h3>MCP Tools Available</h3>
+    <table>
+      <tr><th>Tool</th><th>Description</th></tr>
+      <tr><td><code>recall_memories</code></td><td>Search memories by query, tags, or type</td></tr>
+      <tr><td><code>store_memory</code></td><td>Save a new memory with type, importance, tags</td></tr>
+      <tr><td><code>get_memory_stats</code></td><td>View memory counts, types, top tags</td></tr>
+      <tr><td><code>find_clinamen</code></td><td>Surface unexpected lateral connections</td></tr>
+    </table>
+  </div>
+
+  <!-- Gemini -->
+  <div class="platform">
+    <div class="platform-header">
+      <span class="platform-icon">🔵</span>
+      <span class="platform-name">Gemini</span>
+      <span class="platform-tag">Export</span>
+    </div>
+    
+    <h3>Export to Gemini Gems</h3>
+    <ol class="steps">
+      <li>Run:
+        <pre><span class="cmd">npx clude-bot export</span> <span class="flag">--format gemini</span></pre>
+      </li>
+      <li>Open <strong>Gemini</strong> → Gems → Create a Gem</li>
+      <li>Paste the output into the Gem's instructions</li>
+      <li>Save. Your Gem now carries your memory context.</li>
+    </ol>
+    
+    <div class="note">
+      <strong>Tip:</strong> Gemini Gems have a ~1500 word instruction limit. The export automatically truncates to fit.
+    </div>
+  </div>
+
+  <!-- Cursor / Other IDEs -->
+  <div class="platform">
+    <div class="platform-header">
+      <span class="platform-icon">⚡</span>
+      <span class="platform-name">Cursor / VS Code / Windsurf</span>
+      <span class="platform-tag">MCP</span>
+    </div>
+    
+    <h3>MCP Integration</h3>
+    <ol class="steps">
+      <li>Run:
+        <pre><span class="cmd">npx clude-bot mcp-install</span></pre>
+      </li>
+      <li>Select your IDE when prompted (Cursor, VS Code, or Windsurf)</li>
+      <li>Restart your IDE</li>
+      <li>Your coding assistant now has persistent memory across sessions.</li>
+    </ol>
+    <p>Works with any IDE that supports MCP (Model Context Protocol).</p>
+  </div>
+
+  <!-- Markdown / Universal -->
+  <div class="platform">
+    <div class="platform-header">
+      <span class="platform-icon">📄</span>
+      <span class="platform-name">Any AI (Markdown)</span>
+      <span class="platform-tag">Universal</span>
+    </div>
+    
+    <h3>Export as Markdown</h3>
+    <pre><span class="cmd">npx clude-bot export</span> <span class="flag">--format md</span></pre>
+    <p>Produces a structured Markdown file with all memories grouped by type. Works with:</p>
+    <ul style="padding-left: 20px; margin: 12px 0; font-size: 14px;">
+      <li>Claude Projects (upload as knowledge)</li>
+      <li>ChatGPT (upload as file)</li>
+      <li>Obsidian / Notion (paste directly)</li>
+      <li>Any AI that accepts file uploads or system prompts</li>
+    </ul>
+  </div>
+
+  <!-- Advanced -->
+  <h2>Advanced Options</h2>
+  
+  <h3>Filter by memory type</h3>
+  <pre><span class="cmd">npx clude-bot export</span> <span class="flag">--format chatgpt --types semantic,procedural</span></pre>
+  
+  <h3>Export as JSON (full data)</h3>
+  <pre><span class="cmd">npx clude-bot export</span> <span class="flag">--format json</span></pre>
+  <p>Includes all metadata: importance scores, decay factors, timestamps, tags, concepts, access counts. Use this for backups or building custom integrations.</p>
+
+  <h3>Quick copy to clipboard</h3>
+  <pre><span class="cmd">npx clude-bot export</span> <span class="flag">--format clipboard</span></pre>
+  <p>Copies formatted memories directly to your clipboard. Paste anywhere.</p>
+
+  <h2>Import Sources</h2>
+  <table>
+    <tr><th>Source</th><th>Command</th><th>Notes</th></tr>
+    <tr>
+      <td>ChatGPT Export</td>
+      <td><code>npx clude-bot import chatgpt-export.zip</code></td>
+      <td>Extracts facts and preferences from conversations</td>
+    </tr>
+    <tr>
+      <td>Markdown Files</td>
+      <td><code>npx clude-bot import memories.md</code></td>
+      <td>Each bullet point becomes a memory</td>
+    </tr>
+    <tr>
+      <td>JSON (Clude format)</td>
+      <td><code>npx clude-bot import backup.json</code></td>
+      <td>Full restore with metadata</td>
+    </tr>
+  </table>
+
+  <div class="note" style="margin-top: 32px;">
+    <strong>Your memories, your choice.</strong> Clude is designed for portability. Export everything, move anywhere, delete anytime. No lock-in, no hidden retention.
+  </div>
+</div>
+
+<footer>
+  <a href="/">clude.io</a> · <a href="https://github.com/sebbsssss/cludebot">GitHub</a> · <a href="https://x.com/cludebot">@cludebot</a>
+</footer>
+
+</body>
+</html>

@@ -4,7 +4,7 @@
  */
 
 import { createChildLogger } from '../../core/logger';
-import { recallMemories } from '../../core/memory';
+import { recallMemories } from '../../memory';
 import { buildAndGenerate } from '../../services/response.service';
 import type { Market, CompoundAnalysis, CompoundConfig } from './types';
 

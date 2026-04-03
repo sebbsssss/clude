@@ -1,0 +1,1558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CLUDE — Agent Dashboard</title>
+  <meta name="description" content="Monitor and orchestrate your AI agents. Status, tasks, costs, activity.">
+  <meta name="privy-app-id" content="cmm8y16dq037y0cjr4nsqjtaa">
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' 'unsafe-inline' https://esm.sh https://challenges.cloudflare.com;
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+    font-src 'self' https://fonts.gstatic.com;
+    img-src 'self' data: blob: https://auth.privy.io https://*.walletconnect.com;
+    connect-src 'self' https://auth.privy.io wss://relay.walletconnect.com wss://relay.walletconnect.org wss://www.walletlink.org https://*.rpc.privy.systems https://explorer-api.walletconnect.com https://esm.sh;
+    frame-src https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org https://challenges.cloudflare.com;
+    child-src https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org;
+    object-src 'none';
+    base-uri 'self';
+    form-action 'self';
+    worker-src 'self' blob:;
+  ">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://esm.sh" crossorigin>
+  <link rel="preconnect" href="https://auth.privy.io" crossorigin>
+  <link rel="dns-prefetch" href="https://relay.walletconnect.com">
+  <link rel="modulepreload" href="https://esm.sh/react@19?bundle">
+  <link rel="modulepreload" href="https://esm.sh/react-dom@19/client?bundle">
+  <link rel="modulepreload" href="https://esm.sh/@privy-io/react-auth@2.4.0?external=react,react-dom&bundle-deps">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f5f5f0;
+      --bg-warm: #eeeee8;
+      --surface: #fff;
+      --text: #111;
+      --text-muted: #666;
+      --text-faint: #999;
+      --border: rgba(0,0,0,0.08);
+      --blue: #2244ff;
+      --blue-light: #5566ff;
+      --green: #2a6a3a;
+      --red: #9a3030;
+      --yellow: #8a7a20;
+      --orange: #a05a20;
+      --mono: 'JetBrains Mono', monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--mono);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 12px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    ::selection { background: var(--text); color: var(--bg); }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; width: 100%; z-index: 100;
+      background: rgba(245, 245, 240, 0.9);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+    }
+    .nav-inner {
+      max-width: 1400px; margin: 0 auto; padding: 0 40px;
+      height: 56px; display: flex; align-items: center;
+    }
+    .nav-logo {
+      font-size: 13px; font-weight: 800; letter-spacing: 5px;
+      color: var(--text); text-transform: uppercase; text-decoration: none;
+    }
+    .nav-logo:hover { color: var(--blue); }
+    .nav-links {
+      display: flex; align-items: center; gap: 32px; margin-left: auto;
+    }
+    .nav-links a {
+      color: var(--text-muted); font-size: 11px; letter-spacing: 2px;
+      text-transform: uppercase; text-decoration: none; transition: color 0.3s;
+    }
+    .nav-links a:hover { color: var(--text); }
+    .nav-links a.active { color: var(--text); font-weight: 600; }
+
+    /* ── MAIN LAYOUT ── */
+    .dashboard {
+      padding-top: 72px; padding-bottom: 40px;
+      max-width: 1400px; margin: 0 auto;
+      padding-left: 40px; padding-right: 40px;
+    }
+    .dash-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 24px;
+    }
+    .dash-title {
+      font-size: 20px; font-weight: 700; letter-spacing: -0.5px;
+    }
+    .dash-subtitle {
+      font-size: 11px; color: var(--text-faint); letter-spacing: 1px;
+      margin-top: 2px;
+    }
+    .dash-actions { display: flex; gap: 8px; }
+
+    .btn {
+      font-family: var(--mono);
+      font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
+      padding: 8px 16px; cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--surface); color: var(--text);
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+    .btn:hover { border-color: var(--text); }
+    .btn-primary {
+      background: var(--text); color: var(--bg);
+      border-color: var(--text);
+    }
+    .btn-primary:hover { background: #333; }
+    .btn-danger { color: var(--red); }
+    .btn-danger:hover { border-color: var(--red); background: rgba(154,48,48,0.05); }
+    .btn-sm { padding: 4px 10px; font-size: 9px; }
+
+    /* ── GRID LAYOUT ── */
+    .grid-top {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .panel-header {
+      padding: 14px 18px 10px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-title {
+      font-size: 10px; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--text-muted);
+    }
+    .panel-body { padding: 16px 18px; }
+
+    /* ── AGENT CARDS ── */
+    .agent-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 12px;
+    }
+    .agent-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px;
+      transition: box-shadow 0.2s ease, transform 0.2s ease;
+      position: relative;
+    }
+    .agent-card:hover {
+      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+      transform: translateY(-1px);
+    }
+    .agent-card-top {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    /* Status dot */
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      flex-shrink: 0;
+      cursor: pointer;
+      transition: box-shadow 0.3s ease;
+    }
+    .status-dot.online {
+      background: var(--green);
+      box-shadow: 0 0 6px rgba(42,106,58,0.5);
+      animation: pulse-glow 2.5s ease-in-out infinite;
+    }
+    .status-dot.offline { background: var(--red); }
+    .status-dot.paused { background: var(--yellow); }
+    .status-dot.error {
+      background: var(--orange);
+      animation: pulse-error 1s ease-in-out infinite;
+    }
+    @keyframes pulse-glow {
+      0%, 100% { box-shadow: 0 0 6px rgba(42,106,58,0.5); }
+      50% { box-shadow: 0 0 12px rgba(42,106,58,0.8); }
+    }
+    @keyframes pulse-error {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .agent-name {
+      font-size: 13px; font-weight: 700; flex: 1;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .type-badge {
+      font-size: 8px; font-weight: 600; letter-spacing: 1.5px;
+      text-transform: uppercase;
+      padding: 2px 6px;
+      background: rgba(0,0,0,0.04);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .agent-meta {
+      font-size: 10px; color: var(--text-faint);
+      margin-bottom: 10px; letter-spacing: 0.3px;
+    }
+
+    /* Budget bar */
+    .budget-row {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 10px;
+    }
+    .budget-bar {
+      flex: 1; height: 3px;
+      background: rgba(0,0,0,0.06);
+      border-radius: 2px; overflow: hidden;
+    }
+    .budget-fill {
+      height: 100%; border-radius: 2px;
+      background: var(--blue);
+      transition: width 0.5s ease;
+    }
+    .budget-fill.over { background: var(--red); }
+    .budget-label {
+      font-size: 9px; color: var(--text-faint);
+      white-space: nowrap; letter-spacing: 0.5px;
+    }
+
+    .agent-actions {
+      display: flex; gap: 6px;
+      opacity: 0; transition: opacity 0.2s;
+    }
+    .agent-card:hover .agent-actions { opacity: 1; }
+    .agent-actions button {
+      font-family: var(--mono);
+      font-size: 9px; letter-spacing: 1px;
+      text-transform: uppercase;
+      background: none; border: 1px solid var(--border);
+      color: var(--text-muted); padding: 3px 8px;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .agent-actions button:hover {
+      border-color: var(--text); color: var(--text);
+    }
+    .agent-actions button.del:hover {
+      border-color: var(--red); color: var(--red);
+    }
+
+    /* ── STATS PANEL ── */
+    .stats-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .stat-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px 16px;
+    }
+    .stat-value {
+      font-size: 22px; font-weight: 800; line-height: 1;
+      margin-bottom: 4px;
+    }
+    .stat-value.blue { color: var(--blue); }
+    .stat-label {
+      font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase;
+      color: var(--text-faint);
+    }
+
+    /* ── KANBAN ── */
+    .kanban {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .kanban-col {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      min-height: 200px;
+    }
+    .kanban-col-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .kanban-col-title {
+      font-size: 10px; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--text-muted);
+    }
+    .kanban-count {
+      font-size: 9px; font-weight: 600;
+      background: rgba(0,0,0,0.04); border: 1px solid var(--border);
+      padding: 1px 6px; color: var(--text-faint);
+    }
+    .kanban-list {
+      padding: 10px; display: flex; flex-direction: column; gap: 8px;
+      min-height: 60px;
+    }
+    .task-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 14px;
+      cursor: pointer;
+      transition: box-shadow 0.2s, transform 0.15s;
+    }
+    .task-card:hover {
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      transform: translateY(-1px);
+    }
+    .task-title {
+      font-size: 12px; font-weight: 600; margin-bottom: 6px;
+      line-height: 1.4;
+    }
+    .task-meta {
+      display: flex; align-items: center; gap: 8px;
+      flex-wrap: wrap;
+    }
+    .task-agent {
+      font-size: 9px; color: var(--text-faint); letter-spacing: 0.5px;
+    }
+    .priority-badge {
+      font-size: 8px; font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase; padding: 1px 6px;
+      border-radius: 3px;
+    }
+    .priority-critical { background: rgba(154,48,48,0.12); color: var(--red); }
+    .priority-high { background: rgba(160,90,32,0.12); color: var(--orange); }
+    .priority-medium { background: rgba(34,68,255,0.08); color: var(--blue); }
+    .priority-low { background: rgba(0,0,0,0.04); color: var(--text-faint); }
+
+    /* ── ACTIVITY FEED ── */
+    .activity-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .activity-list {
+      max-height: 280px; overflow-y: auto;
+      padding: 8px 0;
+    }
+    .activity-list::-webkit-scrollbar { width: 4px; }
+    .activity-list::-webkit-scrollbar-track { background: transparent; }
+    .activity-list::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 2px; }
+
+    .activity-entry {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 7px 18px;
+      font-size: 11px;
+      transition: background 0.15s;
+    }
+    .activity-entry:hover { background: rgba(0,0,0,0.02); }
+    .activity-time {
+      font-size: 9px; color: var(--text-faint);
+      white-space: nowrap; min-width: 54px;
+      letter-spacing: 0.5px; padding-top: 1px;
+    }
+    .activity-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      margin-top: 4px; flex-shrink: 0;
+    }
+    .activity-dot.heartbeat { background: var(--green); }
+    .activity-dot.task_created, .activity-dot.task_started { background: var(--blue); }
+    .activity-dot.task_completed { background: var(--green); }
+    .activity-dot.error { background: var(--red); }
+    .activity-dot.status_change { background: var(--yellow); }
+    .activity-dot.agent_registered, .activity-dot.agent_updated { background: var(--blue-light, #5566ff); }
+    .activity-dot.agent_removed { background: var(--red); }
+    .activity-dot.cost_logged { background: var(--orange); }
+    .activity-agent {
+      font-weight: 600; color: var(--text);
+      white-space: nowrap;
+    }
+    .activity-action { color: var(--text-muted); }
+    .activity-detail { color: var(--text-faint); font-size: 10px; }
+
+    /* ── EMPTY STATES ── */
+    .empty-state {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; padding: 40px 20px;
+      color: var(--text-faint); text-align: center;
+    }
+    .empty-icon {
+      font-size: 28px; margin-bottom: 12px; opacity: 0.3;
+    }
+    .empty-text {
+      font-size: 11px; letter-spacing: 0.5px; margin-bottom: 12px;
+    }
+
+    /* ── MODAL ── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,0.3);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      width: 440px; max-width: 90vw;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.12);
+      animation: modalIn 0.2s ease;
+    }
+    @keyframes modalIn {
+      from { opacity: 0; transform: translateY(12px) scale(0.97); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .modal-header {
+      padding: 18px 22px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .modal-title {
+      font-size: 13px; font-weight: 700; letter-spacing: -0.3px;
+    }
+    .modal-close {
+      background: none; border: none; font-size: 18px;
+      color: var(--text-faint); cursor: pointer;
+      padding: 0 4px; line-height: 1;
+    }
+    .modal-close:hover { color: var(--text); }
+    .modal-body { padding: 18px 22px; }
+    .modal-footer {
+      padding: 14px 22px; border-top: 1px solid var(--border);
+      display: flex; justify-content: flex-end; gap: 8px;
+    }
+
+    .form-group { margin-bottom: 14px; }
+    .form-label {
+      display: block; font-size: 9px; font-weight: 600;
+      letter-spacing: 1.5px; text-transform: uppercase;
+      color: var(--text-muted); margin-bottom: 5px;
+    }
+    .form-input, .form-select, .form-textarea {
+      width: 100%; font-family: var(--mono);
+      font-size: 12px; padding: 8px 12px;
+      border: 1px solid var(--border);
+      background: var(--bg); color: var(--text);
+      border-radius: 4px;
+      transition: border-color 0.2s;
+    }
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      outline: none; border-color: var(--blue);
+    }
+    .form-textarea { resize: vertical; min-height: 60px; }
+    .form-select { cursor: pointer; }
+
+    /* ── LOADING SHIMMER ── */
+    .shimmer {
+      background: linear-gradient(90deg, var(--bg) 25%, rgba(255,255,255,0.6) 50%, var(--bg) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+    }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* ── TOAST ── */
+    .toast-container {
+      position: fixed; bottom: 20px; right: 20px; z-index: 300;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .toast {
+      font-family: var(--mono);
+      font-size: 11px; padding: 10px 16px;
+      background: var(--text); color: var(--bg);
+      border-radius: 6px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+      animation: toastIn 0.3s ease, toastOut 0.3s ease 2.7s forwards;
+    }
+    .toast.error { background: var(--red); color: #fff; }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes toastOut { to { opacity: 0; transform: translateY(-8px); } }
+
+    /* ── AUTH GATE ── */
+    .auth-gate {
+      position: fixed; inset: 0; z-index: 150;
+      background: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column;
+    }
+    .auth-gate.hidden { display: none; }
+    .auth-gate-inner {
+      text-align: center; max-width: 380px; padding: 40px;
+    }
+    .auth-gate-logo {
+      font-size: 16px; font-weight: 800; letter-spacing: 6px;
+      text-transform: uppercase; margin-bottom: 8px;
+    }
+    .auth-gate-sub {
+      font-size: 11px; color: var(--text-faint); letter-spacing: 1px;
+      margin-bottom: 32px;
+    }
+    .auth-gate-status {
+      font-size: 11px; color: var(--text-muted); margin-top: 16px;
+      letter-spacing: 0.5px; min-height: 20px;
+    }
+    .auth-gate-denied {
+      color: var(--red); font-size: 11px;
+      margin-top: 16px; letter-spacing: 0.5px;
+    }
+    .auth-wallet-display {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 8px 16px; margin-top: 12px;
+      background: rgba(42,106,58,0.06);
+      border: 1px solid rgba(42,106,58,0.15);
+      font-size: 10px; color: var(--green);
+      letter-spacing: 1px;
+    }
+    .auth-wallet-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--green);
+    }
+    #privy-root { display: inline-block; }
+    .nav-wallet {
+      display: flex; align-items: center; gap: 8px;
+      margin-left: 24px;
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 1024px) {
+      .grid-top { grid-template-columns: 1fr; }
+      .kanban { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 640px) {
+      .dashboard { padding-left: 16px; padding-right: 16px; }
+      .nav-inner { padding: 0 16px; }
+      .nav-links { gap: 16px; }
+      .nav-links a { font-size: 9px; letter-spacing: 1px; }
+      .dash-header { flex-direction: column; gap: 12px; align-items: flex-start; }
+      .agent-grid { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <div class="nav-inner">
+      <a href="/" class="nav-logo">Clude</a>
+      <div class="nav-links">
+        <a href="/chat">Chat</a>
+        <a href="/docs.html">Docs</a>
+        <a href="/brain.html">Brain</a>
+        <a href="/explore">Explorer</a>
+        <a href="/dashboard" class="active">Dashboard</a>
+        <div class="nav-wallet" id="privy-root"></div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Auth Gate -->
+  <div class="auth-gate" id="authGate">
+    <div class="auth-gate-inner">
+      <div class="auth-gate-logo">Clude</div>
+      <div class="auth-gate-sub">Agent Dashboard</div>
+      <div id="authConnect">
+        <div id="privyFallback" style="font-size:10px;color:var(--text-faint);letter-spacing:1px;">Loading wallet connector...</div>
+      </div>
+      <div class="auth-gate-status" id="authStatus"></div>
+    </div>
+  </div>
+
+  <main class="dashboard" id="dashboardMain" style="display:none;">
+    <!-- Header -->
+    <div class="dash-header">
+      <div>
+        <div class="dash-title">Agent Dashboard</div>
+        <div class="dash-subtitle" id="lastUpdate">Loading...</div>
+      </div>
+      <div class="dash-actions">
+        <button class="btn" onclick="checkHeartbeats()">Check heartbeats</button>
+        <button class="btn btn-primary" onclick="openAgentModal()">+ Agent</button>
+      </div>
+    </div>
+
+    <!-- Top Row: Agents + Stats -->
+    <div class="grid-top">
+      <!-- Agent Cards -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Agents</span>
+          <span id="agentCount" style="font-size:9px;color:var(--text-faint);letter-spacing:1px;">0</span>
+        </div>
+        <div class="panel-body">
+          <div class="agent-grid" id="agentGrid">
+            <div class="empty-state">
+              <div class="empty-icon">&#9673;</div>
+              <div class="empty-text">No agents registered yet</div>
+              <button class="btn btn-sm" onclick="openAgentModal()">Register your first agent</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Stats</span>
+        </div>
+        <div class="panel-body">
+          <div class="stats-grid" id="statsGrid">
+            <div class="stat-card">
+              <div class="stat-value blue" id="statActive">--</div>
+              <div class="stat-label">Active agents</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="statTasksDone">--</div>
+              <div class="stat-label">Tasks done (7d)</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="statSpend">--</div>
+              <div class="stat-label">Monthly spend</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="statActivity">--</div>
+              <div class="stat-label">Activity (24h)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task Board -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <span style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text-muted);">Tasks</span>
+      <button class="btn btn-sm" onclick="openTaskModal()">+ Task</button>
+    </div>
+    <div class="kanban" id="kanban">
+      <div class="kanban-col">
+        <div class="kanban-col-header">
+          <span class="kanban-col-title">Pending</span>
+          <span class="kanban-count" id="countPending">0</span>
+        </div>
+        <div class="kanban-list" id="colPending"></div>
+      </div>
+      <div class="kanban-col">
+        <div class="kanban-col-header">
+          <span class="kanban-col-title">In progress</span>
+          <span class="kanban-count" id="countInProgress">0</span>
+        </div>
+        <div class="kanban-list" id="colInProgress"></div>
+      </div>
+      <div class="kanban-col">
+        <div class="kanban-col-header">
+          <span class="kanban-col-title">Completed</span>
+          <span class="kanban-count" id="countCompleted">0</span>
+        </div>
+        <div class="kanban-list" id="colCompleted"></div>
+      </div>
+    </div>
+
+    <!-- Activity Feed -->
+    <div class="activity-panel">
+      <div class="panel-header">
+        <span class="panel-title">Activity</span>
+        <select class="form-select" style="width:auto;font-size:9px;padding:3px 8px;" id="activityFilter" onchange="loadActivity()">
+          <option value="">All agents</option>
+        </select>
+      </div>
+      <div class="activity-list" id="activityList">
+        <div class="empty-state" style="padding:30px;">
+          <div class="empty-text">No activity yet</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Agent Modal -->
+  <div class="modal-overlay" id="agentModal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title" id="agentModalTitle">New Agent</span>
+        <button class="modal-close" onclick="closeAgentModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="agentEditId">
+        <div class="form-group">
+          <label class="form-label">Name</label>
+          <input class="form-input" id="agentName" placeholder="My Agent">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Type</label>
+          <select class="form-select" id="agentType" onchange="onAgentTypeChange()">
+            <option value="claude_code">Claude Code</option>
+            <option value="script">Script</option>
+            <option value="webhook">Webhook</option>
+            <option value="clude_bot">Clude Bot</option>
+            <option value="content">Content Agent</option>
+            <option value="research">Research Agent</option>
+            <option value="dev">Dev Agent</option>
+            <option value="testing">Testing Agent</option>
+            <option value="design_audit">Design Audit Agent</option>
+            <option value="customer_journey">Customer Journey Agent</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description</label>
+          <textarea class="form-textarea" id="agentDesc" placeholder="What does this agent do?"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Monthly budget (USD)</label>
+          <input class="form-input" type="number" id="agentBudget" placeholder="0.00" step="0.01" min="0">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeAgentModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveAgent()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Task Modal -->
+  <div class="modal-overlay" id="taskModal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title" id="taskModalTitle">New Task</span>
+        <button class="modal-close" onclick="closeTaskModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="taskEditId">
+        <div class="form-group">
+          <label class="form-label">Title</label>
+          <input class="form-input" id="taskTitle" placeholder="Task title">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description</label>
+          <textarea class="form-textarea" id="taskDesc" placeholder="What needs to be done?"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Assign to agent</label>
+          <select class="form-select" id="taskAgent">
+            <option value="">Unassigned</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Priority</label>
+          <select class="form-select" id="taskPriority">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+            <option value="critical">Critical</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeTaskModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveTask()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Task Detail Modal -->
+  <div class="modal-overlay" id="taskDetailModal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title" id="taskDetailTitle">Task</span>
+        <button class="modal-close" onclick="closeTaskDetailModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="taskDetailBody"></div>
+      <div class="modal-footer" id="taskDetailFooter"></div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toasts"></div>
+
+  <script>
+    // ── STATE ──
+    var agents = [];
+    var tasks = [];
+    var stats = {};
+    var pollTimer = null;
+    var authToken = null;
+
+    var API = '/api/dashboard';
+
+    // ── FETCH HELPERS ──
+    async function api(path, opts) {
+      var url = API + path;
+      var headers = { 'Content-Type': 'application/json' };
+      if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+      var res = await fetch(url, Object.assign({ headers: headers }, opts));
+      if (!res.ok) {
+        var err = await res.json().catch(function() { return { error: 'Request failed' }; });
+        throw new Error(err.error || 'Request failed');
+      }
+      return res.json();
+    }
+
+    // ── TIME HELPERS ──
+    function relativeTime(ts) {
+      if (!ts) return 'never';
+      var diff = Date.now() - new Date(ts).getTime();
+      var s = Math.floor(diff / 1000);
+      if (s < 10) return 'just now';
+      if (s < 60) return s + 's ago';
+      var m = Math.floor(s / 60);
+      if (m < 60) return m + 'm ago';
+      var h = Math.floor(m / 60);
+      if (h < 24) return h + 'h ago';
+      var d = Math.floor(h / 24);
+      return d + 'd ago';
+    }
+
+    function shortTime(ts) {
+      if (!ts) return '';
+      var d = new Date(ts);
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // ── TOAST ──
+    function toast(msg, isError) {
+      var el = document.createElement('div');
+      el.className = 'toast' + (isError ? ' error' : '');
+      el.textContent = msg;
+      document.getElementById('toasts').appendChild(el);
+      setTimeout(function() { el.remove(); }, 3000);
+    }
+
+    // ── LOAD DATA ──
+    async function loadAll() {
+      var errors = [];
+
+      try { agents = await api('/agents'); renderAgents(); }
+      catch (err) { errors.push('agents: ' + err.message); console.error('Agents load failed:', err); }
+
+      try { tasks = await api('/tasks'); renderKanban(); }
+      catch (err) { errors.push('tasks: ' + err.message); console.error('Tasks load failed:', err); }
+
+      try { stats = await api('/stats'); renderStats(); }
+      catch (err) { errors.push('stats: ' + err.message); console.error('Stats load failed:', err); }
+
+      try { var activity = await api('/activity?limit=50'); renderActivity(activity); }
+      catch (err) { errors.push('activity: ' + err.message); console.error('Activity load failed:', err); }
+
+      populateAgentDropdowns();
+
+      if (errors.length > 0) {
+        toast('Load errors: ' + errors.join('; '), true);
+        document.getElementById('lastUpdate').textContent = 'Some data failed to load';
+      } else {
+        document.getElementById('lastUpdate').textContent =
+          'Last updated ' + new Date().toLocaleTimeString();
+      }
+    }
+
+    async function loadActivity() {
+      try {
+        var filter = document.getElementById('activityFilter').value;
+        var url = '/activity?limit=50';
+        if (filter) url += '&agent_id=' + filter;
+        var activity = await api(url);
+        renderActivity(activity);
+      } catch (err) {
+        console.error('Activity load failed:', err);
+      }
+    }
+
+    // ── RENDER AGENTS ──
+    function renderAgents() {
+      var grid = document.getElementById('agentGrid');
+      document.getElementById('agentCount').textContent = agents.length;
+
+      if (agents.length === 0) {
+        grid.innerHTML =
+          '<div class="empty-state">' +
+          '<div class="empty-icon">&#9673;</div>' +
+          '<div class="empty-text">No agents registered yet</div>' +
+          '<button class="btn btn-sm" onclick="openAgentModal()">Register your first agent</button>' +
+          '</div>';
+        return;
+      }
+
+      grid.innerHTML = agents.map(function(a) {
+        var used = parseFloat(a.budget_used_usd) || 0;
+        var total = parseFloat(a.budget_monthly_usd) || 0;
+        var pct = total > 0 ? Math.min(100, (used / total) * 100) : 0;
+        var overBudget = total > 0 && used > total;
+
+        return '<div class="agent-card">' +
+          '<div class="agent-card-top">' +
+            '<div class="status-dot ' + a.status + '" title="' + a.status + ' — click to toggle" onclick="toggleStatus(\'' + a.id + '\', \'' + a.status + '\')"></div>' +
+            '<span class="agent-name">' + esc(a.name) + '</span>' +
+            '<span class="type-badge">' + esc(a.type) + '</span>' +
+          '</div>' +
+          '<div class="agent-meta">Last heartbeat: ' + relativeTime(a.last_heartbeat_at) + '</div>' +
+          (total > 0 ?
+            '<div class="budget-row">' +
+              '<div class="budget-bar"><div class="budget-fill' + (overBudget ? ' over' : '') + '" style="width:' + pct + '%"></div></div>' +
+              '<span class="budget-label">$' + used.toFixed(2) + ' / $' + total.toFixed(2) + '</span>' +
+            '</div>' : '') +
+          '<div class="agent-actions">' +
+            '<button onclick="openAgentModal(\'' + a.id + '\')">Edit</button>' +
+            '<button class="del" onclick="deleteAgent(\'' + a.id + '\', \'' + esc(a.name) + '\')">Del</button>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    // ── RENDER STATS ──
+    function renderStats() {
+      var s = stats;
+      document.getElementById('statActive').textContent =
+        (s.agents ? s.agents.active : 0) + ' / ' + (s.agents ? s.agents.total : 0);
+      document.getElementById('statTasksDone').textContent =
+        s.tasks ? s.tasks.completedThisWeek : 0;
+      document.getElementById('statSpend').textContent =
+        '$' + (s.budget ? s.budget.totalUsed.toFixed(2) : '0.00');
+      document.getElementById('statActivity').textContent =
+        s.activityLast24h || 0;
+    }
+
+    // ── RENDER KANBAN ──
+    function renderKanban() {
+      var cols = { pending: [], in_progress: [], completed: [] };
+
+      tasks.forEach(function(t) {
+        if (t.status === 'failed' || t.status === 'cancelled') {
+          cols.completed.push(t);
+        } else if (cols[t.status]) {
+          cols[t.status].push(t);
+        }
+      });
+
+      document.getElementById('countPending').textContent = cols.pending.length;
+      document.getElementById('countInProgress').textContent = cols.in_progress.length;
+      document.getElementById('countCompleted').textContent = cols.completed.length;
+
+      renderColumn('colPending', cols.pending);
+      renderColumn('colInProgress', cols.in_progress);
+      renderColumn('colCompleted', cols.completed);
+    }
+
+    function renderColumn(elId, items) {
+      var el = document.getElementById(elId);
+      if (items.length === 0) {
+        el.innerHTML = '<div class="empty-state" style="padding:20px;"><div class="empty-text" style="font-size:10px;">No tasks</div></div>';
+        return;
+      }
+      el.innerHTML = items.map(function(t) {
+        var agentName = t.dashboard_agents ? t.dashboard_agents.name : 'Unassigned';
+        var canRun = t.status === 'pending' && t.agent_id;
+        var canRetry = t.status === 'failed' && t.agent_id;
+        var hasResult = t.metadata && t.metadata.result;
+        return '<div class="task-card" onclick="openTaskDetail(\'' + t.id + '\')">' +
+          '<div class="task-title">' + esc(t.title) + '</div>' +
+          '<div class="task-meta">' +
+            '<span class="task-agent">' + esc(agentName) + '</span>' +
+            '<span class="priority-badge priority-' + t.priority + '">' + t.priority + '</span>' +
+            (t.status === 'failed' ? '<span class="priority-badge priority-critical">failed</span>' : '') +
+            (t.status === 'cancelled' ? '<span class="priority-badge priority-low">cancelled</span>' : '') +
+            (hasResult ? '<span class="priority-badge" style="background:rgba(34,68,255,0.08);color:var(--blue);">has result</span>' : '') +
+          '</div>' +
+          (canRun ? '<button class="btn btn-sm btn-primary" style="margin-top:6px;font-size:9px;padding:3px 8px;" onclick="event.stopPropagation();runTask(\'' + t.id + '\')">Run</button>' : '') +
+          (canRetry ? '<button class="btn btn-sm" style="margin-top:6px;font-size:9px;padding:3px 8px;" onclick="event.stopPropagation();retryTask(\'' + t.id + '\')">Retry</button>' : '') +
+        '</div>';
+      }).join('');
+    }
+
+    // ── RENDER ACTIVITY ──
+    function renderActivity(items) {
+      var el = document.getElementById('activityList');
+      if (!items || items.length === 0) {
+        el.innerHTML = '<div class="empty-state" style="padding:30px;"><div class="empty-text">No activity yet</div></div>';
+        return;
+      }
+
+      el.innerHTML = items.map(function(a) {
+        var agentName = a.dashboard_agents ? a.dashboard_agents.name : 'System';
+        var detail = '';
+        if (a.details) {
+          if (a.details.title) detail = a.details.title;
+          else if (a.details.new_status) detail = a.details.new_status;
+          else if (a.details.name) detail = a.details.name;
+          else if (a.details.reason) detail = a.details.reason;
+        }
+        if (a.cost_usd && parseFloat(a.cost_usd) > 0) {
+          detail += (detail ? ' ' : '') + '$' + parseFloat(a.cost_usd).toFixed(4);
+        }
+        var actionLabel = a.action.replace(/_/g, ' ');
+        return '<div class="activity-entry">' +
+          '<span class="activity-time">' + shortTime(a.created_at) + '</span>' +
+          '<span class="activity-dot ' + a.action + '"></span>' +
+          '<span class="activity-agent">' + esc(agentName) + '</span>' +
+          '<span class="activity-action">' + actionLabel + '</span>' +
+          (detail ? '<span class="activity-detail">' + esc(detail) + '</span>' : '') +
+        '</div>';
+      }).join('');
+    }
+
+    // ── AGENT CRUD ──
+    function openAgentModal(editId) {
+      var modal = document.getElementById('agentModal');
+      document.getElementById('agentEditId').value = '';
+      document.getElementById('agentName').value = '';
+      document.getElementById('agentType').value = 'claude_code';
+      document.getElementById('agentDesc').value = '';
+      document.getElementById('agentBudget').value = '';
+      document.getElementById('agentModalTitle').textContent = 'New Agent';
+
+      if (editId) {
+        var a = agents.find(function(x) { return x.id === editId; });
+        if (a) {
+          document.getElementById('agentEditId').value = a.id;
+          document.getElementById('agentName').value = a.name;
+          document.getElementById('agentType').value = a.type;
+          document.getElementById('agentDesc').value = a.description || '';
+          document.getElementById('agentBudget').value = a.budget_monthly_usd || '';
+          document.getElementById('agentModalTitle').textContent = 'Edit Agent';
+        }
+      }
+      modal.classList.add('open');
+    }
+
+    function closeAgentModal() {
+      document.getElementById('agentModal').classList.remove('open');
+    }
+
+    async function saveAgent() {
+      var editId = document.getElementById('agentEditId').value;
+      var name = document.getElementById('agentName').value.trim();
+      if (!name) { toast('Name is required', true); return; }
+
+      var body = {
+        name: name,
+        type: document.getElementById('agentType').value,
+        description: document.getElementById('agentDesc').value.trim() || null,
+        budget_monthly_usd: parseFloat(document.getElementById('agentBudget').value) || 0,
+      };
+
+      try {
+        if (editId) {
+          await api('/agents/' + editId, { method: 'PUT', body: JSON.stringify(body) });
+          toast('Agent updated');
+        } else {
+          await api('/agents', { method: 'POST', body: JSON.stringify(body) });
+          toast('Agent registered');
+        }
+        closeAgentModal();
+        await loadAll();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    }
+
+    async function deleteAgent(id, name) {
+      if (!confirm('Delete agent "' + name + '"? This cannot be undone.')) return;
+      try {
+        await api('/agents/' + id, { method: 'DELETE' });
+        toast('Agent removed');
+        await loadAll();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    }
+
+    async function toggleStatus(id, current) {
+      var next = current === 'online' ? 'paused' : 'online';
+      try {
+        await api('/agents/' + id + '/status', {
+          method: 'PATCH',
+          body: JSON.stringify({ status: next }),
+        });
+        await loadAll();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    }
+
+    // ── TASK CRUD ──
+    function openTaskModal(editId) {
+      var modal = document.getElementById('taskModal');
+      document.getElementById('taskEditId').value = '';
+      document.getElementById('taskTitle').value = '';
+      document.getElementById('taskDesc').value = '';
+      document.getElementById('taskAgent').value = '';
+      document.getElementById('taskPriority').value = 'medium';
+      document.getElementById('taskModalTitle').textContent = 'New Task';
+
+      if (editId) {
+        var t = tasks.find(function(x) { return x.id === editId; });
+        if (t) {
+          document.getElementById('taskEditId').value = t.id;
+          document.getElementById('taskTitle').value = t.title;
+          document.getElementById('taskDesc').value = t.description || '';
+          document.getElementById('taskAgent').value = t.agent_id || '';
+          document.getElementById('taskPriority').value = t.priority;
+          document.getElementById('taskModalTitle').textContent = 'Edit Task';
+        }
+      }
+      modal.classList.add('open');
+    }
+
+    function closeTaskModal() {
+      document.getElementById('taskModal').classList.remove('open');
+    }
+
+    async function saveTask() {
+      var editId = document.getElementById('taskEditId').value;
+      var title = document.getElementById('taskTitle').value.trim();
+      if (!title) { toast('Title is required', true); return; }
+
+      var body = {
+        title: title,
+        description: document.getElementById('taskDesc').value.trim() || null,
+        agent_id: document.getElementById('taskAgent').value || null,
+        priority: document.getElementById('taskPriority').value,
+      };
+
+      try {
+        if (editId) {
+          await api('/tasks/' + editId, { method: 'PUT', body: JSON.stringify(body) });
+          toast('Task updated');
+        } else {
+          await api('/tasks', { method: 'POST', body: JSON.stringify(body) });
+          toast('Task created');
+        }
+        closeTaskModal();
+        await loadAll();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    }
+
+    function openTaskDetail(id) {
+      var t = tasks.find(function(x) { return x.id === id; });
+      if (!t) return;
+      var modal = document.getElementById('taskDetailModal');
+      document.getElementById('taskDetailTitle').textContent = t.title;
+
+      var agentName = t.dashboard_agents ? t.dashboard_agents.name : 'Unassigned';
+      var meta = t.metadata || {};
+
+      var html =
+        (t.description ? '<div style="margin-bottom:14px;font-size:12px;color:var(--text-muted);line-height:1.7;">' + esc(t.description) + '</div>' : '') +
+        '<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:10px;margin-bottom:14px;">' +
+          '<div><span style="color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;">Status</span><br><strong>' + t.status + '</strong></div>' +
+          '<div><span style="color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;">Priority</span><br><span class="priority-badge priority-' + t.priority + '">' + t.priority + '</span></div>' +
+          '<div><span style="color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;">Agent</span><br><strong>' + esc(agentName) + '</strong></div>' +
+          '<div><span style="color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;">Created</span><br>' + relativeTime(t.created_at) + '</div>' +
+          (t.completed_at ? '<div><span style="color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;">Completed</span><br>' + relativeTime(t.completed_at) + '</div>' : '') +
+          (meta.model ? '<div><span style="color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;">Model</span><br>' + esc(meta.model) + '</div>' : '') +
+          (meta.cost_usd ? '<div><span style="color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;">Cost</span><br>$' + parseFloat(meta.cost_usd).toFixed(4) + '</div>' : '') +
+        '</div>';
+
+      // Show result if present
+      if (meta.result) {
+        html += '<div style="margin-bottom:14px;">' +
+          '<div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-faint);margin-bottom:6px;">Result</div>' +
+          '<div style="background:#fff;border:1px solid #e0e0da;padding:12px;font-size:11px;line-height:1.7;white-space:pre-wrap;max-height:200px;overflow-y:auto;">' + esc(String(meta.result)) + '</div>' +
+        '</div>';
+      }
+
+      // Show error if present
+      if (meta.error) {
+        html += '<div style="margin-bottom:14px;">' +
+          '<div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#9a3030;margin-bottom:6px;">Error</div>' +
+          '<div style="background:rgba(154,48,48,0.04);border:1px solid rgba(154,48,48,0.15);padding:12px;font-size:11px;line-height:1.5;color:#9a3030;">' + esc(String(meta.error)) + '</div>' +
+        '</div>';
+      }
+
+      // Show execution log if present
+      if (meta.execution_log && meta.execution_log.length > 0) {
+        html += '<div>' +
+          '<details><summary style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-faint);cursor:pointer;margin-bottom:6px;">Execution Log (' + meta.execution_log.length + ' entries)</summary>' +
+          '<div style="background:#fff;border:1px solid #e0e0da;padding:10px;font-size:10px;line-height:1.6;font-family:var(--mono);max-height:200px;overflow-y:auto;">' +
+          meta.execution_log.map(function(l) { return '<div style="color:var(--text-muted);">' + esc(l) + '</div>'; }).join('') +
+          '</div></details>' +
+        '</div>';
+      }
+
+      document.getElementById('taskDetailBody').innerHTML = html;
+
+      // Action buttons based on status
+      var footer = document.getElementById('taskDetailFooter');
+      var btns = '<button class="btn" onclick="closeTaskDetailModal()">Close</button>';
+
+      if (t.status === 'pending' && t.agent_id) {
+        btns = '<button class="btn btn-primary" onclick="runTask(\'' + id + '\');closeTaskDetailModal()">Run Agent</button>' + btns;
+      }
+      if (t.status === 'pending') {
+        btns = '<button class="btn" onclick="updateTaskStatus(\'' + id + '\', \'in_progress\')">Start Manual</button>' + btns;
+      }
+      if (t.status === 'in_progress') {
+        btns = '<button class="btn btn-primary" onclick="updateTaskStatus(\'' + id + '\', \'completed\')">Complete</button>' + btns;
+        btns = '<button class="btn btn-danger" onclick="updateTaskStatus(\'' + id + '\', \'failed\')">Failed</button>' + btns;
+      }
+      if (t.status === 'failed' && t.agent_id) {
+        btns = '<button class="btn btn-primary" onclick="retryTask(\'' + id + '\');closeTaskDetailModal()">Retry</button>' + btns;
+      }
+      if (t.status !== 'completed' && t.status !== 'cancelled') {
+        btns = '<button class="btn" onclick="openTaskModal(\'' + id + '\');closeTaskDetailModal()">Edit</button>' + btns;
+      }
+      btns = '<button class="btn btn-danger btn-sm" onclick="deleteTask(\'' + id + '\')">Delete</button>' + btns;
+      footer.innerHTML = btns;
+
+      modal.classList.add('open');
+    }
+
+    function closeTaskDetailModal() {
+      document.getElementById('taskDetailModal').classList.remove('open');
+    }
+
+    async function updateTaskStatus(id, status) {
+      try {
+        await api('/tasks/' + id, { method: 'PUT', body: JSON.stringify({ status: status }) });
+        toast('Task ' + status.replace('_', ' '));
+        closeTaskDetailModal();
+        await loadAll();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    }
+
+    async function deleteTask(id) {
+      if (!confirm('Delete this task?')) return;
+      try {
+        await api('/tasks/' + id, { method: 'DELETE' });
+        toast('Task deleted');
+        closeTaskDetailModal();
+        await loadAll();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    }
+
+    // ── RUN / RETRY TASKS ──
+    async function runTask(id) {
+      try {
+        await api('/tasks/' + id + '/execute', { method: 'POST' });
+        toast('Task executing...');
+        await loadAll();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    }
+
+    async function retryTask(id) {
+      try {
+        await api('/tasks/' + id + '/retry', { method: 'POST' });
+        toast('Retrying task...');
+        await loadAll();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    }
+
+    // ── AGENT TYPE PRESETS ──
+    var agentTypeDescriptions = {
+      content: 'Writes and posts tweets and threads for $CLUDE.',
+      research: 'Investigates topics and stores findings in memory.',
+      dev: 'Analyzes code, writes specs, and plans improvements.',
+      testing: 'Reviews plans, finds edge cases, and writes test reports.',
+      design_audit: 'Audits UX flows and suggests design improvements.',
+      customer_journey: 'Maps user journeys, analyzes community patterns.',
+    };
+
+    function onAgentTypeChange() {
+      var type = document.getElementById('agentType').value;
+      var desc = agentTypeDescriptions[type];
+      if (desc && !document.getElementById('agentEditId').value) {
+        document.getElementById('agentDesc').value = desc;
+      }
+    }
+
+    // ── HEARTBEAT CHECK ──
+    async function checkHeartbeats() {
+      try {
+        var result = await api('/check-heartbeats', { method: 'POST' });
+        toast('Checked ' + result.checked + ' agents, ' + result.marked_offline + ' marked offline');
+        await loadAll();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    }
+
+    // ── POPULATE DROPDOWNS ──
+    function populateAgentDropdowns() {
+      // Task agent assignment dropdown
+      var taskSelect = document.getElementById('taskAgent');
+      var currentVal = taskSelect.value;
+      taskSelect.innerHTML = '<option value="">Unassigned</option>';
+      agents.forEach(function(a) {
+        var opt = document.createElement('option');
+        opt.value = a.id;
+        opt.textContent = a.name;
+        taskSelect.appendChild(opt);
+      });
+      taskSelect.value = currentVal;
+
+      // Activity filter dropdown
+      var filterSelect = document.getElementById('activityFilter');
+      var currentFilter = filterSelect.value;
+      filterSelect.innerHTML = '<option value="">All agents</option>';
+      agents.forEach(function(a) {
+        var opt = document.createElement('option');
+        opt.value = a.id;
+        opt.textContent = a.name;
+        filterSelect.appendChild(opt);
+      });
+      filterSelect.value = currentFilter;
+    }
+
+    // ── ESCAPE HTML ──
+    function esc(s) {
+      if (!s) return '';
+      var d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    // ── CLOSE MODALS ON OVERLAY CLICK ──
+    document.querySelectorAll('.modal-overlay').forEach(function(overlay) {
+      overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) {
+          overlay.classList.remove('open');
+        }
+      });
+    });
+
+    // ── CLOSE ON ESC ──
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        document.querySelectorAll('.modal-overlay.open').forEach(function(m) {
+          m.classList.remove('open');
+        });
+      }
+    });
+
+    // ── AUTH ──
+    function showDashboard() {
+      console.log('[dashboard] Showing dashboard, authToken:', authToken ? 'present' : 'MISSING');
+      document.getElementById('authGate').classList.add('hidden');
+      document.getElementById('dashboardMain').style.display = '';
+      loadAll();
+      pollTimer = setInterval(loadAll, 10000);
+    }
+
+    function hideDashboard() {
+      document.getElementById('authGate').classList.remove('hidden');
+      document.getElementById('dashboardMain').style.display = 'none';
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+      authToken = null;
+    }
+
+    // Listen for wallet auth from Privy React island
+    window.addEventListener('dashboard-auth', async function(e) {
+      var address = e.detail.address;
+      var token = e.detail.token;
+      console.log('[dashboard] Auth event received, wallet:', address?.slice(0,4) + '...' + address?.slice(-4), 'token:', token ? 'present (' + token.length + ' chars)' : 'MISSING');
+      authToken = token;
+
+      var statusEl = document.getElementById('authStatus');
+      statusEl.textContent = 'Verifying...';
+      statusEl.className = 'auth-gate-status';
+
+      try {
+        var result = await api('/auth?wallet=' + encodeURIComponent(address));
+        console.log('[dashboard] Auth response:', result);
+        if (result.authorized) {
+          showDashboard();
+        } else {
+          statusEl.textContent = 'Access denied. Owner wallet required.';
+          statusEl.className = 'auth-gate-denied';
+          authToken = null;
+        }
+      } catch (err) {
+        console.error('[dashboard] Auth call failed:', err);
+        statusEl.textContent = 'Auth failed: ' + err.message;
+        statusEl.className = 'auth-gate-denied';
+        authToken = null;
+      }
+    });
+
+    window.addEventListener('dashboard-disconnect', function() {
+      hideDashboard();
+      document.getElementById('authStatus').textContent = '';
+      document.getElementById('authStatus').className = 'auth-gate-status';
+    });
+  </script>
+
+  <!-- Privy SDK -->
+  <script type="importmap">
+  { "imports": {
+    "react": "https://esm.sh/react@19?bundle",
+    "react-dom": "https://esm.sh/react-dom@19?bundle",
+    "react-dom/client": "https://esm.sh/react-dom@19/client?bundle",
+    "react/jsx-runtime": "https://esm.sh/react@19/jsx-runtime?bundle"
+  }}
+  </script>
+  <script type="module">
+  (async () => {
+    var fallback = document.getElementById('privyFallback');
+    try {
+      // Load everything in parallel — bundle-deps collapses sub-dependencies into single files
+      var [React, ReactDOM, PrivyModule, SolanaModule] = await Promise.all([
+        import('react'),
+        import('react-dom/client'),
+        import('https://esm.sh/@privy-io/react-auth@2.4.0?external=react,react-dom&bundle-deps'),
+        import('https://esm.sh/@privy-io/react-auth@2.4.0/solana?external=react,react-dom&bundle-deps').catch(function() { return null; }),
+      ]);
+
+      var solanaConnectors = null;
+      if (SolanaModule && SolanaModule.toSolanaWalletConnectors) {
+        try {
+          solanaConnectors = SolanaModule.toSolanaWalletConnectors({ shouldAutoConnect: true });
+        } catch (e) {
+          console.warn('Solana connectors init failed:', e.message);
+        }
+      }
+
+      var { PrivyProvider, usePrivy, useWallets } = PrivyModule;
+      var { createElement: h, useState, useEffect } = React;
+
+      var appId = document.querySelector('meta[name="privy-app-id"]')?.content || '';
+      if (!appId) {
+        fallback.textContent = 'Privy not configured. Set PRIVY_APP_ID.';
+        return;
+      }
+
+      function updateNavWallet(addr) {
+        var nav = document.getElementById('privy-root');
+        if (addr) {
+          nav.innerHTML = '<div style="display:flex;align-items:center;gap:6px;padding:4px 10px;background:rgba(42,106,58,0.06);border:1px solid rgba(42,106,58,0.15);font-size:10px;color:#2a6a3a;letter-spacing:0.5px;"><div style="width:5px;height:5px;border-radius:50%;background:#2a6a3a;"></div>' + addr.slice(0,4) + '...' + addr.slice(-4) + '</div>';
+        } else {
+          nav.innerHTML = '';
+        }
+      }
+
+      function WalletButton() {
+        var { ready, authenticated, login, logout, getAccessToken, user } = usePrivy();
+        var { wallets } = useWallets();
+        var [sent, setSent] = useState(false);
+
+        useEffect(function() {
+          if (!authenticated || sent) return;
+          console.log('[dashboard] Authenticated! wallets:', JSON.stringify(wallets?.map(function(w) { return { type: w.walletClientType, chain: w.chainType, addr: w.address?.slice(0,6) }; })));
+          console.log('[dashboard] Privy user:', JSON.stringify(user?.wallet));
+
+          // Try wallets array first, fall back to privy user's linked wallet
+          var addr = null;
+          if (wallets?.length) {
+            var solana = wallets.find(function(w) { return w.walletClientType === 'solana' || w.chainType === 'solana'; });
+            addr = solana?.address || wallets[0]?.address;
+          }
+          if (!addr && user?.wallet?.address) {
+            addr = user.wallet.address;
+          }
+          if (!addr) {
+            console.warn('[dashboard] No wallet address found yet, waiting...');
+            return;
+          }
+
+          setSent(true);
+          updateNavWallet(addr);
+          console.log('[dashboard] Getting access token for', addr.slice(0,4) + '...' + addr.slice(-4));
+          getAccessToken().then(function(token) {
+            if (!token) {
+              console.error('[dashboard] getAccessToken returned null/empty');
+              document.getElementById('authStatus').textContent = 'Failed to get auth token. Try disconnecting and reconnecting.';
+              document.getElementById('authStatus').className = 'auth-gate-denied';
+              setSent(false);
+              return;
+            }
+            console.log('[dashboard] Token obtained, dispatching auth event');
+            window.dispatchEvent(new CustomEvent('dashboard-auth', { detail: { address: addr, token: token } }));
+          }).catch(function(err) {
+            console.error('[dashboard] getAccessToken failed:', err);
+            document.getElementById('authStatus').textContent = 'Token error: ' + err.message + '. Try reconnecting.';
+            document.getElementById('authStatus').className = 'auth-gate-denied';
+            setSent(false);
+          });
+        }, [authenticated, wallets, user]);
+
+        useEffect(function() {
+          if (!authenticated && sent) {
+            setSent(false);
+            updateNavWallet(null);
+            window.dispatchEvent(new CustomEvent('dashboard-disconnect'));
+          }
+        }, [authenticated]);
+
+        if (!ready) return h('span', { style: { fontSize: '10px', color: '#999', letterSpacing: '1px' } }, 'Loading...');
+
+        if (authenticated) {
+          var addr = wallets?.[0]?.address || user?.wallet?.address || '';
+          return h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
+            h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 10px', background: 'rgba(42,106,58,0.06)', border: '1px solid rgba(42,106,58,0.15)', fontSize: '10px', color: '#2a6a3a', letterSpacing: '0.5px' } },
+              h('div', { style: { width: 5, height: 5, borderRadius: '50%', background: '#2a6a3a' } }),
+              addr.slice(0, 4) + '...' + addr.slice(-4)
+            ),
+            h('button', {
+              onClick: logout,
+              style: { fontFamily: 'var(--mono)', fontSize: '9px', letterSpacing: '1.5px', textTransform: 'uppercase', padding: '4px 10px', background: 'transparent', color: '#9a3030', border: '1px solid rgba(154,48,48,0.2)', cursor: 'pointer' }
+            }, 'Disconnect')
+          );
+        }
+
+        return h('button', {
+          onClick: login,
+          style: { fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '2px', textTransform: 'uppercase', padding: '10px 24px', background: '#111', color: '#f5f5f0', border: '1px solid #111', cursor: 'pointer', transition: 'all 0.25s' }
+        }, 'Connect Wallet');
+      }
+
+      function App() {
+        var privyConfig = {
+          appearance: {
+            theme: 'light',
+            walletChainType: 'solana-only',
+          },
+          loginMethods: ['wallet'],
+          embeddedWallets: { createOnLogin: 'off' },
+        };
+        if (solanaConnectors) {
+          privyConfig.externalWallets = {
+            solana: { connectors: solanaConnectors },
+          };
+        }
+        return h(PrivyProvider, {
+          appId: appId,
+          config: privyConfig,
+        }, h(WalletButton));
+      }
+
+      // Mount single PrivyProvider wrapping both gate + nav buttons
+      fallback.style.display = 'none';
+      var container = document.createElement('div');
+      document.getElementById('authConnect').appendChild(container);
+      ReactDOM.createRoot(container).render(h(App));
+
+    } catch (err) {
+      console.error('Privy load failed:', err);
+      fallback.textContent = 'Wallet connector unavailable.';
+    }
+  })();
+  </script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 import { eventBus } from './event-bus';
-import { accumulateImportance } from '../features/dream-cycle';
+import { accumulateImportance } from '../memory/dream/cycle';
 import { createChildLogger } from '../core/logger';
 
 const log = createChildLogger('events');

@@ -16,7 +16,7 @@
  */
 
 import { createChildLogger } from '../core/logger';
-import type { RecallOptions } from '../core/memory';
+import type { RecallOptions } from '../memory';
 
 const log = createChildLogger('exp-ircot');
 

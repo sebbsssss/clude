@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock all dependencies before importing
-vi.mock('../../core/memory', () => ({
+vi.mock('../../memory', () => ({
   recallMemories: vi.fn(),
   formatMemoryContext: vi.fn((memories: any[]) =>
     memories.map(m => m.summary).join('\n')
@@ -61,7 +61,7 @@ vi.mock('../temporal-bonds', () => ({
 }));
 
 import { enhancedRecallMemories, buildEnhancedContext } from '../enhanced-recall';
-import { recallMemories } from '../../core/memory';
+import { recallMemories } from '../../memory';
 import { getExperimentalConfig } from '../config';
 import { rerankWithCrossEncoder, rerankWithVoyage } from '../reranker';
 import { isMultiHopQuery, runIRCoT } from '../ircot';

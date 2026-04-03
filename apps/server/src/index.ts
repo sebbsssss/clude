@@ -18,14 +18,14 @@ if (require.main === module) {
   const { config } = require('./config');
   const { initDatabase } = require('./core/database');
   const { startPriceOracle, stopPriceOracle } = require('./core/price-oracle');
-  const { startPolling, stopPolling } = require('./mentions/poller');
-  const { startMoodTweeter, stopMoodTweeter } = require('./features/price-personality');
-  const { startDreamCycle, stopDreamCycle } = require('./features/dream-cycle');
-  const { startActiveReflection, stopActiveReflection } = require('./features/active-reflection');
-  const { startCampaignTracker, stopCampaignTracker } = require('./features/campaign-tracker');
+  const { startPolling, stopPolling } = require('./workers/mentions/poller');
+  const { startMoodTweeter, stopMoodTweeter } = require('./workers/price-personality');
+  const { startDreamCycle, stopDreamCycle } = require('./memory/dream/cycle');
+  const { startActiveReflection, stopActiveReflection } = require('./memory/active-reflection');
+  const { startCampaignTracker, stopCampaignTracker } = require('./workers/campaign-tracker');
   const { startTaskExecutor, stopTaskExecutor } = require('./agents');
   const { startCompound, stopCompound } = require('./features/compound');
-  const { startServer } = require('./webhook/server');
+  const { startServer } = require('./routes/server');
   const { getBotWallet } = require('./core/solana-client');
   const { createChildLogger } = require('./core/logger');
   const { registerEventHandlers } = require('./events/handlers');
@@ -80,7 +80,7 @@ if (require.main === module) {
 
     // Set owner wallet if configured
     if (config.owner.wallet) {
-      const { _setOwnerWallet } = require('./core/memory');
+      const { _setOwnerWallet } = require('./memory');
       _setOwnerWallet(config.owner.wallet);
       log.info({ owner: config.owner.wallet.slice(0, 8) + '...' }, 'Owner wallet configured');
     }
@@ -117,7 +117,7 @@ if (require.main === module) {
     log.info('Dream cycle started — memory consolidation active');
 
     // Start hosted dream worker — runs dream cycles for all cortex agents
-    const { startHostedDreamSchedule } = require('./features/hosted-dreams');
+    const { startHostedDreamSchedule } = require('./memory/hosted-dreams');
     startHostedDreamSchedule();
     log.info('Hosted dream worker started — all agents get dream cycles');
 
@@ -130,7 +130,7 @@ if (require.main === module) {
     }
 
     if (config.features.telegramEnabled && config.telegram.botToken) {
-      const { startXSentimentMonitor } = require('./features/x-sentiment-monitor');
+      const { startXSentimentMonitor } = require('./workers/x-sentiment-monitor');
       startXSentimentMonitor();
       log.info('X sentiment monitor started — broadcasting to Telegram');
     }
@@ -161,7 +161,7 @@ if (require.main === module) {
       stopTaskExecutor();
       if (process.env.COMPOUND_ENABLED === 'true') stopCompound();
       if (config.features.telegramEnabled) {
-        const { stopXSentimentMonitor } = require('./features/x-sentiment-monitor');
+        const { stopXSentimentMonitor } = require('./workers/x-sentiment-monitor');
         stopXSentimentMonitor();
       }
       process.exit(0);

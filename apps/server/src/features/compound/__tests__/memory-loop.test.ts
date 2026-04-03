@@ -14,7 +14,7 @@ const mockStoreMemory = vi.fn();
 const mockRecallMemories = vi.fn();
 const mockCreateMemoryLink = vi.fn();
 
-vi.mock('../../../core/memory', () => ({
+vi.mock('../../../memory', () => ({
   storeMemory: (...args: any[]) => mockStoreMemory(...args),
   recallMemories: (...args: any[]) => mockRecallMemories(...args),
   createMemoryLink: (...args: any[]) => mockCreateMemoryLink(...args),

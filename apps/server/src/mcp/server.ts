@@ -81,7 +81,7 @@ let _extractSkill: any;
 function loadSelfHosted() {
   if (!_recallMemories) {
     try {
-      const memory = require('../core/memory');
+      const memory = require('../memory');
       _recallMemories = memory.recallMemories;
       _storeMemory = memory.storeMemory;
       _getMemoryStats = memory.getMemoryStats;
@@ -391,7 +391,7 @@ server.tool(
         memories = result.memories;
       } else {
         loadSelfHosted();
-        const { findClinamen } = require('../features/clinamen');
+        const { findClinamen } = require('../memory/clinamen');
         memories = await findClinamen({
           context: args.context,
           limit: args.limit,
@@ -820,7 +820,7 @@ async function main() {
       }
       if (process.env.OWNER_WALLET) {
         try {
-          const { _setOwnerWallet } = require('../core/memory');
+          const { _setOwnerWallet } = require('../memory');
           _setOwnerWallet(process.env.OWNER_WALLET);
           console.error('[clude-mcp] Owner wallet scoped to:', process.env.OWNER_WALLET.slice(0, 8) + '...');
         } catch (err: any) {

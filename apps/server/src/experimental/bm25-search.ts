@@ -16,7 +16,7 @@
 
 import { getDb } from '../core/database';
 import { createChildLogger } from '../core/logger';
-import type { Memory } from '../core/memory';
+import type { Memory } from '../memory';
 
 const log = createChildLogger('exp-bm25');
 

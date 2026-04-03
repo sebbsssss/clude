@@ -64,7 +64,34 @@ export function useAuth(): AuthState {
     setReady(true);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- only needs to run once on mount
 
-  // ... (auto-register useEffect - line 61-88 - kept as is)
+  // Privy auth → auto-register: convert Privy session into a Cortex API key
+  useEffect(() => {
+    if (cortexInitRef.current || loggingOutRef.current || !privyReady || !privyAuth || cortexKey) return;
+
+    // Prefer the wallet already selected in dashboard (shared via localStorage)
+    const savedWallet = localStorage.getItem(STORAGE_KEYS.wallet);
+    const wallet = (savedWallet && wallets?.find((w: { address: string }) => w.address === savedWallet)?.address)
+      || wallets?.[0]?.address;
+    if (!wallet) return;
+
+    (async () => {
+      try {
+        const token = await getAccessToken();
+        if (!token) return;
+
+        const result = await api.autoRegister(token, wallet);
+        api.setKey(result.api_key);
+        setCortexKey(result.api_key);
+        setWalletAddress(wallet);
+        setAuthMode('privy');
+
+        localStorage.setItem(STORAGE_KEYS.cortexKey, result.api_key);
+        localStorage.setItem(STORAGE_KEYS.wallet, wallet);
+      } catch (err) {
+        console.error('Auto-register failed:', err);
+      }
+    })();
+  }, [privyReady, privyAuth, wallets, cortexKey, getAccessToken]);
 
   const login = useCallback(() => {
     privyLogin();

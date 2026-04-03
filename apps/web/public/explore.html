@@ -1,0 +1,2391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CLUDE — Memory Explorer</title>
+  <meta name="description" content="Visualize, search, and explore your agent's mind. Load memories from cloud or local files.">
+  <meta name="privy-app-id" content="">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f5f5f0;
+      --bg-warm: #eeeee8;
+      --surface: rgba(255, 255, 255, 0.92);
+      --text: #111;
+      --text-muted: #666;
+      --text-faint: #999;
+      --border: rgba(0, 0, 0, 0.08);
+      --accent: #2244ff;
+      --accent-light: #5566ff;
+      --episodic: #1a3abf;
+      --semantic: #3a4a7a;
+      --procedural: #2a6a3a;
+      --selfmodel: #5a3a80;
+      --mono: 'JetBrains Mono', monospace;
+      --error: #9a3030;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      font-family: var(--mono);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 12px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; width: 100%; z-index: 100;
+      background: rgba(245, 245, 240, 0.9);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+    }
+
+    .nav-inner {
+      max-width: 1200px; margin: 0 auto; padding: 0 2rem;
+      height: 56px; display: flex; align-items: center;
+    }
+
+    .nav-left { display: flex; align-items: center; gap: 1rem; }
+
+    .nav-logo {
+      font-size: 13px; font-weight: 800; letter-spacing: 5px;
+      color: var(--text); text-transform: uppercase;
+      text-decoration: none; transition: color 0.3s;
+    }
+    .nav-logo:hover { color: var(--accent); text-decoration: none; }
+
+    .nav-status {
+      display: flex; align-items: center; gap: 0.5rem;
+      font-size: 0.65rem; color: var(--text-faint); letter-spacing: 1px;
+    }
+
+    .status-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #2a6a3a;
+      animation: pulse-dot 3s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .nav-links {
+      display: flex; align-items: center; gap: 2rem; margin-left: auto;
+    }
+
+    .nav-links a {
+      color: var(--text-muted); font-size: 11px; letter-spacing: 2px;
+      text-transform: uppercase; text-decoration: none; transition: color 0.3s;
+    }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+    .nav-links a.nav-active { color: var(--text); font-weight: 600; }
+
+    .nav-toggle {
+      display: none; background: none; border: none; cursor: pointer;
+      padding: 6px; flex-direction: column; gap: 4px;
+    }
+    .nav-toggle span {
+      display: block; width: 18px; height: 1.5px;
+      background: var(--text); transition: all 0.3s;
+    }
+    .nav-toggle.open span:nth-child(1) { transform: rotate(45deg) translate(3.5px, 3.5px); }
+    .nav-toggle.open span:nth-child(2) { opacity: 0; }
+    .nav-toggle.open span:nth-child(3) { transform: rotate(-45deg) translate(3.5px, -3.5px); }
+
+    /* ── HERO ── */
+    .hero {
+      padding: 96px 40px 0;
+      text-align: center;
+    }
+
+    .hero-label {
+      font-size: 9px; letter-spacing: 5px; text-transform: uppercase;
+      color: var(--text-faint); margin-bottom: 16px;
+    }
+
+    .hero-title {
+      font-size: clamp(28px, 4vw, 44px);
+      font-weight: 800; line-height: 1.1;
+      letter-spacing: -1px; margin-bottom: 12px;
+    }
+
+    .hero-title em {
+      font-style: normal;
+      background: linear-gradient(135deg, #2244ff, #5566ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-sub {
+      font-size: 12px; color: var(--text-muted);
+      max-width: 440px; margin: 0 auto; line-height: 1.8;
+    }
+
+    /* ── SOURCE SELECTOR ── */
+    .source-section {
+      max-width: 680px; margin: 40px auto 0; padding: 0 20px;
+    }
+
+    .source-tabs {
+      display: flex; gap: 0; border-bottom: 1px solid var(--border);
+      margin-bottom: 0;
+    }
+
+    .source-tab {
+      flex: 1; padding: 14px 0; text-align: center;
+      font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--text-faint); cursor: pointer;
+      border: none; background: none; font-family: var(--mono);
+      transition: all 0.3s; position: relative;
+    }
+
+    .source-tab::after {
+      content: ''; position: absolute; bottom: -1px; left: 0; right: 0;
+      height: 2px; background: transparent; transition: background 0.3s;
+    }
+
+    .source-tab:hover { color: var(--text-muted); }
+    .source-tab.active { color: var(--text); font-weight: 600; }
+    .source-tab.active::after { background: var(--accent); }
+
+    .tab-content { display: none; padding: 28px 0 0; }
+    .tab-content.active { display: block; }
+
+    /* ── API KEY TAB ── */
+    .api-key-form {
+      display: flex; gap: 8px; align-items: stretch;
+    }
+
+    .api-key-input {
+      flex: 1; padding: 12px 16px;
+      font-family: var(--mono); font-size: 11px;
+      background: white; border: 1px solid var(--border);
+      color: var(--text); outline: none;
+      transition: border-color 0.3s;
+    }
+    .api-key-input:focus { border-color: var(--accent); }
+    .api-key-input::placeholder { color: var(--text-faint); }
+
+    .btn {
+      font-family: var(--mono);
+      font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+      padding: 12px 24px; cursor: pointer;
+      transition: all 0.25s ease;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: var(--text); color: var(--bg);
+      border: 1px solid var(--text);
+    }
+    .btn-primary:hover {
+      background: transparent; color: var(--text);
+    }
+
+    .btn-outline {
+      background: transparent; color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+    .btn-outline:hover {
+      border-color: var(--text); color: var(--text);
+    }
+
+    .btn-danger {
+      background: transparent; color: var(--error);
+      border: 1px solid rgba(154, 48, 48, 0.2);
+    }
+    .btn-danger:hover {
+      border-color: var(--error);
+    }
+
+    .connected-state {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 16px;
+      background: rgba(42, 106, 58, 0.06);
+      border: 1px solid rgba(42, 106, 58, 0.15);
+    }
+
+    .connected-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #2a6a3a; flex-shrink: 0;
+      animation: pulse-dot 3s ease-in-out infinite;
+    }
+
+    .connected-label {
+      font-size: 10px; letter-spacing: 1px; color: #2a6a3a;
+      flex: 1;
+    }
+
+    .error-msg {
+      font-size: 10px; color: var(--error);
+      margin-top: 8px; letter-spacing: 0.5px;
+    }
+
+    /* ── WALLET TAB ── */
+    .wallet-info {
+      font-size: 11px; color: var(--text-muted); line-height: 1.8;
+      margin-top: 12px;
+    }
+
+    #privy-root {
+      min-height: 44px;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .privy-fallback {
+      font-size: 10px; color: var(--text-faint);
+      letter-spacing: 1px; text-align: center;
+      padding: 16px;
+    }
+
+    /* ── FILE DROP ZONE ── */
+    .drop-zone {
+      border: 1.5px dashed rgba(0,0,0,0.12);
+      padding: 40px 20px; text-align: center;
+      cursor: pointer; transition: all 0.3s;
+      position: relative;
+    }
+
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: var(--accent);
+      background: rgba(34, 68, 255, 0.02);
+    }
+
+    .drop-zone-icon {
+      font-size: 24px; color: var(--text-faint);
+      margin-bottom: 12px; display: block;
+    }
+
+    .drop-zone-text {
+      font-size: 11px; color: var(--text-muted);
+      letter-spacing: 1px; margin-bottom: 4px;
+    }
+
+    .drop-zone-hint {
+      font-size: 9px; color: var(--text-faint);
+      letter-spacing: 1px;
+    }
+
+    .drop-zone input[type="file"] {
+      position: absolute; inset: 0;
+      opacity: 0; cursor: pointer;
+    }
+
+    .file-loaded {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 16px;
+      background: rgba(34, 68, 255, 0.04);
+      border: 1px solid rgba(34, 68, 255, 0.12);
+    }
+
+    .file-loaded-name {
+      font-size: 11px; color: var(--accent);
+      flex: 1; letter-spacing: 0.5px;
+    }
+
+    /* ── STATS BAR ── */
+    .stats-bar {
+      max-width: 680px; margin: 32px auto 0; padding: 0 20px;
+      display: none;
+    }
+
+    .stats-bar.visible { display: block; }
+
+    .stats-inner {
+      display: flex; align-items: center; gap: 20px;
+      padding: 12px 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+
+    .stat {
+      font-size: 10px; color: var(--text-faint); letter-spacing: 1px;
+    }
+
+    .stat .v {
+      color: var(--text); font-weight: 600;
+    }
+
+    .stat-sep {
+      width: 3px; height: 3px; border-radius: 50%;
+      background: var(--border); flex-shrink: 0;
+    }
+
+    /* ── BRAIN IFRAME ── */
+    .brain-section {
+      max-width: 1200px; margin: 32px auto 0; padding: 0 20px;
+      display: none;
+    }
+
+    .brain-section.visible { display: block; }
+
+    .brain-frame-wrap {
+      border: 1px solid var(--border);
+      background: var(--bg);
+      position: relative; overflow: hidden;
+    }
+
+    .brain-frame-wrap iframe {
+      width: 100%; height: 60vh; border: none; display: block;
+    }
+
+    .brain-label {
+      position: absolute; top: 16px; left: 20px;
+      font-size: 9px; letter-spacing: 4px; text-transform: uppercase;
+      color: var(--text-faint); z-index: 2; pointer-events: none;
+    }
+
+    /* ── SEARCH ── */
+    .search-section {
+      max-width: 680px; margin: 28px auto 0; padding: 0 20px;
+      display: none;
+    }
+
+    .search-section.visible { display: block; }
+
+    .search-bar {
+      display: flex; align-items: stretch; gap: 0;
+      border: 1px solid var(--border);
+      background: white;
+      transition: border-color 0.3s;
+    }
+
+    .search-bar:focus-within { border-color: var(--accent); }
+
+    .search-icon {
+      display: flex; align-items: center; justify-content: center;
+      padding: 0 14px; color: var(--text-faint);
+      font-size: 14px; flex-shrink: 0;
+    }
+
+    .search-input {
+      flex: 1; padding: 12px 0;
+      font-family: var(--mono); font-size: 11px;
+      background: transparent; border: none;
+      color: var(--text); outline: none;
+    }
+    .search-input::placeholder { color: var(--text-faint); }
+
+    .search-mode {
+      display: flex; align-items: center; gap: 0;
+      border-left: 1px solid var(--border); flex-shrink: 0;
+    }
+
+    .search-mode-btn {
+      padding: 8px 14px;
+      font-family: var(--mono); font-size: 9px;
+      letter-spacing: 1px; text-transform: uppercase;
+      background: none; border: none; cursor: pointer;
+      color: var(--text-faint); transition: all 0.2s;
+    }
+    .search-mode-btn:hover { color: var(--text-muted); }
+    .search-mode-btn.active {
+      color: var(--accent); font-weight: 600;
+    }
+    .search-mode-btn:disabled {
+      opacity: 0.3; cursor: default;
+    }
+
+    .search-count {
+      font-size: 9px; color: var(--text-faint);
+      letter-spacing: 1px; margin-top: 8px;
+      text-align: right;
+    }
+
+    /* ── MEMORY CARDS ── */
+    .cards-section {
+      max-width: 1200px; margin: 24px auto 60px; padding: 0 20px;
+      display: none;
+    }
+
+    .cards-section.visible { display: block; }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 12px;
+    }
+
+    .memory-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--text-faint);
+      padding: 16px 18px;
+      cursor: pointer;
+      transition: all 0.25s;
+      position: relative;
+    }
+
+    .memory-card:hover {
+      border-color: rgba(0,0,0,0.12);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+    }
+
+    .memory-card[data-type="episodic"] { border-left-color: var(--episodic); }
+    .memory-card[data-type="semantic"] { border-left-color: var(--semantic); }
+    .memory-card[data-type="procedural"] { border-left-color: var(--procedural); }
+    .memory-card[data-type="self_model"] { border-left-color: var(--selfmodel); }
+
+    .card-header {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .card-type {
+      font-size: 8px; letter-spacing: 2px; text-transform: uppercase;
+      font-weight: 700; padding: 2px 8px;
+      border: 1px solid currentColor; white-space: nowrap;
+    }
+
+    .card-type[data-type="episodic"] { color: var(--episodic); }
+    .card-type[data-type="semantic"] { color: var(--semantic); }
+    .card-type[data-type="procedural"] { color: var(--procedural); }
+    .card-type[data-type="self_model"] { color: var(--selfmodel); }
+
+    .card-id {
+      font-size: 9px; color: var(--text-faint); margin-left: auto;
+    }
+
+    .card-summary {
+      font-size: 11px; line-height: 1.7; color: var(--text-muted);
+      font-weight: 300; margin-bottom: 12px;
+      display: -webkit-box; -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical; overflow: hidden;
+    }
+
+    .card-meta {
+      display: flex; align-items: center; gap: 14px;
+      font-size: 9px; color: var(--text-faint);
+      letter-spacing: 0.5px;
+    }
+
+    .card-meta .v { color: var(--text-muted); font-weight: 500; }
+
+    .card-imp-bar {
+      width: 40px; height: 3px; background: rgba(0,0,0,0.06);
+      position: relative; flex-shrink: 0;
+    }
+
+    .card-imp-fill {
+      position: absolute; top: 0; left: 0; height: 100%;
+      background: var(--text-muted);
+    }
+
+    .card-tags {
+      display: flex; gap: 4px; flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .card-tag {
+      font-size: 8px; color: var(--text-faint);
+      border: 1px solid var(--border);
+      padding: 2px 8px; letter-spacing: 1px;
+    }
+
+    .card-score {
+      position: absolute; top: 12px; right: 14px;
+      font-size: 9px; color: var(--accent);
+      font-weight: 600; letter-spacing: 1px;
+    }
+
+    .card-actions {
+      display: flex; gap: 6px; margin-top: 10px;
+      border-top: 1px solid var(--border); padding-top: 10px;
+    }
+
+    .card-actions button {
+      font-family: var(--mono); font-size: 8px;
+      letter-spacing: 1.5px; text-transform: uppercase;
+      padding: 5px 12px; cursor: pointer;
+      background: transparent; border: 1px solid var(--border);
+      color: var(--text-muted); transition: all 0.2s;
+    }
+    .card-actions button:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── PROVENANCE PANEL ── */
+    .provenance-overlay {
+      position: fixed; inset: 0; z-index: 150;
+      background: rgba(245, 245, 240, 0.97);
+      backdrop-filter: blur(8px);
+      display: none; overflow-y: auto;
+    }
+    .provenance-overlay.visible { display: block; }
+
+    .prov-container {
+      max-width: 1200px; margin: 0 auto; padding: 2rem;
+    }
+
+    .prov-header {
+      display: flex; align-items: center; gap: 1rem;
+      margin-bottom: 1.5rem; padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .prov-close {
+      background: none; border: 1px solid var(--border);
+      font-family: var(--mono); font-size: 9px;
+      letter-spacing: 2px; text-transform: uppercase;
+      padding: 8px 16px; cursor: pointer; color: var(--text-muted);
+      transition: all 0.2s;
+    }
+    .prov-close:hover { border-color: var(--text); color: var(--text); }
+
+    .prov-title {
+      font-size: 14px; font-weight: 700; letter-spacing: -0.5px;
+    }
+    .prov-title em {
+      font-style: normal;
+      background: linear-gradient(135deg, #2244ff, #5566ff);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .prov-stats {
+      display: flex; gap: 1.5rem; flex-wrap: wrap;
+      padding: 12px 0; margin-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border);
+      font-size: 10px; color: var(--text-faint); letter-spacing: 0.5px;
+    }
+    .prov-stats .v { color: var(--text); font-weight: 600; }
+
+    .prov-layout {
+      display: grid; grid-template-columns: 1fr 380px; gap: 1.5rem;
+    }
+    @media (max-width: 900px) { .prov-layout { grid-template-columns: 1fr; } }
+
+    .prov-graph {
+      background: var(--surface); border: 1px solid var(--border);
+      position: relative; overflow: hidden; min-height: 420px;
+    }
+    .prov-graph canvas { width: 100%; height: 100%; display: block; }
+
+    .prov-graph-legend {
+      position: absolute; bottom: 10px; left: 10px;
+      display: flex; gap: 10px; font-size: 9px;
+      background: rgba(255,255,255,0.9); padding: 5px 10px;
+      letter-spacing: 0.5px;
+    }
+    .prov-legend-dot {
+      width: 7px; height: 7px; border-radius: 50%; display: inline-block;
+      margin-right: 3px; vertical-align: middle;
+    }
+
+    .prov-sidebar { display: flex; flex-direction: column; gap: 1rem; }
+
+    .prov-section-label {
+      font-size: 9px; font-weight: 700; letter-spacing: 3px;
+      text-transform: uppercase; color: var(--text-faint);
+      margin-bottom: 4px;
+    }
+
+    .prov-node-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-left: 3px solid var(--text-faint); padding: 12px 14px;
+      cursor: pointer; transition: all 0.2s; font-size: 10px;
+    }
+    .prov-node-card:hover { border-color: rgba(0,0,0,0.12); }
+    .prov-node-card.prov-root { border-left-color: var(--accent); }
+    .prov-node-card.prov-ancestor { border-left-color: #3498db; }
+    .prov-node-card.prov-descendant { border-left-color: #2a6a3a; }
+    .prov-node-card.prov-related { border-left-color: #9b59b6; }
+
+    .prov-node-head {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 6px;
+    }
+    .prov-node-type {
+      font-size: 8px; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    .prov-node-date { font-size: 9px; color: var(--text-faint); }
+    .prov-node-relation { font-size: 9px; color: var(--accent); margin-bottom: 4px; }
+    .prov-node-summary { font-size: 10px; line-height: 1.6; color: var(--text-muted); margin-bottom: 6px; }
+    .prov-node-meta {
+      display: flex; gap: 10px; font-size: 9px; color: var(--text-faint);
+    }
+    .prov-node-meta .v { color: var(--text-muted); font-weight: 500; }
+
+    /* ── EXPLAIN / ASK ── */
+    .prov-ask {
+      background: var(--surface); border: 1px solid var(--border);
+      padding: 16px; margin-top: 1rem;
+    }
+    .prov-ask-label {
+      font-size: 9px; font-weight: 700; letter-spacing: 3px;
+      text-transform: uppercase; color: var(--text-faint);
+      margin-bottom: 10px;
+    }
+    .prov-ask-row { display: flex; gap: 6px; }
+    .prov-ask-input {
+      flex: 1; padding: 10px 12px; font-family: var(--mono);
+      font-size: 10px; background: var(--bg); border: 1px solid var(--border);
+      color: var(--text); outline: none; transition: border-color 0.2s;
+    }
+    .prov-ask-input:focus { border-color: var(--accent); }
+    .prov-ask-btn {
+      padding: 10px 18px; font-family: var(--mono); font-size: 9px;
+      letter-spacing: 2px; text-transform: uppercase;
+      background: var(--text); color: var(--bg); border: 1px solid var(--text);
+      cursor: pointer; transition: all 0.2s;
+    }
+    .prov-ask-btn:hover { background: transparent; color: var(--text); }
+
+    .prov-answer {
+      margin-top: 14px; font-size: 10px; line-height: 1.8;
+      color: var(--text-muted); white-space: pre-wrap;
+    }
+    .prov-chain {
+      margin-top: 12px; padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+    .prov-chain-step {
+      display: flex; gap: 8px; margin-bottom: 4px; font-size: 9px;
+    }
+    .prov-chain-date { color: var(--accent); white-space: nowrap; min-width: 70px; }
+    .prov-chain-text { color: var(--text-muted); }
+
+    /* ── HOW-TO GUIDE ── */
+    .guide-section {
+      max-width: 680px; margin: 28px auto 0; padding: 0 20px;
+    }
+
+    .guide-toggle {
+      width: 100%; text-align: left; padding: 12px 0;
+      font-family: var(--mono); font-size: 11px;
+      color: var(--text-muted); background: none; border: none;
+      cursor: pointer; display: flex; align-items: center; gap: 8px;
+      letter-spacing: 1px; transition: color 0.2s;
+    }
+    .guide-toggle:hover { color: var(--text); }
+
+    .guide-chevron {
+      font-size: 10px; transition: transform 0.3s; display: inline-block;
+    }
+    .guide-toggle.open .guide-chevron { transform: rotate(90deg); }
+
+    .guide-content {
+      max-height: 0; overflow: hidden;
+      transition: max-height 0.4s ease, opacity 0.3s;
+      opacity: 0;
+    }
+    .guide-content.open {
+      max-height: 400px; opacity: 1;
+    }
+
+    .guide-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 12px; padding: 8px 0 20px;
+    }
+
+    .guide-card {
+      padding: 16px; border: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    .guide-step {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: var(--accent); color: white;
+      font-size: 10px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 10px;
+    }
+
+    .guide-card-title {
+      font-size: 10px; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; margin-bottom: 8px;
+    }
+
+    .guide-card p {
+      font-size: 10px; color: var(--text-muted); line-height: 1.7;
+      margin-bottom: 6px;
+    }
+
+    .guide-card code {
+      display: inline-block; padding: 3px 8px;
+      background: rgba(0,0,0,0.04); font-size: 10px;
+      color: var(--accent); letter-spacing: 0.5px;
+    }
+
+    /* ── ACTION BAR ── */
+    .action-bar {
+      max-width: 680px; margin: 16px auto 0; padding: 0 20px;
+      display: none;
+    }
+    .action-bar.visible { display: block; }
+
+    .action-inner {
+      display: flex; gap: 8px; align-items: center;
+    }
+
+    .action-label {
+      font-size: 9px; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--text-faint); margin-right: 4px;
+    }
+
+    /* ── EMPTY STATE ── */
+    .empty-state {
+      text-align: center; padding: 80px 20px;
+      max-width: 480px; margin: 0 auto;
+    }
+
+    .empty-icon {
+      font-size: 40px; color: var(--text-faint);
+      margin-bottom: 20px; opacity: 0.3;
+    }
+
+    .empty-title {
+      font-size: 13px; font-weight: 600; letter-spacing: 3px;
+      text-transform: uppercase; margin-bottom: 10px;
+    }
+
+    .empty-sub {
+      font-size: 11px; color: var(--text-muted); line-height: 1.8;
+      margin-bottom: 20px;
+    }
+
+    .empty-steps {
+      display: flex; flex-direction: column; gap: 10px;
+      text-align: left; max-width: 360px; margin: 0 auto;
+    }
+
+    .empty-step {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 10px; color: var(--text-muted); line-height: 1.6;
+    }
+
+    .empty-step code {
+      padding: 2px 6px; background: rgba(0,0,0,0.04);
+      font-size: 10px; color: var(--accent);
+    }
+
+    .empty-step-num {
+      width: 20px; height: 20px; border-radius: 50%;
+      background: var(--border); color: var(--text-muted);
+      font-size: 9px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    /* ── SAMPLE PACKS ── */
+    .samples-section {
+      max-width: 680px; margin: 28px auto 0; padding: 0 20px;
+    }
+    .samples-label {
+      font-size: 9px; letter-spacing: 4px; text-transform: uppercase;
+      color: var(--text-faint); margin-bottom: 12px;
+    }
+    .samples-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+    }
+    .sample-card {
+      padding: 16px; border: 1px solid var(--border);
+      background: var(--surface); cursor: pointer;
+      transition: all 0.25s; text-align: left;
+      font-family: var(--mono);
+    }
+    .sample-card:hover {
+      border-color: rgba(0,0,0,0.15);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+    }
+    .sample-card-icon {
+      font-size: 18px; margin-bottom: 10px;
+    }
+    .sample-card-name {
+      font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
+      text-transform: uppercase; margin-bottom: 6px;
+    }
+    .sample-card-desc {
+      font-size: 9px; color: var(--text-muted); line-height: 1.7;
+      margin-bottom: 8px;
+    }
+    .sample-card-meta {
+      font-size: 8px; color: var(--text-faint); letter-spacing: 1px;
+    }
+    @media (max-width: 768px) {
+      .samples-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ── LOADING OVERLAY ── */
+    .loading-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(245, 245, 240, 0.95);
+      display: none; align-items: center; justify-content: center;
+      flex-direction: column; gap: 16px;
+    }
+    .loading-overlay.visible { display: flex; }
+
+    .loading-spinner {
+      width: 24px; height: 24px;
+      border: 1.5px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+      font-size: 10px; letter-spacing: 3px;
+      text-transform: uppercase; color: var(--text-faint);
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 768px) {
+      .nav-toggle { display: flex; flex-direction: column; }
+      .nav-links {
+        display: none; position: absolute; top: 56px; left: 0; right: 0;
+        background: rgba(245, 245, 240, 0.97);
+        backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+        border-bottom: 1px solid var(--border);
+        flex-direction: column; padding: 1.2rem 2rem; gap: 1.2rem;
+      }
+      .nav-links.open { display: flex; }
+      .hero { padding: 80px 20px 0; }
+      .hero-title { font-size: 28px; }
+      .source-section { margin-top: 28px; }
+      .api-key-form { flex-direction: column; }
+      .brain-frame-wrap iframe { height: 40vh; }
+      .cards-grid { grid-template-columns: 1fr; }
+      .stats-inner { gap: 12px; }
+      .guide-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <div class="nav-inner">
+      <div class="nav-left">
+        <a href="/" class="nav-logo">Clude</a>
+        <div class="nav-status">
+          <div class="status-dot"></div>
+          <span>LIVE</span>
+        </div>
+      </div>
+      <button class="nav-toggle" id="navToggle" aria-label="Menu"><span></span><span></span><span></span></button>
+      <div class="nav-links">
+        <a href="/chat">Chat</a>
+        <a href="/docs.html">Docs</a>
+        <a href="/brain.html">Brain</a>
+        <a href="/explore" class="nav-active">Explorer</a>
+        <a href="/dashboard">Dashboard</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-label">Memory Infrastructure</div>
+    <h1 class="hero-title"><em>Memory</em> Explorer</h1>
+    <p class="hero-sub">Visualize, search, and explore your agent's mind.</p>
+  </section>
+
+  <!-- HOW-TO GUIDE -->
+  <section class="guide-section">
+    <button class="guide-toggle" id="guideToggle" onclick="toggleGuide()">
+      How do I get my memories? <span class="guide-chevron">&#x25B8;</span>
+    </button>
+    <div class="guide-content" id="guideContent">
+      <div class="guide-grid">
+        <div class="guide-card">
+          <div class="guide-step">1</div>
+          <div class="guide-card-title">Export from CLI</div>
+          <p>Run this in your terminal:</p>
+          <code>npx clude-bot export</code>
+          <p>This creates a <strong>clude-memories.json</strong> file. Then drag it into the Local File tab below.</p>
+        </div>
+        <div class="guide-card">
+          <div class="guide-step">2</div>
+          <div class="guide-card-title">Use your API Key</div>
+          <p>Get a key by running:</p>
+          <code>npx clude-bot register</code>
+          <p>Then paste it in the API Key tab below. Your memories load automatically from the cloud.</p>
+        </div>
+        <div class="guide-card">
+          <div class="guide-step">3</div>
+          <div class="guide-card-title">Connect Wallet</div>
+          <p>If your agent uses wallet-linked memory, connect via the Wallet tab.</p>
+          <p>We'll fetch your memories from the Cortex cloud.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SOURCE SELECTOR -->
+  <section class="source-section">
+    <div class="source-tabs">
+      <button class="source-tab active" data-tab="apikey" onclick="setTab('apikey')">API Key</button>
+      <button class="source-tab" data-tab="wallet" onclick="setTab('wallet')">Wallet</button>
+      <button class="source-tab" data-tab="file" onclick="setTab('file')">Local File</button>
+    </div>
+
+    <!-- API KEY -->
+    <div class="tab-content active" id="tab-apikey">
+      <div id="apiKeyForm">
+        <div class="api-key-form">
+          <input type="password" class="api-key-input" id="apiKeyInput" placeholder="Enter your Cortex API key..." autocomplete="off">
+          <button class="btn btn-primary" id="apiKeyConnect" onclick="connectWithApiKey()">Connect</button>
+        </div>
+      </div>
+      <div id="apiKeyConnected" style="display:none">
+        <div class="connected-state">
+          <div class="connected-dot"></div>
+          <span class="connected-label">Connected</span>
+          <button class="btn btn-danger" onclick="disconnectApiKey()" style="padding:8px 16px">Disconnect</button>
+        </div>
+      </div>
+      <div class="error-msg" id="apiKeyError" style="display:none"></div>
+      <p style="font-size:10px;color:var(--text-faint);margin-top:10px;line-height:1.7;letter-spacing:0.5px">Don't have a key? Run <code style="padding:2px 6px;background:rgba(0,0,0,0.04);color:var(--accent);font-size:10px">npx clude-bot register</code> to get one.</p>
+    </div>
+
+    <!-- WALLET -->
+    <div class="tab-content" id="tab-wallet">
+      <div id="privy-root">
+        <div class="privy-fallback" id="privyFallback">Loading wallet connector...</div>
+      </div>
+      <p class="wallet-info">Connect your Solana wallet via Privy to retrieve your cloud memories.</p>
+    </div>
+
+    <!-- LOCAL FILE -->
+    <div class="tab-content" id="tab-file">
+      <div class="drop-zone" id="dropZone">
+        <span class="drop-zone-icon">&#x2B07;</span>
+        <div class="drop-zone-text">Drop .json or .md file here</div>
+        <div class="drop-zone-hint">Accepts MemoryPack JSON or exported Markdown</div>
+        <input type="file" accept=".json,.md,.txt" id="fileInput">
+      </div>
+      <div class="file-loaded" id="fileLoaded" style="display:none">
+        <span class="file-loaded-name" id="fileName"></span>
+        <button class="btn btn-outline" onclick="clearFile()" style="padding:6px 14px;font-size:9px">Clear</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- STATS BAR -->
+  <div class="stats-bar" id="statsBar">
+    <div class="stats-inner" id="statsInner"></div>
+  </div>
+
+  <!-- ACTION BAR -->
+  <div class="action-bar" id="actionBar">
+    <div class="action-inner">
+      <span class="action-label">Export</span>
+      <button class="btn btn-outline" onclick="exportJSON()" style="padding:8px 16px;font-size:9px">JSON</button>
+      <button class="btn btn-outline" onclick="exportMarkdown()" style="padding:8px 16px;font-size:9px">Markdown</button>
+    </div>
+  </div>
+
+  <!-- BRAIN VISUALIZATION -->
+  <section class="brain-section" id="brainSection">
+    <div class="brain-frame-wrap">
+      <span class="brain-label">Neural Map</span>
+      <iframe id="brainFrame" src="brain.html?embedded=1" loading="lazy"></iframe>
+    </div>
+  </section>
+
+  <!-- SEARCH -->
+  <section class="search-section" id="searchSection">
+    <div class="search-bar">
+      <span class="search-icon">&#x2315;</span>
+      <input type="text" class="search-input" id="searchInput" placeholder="Search your memories...">
+      <div class="search-mode">
+        <button class="search-mode-btn active" id="btnKeyword" onclick="setSearchMode('keyword')">Keyword</button>
+        <button class="search-mode-btn" id="btnSemantic" onclick="setSearchMode('semantic')" disabled title="Requires API key connection">Semantic</button>
+      </div>
+    </div>
+    <div class="search-count" id="searchCount"></div>
+  </section>
+
+  <!-- MEMORY CARDS -->
+  <section class="cards-section" id="cardsSection">
+    <div class="cards-grid" id="cardsGrid"></div>
+  </section>
+
+  <!-- SAMPLE PACKS -->
+  <section class="samples-section" id="samplesSection">
+    <div class="samples-label">Or try a sample agent</div>
+    <div class="samples-grid">
+      <div class="sample-card" onclick="loadSample('defi-trader')">
+        <div class="sample-card-icon">📈</div>
+        <div class="sample-card-name">DeFi Trader</div>
+        <div class="sample-card-desc">90 days on Solana. Rug pulls, alpha discovery, strategy evolution.</div>
+        <div class="sample-card-meta">~350 memories</div>
+      </div>
+      <div class="sample-card" onclick="loadSample('support-agent')">
+        <div class="sample-card-icon">💬</div>
+        <div class="sample-card-name">Support Agent</div>
+        <div class="sample-card-desc">60 days of tickets. Learned empathy, improved satisfaction 3.2→4.6.</div>
+        <div class="sample-card-meta">~350 memories</div>
+      </div>
+      <div class="sample-card" onclick="loadSample('research-agent')">
+        <div class="sample-card-icon">🔬</div>
+        <div class="sample-card-name">Research Agent</div>
+        <div class="sample-card-desc">45 days tracking memory/AI papers. Thesis: "memory is the moat."</div>
+        <div class="sample-card-meta">~350 memories</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- EMPTY STATE -->
+  <section class="empty-state" id="emptyState">
+    <div class="empty-icon">&#x25C9;</div>
+    <div class="empty-title">Load your memories</div>
+    <p class="empty-sub">Three ways to get started:</p>
+    <div class="empty-steps">
+      <div class="empty-step">
+        <span class="empty-step-num">1</span>
+        <span>Run <code>npx clude-bot export</code> then drag the file into <strong>Local File</strong></span>
+      </div>
+      <div class="empty-step">
+        <span class="empty-step-num">2</span>
+        <span>Paste your API key in the <strong>API Key</strong> tab</span>
+      </div>
+      <div class="empty-step">
+        <span class="empty-step-num">3</span>
+        <span>Connect your wallet in the <strong>Wallet</strong> tab</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROVENANCE OVERLAY -->
+  <div class="provenance-overlay" id="provOverlay">
+    <div class="prov-container">
+      <div class="prov-header">
+        <button class="prov-close" onclick="closeProvenance()">← Back</button>
+        <div class="prov-title">Memory <em>Provenance</em></div>
+      </div>
+      <div class="prov-stats" id="provStats"></div>
+      <div class="prov-layout">
+        <div>
+          <div class="prov-graph" id="provGraphPanel">
+            <canvas id="provCanvas"></canvas>
+            <div class="prov-graph-legend">
+              <span><span class="prov-legend-dot" style="background:#2244ff"></span>Root</span>
+              <span><span class="prov-legend-dot" style="background:#3498db"></span>Ancestor</span>
+              <span><span class="prov-legend-dot" style="background:#2a6a3a"></span>Descendant</span>
+              <span><span class="prov-legend-dot" style="background:#9b59b6"></span>Related</span>
+            </div>
+          </div>
+          <div class="prov-ask">
+            <div class="prov-ask-label">Ask about this memory</div>
+            <div class="prov-ask-row">
+              <input type="text" class="prov-ask-input" id="provAskInput" placeholder="Why did you form this memory? What led to this decision?">
+              <button class="prov-ask-btn" onclick="askProvenance()">Ask</button>
+            </div>
+            <div id="provAnswer"></div>
+          </div>
+        </div>
+        <div class="prov-sidebar" id="provSidebar"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOADING OVERLAY -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text" id="loadingMsg">Mapping Neural Network...</div>
+  </div>
+
+  <!-- NAV TOGGLE SCRIPT -->
+  <script>
+  document.getElementById('navToggle').addEventListener('click', function() {
+    this.classList.toggle('open');
+    document.querySelector('.nav-links').classList.toggle('open');
+  });
+  </script>
+
+  <!-- MAIN LOGIC -->
+  <script>
+  /* ============= STATE ============= */
+  let brainNodes = [];
+  let allNodes = [];
+  let apiKey = null;
+  let apiEndpoint = '';
+  let brainReady = false;
+  let pendingData = null;
+  let searchMode = 'keyword';
+  let searchTimer = null;
+  let displayedCount = 0;
+  const PAGE_SIZE = 50;
+  const BRAIN_MAX = 500; // max nodes to send to 3D brain
+  let currentDisplayNodes = [];
+  let isLoadingMore = false;
+
+  /* ============= GUIDE TOGGLE ============= */
+  function toggleGuide() {
+    const btn = document.getElementById('guideToggle');
+    const content = document.getElementById('guideContent');
+    btn.classList.toggle('open');
+    content.classList.toggle('open');
+  }
+
+  /* ============= TAB SWITCHING ============= */
+  function setTab(name) {
+    document.querySelectorAll('.source-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+  }
+
+  /* ============= API KEY AUTH ============= */
+  async function connectWithApiKey() {
+    const input = document.getElementById('apiKeyInput');
+    const key = input.value.trim();
+    if (!key) return;
+
+    showLoading('Connecting...');
+    hideError('apiKeyError');
+
+    try {
+      const res = await fetch('/api/cortex/brain?limit=500', {
+        headers: { 'Authorization': 'Bearer ' + key }
+      });
+
+      if (!res.ok) {
+        const msg = res.status === 401 ? 'Invalid API key' : 'Connection failed (' + res.status + ')';
+        throw new Error(msg);
+      }
+
+      const data = await res.json();
+      apiKey = key;
+      localStorage.setItem('explorer_api_key', key);
+
+      document.getElementById('apiKeyForm').style.display = 'none';
+      document.getElementById('apiKeyConnected').style.display = 'block';
+
+      // Enable semantic search
+      document.getElementById('btnSemantic').disabled = false;
+      document.getElementById('btnSemantic').title = '';
+
+      hideLoading();
+      usingSampleData = false;
+      loadBrainData(data);
+    } catch (err) {
+      hideLoading();
+      showError('apiKeyError', err.message);
+    }
+  }
+
+  function disconnectApiKey() {
+    apiKey = null;
+    localStorage.removeItem('explorer_api_key');
+    document.getElementById('apiKeyForm').style.display = 'block';
+    document.getElementById('apiKeyConnected').style.display = 'none';
+    document.getElementById('apiKeyInput').value = '';
+    document.getElementById('btnSemantic').disabled = true;
+    document.getElementById('btnSemantic').title = 'Requires API key connection';
+    if (searchMode === 'semantic') setSearchMode('keyword');
+    clearData();
+  }
+
+  /* ============= FILE HANDLING ============= */
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+
+  dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('dragover'); });
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) handleFile(e.target.files[0]);
+  });
+
+  function handleFile(file) {
+    const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+    showLoading('Reading ' + file.name + ' (' + sizeMB + 'MB)...');
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      // Use setTimeout to let the loading UI paint before blocking parse
+      setTimeout(() => {
+        try {
+          showLoading('Parsing ' + file.name + '...');
+          const text = e.target.result;
+          if (file.name.endsWith('.json')) {
+            const pack = JSON.parse(text);
+            showLoading('Loading ' + (pack.memories || pack.nodes || []).length + ' memories...');
+            setTimeout(() => {
+              loadFromMemoryPack(pack);
+              document.getElementById('dropZone').style.display = 'none';
+              document.getElementById('fileLoaded').style.display = 'flex';
+              document.getElementById('fileName').textContent = file.name + ' (' + (pack.memories || pack.nodes || []).length + ' memories)';
+              hideLoading();
+            }, 50);
+          } else {
+            loadFromMarkdown(text);
+            document.getElementById('dropZone').style.display = 'none';
+            document.getElementById('fileLoaded').style.display = 'flex';
+            document.getElementById('fileName').textContent = file.name;
+            hideLoading();
+          }
+        } catch (err) {
+          hideLoading();
+          alert('Failed to parse file: ' + err.message);
+        }
+      }, 50);
+    };
+    reader.readAsText(file);
+  }
+
+  function clearFile() {
+    document.getElementById('dropZone').style.display = 'block';
+    document.getElementById('fileLoaded').style.display = 'none';
+    fileInput.value = '';
+    clearData();
+  }
+
+  /* ============= DATA PARSING ============= */
+  function loadFromMemoryPack(pack) {
+    usingSampleData = true;
+    loadedConnections = pack.connections || [];
+    const mems = pack.memories || pack.nodes || [];
+    const nodes = mems.map((m, i) => ({
+      id: m.id || m._local_id || (i + 1),
+      type: m.type || m.memory_type || 'episodic',
+      summary: m.summary || (m.content || '').slice(0, 200),
+      content: m.content || m.summary || '',
+      tags: m.tags || [],
+      importance: m.importance ?? 0.5,
+      decay: m.decay_factor ?? m.decay ?? 1,
+      valence: m.emotional_valence ?? m.valence ?? 0,
+      accessCount: m.access_count ?? m.accessCount ?? 0,
+      source: m.source ?? m.source_wallet ?? '',
+      evidenceIds: m.evidence_ids || m.evidenceIds || [],
+      createdAt: m.created_at || m.createdAt || new Date().toISOString(),
+      lastAccessed: m.last_accessed || m.lastAccessed || m.created_at || new Date().toISOString(),
+    }));
+    // Auto-build connections from evidence_ids if none provided
+    if (loadedConnections.length === 0) {
+      buildAutoConnections(nodes);
+    }
+    loadBrainData({ nodes, total: nodes.length });
+  }
+
+  function buildAutoConnections(nodes) {
+    loadedConnections = [];
+    const idSet = new Set(nodes.map(n => n.id));
+    
+    // 1. Evidence links
+    for (const n of nodes) {
+      if (n.evidenceIds && n.evidenceIds.length > 0) {
+        for (const eid of n.evidenceIds) {
+          if (idSet.has(eid)) {
+            loadedConnections.push({ source_id: eid, target_id: n.id, link_type: 'supports', strength: 0.85 });
+          }
+        }
+      }
+    }
+    
+    // 2. Source-based chains (consolidation → its nearby episodics)
+    const bySource = {};
+    for (const n of nodes) bySource[n.source] = (bySource[n.source] || []).push ? (bySource[n.source] || []) : [];
+    for (const n of nodes) (bySource[n.source] = bySource[n.source] || []).push(n);
+    
+    // 3. Tag co-occurrence (memories sharing 2+ tags within 7 days = related)
+    // Only do this for non-huge datasets to avoid O(n^2) explosion
+    if (nodes.length <= 2000) {
+      for (let i = 0; i < nodes.length; i++) {
+        const a = nodes[i];
+        if (!a.tags || a.tags.length === 0) continue;
+        const aTags = new Set(a.tags);
+        for (let j = i + 1; j < Math.min(i + 50, nodes.length); j++) {
+          const b = nodes[j];
+          if (!b.tags) continue;
+          const overlap = b.tags.filter(t => aTags.has(t)).length;
+          if (overlap >= 2) {
+            const daysDiff = Math.abs(new Date(a.createdAt) - new Date(b.createdAt)) / 86400000;
+            if (daysDiff < 7) {
+              loadedConnections.push({ source_id: a.id, target_id: b.id, link_type: 'relates', strength: Math.min(0.7, overlap * 0.25) });
+            }
+          }
+        }
+      }
+    }
+    
+    // 4. Temporal chains (same source, sequential = follows)
+    const sorted = [...nodes].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = sorted[i-1], curr = sorted[i];
+      if (prev.source === curr.source && prev.source !== '' && prev.source !== 'consolidation') {
+        const hoursDiff = (new Date(curr.createdAt) - new Date(prev.createdAt)) / 3600000;
+        if (hoursDiff < 2) {
+          loadedConnections.push({ source_id: prev.id, target_id: curr.id, link_type: 'follows', strength: 0.5 });
+        }
+      }
+    }
+    
+    console.log('Auto-built ' + loadedConnections.length + ' connections');
+  }
+
+  function loadFromMarkdown(text) {
+    const nodes = [];
+    let currentType = 'episodic';
+    let id = 1;
+    const typeMap = {
+      'episodic': 'episodic', 'semantic': 'semantic',
+      'procedural': 'procedural', 'self model': 'self_model', 'self_model': 'self_model',
+    };
+
+    for (const line of text.split('\n')) {
+      const trimmed = line.trim();
+
+      // Section headers
+      const sectionMatch = trimmed.match(/^##\s+(\w[\w\s]*?)(?:\s+memories?)?(?:\s*\(\d+\))?$/i);
+      if (sectionMatch) {
+        const key = sectionMatch[1].toLowerCase().trim();
+        if (typeMap[key]) currentType = typeMap[key];
+        continue;
+      }
+
+      // Entries with importance: "- [0.85] Summary — Content"
+      const entryMatch = trimmed.match(/^[-*]\s+\[(\d*\.?\d+)]\s+(.+)$/);
+      if (entryMatch) {
+        const importance = parseFloat(entryMatch[1]);
+        const rest = entryMatch[2];
+        const parts = rest.split(/\s+[—\-]{1,2}\s+/);
+        nodes.push({
+          id: id++, type: currentType,
+          summary: parts[0].slice(0, 300),
+          content: parts.length > 1 ? parts.slice(1).join(' ') : parts[0],
+          tags: [], importance: Math.max(0, Math.min(1, importance)),
+          decay: 1, valence: 0, accessCount: 0, source: 'import',
+          evidenceIds: [], createdAt: new Date().toISOString(), lastAccessed: new Date().toISOString(),
+        });
+        continue;
+      }
+
+      // Cortex format: "- **[uuid]** (imp=0.8) Summary"
+      const cortexMatch = trimmed.match(/^[-*]\s+\*\*\[.*?]\*\*\s*\(imp=?([\d.]+)\)\s*(.+)$/);
+      if (cortexMatch) {
+        nodes.push({
+          id: id++, type: currentType,
+          summary: cortexMatch[2].slice(0, 300), content: cortexMatch[2],
+          tags: [], importance: parseFloat(cortexMatch[1]),
+          decay: 1, valence: 0, accessCount: 0, source: 'import',
+          evidenceIds: [], createdAt: new Date().toISOString(), lastAccessed: new Date().toISOString(),
+        });
+        continue;
+      }
+
+      // Plain list items
+      const plainMatch = trimmed.match(/^[-*]\s+(.{10,})$/);
+      if (plainMatch && !trimmed.match(/^[-*]\s+\[/)) {
+        nodes.push({
+          id: id++, type: currentType,
+          summary: plainMatch[1].slice(0, 200), content: plainMatch[1],
+          tags: [], importance: 0.5,
+          decay: 1, valence: 0, accessCount: 0, source: 'import',
+          evidenceIds: [], createdAt: new Date().toISOString(), lastAccessed: new Date().toISOString(),
+        });
+      }
+    }
+
+    if (nodes.length === 0) throw new Error('No memories found in markdown');
+    loadBrainData({ nodes, total: nodes.length });
+  }
+
+  /* ============= BRAIN INTEGRATION ============= */
+  function computeTraceCounts(nodes) {
+    // Build adjacency from loadedConnections + evidence_ids
+    const adj = new Map(); // id → Set of connected ids
+    const addEdge = (a, b) => {
+      if (!adj.has(a)) adj.set(a, new Set());
+      if (!adj.has(b)) adj.set(b, new Set());
+      adj.get(a).add(b);
+      adj.get(b).add(a);
+    };
+    for (const c of loadedConnections) addEdge(c.source_id, c.target_id);
+    for (const n of nodes) {
+      if (n.evidenceIds) for (const eid of n.evidenceIds) addEdge(n.id, eid);
+    }
+    // BFS up to depth 3 (matching localTrace)
+    const nodeSet = new Set(nodes.map(n => n.id));
+    for (const n of nodes) {
+      const visited = new Set([n.id]);
+      let frontier = [n.id];
+      for (let d = 0; d < 3 && frontier.length > 0; d++) {
+        const next = [];
+        for (const fid of frontier) {
+          for (const nb of (adj.get(fid) || [])) {
+            if (!visited.has(nb) && nodeSet.has(nb)) {
+              visited.add(nb);
+              next.push(nb);
+            }
+          }
+        }
+        frontier = next.slice(0, 10);
+      }
+      n._traceCount = visited.size - 1; // exclude self
+    }
+  }
+
+  function loadBrainData(data) {
+    brainNodes = data.nodes || [];
+    allNodes = [...brainNodes];
+
+    // Compute trace counts and sort by them (high to low)
+    computeTraceCounts(allNodes);
+    allNodes.sort((a, b) => (b._traceCount || 0) - (a._traceCount || 0));
+    brainNodes = allNodes;
+
+    // Only send top memories to brain visualization (by importance)
+    const brainSubset = [...brainNodes]
+      .sort((a, b) => (b.importance || 0) - (a.importance || 0))
+      .slice(0, BRAIN_MAX);
+    const brainPayload = { nodes: brainSubset, total: brainNodes.length };
+
+    if (brainReady) {
+      sendToBrain(brainPayload);
+    } else {
+      pendingData = brainPayload;
+    }
+
+    renderStats(brainNodes);
+    currentDisplayNodes = brainNodes;
+    displayedCount = 0;
+    document.getElementById('cardsGrid').innerHTML = '';
+    renderMoreCards();
+    showDataUI();
+  }
+
+  function sendToBrain(data) {
+    const iframe = document.getElementById('brainFrame');
+    iframe.contentWindow.postMessage({ type: 'LOAD_BRAIN_DATA', payload: data }, '*');
+  }
+
+  function highlightInBrain(ids) {
+    const iframe = document.getElementById('brainFrame');
+    iframe.contentWindow.postMessage({ type: 'HIGHLIGHT_NODES', ids }, '*');
+  }
+
+  function resetBrainHighlights() {
+    const iframe = document.getElementById('brainFrame');
+    iframe.contentWindow.postMessage({ type: 'RESET_HIGHLIGHTS' }, '*');
+  }
+
+  function focusInBrain(id) {
+    // Try brain iframe focus
+    const iframe = document.getElementById('brainFrame');
+    if (iframe) iframe.contentWindow.postMessage({ type: 'FOCUS_NODE', id }, '*');
+    
+    // Also highlight the card visually
+    document.querySelectorAll('.memory-card').forEach(c => c.style.outline = '');
+    const card = document.querySelector('.memory-card[onclick*="' + id + '"]');
+    if (card) {
+      card.style.outline = '2px solid var(--accent)';
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => card.style.outline = '', 3000);
+    } else {
+      // Card not rendered yet (paginated) — find and show it
+      const idx = currentDisplayNodes.findIndex(n => n.id === id);
+      if (idx >= 0 && idx >= displayedCount) {
+        // Render up to that point
+        const grid = document.getElementById('cardsGrid');
+        const end = Math.min(idx + 5, currentDisplayNodes.length);
+        let html = '';
+        for (let i = displayedCount; i < end; i++) {
+          html += renderCardHtml(currentDisplayNodes[i]);
+        }
+        grid.insertAdjacentHTML('beforeend', html);
+        displayedCount = end;
+        // Now scroll to it
+        setTimeout(() => {
+          const newCard = document.querySelector('.memory-card[onclick*="' + id + '"]');
+          if (newCard) {
+            newCard.style.outline = '2px solid var(--accent)';
+            newCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => newCard.style.outline = '', 3000);
+          }
+        }, 100);
+      }
+    }
+  }
+
+  window.addEventListener('message', (e) => {
+    if (e.data?.type === 'BRAIN_READY') {
+      brainReady = true;
+      if (pendingData) {
+        sendToBrain(pendingData);
+        pendingData = null;
+      }
+    }
+  });
+
+  /* ============= SEARCH ============= */
+  document.getElementById('searchInput').addEventListener('input', (e) => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => searchMemories(e.target.value), 300);
+  });
+
+  function setSearchMode(mode) {
+    searchMode = mode;
+    document.getElementById('btnKeyword').classList.toggle('active', mode === 'keyword');
+    document.getElementById('btnSemantic').classList.toggle('active', mode === 'semantic');
+    const query = document.getElementById('searchInput').value;
+    if (query.trim()) searchMemories(query);
+  }
+
+  async function searchMemories(query) {
+    if (!query.trim()) {
+      currentDisplayNodes = allNodes;
+      displayedCount = 0;
+      document.getElementById('cardsGrid').innerHTML = '';
+      renderMoreCards();
+      resetBrainHighlights();
+      document.getElementById('searchCount').textContent = '';
+      return;
+    }
+
+    if (searchMode === 'semantic' && apiKey) {
+      try {
+        const res = await fetch('/api/cortex/recall', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + apiKey,
+          },
+          body: JSON.stringify({ query, limit: 30 }),
+        });
+        const data = await res.json();
+        const results = (data.memories || []).map(m => ({
+          ...m,
+          id: m.id,
+          type: m.memory_type || m.type,
+          summary: m.summary,
+          content: m.content || '',
+          tags: m.tags || [],
+          importance: m.importance,
+          decay: m.decay_factor || m.decay || 1,
+          _score: m._score || m.score,
+        }));
+        renderMemoryCards(results, true);
+        highlightInBrain(results.map(r => r.id));
+        document.getElementById('searchCount').textContent = results.length + ' result' + (results.length !== 1 ? 's' : '') + ' (semantic)';
+      } catch {
+        // Fall back to keyword
+        keywordSearch(query);
+      }
+    } else {
+      keywordSearch(query);
+    }
+  }
+
+  function keywordSearch(query) {
+    const q = query.toLowerCase();
+    const results = allNodes.filter(n =>
+      (n.summary || '').toLowerCase().includes(q) ||
+      (n.content || '').toLowerCase().includes(q) ||
+      (n.tags || []).some(t => t.toLowerCase().includes(q))
+    );
+    renderMemoryCards(results);
+    highlightInBrain(results.map(n => n.id));
+    document.getElementById('searchCount').textContent = results.length + ' result' + (results.length !== 1 ? 's' : '');
+  }
+
+  /* ============= RENDERING ============= */
+  function renderStats(nodes) {
+    const byType = { episodic: 0, semantic: 0, procedural: 0, self_model: 0 };
+    let totalImp = 0, totalDecay = 0;
+    for (const n of nodes) {
+      byType[n.type] = (byType[n.type] || 0) + 1;
+      totalImp += n.importance || 0;
+      totalDecay += n.decay ?? 1;
+    }
+    const avgImp = nodes.length > 0 ? (totalImp / nodes.length).toFixed(2) : '0';
+    const avgDecay = nodes.length > 0 ? ((totalDecay / nodes.length) * 100).toFixed(0) : '0';
+
+    const typeStr = Object.entries(byType).filter(([,v]) => v > 0).map(([t,v]) => {
+      const short = { episodic: 'E', semantic: 'S', procedural: 'P', self_model: 'SM' }[t] || t;
+      return short + ':' + v;
+    }).join('  ');
+
+    document.getElementById('statsInner').innerHTML =
+      '<span class="stat"><span class="v">' + nodes.length + '</span> memories</span>' +
+      '<span class="stat-sep"></span>' +
+      '<span class="stat">' + typeStr + '</span>' +
+      '<span class="stat-sep"></span>' +
+      '<span class="stat">avg imp <span class="v">' + avgImp + '</span></span>' +
+      '<span class="stat-sep"></span>' +
+      '<span class="stat">decay <span class="v">' + avgDecay + '%</span></span>';
+  }
+
+  function renderCardHtml(n, showScores) {
+    const typeName = (n.type || 'episodic').replace('_', ' ');
+    const age = timeAgo(n.createdAt);
+    const tags = (n.tags || []).slice(0, 4).map(t => '<span class="card-tag">' + esc(t) + '</span>').join('');
+    const scoreHtml = showScores && n._score ? '<span class="card-score">' + (n._score).toFixed(2) + '</span>' : '';
+    const hasEvidence = (n.evidenceIds && n.evidenceIds.length > 0);
+
+    return '<div class="memory-card" data-type="' + esc(n.type) + '" onclick="focusInBrain(' + n.id + ')">' +
+      scoreHtml +
+      '<div class="card-header">' +
+        '<span class="card-type" data-type="' + esc(n.type) + '">' + esc(typeName) + '</span>' +
+        '<span class="card-id">#' + n.id + '</span>' +
+      '</div>' +
+      '<div class="card-summary">' + esc(n.summary || '') + '</div>' +
+      '<div class="card-meta">' +
+        '<span>imp <span class="v">' + (n.importance || 0).toFixed(2) + '</span></span>' +
+        '<div class="card-imp-bar"><div class="card-imp-fill" style="width:' + ((n.importance || 0) * 100) + '%"></div></div>' +
+        '<span>decay <span class="v">' + ((n.decay ?? 1) * 100).toFixed(0) + '%</span></span>' +
+        '<span>' + age + '</span>' +
+        (n._traceCount ? '<span style="color:var(--accent)" title="Trace depth">⛓ ' + n._traceCount + ' traces</span>' : '') +
+        (hasEvidence ? '<span style="color:var(--accent)">🔗' + n.evidenceIds.length + '</span>' : '') +
+      '</div>' +
+      (tags ? '<div class="card-tags">' + tags + '</div>' : '') +
+      '<div class="card-actions">' +
+        '<button onclick="event.stopPropagation(); openProvenance(' + n.id + ')">&#x2B95; Trace</button>' +
+        '<button onclick="event.stopPropagation(); focusInBrain(' + n.id + ')">&#x25CE; Focus</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderMoreCards(showScores) {
+    const grid = document.getElementById('cardsGrid');
+    const nodes = currentDisplayNodes;
+    if (nodes.length === 0 && displayedCount === 0) {
+      grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-faint);font-size:11px;letter-spacing:2px">No memories found</div>';
+      return;
+    }
+    const end = Math.min(displayedCount + PAGE_SIZE, nodes.length);
+    let html = '';
+    for (let i = displayedCount; i < end; i++) {
+      html += renderCardHtml(nodes[i], showScores);
+    }
+    grid.insertAdjacentHTML('beforeend', html);
+    displayedCount = end;
+    
+    // Update count display
+    const countEl = document.getElementById('searchCount');
+    if (countEl && nodes.length > PAGE_SIZE) {
+      countEl.textContent = 'Showing ' + displayedCount + ' of ' + nodes.length;
+    }
+  }
+
+  function renderMemoryCards(nodes, showScores) {
+    currentDisplayNodes = nodes;
+    displayedCount = 0;
+    document.getElementById('cardsGrid').innerHTML = '';
+    renderMoreCards(showScores);
+  }
+
+  // Infinite scroll
+  window.addEventListener('scroll', function() {
+    if (isLoadingMore) return;
+    if (displayedCount >= currentDisplayNodes.length) return;
+    const scrollBottom = window.innerHeight + window.scrollY;
+    const docHeight = document.documentElement.scrollHeight;
+    if (scrollBottom > docHeight - 400) {
+      isLoadingMore = true;
+      renderMoreCards();
+      isLoadingMore = false;
+    }
+  });
+
+  /* ============= EXPORT ============= */
+  function exportJSON() {
+    if (allNodes.length === 0) return;
+    const pack = {
+      version: 1,
+      wallet: '',
+      memories: allNodes.map(function(n) {
+        return {
+          id: n.id,
+          content: n.content || n.summary || '',
+          summary: n.summary || '',
+          type: n.type || 'episodic',
+          importance: n.importance ?? 0.5,
+          tags: n.tags || [],
+          created_at: n.createdAt || new Date().toISOString(),
+          access_count: n.accessCount || 0,
+          decay_factor: n.decay ?? 1,
+          emotional_valence: n.valence || 0,
+          source: n.source || '',
+        };
+      }),
+      connections: [],
+      meta: {
+        exported_at: new Date().toISOString(),
+        memory_count: allNodes.length,
+        content_hash: simpleHash(allNodes.map(function(n){ return n.summary; }).join('')),
+      },
+    };
+    var json = JSON.stringify(pack, null, 2);
+    downloadBlob(new Blob([json], { type: 'application/json' }), 'clude-memories.json');
+  }
+
+  function exportMarkdown() {
+    if (allNodes.length === 0) return;
+    var byType = { episodic: [], semantic: [], procedural: [], self_model: [] };
+    for (var i = 0; i < allNodes.length; i++) {
+      var n = allNodes[i];
+      var t = n.type || 'episodic';
+      if (byType[t]) byType[t].push(n); else byType.episodic.push(n);
+    }
+
+    var md = '# Clude Memory Export\n\n';
+    md += '> ' + allNodes.length + ' memories — exported ' + new Date().toISOString() + '\n\n---\n\n';
+
+    var types = ['episodic', 'semantic', 'procedural', 'self_model'];
+    var titles = { episodic: 'Episodic', semantic: 'Semantic', procedural: 'Procedural', self_model: 'Self Model' };
+    for (var ti = 0; ti < types.length; ti++) {
+      var key = types[ti];
+      var mems = byType[key];
+      if (!mems || mems.length === 0) continue;
+      md += '## ' + titles[key] + ' (' + mems.length + ')\n\n';
+      for (var mi = 0; mi < mems.length; mi++) {
+        md += '- [' + (mems[mi].importance || 0).toFixed(2) + '] ' + (mems[mi].summary || mems[mi].content || '') + '\n';
+      }
+      md += '\n';
+    }
+
+    downloadBlob(new Blob([md], { type: 'text/markdown' }), 'clude-memories.md');
+  }
+
+  function downloadBlob(blob, filename) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function simpleHash(str) {
+    var hash = 0;
+    for (var i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+    }
+    return Math.abs(hash).toString(16).padStart(8, '0');
+  }
+
+  /* ============= UI HELPERS ============= */
+  function showDataUI() {
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('samplesSection').style.display = 'none';
+    document.getElementById('statsBar').classList.add('visible');
+    document.getElementById('actionBar').classList.add('visible');
+    document.getElementById('brainSection').classList.add('visible');
+    document.getElementById('searchSection').classList.add('visible');
+    document.getElementById('cardsSection').classList.add('visible');
+  }
+
+  function clearData() {
+    brainNodes = [];
+    allNodes = [];
+    document.getElementById('emptyState').style.display = 'block';
+    document.getElementById('samplesSection').style.display = 'block';
+    document.getElementById('statsBar').classList.remove('visible');
+    document.getElementById('actionBar').classList.remove('visible');
+    document.getElementById('brainSection').classList.remove('visible');
+    document.getElementById('searchSection').classList.remove('visible');
+    document.getElementById('cardsSection').classList.remove('visible');
+    document.getElementById('searchInput').value = '';
+    document.getElementById('searchCount').textContent = '';
+    resetBrainHighlights();
+  }
+
+  function showLoading(msg) {
+    document.getElementById('loadingMsg').textContent = msg || 'Loading...';
+    document.getElementById('loadingOverlay').classList.add('visible');
+  }
+  function hideLoading() {
+    document.getElementById('loadingOverlay').classList.remove('visible');
+  }
+
+  function showError(id, msg) {
+    const el = document.getElementById(id);
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+  function hideError(id) {
+    document.getElementById(id).style.display = 'none';
+  }
+
+  function esc(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function timeAgo(dateStr) {
+    if (!dateStr) return '';
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'now';
+    if (mins < 60) return mins + 'm';
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return hours + 'h';
+    const days = Math.floor(hours / 24);
+    if (days < 30) return days + 'd';
+    return Math.floor(days / 30) + 'mo';
+  }
+
+  /* ============= AUTO-RECONNECT ============= */
+  (function() {
+    const saved = localStorage.getItem('explorer_api_key');
+    if (saved) {
+      document.getElementById('apiKeyInput').value = saved;
+      connectWithApiKey();
+    }
+  })();
+
+  /* ============= SAMPLE PACKS ============= */
+  async function loadSample(name) {
+    showLoading('Loading ' + name + ' sample...');
+    try {
+      const res = await fetch('/samples/' + name + '.json');
+      if (!res.ok) throw new Error('Sample not found');
+      const pack = await res.json();
+      loadFromMemoryPack(pack);
+      hideLoading();
+    } catch (err) {
+      hideLoading();
+      alert('Failed to load sample: ' + err.message);
+    }
+  }
+
+  /* ============= PROVENANCE ============= */
+  let currentProvTrace = null;
+  let loadedConnections = []; // from sample packs
+  let usingSampleData = false; // skip API when viewing samples
+
+  async function openProvenance(memoryId) {
+    const overlay = document.getElementById('provOverlay');
+    overlay.classList.add('visible');
+    document.getElementById('provStats').innerHTML = '<span style="letter-spacing:2px">TRACING...</span>';
+    document.getElementById('provSidebar').innerHTML = '';
+    document.getElementById('provAnswer').innerHTML = '';
+    document.getElementById('provAskInput').value = '';
+
+    // Try API first (only for real data, not samples), fall back to local trace
+    if (!usingSampleData) {
+      try {
+        const res = await fetch('/api/memory/' + memoryId + '/trace');
+        if (res.ok) {
+          currentProvTrace = await res.json();
+          renderProvenance(currentProvTrace);
+          return;
+        }
+      } catch (e) {}
+    }
+
+    // Local trace from loaded data
+    currentProvTrace = localTrace(memoryId);
+    if (currentProvTrace) {
+      renderProvenance(currentProvTrace);
+    } else {
+      document.getElementById('provStats').innerHTML = '<span style="color:var(--error)">Memory #' + memoryId + ' not found in loaded data</span>';
+    }
+  }
+
+  function localTrace(memoryId) {
+    const nodeMap = new Map();
+    for (const n of allNodes) nodeMap.set(n.id, n);
+    const root = nodeMap.get(memoryId);
+    if (!root) return null;
+
+    const toTraceNode = (n, depth, relation, strength) => ({
+      id: n.id, hash_id: n.hash_id || '', summary: n.summary || '', content: n.content || '',
+      memory_type: n.type || 'episodic', source: n.source || '', importance: n.importance || 0,
+      emotional_valence: n.valence || 0, decay_factor: n.decay ?? 1, access_count: n.accessCount || 0,
+      created_at: n.createdAt || '', last_accessed: n.lastAccessed || '',
+      tags: n.tags || [], concepts: [], depth, relation, strength,
+    });
+
+    const ancestors = [];
+    const descendants = [];
+    const related = [];
+    const links = [];
+    const visited = new Set([memoryId]);
+    const MAX_DEPTH = 3;
+
+    // Build adjacency index for fast lookup
+    const inbound = new Map();  // target_id → [{source_id, link_type, strength}]
+    const outbound = new Map(); // source_id → [{target_id, link_type, strength}]
+    for (const conn of loadedConnections) {
+      if (!inbound.has(conn.target_id)) inbound.set(conn.target_id, []);
+      inbound.get(conn.target_id).push(conn);
+      if (!outbound.has(conn.source_id)) outbound.set(conn.source_id, []);
+      outbound.get(conn.source_id).push(conn);
+    }
+
+    // Also index evidence_ids as inbound
+    for (const n of allNodes) {
+      if (n.evidenceIds) {
+        for (const eid of n.evidenceIds) {
+          const conn = { source_id: eid, target_id: n.id, link_type: 'supports', strength: 0.85 };
+          if (!inbound.has(n.id)) inbound.set(n.id, []);
+          inbound.get(n.id).push(conn);
+          if (!outbound.has(eid)) outbound.set(eid, []);
+          outbound.get(eid).push(conn);
+        }
+      }
+    }
+
+    // Walk ancestors (multi-hop backward)
+    let frontier = [memoryId];
+    for (let depth = 1; depth <= MAX_DEPTH && frontier.length > 0; depth++) {
+      const nextFrontier = [];
+      for (const fid of frontier) {
+        const ins = inbound.get(fid) || [];
+        for (const conn of ins) {
+          if (visited.has(conn.source_id)) continue;
+          const src = nodeMap.get(conn.source_id);
+          if (!src) continue;
+          visited.add(conn.source_id);
+          ancestors.push(toTraceNode(src, depth, conn.link_type, conn.strength));
+          links.push(conn);
+          nextFrontier.push(conn.source_id);
+        }
+      }
+      frontier = nextFrontier.slice(0, 10); // cap per-hop
+    }
+
+    // Walk descendants (multi-hop forward)
+    frontier = [memoryId];
+    for (let depth = 1; depth <= MAX_DEPTH && frontier.length > 0; depth++) {
+      const nextFrontier = [];
+      for (const fid of frontier) {
+        const outs = outbound.get(fid) || [];
+        for (const conn of outs) {
+          if (visited.has(conn.target_id)) continue;
+          const tgt = nodeMap.get(conn.target_id);
+          if (!tgt) continue;
+          visited.add(conn.target_id);
+          descendants.push(toTraceNode(tgt, depth, conn.link_type, conn.strength));
+          links.push(conn);
+          nextFrontier.push(conn.target_id);
+        }
+      }
+      frontier = nextFrontier.slice(0, 10);
+    }
+
+    // Find tag-related memories (best matches not yet visited)
+    const rootTags = new Set(root.tags || []);
+    if (rootTags.size > 0) {
+      const scored = allNodes.filter(n => !visited.has(n.id))
+        .map(n => ({ node: n, overlap: (n.tags || []).filter(t => rootTags.has(t)).length }))
+        .filter(x => x.overlap > 0)
+        .sort((a, b) => b.overlap - a.overlap || (b.node.importance||0) - (a.node.importance||0))
+        .slice(0, 10);
+      for (const { node, overlap } of scored) {
+        visited.add(node.id);
+        const sharedTag = (node.tags || []).find(t => rootTags.has(t)) || 'tag';
+        related.push(toTraceNode(node, 1, 'shared:' + sharedTag, Math.min(0.8, overlap * 0.3)));
+      }
+    }
+
+    // If still very few results, find temporally close memories (same day, same source)
+    if (ancestors.length + descendants.length + related.length < 5) {
+      const rootDate = new Date(root.createdAt).getTime();
+      const nearby = allNodes.filter(n => !visited.has(n.id))
+        .map(n => ({ node: n, diff: Math.abs(new Date(n.createdAt).getTime() - rootDate) }))
+        .filter(x => x.diff < 86400000) // within 24 hours
+        .sort((a, b) => a.diff - b.diff)
+        .slice(0, 8);
+      for (const { node } of nearby) {
+        visited.add(node.id);
+        related.push(toTraceNode(node, 1, 'temporal', 0.4));
+      }
+    }
+
+    const allN = [toTraceNode(root, 0, 'root', 1.0), ...ancestors, ...descendants, ...related];
+    const timeline = [...allN].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    const linkTypes = {};
+    for (const l of links) linkTypes[l.link_type] = (linkTypes[l.link_type] || 0) + 1;
+    if (related.length) linkTypes['related'] = related.length;
+    const dates = allN.map(n => new Date(n.created_at).getTime()).filter(t => !isNaN(t));
+    const span = dates.length > 1 ? (Math.max(...dates) - Math.min(...dates)) / 86400000 : 0;
+    const maxD = Math.max(0, ...allN.map(n => n.depth));
+
+    return {
+      root: toTraceNode(root, 0, 'root', 1.0),
+      ancestors, descendants, related, links, entities: [], timeline,
+      stats: { total_nodes: allN.length, max_depth: maxD, link_types: linkTypes, time_span_days: Math.round(span * 10) / 10 }
+    };
+  }
+
+  function closeProvenance() {
+    document.getElementById('provOverlay').classList.remove('visible');
+    currentProvTrace = null;
+  }
+
+  function renderProvenance(trace) {
+    // Stats
+    const linkSummary = Object.entries(trace.stats.link_types || {}).map(([k,v]) => k + ':' + v).join('  ');
+    document.getElementById('provStats').innerHTML =
+      '<span><span class="v">' + trace.stats.total_nodes + '</span> nodes</span>' +
+      '<span><span class="v">' + trace.ancestors.length + '</span> ancestors</span>' +
+      '<span><span class="v">' + trace.descendants.length + '</span> descendants</span>' +
+      '<span><span class="v">' + trace.related.length + '</span> related</span>' +
+      '<span>depth <span class="v">' + trace.stats.max_depth + '</span></span>' +
+      '<span>span <span class="v">' + trace.stats.time_span_days + 'd</span></span>' +
+      (trace.entities.length ? '<span>entities: <span class="v">' + trace.entities.map(e => e.name).join(', ') + '</span></span>' : '');
+
+    // Sidebar
+    let html = '';
+    html += provNodeCard(trace.root, 'root');
+
+    if (trace.ancestors.length > 0) {
+      html += '<div class="prov-section-label" style="margin-top:12px">Ancestors (' + trace.ancestors.length + ')</div>';
+      trace.ancestors.forEach(a => html += provNodeCard(a, 'ancestor'));
+    }
+    if (trace.descendants.length > 0) {
+      html += '<div class="prov-section-label" style="margin-top:12px">Descendants (' + trace.descendants.length + ')</div>';
+      trace.descendants.forEach(d => html += provNodeCard(d, 'descendant'));
+    }
+    if (trace.related.length > 0) {
+      html += '<div class="prov-section-label" style="margin-top:12px">Related (' + trace.related.length + ')</div>';
+      trace.related.forEach(r => html += provNodeCard(r, 'related'));
+    }
+    document.getElementById('provSidebar').innerHTML = html;
+
+    // Graph
+    renderProvGraph(trace);
+  }
+
+  function provNodeCard(node, category) {
+    const date = new Date(node.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return '<div class="prov-node-card prov-' + category + '" onclick="openProvenance(' + node.id + ')">' +
+      '<div class="prov-node-head">' +
+        '<span class="prov-node-type">' + category + ' · ' + esc(node.memory_type) + '</span>' +
+        '<span class="prov-node-date">' + date + '</span>' +
+      '</div>' +
+      (node.relation !== 'root' ? '<div class="prov-node-relation">↳ ' + esc(node.relation) + ' (' + node.strength.toFixed(2) + ')</div>' : '') +
+      '<div class="prov-node-summary">' + esc(node.summary || node.content || '') + '</div>' +
+      '<div class="prov-node-meta">' +
+        '<span>imp <span class="v">' + (node.importance || 0).toFixed(2) + '</span></span>' +
+        '<span>decay <span class="v">' + ((node.decay_factor || 1) * 100).toFixed(0) + '%</span></span>' +
+        '<span>accessed <span class="v">' + (node.access_count || 0) + 'x</span></span>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderProvGraph(trace) {
+    const canvas = document.getElementById('provCanvas');
+    const panel = document.getElementById('provGraphPanel');
+    const rect = panel.getBoundingClientRect();
+    const W = rect.width || 700;
+    const H = 420;
+    canvas.width = W * 2; canvas.height = H * 2;
+    canvas.style.height = H + 'px';
+    const ctx = canvas.getContext('2d');
+    ctx.scale(2, 2);
+
+    const allN = [trace.root, ...trace.ancestors, ...trace.descendants, ...trace.related];
+    const nodeMap = new Map();
+    const colors = { root: '#2244ff', ancestor: '#3498db', descendant: '#2a6a3a', related: '#9b59b6' };
+
+    const nodes = allN.map(n => {
+      const cat = n.depth === 0 ? 'root' :
+        trace.ancestors.includes(n) ? 'ancestor' :
+        trace.descendants.includes(n) ? 'descendant' : 'related';
+      const obj = {
+        id: n.id, x: W/2 + (Math.random()-0.5)*W*0.5, y: H/2 + (Math.random()-0.5)*H*0.5,
+        vx: 0, vy: 0, r: n.depth === 0 ? 13 : Math.max(5, 9 - n.depth*2),
+        color: colors[cat], label: (n.summary||'').slice(0, 25), importance: n.importance, cat, data: n,
+      };
+      nodeMap.set(n.id, obj);
+      return obj;
+    });
+
+    const edges = (trace.links||[]).map(l => ({
+      source: nodeMap.get(l.source_id), target: nodeMap.get(l.target_id),
+      strength: l.strength, type: l.link_type,
+    })).filter(e => e.source && e.target);
+
+    // Ensure connectivity
+    for (const n of [...trace.ancestors, ...trace.descendants]) {
+      if (!edges.some(e => (e.source.id===n.id && e.target.id===trace.root.id) || (e.target.id===n.id && e.source.id===trace.root.id))) {
+        if (nodeMap.has(n.id)) edges.push({ source: nodeMap.get(n.id), target: nodeMap.get(trace.root.id), strength: n.strength, type: n.relation });
+      }
+    }
+
+    function tick() {
+      for (let i=0;i<nodes.length;i++) for (let j=i+1;j<nodes.length;j++) {
+        let dx=nodes[j].x-nodes[i].x, dy=nodes[j].y-nodes[i].y, d=Math.sqrt(dx*dx+dy*dy)||1, f=600/(d*d);
+        nodes[i].vx-=dx/d*f; nodes[i].vy-=dy/d*f; nodes[j].vx+=dx/d*f; nodes[j].vy+=dy/d*f;
+      }
+      for (const e of edges) {
+        let dx=e.target.x-e.source.x, dy=e.target.y-e.source.y, d=Math.sqrt(dx*dx+dy*dy)||1, f=(d-90)*0.01*e.strength;
+        e.source.vx+=dx/d*f; e.source.vy+=dy/d*f; e.target.vx-=dx/d*f; e.target.vy-=dy/d*f;
+      }
+      for (const n of nodes) {
+        n.vx+=(W/2-n.x)*0.002; n.vy+=(H/2-n.y)*0.002; n.vx*=0.85; n.vy*=0.85;
+        n.x+=n.vx; n.y+=n.vy;
+        n.x=Math.max(n.r+5,Math.min(W-n.r-5,n.x)); n.y=Math.max(n.r+5,Math.min(H-n.r-5,n.y));
+      }
+    }
+    function draw() {
+      ctx.clearRect(0,0,W,H);
+      for (const e of edges) {
+        ctx.beginPath(); ctx.moveTo(e.source.x,e.source.y); ctx.lineTo(e.target.x,e.target.y);
+        ctx.strokeStyle='rgba(0,0,0,'+(0.06+e.strength*0.1)+')'; ctx.lineWidth=0.5+e.strength; ctx.stroke();
+      }
+      for (const n of nodes) {
+        ctx.beginPath(); ctx.arc(n.x,n.y,n.r,0,Math.PI*2);
+        ctx.fillStyle=n.color; ctx.globalAlpha=0.25+n.importance*0.75; ctx.fill();
+        ctx.globalAlpha=1; ctx.strokeStyle=n.color; ctx.lineWidth=n.cat==='root'?2:1; ctx.stroke();
+        if (n.r>=7) { ctx.font=(n.cat==='root'?9:7)+'px JetBrains Mono'; ctx.fillStyle='#333'; ctx.textAlign='center'; ctx.fillText(n.label,n.x,n.y+n.r+10); }
+      }
+    }
+    let frame=0;
+    (function animate(){ tick(); draw(); if(++frame<180) requestAnimationFrame(animate); })();
+
+    canvas.onclick = function(e) {
+      const r = canvas.getBoundingClientRect();
+      const x = e.clientX-r.left, y = e.clientY-r.top;
+      for (const n of nodes) {
+        if ((n.x-x)**2+(n.y-y)**2 < (n.r+5)**2) { openProvenance(n.id); break; }
+      }
+    };
+  }
+
+  function localExplain(trace, question) {
+    const root = trace.root;
+    const ancestors = trace.ancestors || [];
+    const descendants = trace.descendants || [];
+    const q = question.toLowerCase();
+
+    // Build explanation from trace context
+    let explanation = '';
+    const rootType = root.memory_type || 'memory';
+
+    // Summarize the root
+    explanation += 'This ' + rootType + ' memory captures: "' + (root.content || root.summary || '') + '"\n\n';
+
+    // Describe ancestry
+    if (ancestors.length > 0) {
+      const byRelation = {};
+      ancestors.forEach(a => {
+        const r = a.relation || 'related';
+        if (!byRelation[r]) byRelation[r] = [];
+        byRelation[r].push(a);
+      });
+
+      explanation += 'It is connected to ' + ancestors.length + ' ancestor memories:\n\n';
+      for (const [relation, mems] of Object.entries(byRelation)) {
+        explanation += '• ' + relation + ' (' + mems.length + '): ';
+        explanation += mems.slice(0, 5).map(m => '"' + (m.summary || m.content || '').slice(0, 80) + '"').join(', ');
+        if (mems.length > 5) explanation += ' and ' + (mems.length - 5) + ' more';
+        explanation += '\n';
+      }
+    }
+
+    if (descendants.length > 0) {
+      explanation += '\nThis memory led to ' + descendants.length + ' downstream memories, including: ';
+      explanation += descendants.slice(0, 5).map(d => '"' + (d.summary || d.content || '').slice(0, 80) + '"').join(', ');
+      explanation += '\n';
+    }
+
+    // Build reasoning chain from trace timeline
+    const allNodes = [root, ...ancestors, ...descendants].filter(n => n.created_at);
+    allNodes.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    const chain = allNodes.slice(0, 8).map(n => {
+      const date = new Date(n.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const rel = n.relation && n.relation !== 'root' ? ' [' + n.relation + ']' : '';
+      return date + ': ' + (n.summary || (n.content || '').slice(0, 100)) + rel;
+    });
+
+    return { explanation, reasoning_chain: chain };
+  }
+
+  let provAsking = false;
+  async function askProvenance() {
+    if (!currentProvTrace || provAsking) return;
+    const q = document.getElementById('provAskInput').value.trim();
+    if (!q) return;
+
+    provAsking = true;
+    const ansDiv = document.getElementById('provAnswer');
+    const btn = document.querySelector('.prov-ask-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '...'; }
+    ansDiv.innerHTML = '<div style="font-size:10px;color:var(--text-faint);letter-spacing:2px;padding:12px 0">ANALYZING...</div>';
+
+    let result;
+    try {
+      if (usingSampleData) {
+        result = localExplain(currentProvTrace, q);
+      } else {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000);
+        const res = await fetch('/api/memory/' + currentProvTrace.root.id + '/explain', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: q }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        if (!res.ok) {
+          const errBody = await res.text().catch(() => '');
+          throw new Error('Explain failed (' + res.status + ')' + (errBody ? ': ' + errBody : ''));
+        }
+        result = await res.json();
+      }
+
+      let html = '<div class="prov-answer">' + esc(result.explanation) + '</div>';
+      if (result.reasoning_chain && result.reasoning_chain.length > 0) {
+        html += '<div class="prov-chain"><div class="prov-section-label">Reasoning Chain</div>';
+        result.reasoning_chain.forEach(step => {
+          const [date, ...rest] = step.split(': ');
+          html += '<div class="prov-chain-step"><span class="prov-chain-date">' + esc(date) + '</span><span class="prov-chain-text">' + esc(rest.join(': ')) + '</span></div>';
+        });
+        html += '</div>';
+      }
+      ansDiv.innerHTML = html;
+    } catch (err) {
+      const msg = err.name === 'AbortError' ? 'Request timed out (30s). Try again.' : err.message;
+      ansDiv.innerHTML = '<div style="color:var(--error);font-size:10px">Error: ' + esc(msg) + '</div>';
+    } finally {
+      provAsking = false;
+      if (btn) { btn.disabled = false; btn.textContent = 'ASK'; }
+    }
+  }
+
+  // Enter key for ask input
+  document.getElementById('provAskInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') askProvenance();
+  });
+
+  // Escape to close
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && currentProvTrace) closeProvenance();
+  });
+
+  /* ============= PRIVY WALLET EVENT ============= */
+  window.addEventListener('privy-wallet', async (e) => {
+    const { address, token } = e.detail;
+    showLoading('Fetching memories for ' + address.slice(0, 4) + '...' + address.slice(-4) + '...');
+
+    try {
+      const res = await fetch('/api/user/brain?wallet=' + encodeURIComponent(address) + '&limit=500', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+
+      if (!res.ok) throw new Error('Failed to fetch: ' + res.status);
+      const data = await res.json();
+
+      if (!data.nodes || data.nodes.length === 0) {
+        hideLoading();
+        alert('No memories found for this wallet.');
+        return;
+      }
+
+      hideLoading();
+      loadBrainData(data);
+    } catch (err) {
+      hideLoading();
+      alert('Failed to retrieve memories: ' + err.message);
+    }
+  });
+  </script>
+
+  <!-- PRIVY REACT ISLAND -->
+  <script type="importmap">
+  { "imports": {
+    "react": "https://esm.sh/react@19",
+    "react-dom/client": "https://esm.sh/react-dom@19/client",
+    "react/jsx-runtime": "https://esm.sh/react@19/jsx-runtime"
+  }}
+  </script>
+  <script type="module">
+  // Attempt to load Privy SDK and create a React island for wallet connect
+  (async () => {
+    const fallback = document.getElementById('privyFallback');
+    try {
+      const [React, ReactDOM, PrivyModule] = await Promise.all([
+        import('react'),
+        import('react-dom/client'),
+        import('https://esm.sh/@privy-io/react-auth@2?external=react,react-dom'),
+      ]);
+
+      const { PrivyProvider, usePrivy, useWallets } = PrivyModule;
+      const { createElement: h, useState, useEffect } = React;
+
+      const appId = document.querySelector('meta[name="privy-app-id"]')?.content || '';
+
+      if (!appId) {
+        fallback.textContent = 'Privy not configured. Use API Key instead.';
+        return;
+      }
+
+      function WalletButton() {
+        const { ready, authenticated, login, logout, getAccessToken } = usePrivy();
+        const { wallets } = useWallets();
+        const [status, setStatus] = useState('idle');
+
+        useEffect(() => {
+          if (!authenticated || !wallets?.length) return;
+          const solana = wallets.find(w => w.walletClientType === 'solana' || w.chainType === 'solana');
+          const addr = solana?.address || wallets[0]?.address;
+          if (!addr) return;
+
+          setStatus('connected');
+          getAccessToken().then(token => {
+            window.dispatchEvent(new CustomEvent('privy-wallet', { detail: { address: addr, token } }));
+          });
+        }, [authenticated, wallets]);
+
+        if (!ready) return h('div', { style: { fontSize: '10px', color: '#999', letterSpacing: '1px' } }, 'Initializing...');
+
+        if (authenticated && status === 'connected') {
+          const addr = wallets?.[0]?.address || '';
+          return h('div', { style: { display: 'flex', alignItems: 'center', gap: '12px', width: '100%' } },
+            h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flex: 1, padding: '12px 16px', background: 'rgba(42,106,58,0.06)', border: '1px solid rgba(42,106,58,0.15)' } },
+              h('div', { style: { width: 6, height: 6, borderRadius: '50%', background: '#2a6a3a', animation: 'pulse-dot 3s ease-in-out infinite' } }),
+              h('span', { style: { fontSize: '10px', letterSpacing: '1px', color: '#2a6a3a' } }, addr.slice(0, 4) + '...' + addr.slice(-4)),
+            ),
+            h('button', {
+              onClick: logout,
+              style: { fontFamily: 'var(--mono)', fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', padding: '8px 16px', background: 'transparent', color: '#9a3030', border: '1px solid rgba(154,48,48,0.2)', cursor: 'pointer' }
+            }, 'Disconnect')
+          );
+        }
+
+        return h('button', {
+          onClick: login,
+          style: { fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '2px', textTransform: 'uppercase', padding: '12px 24px', background: '#111', color: '#f5f5f0', border: '1px solid #111', cursor: 'pointer', width: '100%', transition: 'all 0.25s' }
+        }, 'Connect Wallet');
+      }
+
+      function App() {
+        return h(PrivyProvider, {
+          appId,
+          config: {
+            appearance: { theme: 'light' },
+            loginMethods: ['wallet'],
+            embeddedWallets: { createOnLogin: 'off' },
+          },
+        }, h(WalletButton));
+      }
+
+      fallback.style.display = 'none';
+      const container = document.createElement('div');
+      document.getElementById('privy-root').appendChild(container);
+      ReactDOM.createRoot(container).render(h(App));
+
+    } catch (err) {
+      console.error('Privy load failed:', err);
+      fallback.textContent = 'Wallet connector unavailable. Use API Key instead.';
+    }
+  })();
+  </script>
+
+</body>
+</html>

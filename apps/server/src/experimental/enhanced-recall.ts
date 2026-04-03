@@ -18,7 +18,7 @@
  *   const memories = await enhancedRecallMemories(opts);
  */
 
-import { recallMemories, formatMemoryContext, type RecallOptions, type Memory } from '../core/memory';
+import { recallMemories, formatMemoryContext, type RecallOptions, type Memory } from '../memory';
 import { getExperimentalConfig } from './config';
 import { rerankWithCrossEncoder, rerankWithVoyage } from './reranker';
 import { evaluateConfidence, filterLowConfidenceMemories, type ConfidenceResult } from './confidence-gate';

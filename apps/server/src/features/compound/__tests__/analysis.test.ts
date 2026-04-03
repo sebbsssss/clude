@@ -11,7 +11,7 @@ vi.mock('../../../core/logger', () => ({
   }),
 }));
 
-vi.mock('../../../core/memory', () => ({
+vi.mock('../../../memory', () => ({
   recallMemories: vi.fn().mockResolvedValue([]),
 }));
 
@@ -21,7 +21,7 @@ vi.mock('../../../services/response.service', () => ({
 }));
 
 import { analyzeMarket, analyzeMarkets } from '../analysis';
-import { recallMemories } from '../../../core/memory';
+import { recallMemories } from '../../../memory';
 
 function makeMarket(overrides: Partial<Market> = {}): Market {
   return {

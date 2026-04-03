@@ -1,7 +1,7 @@
 import { generateResponse, generateThread, GenerateOptions } from '../core/claude-client';
 import { getCurrentMood } from '../core/price-oracle';
 import { getMoodModifier } from '../character/mood-modifiers';
-import { recallMemories, formatMemoryContext, type RecallOptions } from '../core/memory';
+import { recallMemories, formatMemoryContext, type RecallOptions } from '../memory';
 import { enhancedRecallMemories, buildEnhancedContext } from '../experimental/enhanced-recall';
 import { getExperimentalConfig } from '../experimental/config';
 import { createChildLogger } from '../core/logger';

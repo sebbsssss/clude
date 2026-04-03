@@ -303,7 +303,7 @@ export async function runExport(): Promise<void> {
     printInfo('Mode: self-hosted (Supabase)');
 
     try {
-      const { getRecentMemories } = require('../core/memory');
+      const { getRecentMemories } = require('../memory');
       const raw = await getRecentMemories(8760, types, 10000);
       memories = (raw || []).map((m: any) => ({
         content: m.content,

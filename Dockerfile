@@ -18,6 +18,7 @@ RUN pnpm install --frozen-lockfile
 COPY apps/server/ ./apps/server/
 COPY apps/chat/ ./apps/chat/
 COPY apps/dashboard/ ./apps/dashboard/
+COPY apps/web/ ./apps/web/
 
 # Build backend
 RUN pnpm --filter @clude/server build
@@ -42,8 +43,7 @@ COPY apps/server/package.json ./apps/server/
 RUN pnpm install --frozen-lockfile --prod
 
 COPY --from=builder /app/apps/server/dist/ ./apps/server/dist/
-COPY --from=builder /app/apps/server/src/verify-app/public/ ./apps/server/dist/verify-app/public/
-COPY --from=builder /app/apps/server/src/landing/ ./apps/server/src/landing/
+COPY --from=builder /app/apps/web/public/ ./apps/web/public/
 
 ENV NODE_ENV=production
 EXPOSE 3000

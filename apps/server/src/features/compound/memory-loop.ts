@@ -5,7 +5,7 @@
  */
 
 import { createChildLogger } from '../../core/logger';
-import { storeMemory, recallMemories, createMemoryLink } from '../../core/memory';
+import { storeMemory, recallMemories, createMemoryLink } from '../../memory';
 import { getDb } from '../../core/database';
 import type { CompoundAnalysis, MarketResolution, PredictionRecord } from './types';
 

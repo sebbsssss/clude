@@ -1,4 +1,4 @@
-import type { MemoryType, Memory, MemorySummary, StoreMemoryOptions, RecallOptions, MemoryStats } from '../core/memory';
+import type { MemoryType, Memory, MemorySummary, StoreMemoryOptions, RecallOptions, MemoryStats } from '../memory';
 import type { MemoryLinkType, MemoryConcept } from '../utils/constants';
 
 export interface CortexConfig {
