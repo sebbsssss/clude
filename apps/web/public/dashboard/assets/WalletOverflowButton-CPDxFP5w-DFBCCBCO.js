@@ -1,1 +1,0 @@
-import{am as s,df as o,cW as r,dg as i}from"./index-C5ltmIwg.js";import{W as l}from"./wallet-CgOyneFB.js";const c=({onClick:e,text:t})=>s.jsxs(o,{onClick:e,children:[s.jsx(r,{children:s.jsx(l,{})}),s.jsx(i,{children:t})]});export{c as l};

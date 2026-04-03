@@ -20,7 +20,7 @@ export default defineConfig({
     include: ['buffer', '@privy-io/react-auth'],
   },
   build: {
-    outDir: '../server/src/verify-app/public/dashboard',
+    outDir: '../web/public/dashboard',
     emptyOutDir: true,
     commonjsOptions: {
       include: [/node_modules/],

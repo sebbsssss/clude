@@ -12,7 +12,7 @@ export default defineConfig({
   envDir: '../..',
   base: '/chat/',
   build: {
-    outDir: '../server/src/verify-app/public/chat',
+    outDir: '../web/public/chat',
     emptyOutDir: true,
     rollupOptions: {
       output: {
