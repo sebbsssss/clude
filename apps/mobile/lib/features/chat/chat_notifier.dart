@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client_provider.dart';
 import '../../core/api/api_exceptions.dart';
+import '../balance/balance_notifier.dart';
 import '../../core/api/models/responses.dart';
 import '../../core/api/sse_parser.dart';
 import 'chat_state.dart';
@@ -329,6 +330,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
       streamingMsg: null,
     );
     _contentBuffer = '';
+
+    // Update balance chip instantly from receipt.
+    if (doneData?.receipt?.remainingBalance != null) {
+      _ref
+          .read(balanceNotifierProvider.notifier)
+          .updateFromReceipt(doneData!.receipt!.remainingBalance!);
+    }
 
     // Refresh title after first exchange in a new conversation.
     if (_initialMessageCount == 0 && _conversationId != null) {

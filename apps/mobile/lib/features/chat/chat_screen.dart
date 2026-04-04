@@ -7,6 +7,7 @@ import '../../shared/utils/relative_time.dart';
 import '../../shared/widgets/empty_state_widget.dart';
 import '../../shared/widgets/error_view.dart';
 import '../../core/auth/auth_provider.dart';
+import '../balance/balance_chip.dart';
 import 'chat_provider.dart';
 import 'chat_state.dart';
 import 'conversation_list_provider.dart';
@@ -269,6 +270,7 @@ class _ActiveChatScreenState extends ConsumerState<ActiveChatScreen>
       appBar: AppBar(
         title: Text(chatState.title ?? 'New Chat'),
         actions: [
+          const BalanceChip(),
           const ModelChip(),
           if (isStreaming)
             IconButton(
