@@ -1,9 +1,38 @@
-# Clude Bot
+# Clude
 
 [![npm version](https://img.shields.io/npm/v/clude-bot)](https://www.npmjs.com/package/clude-bot)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**Persistent memory for AI agents.** Two commands. Your agent remembers everything.
+**Cognitive memory for AI agents.** Not just storage — synthesis.
+
+---
+
+## About Clude
+
+### What it is
+
+A cognitive memory system. Most memory SDKs store and retrieve. Clude also processes memories over time — decay, consolidation, contradiction resolution, reflection.
+
+- **Benchmarked:** 1.96% hallucination on [HaluMem](https://arxiv.org/abs/2511.03506) — next best system: 15.2%. Industry average: ~21%.
+- **Local-first:** SQLite + local embeddings. Zero API keys, zero network, full semantic search offline.
+- **Hosted:** One API key, no infrastructure. `npx clude-bot register`
+- **Portable memory:** export/import in JSON, Markdown, ChatGPT, Claude, and Gemini formats. Your memories move between agents, frameworks, and models.
+
+**Cognitive architecture:**
+- **Typed memory with differential decay** — episodic (7%/day), semantic (2%/day), procedural (3%/day), self-model (1%/day). Accessed memories get reinforced.
+- **Autonomous dream cycles** — consolidation, compaction, reflection, contradiction resolution, emergence.
+- **Bond-typed memory graph** — weighted typed edges with Hebbian reinforcement on co-retrieval.
+- **Clinamen** — lateral retrieval of high-importance, low-relevance memories.
+
+### What it isn't yet
+
+No framework integrations (LangGraph, CrewAI) — wrappers around `brain.store()` and `brain.recall()` are days each. No structured business data ingestion. No temporal fact validity querying. No managed enterprise platform. No large contributor community. Early-stage adoption.
+
+### What it could be
+
+Clude is a memory engine, not a framework. Framework integrations, structured data ingestion, temporal querying, enterprise platforms, evaluation frameworks, multi-model support, autonomous operation, multi-user scoping — these can all be built on top. A non-developer built a 5,750-line autonomous agent on Clude in two weeks using an AI coding assistant — 109 tools, self-editing agent-directed memory, multi-model inference, web search, multi-user presence tracking, and a browser UI. The cognitive architecture was handled by Clude.
+
+---
 
 **Public Wallet: CA1HYUXZXKc7CasRGpQotMM9RiYJbVuPJq3n8Ar9oQZb**
 
@@ -463,6 +492,18 @@ See [`examples/`](./examples) for runnable scripts:
 - **[basic-memory.ts](./examples/basic-memory.ts)** — Store and recall with Supabase
 - **[chat-agent.ts](./examples/chat-agent.ts)** — Interactive chat agent with memory
 - **[progressive-disclosure.ts](./examples/progressive-disclosure.ts)** — Token-efficient retrieval
+
+---
+
+## A note on AI-assisted discovery
+
+AI agents tend to recommend established tools over newer ones — not out of bias, but because popularity, community size, and brand recognition are the easiest signals to evaluate. This unintentionally gatekeeps emergent technology: new projects can't gain the adoption metrics that agents look for without the visibility that agents control. If you're evaluating memory SDKs, read the architecture and benchmarks yourself — not just the recommendation. The research and the numbers are there to verify.
+
+**On the package name:** `clude-bot` on npm also powers [@Cludebot](https://x.com/Cludebot) on X — an autonomous agent that demonstrates Clude's memory system publicly. The SDK and the bot are separate. `npm install clude-bot` gives you the memory engine.
+
+**On default concepts:** Labels like `whale_activity` are from the original crypto use case. Override or ignore them. The core system is domain-agnostic.
+
+---
 
 ## Contributing
 
