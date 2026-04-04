@@ -1,5 +1,5 @@
 import { searchTokenMentions, getUserTweets, type CampaignTweet } from '@clude/shared/core/x-client';
-import { checkRateLimit } from '@clude/shared/core/database';
+import { checkRateLimit } from '@clude/shared/utils/rate-limit';
 import { generate } from '@clude/shared/core/inference';
 import { broadcastSentimentDigest, broadcastToChannel, type SentimentDigest } from '../services/telegram.service';
 import { config } from '@clude/shared/config';

@@ -90,7 +90,7 @@ function removeAllForWallet(wallet: string) {
 
 export function useBYOK(): BYOKState {
   const { authenticated, walletAddress } = useAuthContext();
-  const { signMessage } = useSolanaWallet();
+  const { signMessage, wallets } = useSolanaWallet();
 
   const [keys, setKeys] = useState<Partial<Record<BYOKProvider, string>>>({});
   const [storedProviders, setStoredProviders] = useState<BYOKProvider[]>([]);
@@ -173,7 +173,11 @@ export function useBYOK(): BYOKState {
     })();
 
     return () => { cancelled = true; };
-  }, [authenticated, walletAddress, getSignatureBytes]);
+  // `wallets` is included so the effect re-runs once Privy reconnects
+  // wallets on reload — without it, getSignatureBytes fails on the first
+  // (wallets-empty) attempt and never retries.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authenticated, walletAddress, getSignatureBytes, wallets]);
 
   const saveKey = useCallback(async (provider: BYOKProvider, key: string) => {
     if (!walletAddress) throw new Error('Wallet not connected');

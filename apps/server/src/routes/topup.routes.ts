@@ -10,7 +10,8 @@
  */
 import { Router, Request, Response, NextFunction } from 'express';
 import { createHash, timingSafeEqual, randomBytes } from 'crypto';
-import { getDb, checkRateLimit } from '@clude/shared/core/database';
+import { checkRateLimit } from '@clude/shared/utils/rate-limit';
+import { getDb } from '@clude/shared/core/database';
 import { getConnection } from '@clude/shared/core/solana-client';
 import { config } from '@clude/shared/config';
 import { createChildLogger } from '@clude/shared/core/logger';

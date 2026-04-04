@@ -18,7 +18,8 @@
  */
 
 import { generateResponse } from '@clude/shared/core/claude-client';
-import { checkRateLimit, getDb } from '@clude/shared/core/database';
+import { checkRateLimit } from '@clude/shared/utils/rate-limit';
+import { getDb } from '@clude/shared/core/database';
 import {
   getRecentMemories,
   getSelfModel,

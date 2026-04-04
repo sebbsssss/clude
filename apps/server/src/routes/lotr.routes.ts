@@ -9,7 +9,8 @@
 import { Router, Request, Response } from "express";
 import { withOwnerWallet } from "@clude/shared/core/owner-context";
 import { recallMemories } from "@clude/brain/memory";
-import { getDb, checkRateLimit } from "@clude/shared/core/database";
+import { checkRateLimit } from "@clude/shared/utils/rate-limit";
+import { getDb } from "@clude/shared/core/database";
 import { createChildLogger } from "@clude/shared/core/logger";
 import { config } from "@clude/shared/config";
 import {

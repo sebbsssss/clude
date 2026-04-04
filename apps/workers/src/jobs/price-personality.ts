@@ -1,4 +1,4 @@
-import { checkRateLimit } from '@clude/shared/core/database';
+import { checkRateLimit } from '@clude/shared/utils/rate-limit';
 import { getRecentMemories, getMemoryStats, type Memory } from '@clude/brain/memory';
 import { config } from '@clude/shared/config';
 import { createChildLogger } from '@clude/shared/core/logger';

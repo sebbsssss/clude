@@ -33,6 +33,8 @@ export {
 
   // Links
   createMemoryLink,
+  createMemoryLinksBatch,
+  type MemoryLinkRow,
 
   // Decay
   decayMemories,

@@ -91,9 +91,11 @@ function chainBuilder(): any {
   });
 }
 
+vi.mock('@clude/shared/utils/rate-limit', () => ({
+  checkRateLimit: (...args: any[]) => mockCheckRateLimit(...args),
+}));
 vi.mock('../../core/database', () => ({
   getDb: () => ({ from: () => chainBuilder() }),
-  checkRateLimit: (...args: any[]) => mockCheckRateLimit(...args),
 }));
 
 import { chatRoutes } from '../chat.routes.js';

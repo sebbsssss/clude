@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { createHash } from 'crypto';
 import { storeMemory, recallMemories } from '@clude/brain/memory';
-import { getDb, checkRateLimit } from '@clude/shared/core/database';
+import { checkRateLimit } from '@clude/shared/utils/rate-limit';
+import { getDb } from '@clude/shared/core/database';
 import { writeMemo } from '@clude/shared/core/solana-client';
 import { checkInputContent } from '@clude/shared/core/guardrails';
 import { withOwnerWallet } from '@clude/shared/core/owner-context';

@@ -571,32 +571,6 @@ export async function initDatabase(): Promise<void> {
   log.info('Database initialized');
 }
 
-// Rate limiting helpers
-export async function checkRateLimit(key: string, maxCount: number, windowMinutes: number): Promise<boolean> {
-  const db = getDb();
-  const cutoff = new Date(Date.now() - windowMinutes * 60 * 1000).toISOString();
-
-  const { data: row } = await db
-    .from('rate_limits')
-    .select('count, window_start')
-    .eq('key', key)
-    .single();
-
-  if (!row || row.window_start < cutoff) {
-    await db
-      .from('rate_limits')
-      .upsert({ key, count: 1, window_start: new Date().toISOString() });
-    return true;
-  }
-
-  if (row.count >= maxCount) return false;
-
-  await db
-    .from('rate_limits')
-    .update({ count: row.count + 1 })
-    .eq('key', key);
-  return true;
-}
 
 export async function isAlreadyProcessed(tweetId: string): Promise<boolean> {
   const db = getDb();

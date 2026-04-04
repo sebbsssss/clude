@@ -21,7 +21,8 @@ import { loadInstruction } from '@clude/shared/utils/env-persona';
 import { getVestingInfo, getCAResponse, CLUDE_CA, getTokenStatus } from '@clude/brain/knowledge/tokenomics';
 import { checkInput, getCASpoofResponse, getTokenDeployResponse } from '@clude/shared/core/guardrails';
 import { webSearch, isWebSearchEnabled } from '@clude/shared/core/web-search';
-import { checkRateLimit, getDb } from '@clude/shared/core/database';
+import { checkRateLimit } from '@clude/shared/utils/rate-limit';
+import { getDb } from '@clude/shared/core/database';
 
 const log = createChildLogger('dispatcher');
 

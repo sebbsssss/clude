@@ -25,7 +25,8 @@ import {
 } from '@clude/brain/memory';
 import { findClinamen } from '@clude/brain/memory/clinamen';
 import type { MemoryLinkType } from '@clude/shared/utils/constants';
-import { checkRateLimit, getDb } from '@clude/shared/core/database';
+import { checkRateLimit } from '@clude/shared/utils/rate-limit';
+import { getDb } from '@clude/shared/core/database';
 import { createChildLogger } from '@clude/shared/core/logger';
 
 const log = createChildLogger('cortex-api');

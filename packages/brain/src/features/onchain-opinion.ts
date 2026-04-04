@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 import { postReply } from '@clude/shared/core/x-client';
 import { writeMemo, solscanTxUrl } from '@clude/shared/core/solana-client';
-import { checkRateLimit, markProcessed, getDb } from '@clude/shared/core/database';
+import { markProcessed, getDb } from '@clude/shared/core/database';
 import { config } from '@clude/shared/config';
 import { getTierModifier } from '../character/tier-modifiers';
 import { HolderTier } from '../character/tier-modifiers';

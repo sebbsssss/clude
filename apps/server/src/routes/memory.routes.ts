@@ -10,7 +10,7 @@ import { requireOwnership, optionalOwnership } from '@clude/brain/auth/require-o
 import { traceMemory, explainMemory } from '@clude/brain/memory/trace';
 import { withOwnerWallet } from '@clude/shared/core/owner-context';
 import { createChildLogger } from '@clude/shared/core/logger';
-import { checkRateLimit } from '@clude/shared/core/database';
+import { checkRateLimit } from '@clude/shared/utils/rate-limit';
 
 const log = createChildLogger('memory-routes');
 

@@ -1,10 +1,10 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { authenticateAgent, recordAgentInteraction, AgentRegistration } from '@clude/brain/features/agent-tier';
 import { getAgentTierModifier } from '@clude/brain/character/agent-tier-modifiers';
-import { getMoodModifier } from '@clude/brain/character/mood-modifiers';
 import { getCurrentMood } from '@clude/brain/core-ext/price-oracle';
-import { recallMemories, formatMemoryContext, storeMemory, getMemoryStats, scoreImportanceWithLLM, type MemoryType } from '@clude/brain/memory';
-import { checkRateLimit, getDb } from '@clude/shared/core/database';
+import { recallMemories, storeMemory, getMemoryStats, scoreImportanceWithLLM, type MemoryType } from '@clude/brain/memory';
+import { checkRateLimit } from '@clude/shared/utils/rate-limit';
+import { getDb } from '@clude/shared/core/database';
 import { config } from '@clude/shared/config';
 import { createChildLogger } from '@clude/shared/core/logger';
 import { buildAndGenerate } from '@clude/brain/services/response.service';
