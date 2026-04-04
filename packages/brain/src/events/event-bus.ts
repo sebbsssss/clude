@@ -10,7 +10,7 @@ export type Mood = 'PUMPING' | 'DUMPING' | 'SIDEWAYS' | 'NEW_ATH' | 'WHALE_SELL'
  */
 export interface BotEvents {
   'mood:changed': { previous: Mood; current: Mood };
-  'memory:stored': { importance: number; memoryType: string };
+  'memory:stored': { importance: number; memoryType: string; source: string };
   'telegram:broadcast': { message: string; feature: string; messageId?: number };
   'sentiment:analyzed': { sentiment: 'bullish' | 'bearish' | 'neutral'; tweetCount: number; digest: string };
 }

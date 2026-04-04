@@ -10,8 +10,11 @@ const log = createChildLogger('events');
  */
 export function registerEventHandlers(): void {
   // Accumulate importance for event-driven reflection triggers (Park et al. 2023)
-  eventBus.on('memory:stored', ({ importance, memoryType }) => {
-    if (memoryType === 'episodic') {
+  // Exclude external agent sources (e.g. shiro_*) — these are operational writes
+  // from autonomous agents running frequent cycles, not genuine interactions.
+  // Including them causes dream cycles to trigger far too often.
+  eventBus.on('memory:stored', ({ importance, memoryType, source }) => {
+    if (memoryType === 'episodic' && !source.startsWith('shiro_')) {
       accumulateImportance(importance);
     }
   });
