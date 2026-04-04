@@ -360,6 +360,7 @@ mixin _$DisplayMessage {
       MessageTokens? tokens,
       MessageReceipt? receipt,
       bool isGreeting,
+      GreetingMeta? greetingMeta,
     )
     settled,
     required TResult Function(String id, String content, bool isGreeting)
@@ -377,6 +378,7 @@ mixin _$DisplayMessage {
       MessageTokens? tokens,
       MessageReceipt? receipt,
       bool isGreeting,
+      GreetingMeta? greetingMeta,
     )?
     settled,
     TResult? Function(String id, String content, bool isGreeting)? streaming,
@@ -393,6 +395,7 @@ mixin _$DisplayMessage {
       MessageTokens? tokens,
       MessageReceipt? receipt,
       bool isGreeting,
+      GreetingMeta? greetingMeta,
     )?
     settled,
     TResult Function(String id, String content, bool isGreeting)? streaming,
@@ -490,11 +493,13 @@ abstract class _$$SettledMessageImplCopyWith<$Res>
     MessageTokens? tokens,
     MessageReceipt? receipt,
     bool isGreeting,
+    GreetingMeta? greetingMeta,
   });
 
   $MessageCostCopyWith<$Res>? get cost;
   $MessageTokensCopyWith<$Res>? get tokens;
   $MessageReceiptCopyWith<$Res>? get receipt;
+  $GreetingMetaCopyWith<$Res>? get greetingMeta;
 }
 
 /// @nodoc
@@ -520,6 +525,7 @@ class __$$SettledMessageImplCopyWithImpl<$Res>
     Object? tokens = freezed,
     Object? receipt = freezed,
     Object? isGreeting = null,
+    Object? greetingMeta = freezed,
   }) {
     return _then(
       _$SettledMessageImpl(
@@ -559,6 +565,10 @@ class __$$SettledMessageImplCopyWithImpl<$Res>
             ? _value.isGreeting
             : isGreeting // ignore: cast_nullable_to_non_nullable
                   as bool,
+        greetingMeta: freezed == greetingMeta
+            ? _value.greetingMeta
+            : greetingMeta // ignore: cast_nullable_to_non_nullable
+                  as GreetingMeta?,
       ),
     );
   }
@@ -604,6 +614,20 @@ class __$$SettledMessageImplCopyWithImpl<$Res>
       return _then(_value.copyWith(receipt: value));
     });
   }
+
+  /// Create a copy of DisplayMessage
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $GreetingMetaCopyWith<$Res>? get greetingMeta {
+    if (_value.greetingMeta == null) {
+      return null;
+    }
+
+    return $GreetingMetaCopyWith<$Res>(_value.greetingMeta!, (value) {
+      return _then(_value.copyWith(greetingMeta: value));
+    });
+  }
 }
 
 /// @nodoc
@@ -619,6 +643,7 @@ class _$SettledMessageImpl implements SettledMessage {
     this.tokens,
     this.receipt,
     this.isGreeting = false,
+    this.greetingMeta,
   }) : _memoryIds = memoryIds;
 
   @override
@@ -648,10 +673,12 @@ class _$SettledMessageImpl implements SettledMessage {
   @override
   @JsonKey()
   final bool isGreeting;
+  @override
+  final GreetingMeta? greetingMeta;
 
   @override
   String toString() {
-    return 'DisplayMessage.settled(id: $id, role: $role, content: $content, memoryIds: $memoryIds, model: $model, cost: $cost, tokens: $tokens, receipt: $receipt, isGreeting: $isGreeting)';
+    return 'DisplayMessage.settled(id: $id, role: $role, content: $content, memoryIds: $memoryIds, model: $model, cost: $cost, tokens: $tokens, receipt: $receipt, isGreeting: $isGreeting, greetingMeta: $greetingMeta)';
   }
 
   @override
@@ -671,7 +698,9 @@ class _$SettledMessageImpl implements SettledMessage {
             (identical(other.tokens, tokens) || other.tokens == tokens) &&
             (identical(other.receipt, receipt) || other.receipt == receipt) &&
             (identical(other.isGreeting, isGreeting) ||
-                other.isGreeting == isGreeting));
+                other.isGreeting == isGreeting) &&
+            (identical(other.greetingMeta, greetingMeta) ||
+                other.greetingMeta == greetingMeta));
   }
 
   @override
@@ -686,6 +715,7 @@ class _$SettledMessageImpl implements SettledMessage {
     tokens,
     receipt,
     isGreeting,
+    greetingMeta,
   );
 
   /// Create a copy of DisplayMessage
@@ -712,6 +742,7 @@ class _$SettledMessageImpl implements SettledMessage {
       MessageTokens? tokens,
       MessageReceipt? receipt,
       bool isGreeting,
+      GreetingMeta? greetingMeta,
     )
     settled,
     required TResult Function(String id, String content, bool isGreeting)
@@ -727,6 +758,7 @@ class _$SettledMessageImpl implements SettledMessage {
       tokens,
       receipt,
       isGreeting,
+      greetingMeta,
     );
   }
 
@@ -743,6 +775,7 @@ class _$SettledMessageImpl implements SettledMessage {
       MessageTokens? tokens,
       MessageReceipt? receipt,
       bool isGreeting,
+      GreetingMeta? greetingMeta,
     )?
     settled,
     TResult? Function(String id, String content, bool isGreeting)? streaming,
@@ -757,6 +790,7 @@ class _$SettledMessageImpl implements SettledMessage {
       tokens,
       receipt,
       isGreeting,
+      greetingMeta,
     );
   }
 
@@ -773,6 +807,7 @@ class _$SettledMessageImpl implements SettledMessage {
       MessageTokens? tokens,
       MessageReceipt? receipt,
       bool isGreeting,
+      GreetingMeta? greetingMeta,
     )?
     settled,
     TResult Function(String id, String content, bool isGreeting)? streaming,
@@ -789,6 +824,7 @@ class _$SettledMessageImpl implements SettledMessage {
         tokens,
         receipt,
         isGreeting,
+        greetingMeta,
       );
     }
     return orElse();
@@ -837,6 +873,7 @@ abstract class SettledMessage implements DisplayMessage {
     final MessageTokens? tokens,
     final MessageReceipt? receipt,
     final bool isGreeting,
+    final GreetingMeta? greetingMeta,
   }) = _$SettledMessageImpl;
 
   @override
@@ -851,6 +888,7 @@ abstract class SettledMessage implements DisplayMessage {
   MessageReceipt? get receipt;
   @override
   bool get isGreeting;
+  GreetingMeta? get greetingMeta;
 
   /// Create a copy of DisplayMessage
   /// with the given fields replaced by the non-null parameter values.
@@ -969,6 +1007,7 @@ class _$StreamingMessageImpl implements StreamingMessage {
       MessageTokens? tokens,
       MessageReceipt? receipt,
       bool isGreeting,
+      GreetingMeta? greetingMeta,
     )
     settled,
     required TResult Function(String id, String content, bool isGreeting)
@@ -990,6 +1029,7 @@ class _$StreamingMessageImpl implements StreamingMessage {
       MessageTokens? tokens,
       MessageReceipt? receipt,
       bool isGreeting,
+      GreetingMeta? greetingMeta,
     )?
     settled,
     TResult? Function(String id, String content, bool isGreeting)? streaming,
@@ -1010,6 +1050,7 @@ class _$StreamingMessageImpl implements StreamingMessage {
       MessageTokens? tokens,
       MessageReceipt? receipt,
       bool isGreeting,
+      GreetingMeta? greetingMeta,
     )?
     settled,
     TResult Function(String id, String content, bool isGreeting)? streaming,

@@ -34,6 +34,7 @@ sealed class DisplayMessage with _$DisplayMessage {
     MessageTokens? tokens,
     MessageReceipt? receipt,
     @Default(false) bool isGreeting,
+    GreetingMeta? greetingMeta,
   }) = SettledMessage;
 
   const factory DisplayMessage.streaming({

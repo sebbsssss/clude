@@ -137,3 +137,36 @@ Map<String, dynamic> _$$StreamDoneDataImplToJson(
   'tokens': instance.tokens,
   'receipt': instance.receipt,
 };
+
+_$TemporalSpanImpl _$$TemporalSpanImplFromJson(Map<String, dynamic> json) =>
+    _$TemporalSpanImpl(
+      weeks: (json['weeks'] as num).toInt(),
+      sinceLabel: json['since_label'] as String,
+    );
+
+Map<String, dynamic> _$$TemporalSpanImplToJson(_$TemporalSpanImpl instance) =>
+    <String, dynamic>{
+      'weeks': instance.weeks,
+      'since_label': instance.sinceLabel,
+    };
+
+_$GreetingMetaImpl _$$GreetingMetaImplFromJson(
+  Map<String, dynamic> json,
+) => _$GreetingMetaImpl(
+  totalMemories: (json['total_memories'] as num).toInt(),
+  memoriesRecalled: (json['memories_recalled'] as num).toInt(),
+  temporalSpan: json['temporal_span'] == null
+      ? null
+      : TemporalSpan.fromJson(json['temporal_span'] as Map<String, dynamic>),
+  topics: (json['topics'] as List<dynamic>).map((e) => e as String).toList(),
+  greetingCost: (json['greeting_cost'] as num).toDouble(),
+);
+
+Map<String, dynamic> _$$GreetingMetaImplToJson(_$GreetingMetaImpl instance) =>
+    <String, dynamic>{
+      'total_memories': instance.totalMemories,
+      'memories_recalled': instance.memoriesRecalled,
+      'temporal_span': instance.temporalSpan,
+      'topics': instance.topics,
+      'greeting_cost': instance.greetingCost,
+    };

@@ -1918,3 +1918,469 @@ abstract class _StreamDoneData implements StreamDoneData {
   _$$StreamDoneDataImplCopyWith<_$StreamDoneDataImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }
+
+TemporalSpan _$TemporalSpanFromJson(Map<String, dynamic> json) {
+  return _TemporalSpan.fromJson(json);
+}
+
+/// @nodoc
+mixin _$TemporalSpan {
+  int get weeks => throw _privateConstructorUsedError;
+  @JsonKey(name: 'since_label')
+  String get sinceLabel => throw _privateConstructorUsedError;
+
+  /// Serializes this TemporalSpan to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of TemporalSpan
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $TemporalSpanCopyWith<TemporalSpan> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $TemporalSpanCopyWith<$Res> {
+  factory $TemporalSpanCopyWith(
+    TemporalSpan value,
+    $Res Function(TemporalSpan) then,
+  ) = _$TemporalSpanCopyWithImpl<$Res, TemporalSpan>;
+  @useResult
+  $Res call({int weeks, @JsonKey(name: 'since_label') String sinceLabel});
+}
+
+/// @nodoc
+class _$TemporalSpanCopyWithImpl<$Res, $Val extends TemporalSpan>
+    implements $TemporalSpanCopyWith<$Res> {
+  _$TemporalSpanCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of TemporalSpan
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({Object? weeks = null, Object? sinceLabel = null}) {
+    return _then(
+      _value.copyWith(
+            weeks: null == weeks
+                ? _value.weeks
+                : weeks // ignore: cast_nullable_to_non_nullable
+                      as int,
+            sinceLabel: null == sinceLabel
+                ? _value.sinceLabel
+                : sinceLabel // ignore: cast_nullable_to_non_nullable
+                      as String,
+          )
+          as $Val,
+    );
+  }
+}
+
+/// @nodoc
+abstract class _$$TemporalSpanImplCopyWith<$Res>
+    implements $TemporalSpanCopyWith<$Res> {
+  factory _$$TemporalSpanImplCopyWith(
+    _$TemporalSpanImpl value,
+    $Res Function(_$TemporalSpanImpl) then,
+  ) = __$$TemporalSpanImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({int weeks, @JsonKey(name: 'since_label') String sinceLabel});
+}
+
+/// @nodoc
+class __$$TemporalSpanImplCopyWithImpl<$Res>
+    extends _$TemporalSpanCopyWithImpl<$Res, _$TemporalSpanImpl>
+    implements _$$TemporalSpanImplCopyWith<$Res> {
+  __$$TemporalSpanImplCopyWithImpl(
+    _$TemporalSpanImpl _value,
+    $Res Function(_$TemporalSpanImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of TemporalSpan
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({Object? weeks = null, Object? sinceLabel = null}) {
+    return _then(
+      _$TemporalSpanImpl(
+        weeks: null == weeks
+            ? _value.weeks
+            : weeks // ignore: cast_nullable_to_non_nullable
+                  as int,
+        sinceLabel: null == sinceLabel
+            ? _value.sinceLabel
+            : sinceLabel // ignore: cast_nullable_to_non_nullable
+                  as String,
+      ),
+    );
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$TemporalSpanImpl implements _TemporalSpan {
+  const _$TemporalSpanImpl({
+    required this.weeks,
+    @JsonKey(name: 'since_label') required this.sinceLabel,
+  });
+
+  factory _$TemporalSpanImpl.fromJson(Map<String, dynamic> json) =>
+      _$$TemporalSpanImplFromJson(json);
+
+  @override
+  final int weeks;
+  @override
+  @JsonKey(name: 'since_label')
+  final String sinceLabel;
+
+  @override
+  String toString() {
+    return 'TemporalSpan(weeks: $weeks, sinceLabel: $sinceLabel)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$TemporalSpanImpl &&
+            (identical(other.weeks, weeks) || other.weeks == weeks) &&
+            (identical(other.sinceLabel, sinceLabel) ||
+                other.sinceLabel == sinceLabel));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType, weeks, sinceLabel);
+
+  /// Create a copy of TemporalSpan
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$TemporalSpanImplCopyWith<_$TemporalSpanImpl> get copyWith =>
+      __$$TemporalSpanImplCopyWithImpl<_$TemporalSpanImpl>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$TemporalSpanImplToJson(this);
+  }
+}
+
+abstract class _TemporalSpan implements TemporalSpan {
+  const factory _TemporalSpan({
+    required final int weeks,
+    @JsonKey(name: 'since_label') required final String sinceLabel,
+  }) = _$TemporalSpanImpl;
+
+  factory _TemporalSpan.fromJson(Map<String, dynamic> json) =
+      _$TemporalSpanImpl.fromJson;
+
+  @override
+  int get weeks;
+  @override
+  @JsonKey(name: 'since_label')
+  String get sinceLabel;
+
+  /// Create a copy of TemporalSpan
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$TemporalSpanImplCopyWith<_$TemporalSpanImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+GreetingMeta _$GreetingMetaFromJson(Map<String, dynamic> json) {
+  return _GreetingMeta.fromJson(json);
+}
+
+/// @nodoc
+mixin _$GreetingMeta {
+  @JsonKey(name: 'total_memories')
+  int get totalMemories => throw _privateConstructorUsedError;
+  @JsonKey(name: 'memories_recalled')
+  int get memoriesRecalled => throw _privateConstructorUsedError;
+  @JsonKey(name: 'temporal_span')
+  TemporalSpan? get temporalSpan => throw _privateConstructorUsedError;
+  List<String> get topics => throw _privateConstructorUsedError;
+  @JsonKey(name: 'greeting_cost')
+  double get greetingCost => throw _privateConstructorUsedError;
+
+  /// Serializes this GreetingMeta to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of GreetingMeta
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $GreetingMetaCopyWith<GreetingMeta> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $GreetingMetaCopyWith<$Res> {
+  factory $GreetingMetaCopyWith(
+    GreetingMeta value,
+    $Res Function(GreetingMeta) then,
+  ) = _$GreetingMetaCopyWithImpl<$Res, GreetingMeta>;
+  @useResult
+  $Res call({
+    @JsonKey(name: 'total_memories') int totalMemories,
+    @JsonKey(name: 'memories_recalled') int memoriesRecalled,
+    @JsonKey(name: 'temporal_span') TemporalSpan? temporalSpan,
+    List<String> topics,
+    @JsonKey(name: 'greeting_cost') double greetingCost,
+  });
+
+  $TemporalSpanCopyWith<$Res>? get temporalSpan;
+}
+
+/// @nodoc
+class _$GreetingMetaCopyWithImpl<$Res, $Val extends GreetingMeta>
+    implements $GreetingMetaCopyWith<$Res> {
+  _$GreetingMetaCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of GreetingMeta
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? totalMemories = null,
+    Object? memoriesRecalled = null,
+    Object? temporalSpan = freezed,
+    Object? topics = null,
+    Object? greetingCost = null,
+  }) {
+    return _then(
+      _value.copyWith(
+            totalMemories: null == totalMemories
+                ? _value.totalMemories
+                : totalMemories // ignore: cast_nullable_to_non_nullable
+                      as int,
+            memoriesRecalled: null == memoriesRecalled
+                ? _value.memoriesRecalled
+                : memoriesRecalled // ignore: cast_nullable_to_non_nullable
+                      as int,
+            temporalSpan: freezed == temporalSpan
+                ? _value.temporalSpan
+                : temporalSpan // ignore: cast_nullable_to_non_nullable
+                      as TemporalSpan?,
+            topics: null == topics
+                ? _value.topics
+                : topics // ignore: cast_nullable_to_non_nullable
+                      as List<String>,
+            greetingCost: null == greetingCost
+                ? _value.greetingCost
+                : greetingCost // ignore: cast_nullable_to_non_nullable
+                      as double,
+          )
+          as $Val,
+    );
+  }
+
+  /// Create a copy of GreetingMeta
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $TemporalSpanCopyWith<$Res>? get temporalSpan {
+    if (_value.temporalSpan == null) {
+      return null;
+    }
+
+    return $TemporalSpanCopyWith<$Res>(_value.temporalSpan!, (value) {
+      return _then(_value.copyWith(temporalSpan: value) as $Val);
+    });
+  }
+}
+
+/// @nodoc
+abstract class _$$GreetingMetaImplCopyWith<$Res>
+    implements $GreetingMetaCopyWith<$Res> {
+  factory _$$GreetingMetaImplCopyWith(
+    _$GreetingMetaImpl value,
+    $Res Function(_$GreetingMetaImpl) then,
+  ) = __$$GreetingMetaImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({
+    @JsonKey(name: 'total_memories') int totalMemories,
+    @JsonKey(name: 'memories_recalled') int memoriesRecalled,
+    @JsonKey(name: 'temporal_span') TemporalSpan? temporalSpan,
+    List<String> topics,
+    @JsonKey(name: 'greeting_cost') double greetingCost,
+  });
+
+  @override
+  $TemporalSpanCopyWith<$Res>? get temporalSpan;
+}
+
+/// @nodoc
+class __$$GreetingMetaImplCopyWithImpl<$Res>
+    extends _$GreetingMetaCopyWithImpl<$Res, _$GreetingMetaImpl>
+    implements _$$GreetingMetaImplCopyWith<$Res> {
+  __$$GreetingMetaImplCopyWithImpl(
+    _$GreetingMetaImpl _value,
+    $Res Function(_$GreetingMetaImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of GreetingMeta
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? totalMemories = null,
+    Object? memoriesRecalled = null,
+    Object? temporalSpan = freezed,
+    Object? topics = null,
+    Object? greetingCost = null,
+  }) {
+    return _then(
+      _$GreetingMetaImpl(
+        totalMemories: null == totalMemories
+            ? _value.totalMemories
+            : totalMemories // ignore: cast_nullable_to_non_nullable
+                  as int,
+        memoriesRecalled: null == memoriesRecalled
+            ? _value.memoriesRecalled
+            : memoriesRecalled // ignore: cast_nullable_to_non_nullable
+                  as int,
+        temporalSpan: freezed == temporalSpan
+            ? _value.temporalSpan
+            : temporalSpan // ignore: cast_nullable_to_non_nullable
+                  as TemporalSpan?,
+        topics: null == topics
+            ? _value._topics
+            : topics // ignore: cast_nullable_to_non_nullable
+                  as List<String>,
+        greetingCost: null == greetingCost
+            ? _value.greetingCost
+            : greetingCost // ignore: cast_nullable_to_non_nullable
+                  as double,
+      ),
+    );
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$GreetingMetaImpl implements _GreetingMeta {
+  const _$GreetingMetaImpl({
+    @JsonKey(name: 'total_memories') required this.totalMemories,
+    @JsonKey(name: 'memories_recalled') required this.memoriesRecalled,
+    @JsonKey(name: 'temporal_span') this.temporalSpan,
+    required final List<String> topics,
+    @JsonKey(name: 'greeting_cost') required this.greetingCost,
+  }) : _topics = topics;
+
+  factory _$GreetingMetaImpl.fromJson(Map<String, dynamic> json) =>
+      _$$GreetingMetaImplFromJson(json);
+
+  @override
+  @JsonKey(name: 'total_memories')
+  final int totalMemories;
+  @override
+  @JsonKey(name: 'memories_recalled')
+  final int memoriesRecalled;
+  @override
+  @JsonKey(name: 'temporal_span')
+  final TemporalSpan? temporalSpan;
+  final List<String> _topics;
+  @override
+  List<String> get topics {
+    if (_topics is EqualUnmodifiableListView) return _topics;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_topics);
+  }
+
+  @override
+  @JsonKey(name: 'greeting_cost')
+  final double greetingCost;
+
+  @override
+  String toString() {
+    return 'GreetingMeta(totalMemories: $totalMemories, memoriesRecalled: $memoriesRecalled, temporalSpan: $temporalSpan, topics: $topics, greetingCost: $greetingCost)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$GreetingMetaImpl &&
+            (identical(other.totalMemories, totalMemories) ||
+                other.totalMemories == totalMemories) &&
+            (identical(other.memoriesRecalled, memoriesRecalled) ||
+                other.memoriesRecalled == memoriesRecalled) &&
+            (identical(other.temporalSpan, temporalSpan) ||
+                other.temporalSpan == temporalSpan) &&
+            const DeepCollectionEquality().equals(other._topics, _topics) &&
+            (identical(other.greetingCost, greetingCost) ||
+                other.greetingCost == greetingCost));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(
+    runtimeType,
+    totalMemories,
+    memoriesRecalled,
+    temporalSpan,
+    const DeepCollectionEquality().hash(_topics),
+    greetingCost,
+  );
+
+  /// Create a copy of GreetingMeta
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$GreetingMetaImplCopyWith<_$GreetingMetaImpl> get copyWith =>
+      __$$GreetingMetaImplCopyWithImpl<_$GreetingMetaImpl>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$GreetingMetaImplToJson(this);
+  }
+}
+
+abstract class _GreetingMeta implements GreetingMeta {
+  const factory _GreetingMeta({
+    @JsonKey(name: 'total_memories') required final int totalMemories,
+    @JsonKey(name: 'memories_recalled') required final int memoriesRecalled,
+    @JsonKey(name: 'temporal_span') final TemporalSpan? temporalSpan,
+    required final List<String> topics,
+    @JsonKey(name: 'greeting_cost') required final double greetingCost,
+  }) = _$GreetingMetaImpl;
+
+  factory _GreetingMeta.fromJson(Map<String, dynamic> json) =
+      _$GreetingMetaImpl.fromJson;
+
+  @override
+  @JsonKey(name: 'total_memories')
+  int get totalMemories;
+  @override
+  @JsonKey(name: 'memories_recalled')
+  int get memoriesRecalled;
+  @override
+  @JsonKey(name: 'temporal_span')
+  TemporalSpan? get temporalSpan;
+  @override
+  List<String> get topics;
+  @override
+  @JsonKey(name: 'greeting_cost')
+  double get greetingCost;
+
+  /// Create a copy of GreetingMeta
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$GreetingMetaImplCopyWith<_$GreetingMetaImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}

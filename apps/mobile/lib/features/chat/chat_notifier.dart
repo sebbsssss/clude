@@ -14,6 +14,8 @@ import 'models/display_message.dart';
 class ChatNotifier extends StateNotifier<ChatState> {
   ChatNotifier(this._ref) : super(const ChatState());
 
+  static bool _greetedThisSession = false;
+
   final Ref _ref;
   String _contentBuffer = '';
   Timer? _flushTimer;
@@ -24,6 +26,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   Future<void> loadInitial(String conversationId) async {
     _conversationId = conversationId;
+
+    // Cancel any in-progress greeting before reloading.
+    if (_sseSubscription != null) {
+      _cancelToken?.cancel();
+      _stopFlushTimer();
+      _sseSubscription?.cancel();
+      _sseSubscription = null;
+      _contentBuffer = '';
+    }
+
     try {
       final client = _ref.read(apiClientProvider);
       final detail = await client.getConversation(conversationId);
@@ -37,13 +49,28 @@ class ChatNotifier extends StateNotifier<ChatState> {
         title: detail.title,
         model: detail.model,
       );
+      if (state.settled.isEmpty) {
+        fetchGreeting();
+      }
     } catch (e) {
       state = ChatState(error: e.toString());
     }
   }
 
   Future<void> send(String content, String model) async {
-    if (state.streamingMsg != null || _conversationId == null) return;
+    if (_conversationId == null) return;
+
+    // Cancel any in-progress greeting silently before sending.
+    if (state.streamingMsg?.isGreeting == true) {
+      _cancelToken?.cancel();
+      _stopFlushTimer();
+      _sseSubscription?.cancel();
+      _sseSubscription = null;
+      _contentBuffer = '';
+      state = state.copyWith(streamingMsg: null);
+    }
+
+    if (state.streamingMsg != null) return;
 
     final tempId = 'temp-${DateTime.now().millisecondsSinceEpoch}';
     final userMsg = SettledMessage(id: tempId, role: 'user', content: content);
@@ -97,6 +124,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
     _sseSubscription?.cancel();
     _sseSubscription = null;
 
+    // Greeting streams are discarded silently — no partial content saved.
+    if (state.streamingMsg?.isGreeting == true) {
+      state = state.copyWith(streamingMsg: null);
+      _contentBuffer = '';
+      return;
+    }
+
     if (_contentBuffer.isNotEmpty && state.streamingMsg != null) {
       final partial = SettledMessage(
         id: state.streamingMsg!.id,
@@ -134,6 +168,97 @@ class ChatNotifier extends StateNotifier<ChatState> {
     } catch (e) {
       state = state.copyWith(isLoadingOlder: false, error: e.toString());
     }
+  }
+
+  Future<void> fetchGreeting() async {
+    if (_greetedThisSession) return;
+    _greetedThisSession = true;
+
+    _contentBuffer = '';
+    final streamId = 'greeting-${DateTime.now().millisecondsSinceEpoch}';
+    state = state.copyWith(
+      streamingMsg: StreamingMessage(id: streamId, content: '', isGreeting: true),
+    );
+
+    _cancelToken = CancelToken();
+    _startFlushTimer();
+
+    try {
+      final client = _ref.read(apiClientProvider);
+      final stream = client.greet(cancelToken: _cancelToken);
+
+      _sseSubscription = stream.listen(
+        (event) {
+          switch (event) {
+            case SseChunk(:final text):
+              _contentBuffer += text;
+            case SseDone(:final data):
+              _onGreetingDone(data);
+          }
+        },
+        onError: (Object error) => _onGreetingError(error),
+        onDone: () {
+          if (state.streamingMsg != null) {
+            _onGreetingDone(null);
+          }
+        },
+      );
+    } catch (e) {
+      _onGreetingError(e);
+    }
+  }
+
+  void _onGreetingDone(Map<String, dynamic>? data) {
+    _stopFlushTimer();
+    _sseSubscription?.cancel();
+    _sseSubscription = null;
+
+    GreetingMeta? meta;
+    if (data != null) {
+      try {
+        meta = GreetingMeta.fromJson(data);
+      } catch (_) {}
+    }
+
+    final greetingMsg = SettledMessage(
+      id: state.streamingMsg?.id ?? 'greeting',
+      role: 'assistant',
+      content: _contentBuffer.isNotEmpty
+          ? _contentBuffer.trimLeft()
+          : 'Hey! How can I help you today?',
+      isGreeting: true,
+      greetingMeta: meta,
+    );
+
+    state = state.copyWith(
+      settled: [greetingMsg, ...state.settled],
+      streamingMsg: null,
+    );
+    _contentBuffer = '';
+  }
+
+  void _onGreetingError(Object error) {
+    _stopFlushTimer();
+    _sseSubscription?.cancel();
+    _sseSubscription = null;
+
+    if (error is DioException && error.type == DioExceptionType.cancel) {
+      state = state.copyWith(streamingMsg: null);
+      _contentBuffer = '';
+      return;
+    }
+
+    final fallback = SettledMessage(
+      id: state.streamingMsg?.id ?? 'greeting-fallback',
+      role: 'assistant',
+      content: 'Hey! How can I help you today?',
+      isGreeting: true,
+    );
+    state = state.copyWith(
+      settled: [fallback, ...state.settled],
+      streamingMsg: null,
+    );
+    _contentBuffer = '';
   }
 
   void _startFlushTimer() {

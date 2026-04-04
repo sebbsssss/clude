@@ -105,3 +105,28 @@ class StreamDoneData with _$StreamDoneData {
   factory StreamDoneData.fromJson(Map<String, dynamic> json) =>
       _$StreamDoneDataFromJson(json);
 }
+
+@freezed
+class TemporalSpan with _$TemporalSpan {
+  const factory TemporalSpan({
+    required int weeks,
+    @JsonKey(name: 'since_label') required String sinceLabel,
+  }) = _TemporalSpan;
+
+  factory TemporalSpan.fromJson(Map<String, dynamic> json) =>
+      _$TemporalSpanFromJson(json);
+}
+
+@freezed
+class GreetingMeta with _$GreetingMeta {
+  const factory GreetingMeta({
+    @JsonKey(name: 'total_memories') required int totalMemories,
+    @JsonKey(name: 'memories_recalled') required int memoriesRecalled,
+    @JsonKey(name: 'temporal_span') TemporalSpan? temporalSpan,
+    required List<String> topics,
+    @JsonKey(name: 'greeting_cost') required double greetingCost,
+  }) = _GreetingMeta;
+
+  factory GreetingMeta.fromJson(Map<String, dynamic> json) =>
+      _$GreetingMetaFromJson(json);
+}
