@@ -73,6 +73,9 @@ class ApiClient {
       if (e.response?.statusCode == 401) {
         throw AuthExpiredException();
       }
+      if (e.response?.statusCode == 429) {
+        throw RateLimitException();
+      }
       final msg = e.response?.data?.toString() ?? e.message ?? 'Stream failed';
       throw ApiException(msg);
     }

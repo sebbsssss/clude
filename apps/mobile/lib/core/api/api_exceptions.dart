@@ -13,3 +13,7 @@ class AuthExpiredException extends ApiException {
 class NetworkException extends ApiException {
   NetworkException([super.message = 'Network error']);
 }
+
+class RateLimitException extends ApiException {
+  RateLimitException() : super('Rate limit exceeded');
+}

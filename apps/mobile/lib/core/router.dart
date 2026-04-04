@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../features/billing/topup_screen.dart';
 import '../features/chat/chat_screen.dart';
+import '../features/chat/guest_chat_screen.dart';
 import '../features/login/login_screen.dart';
 import '../features/memory/memory_screen.dart';
 import '../features/settings/settings_screen.dart';
@@ -16,15 +17,25 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/chat',
     redirect: (context, state) {
       final isLoginRoute = state.matchedLocation == '/login';
+      final isGuestRoute = state.matchedLocation == '/guest';
       final hasAccess = auth.isAuthenticated || auth.isGuest;
+
       if (!hasAccess && !isLoginRoute) return '/login';
-      if (hasAccess && isLoginRoute) return '/chat';
+      if (hasAccess && isLoginRoute) {
+        return auth.isGuest ? '/guest' : '/chat';
+      }
+      if (auth.isGuest && !isGuestRoute && !isLoginRoute) return '/guest';
+      if (auth.isAuthenticated && isGuestRoute) return '/chat';
       return null;
     },
     routes: [
       GoRoute(
         path: '/login',
         builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: '/guest',
+        builder: (context, state) => const GuestChatScreen(),
       ),
       ShellRoute(
         builder: (context, state, child) => ScaffoldWithBottomNav(child: child),
