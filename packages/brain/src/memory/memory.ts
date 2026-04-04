@@ -265,9 +265,52 @@ export function inferConcepts(summary: string, source: string, tags: string[]): 
   return [...new Set(concepts)];
 }
 
+// ---- STORE DEDUP ---- //
+//
+// Prevents high-frequency external agents (e.g. Shiro trading cycles) from
+// flooding the DB with identical memories every few seconds.
+// Keyed by source+normalizedSummary; TTL = 10 minutes.
+
+const DEDUP_TTL_MS = 10 * 60 * 1000;
+const dedupCache = new Map<string, number>(); // key -> last write timestamp
+
+/**
+ * Normalize a summary for dedup comparison.
+ * Strips UUIDs and ISO timestamps so "Mission cycle <uuid>: hold" de-dupes correctly.
+ */
+function normalizeSummary(summary: string): string {
+  return summary
+    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '<id>')
+    .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[^\s]*/g, '<ts>')
+    .toLowerCase()
+    .trim();
+}
+
+function isDuplicateWrite(source: string, summary: string): boolean {
+  const key = `${source}::${normalizeSummary(summary)}`;
+  const last = dedupCache.get(key);
+  if (last && Date.now() - last < DEDUP_TTL_MS) return true;
+  dedupCache.set(key, Date.now());
+  // Evict stale entries periodically to prevent unbounded growth
+  if (dedupCache.size > 500) {
+    const cutoff = Date.now() - DEDUP_TTL_MS;
+    for (const [k, ts] of dedupCache) {
+      if (ts < cutoff) dedupCache.delete(k);
+    }
+  }
+  return false;
+}
+
 // ---- STORE ---- //
 
 export async function storeMemory(opts: StoreMemoryOptions): Promise<number | null> {
+  // Skip duplicate writes from high-frequency external agent sources.
+  // Applies to any source whose writes are repetitive by nature (shiro_* trading cycles, etc.)
+  if (opts.source.startsWith('shiro_') && isDuplicateWrite(opts.source, opts.summary)) {
+    log.debug({ source: opts.source, summary: opts.summary.slice(0, 60) }, 'Skipping duplicate memory write');
+    return null;
+  }
+
   const db = getDb();
 
   // Auto-classify concepts if not explicitly provided
@@ -325,6 +368,7 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
     eventBus.emit('memory:stored', {
       importance: clamp(opts.importance ?? 0.5, 0, 1),
       memoryType: opts.type,
+      source: opts.source,
     });
 
     // Commit memory to Solana (fire-and-forget)
