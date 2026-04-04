@@ -6,12 +6,15 @@ import '../../core/api/models/conversation.dart';
 import '../../shared/utils/relative_time.dart';
 import '../../shared/widgets/empty_state_widget.dart';
 import '../../shared/widgets/error_view.dart';
+import '../../core/auth/auth_provider.dart';
 import 'chat_provider.dart';
 import 'chat_state.dart';
 import 'conversation_list_provider.dart';
 import 'models/display_message.dart';
+import 'models_provider.dart';
 import 'widgets/chat_input_bar.dart';
 import 'widgets/message_bubble.dart';
+import 'widgets/model_chip.dart';
 
 class ConversationListScreen extends ConsumerStatefulWidget {
   const ConversationListScreen({super.key});
@@ -234,6 +237,7 @@ class _ActiveChatScreenState extends ConsumerState<ActiveChatScreen>
   @override
   Widget build(BuildContext context) {
     final chatState = ref.watch(chatNotifierProvider(widget.conversationId));
+    final selectedModelId = ref.watch(selectedModelNotifierProvider);
     final isStreaming = chatState.streamingMsg != null;
 
     // Show error via SnackBar.
@@ -246,6 +250,16 @@ class _ActiveChatScreenState extends ConsumerState<ActiveChatScreen>
       }
     });
 
+    // Auto-downgrade pro model on logout.
+    ref.listen(authNotifierProvider, (prev, next) {
+      if (prev?.isAuthenticated == true && !next.isAuthenticated) {
+        final models = ref.read(modelsNotifierProvider).valueOrNull;
+        if (models != null) {
+          ref.read(selectedModelNotifierProvider.notifier).downgradeIfPro(models);
+        }
+      }
+    });
+
     final items = <DisplayMessage>[
       if (chatState.streamingMsg != null) chatState.streamingMsg!,
       ...chatState.settled,
@@ -255,6 +269,7 @@ class _ActiveChatScreenState extends ConsumerState<ActiveChatScreen>
       appBar: AppBar(
         title: Text(chatState.title ?? 'New Chat'),
         actions: [
+          const ModelChip(),
           if (isStreaming)
             IconButton(
               icon: const Icon(Icons.stop_circle_outlined),
@@ -291,7 +306,7 @@ class _ActiveChatScreenState extends ConsumerState<ActiveChatScreen>
           ChatInputBar(
             enabled: !isStreaming,
             onSubmit: (content) {
-              final model = chatState.model ?? 'claude-sonnet-4-20250514';
+              final model = selectedModelId ?? chatState.model ?? 'claude-sonnet-4-20250514';
               ref
                   .read(chatNotifierProvider(widget.conversationId).notifier)
                   .send(content, model);
