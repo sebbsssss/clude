@@ -53,7 +53,10 @@ class _ConversationListScreenState
     final asyncConversations = ref.watch(conversationListNotifierProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Chat')),
+      appBar: AppBar(
+        title: const Text('Conversations'),
+        actions: const [BalanceChip(), ModelChip()],
+      ),
       body: asyncConversations.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => ErrorView(
@@ -150,6 +153,15 @@ class _ConversationTile extends ConsumerWidget {
         child: const Icon(Icons.delete, color: Colors.white),
       ),
       child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: colorScheme.secondary,
+          radius: 20,
+          child: Icon(
+            Icons.chat_bubble_outline,
+            size: 18,
+            color: colorScheme.onSecondary,
+          ),
+        ),
         title: Text(
           title,
           maxLines: 1,
@@ -159,7 +171,7 @@ class _ConversationTile extends ConsumerWidget {
               : null,
         ),
         subtitle: Text(
-          relativeTime(conversation.updatedAt),
+          '${relativeTime(conversation.updatedAt)} · ${conversation.model}',
           style: TextStyle(
             color: colorScheme.onSurface.withAlpha(100),
             fontSize: 12,

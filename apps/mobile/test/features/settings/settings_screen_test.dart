@@ -3,12 +3,26 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:clude_mobile/core/api/models/agent.dart';
+import 'package:clude_mobile/core/auth/auth_notifier.dart';
+import 'package:clude_mobile/core/auth/auth_provider.dart';
+import 'package:clude_mobile/core/auth/auth_state.dart';
 import 'package:clude_mobile/core/storage/secure_storage.dart';
 import 'package:clude_mobile/core/storage/secure_storage_provider.dart';
 import 'package:clude_mobile/features/settings/agents_provider.dart';
 import 'package:clude_mobile/features/settings/settings_screen.dart';
 
 class MockSecureStorage extends Mock implements SecureStorageService {}
+
+class MockAuthNotifier extends StateNotifier<AuthState>
+    with Mock
+    implements AuthNotifier {
+  MockAuthNotifier()
+      : super(const AuthState(
+          isAuthenticated: true,
+          cortexKey: 'clk_test1234abcd1a3f',
+          walletAddress: '7xKpG8mN4w',
+        ));
+}
 
 void main() {
   group('SettingsScreen', () {
@@ -31,6 +45,7 @@ void main() {
         overrides: [
           agentsProvider.overrideWith((ref) async => agents),
           secureStorageProvider.overrideWithValue(mockStorage),
+          authNotifierProvider.overrideWith((ref) => MockAuthNotifier()),
         ],
         child: const MaterialApp(home: SettingsScreen()),
       );
@@ -43,7 +58,7 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('Agent'), findsOneWidget);
+      expect(find.text('AGENT'), findsOneWidget);
       expect(find.text('Alpha'), findsOneWidget);
     });
 
@@ -54,7 +69,7 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('Agent'), findsNothing);
+      expect(find.text('AGENT'), findsNothing);
     });
 
     testWidgets('tapping agent section opens bottom sheet', (tester) async {

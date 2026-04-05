@@ -35,6 +35,7 @@ sealed class DisplayMessage with _$DisplayMessage {
     MessageReceipt? receipt,
     @Default(false) bool isGreeting,
     GreetingMeta? greetingMeta,
+    String? createdAt,
   }) = SettledMessage;
 
   const factory DisplayMessage.streaming({
@@ -50,4 +51,5 @@ SettledMessage settledFromMessage(Message m) => SettledMessage(
       content: m.content,
       memoryIds: m.memoryIds,
       model: m.model,
+      createdAt: m.createdAt,
     );

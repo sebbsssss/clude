@@ -5,9 +5,15 @@ import 'package:mocktail/mocktail.dart';
 import 'package:clude_mobile/core/api/api_client.dart';
 import 'package:clude_mobile/core/api/api_client_provider.dart';
 import 'package:clude_mobile/core/api/models/conversation.dart';
+import 'package:clude_mobile/core/storage/secure_storage.dart';
+import 'package:clude_mobile/core/storage/secure_storage_provider.dart';
+import 'package:clude_mobile/features/balance/balance_notifier.dart';
+import 'package:clude_mobile/features/balance/balance_state.dart';
 import 'package:clude_mobile/features/chat/chat_screen.dart';
 
 class MockApiClient extends Mock implements ApiClient {}
+
+class MockSecureStorage extends Mock implements SecureStorageService {}
 
 Conversation _conv(String id, {String? title, String updatedAt = '', int messageCount = 3}) {
   return Conversation(
@@ -25,15 +31,27 @@ Conversation _conv(String id, {String? title, String updatedAt = '', int message
 
 void main() {
   late MockApiClient mockClient;
+  late MockSecureStorage mockStorage;
 
   setUp(() {
     mockClient = MockApiClient();
+    mockStorage = MockSecureStorage();
+    when(() => mockStorage.getSelectedModel()).thenAnswer((_) async => null);
+    when(() => mockStorage.setSelectedModel(any())).thenAnswer((_) async {});
+    when(() => mockClient.getModels()).thenAnswer((_) async => []);
+    when(() => mockClient.getBalance()).thenAnswer((_) async =>
+        throw Exception('not mocked'));
   });
 
   Widget buildSubject() {
     return ProviderScope(
       overrides: [
         apiClientProvider.overrideWithValue(mockClient),
+        secureStorageProvider.overrideWithValue(mockStorage),
+        balanceNotifierProvider.overrideWith(
+          (ref) => BalanceNotifier(ref, skipInit: true)
+            ..setStateForTest(const BalanceState(isLoading: false, balanceUsdc: 5.0)),
+        ),
       ],
       child: const MaterialApp(home: ConversationListScreen()),
     );
@@ -155,8 +173,8 @@ void main() {
       await tester.pumpWidget(buildSubject());
       await tester.pumpAndSettle();
 
-      // _conv sets updatedAt to 2h ago by default.
-      expect(find.text('2h ago'), findsOneWidget);
+      // _conv sets updatedAt to 2h ago by default, model is 'claude-3'.
+      expect(find.text('2h ago · claude-3'), findsOneWidget);
     });
   });
 }

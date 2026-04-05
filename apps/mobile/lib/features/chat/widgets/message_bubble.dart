@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/display_message.dart';
@@ -77,6 +78,17 @@ class _SettledBubble extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: GreetingMetaBar(meta: message.greetingMeta!),
+              ),
+            if (message.createdAt != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  DateFormat.jm().format(DateTime.parse(message.createdAt!)),
+                  style: TextStyle(
+                    color: colorScheme.onSurface.withAlpha(80),
+                    fontSize: 10,
+                  ),
+                ),
               ),
           ],
         ),
