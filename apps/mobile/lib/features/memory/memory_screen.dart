@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/models/graph_data.dart';
 import '../../core/api/models/memory_stats.dart';
 import '../../core/api/models/memory_summary.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../shared/utils/relative_time.dart';
+import 'force_graph_widget.dart';
+import 'graph_provider.dart';
 import 'import_pack_sheet.dart';
 import 'memory_stats_provider.dart';
 import 'recent_memories_provider.dart';
@@ -32,23 +35,72 @@ class MemoryPanelScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(authNotifierProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Memory'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.download),
-            tooltip: 'Import Pack',
-            onPressed: () => showModalBottomSheet(
-              context: context,
-              builder: (_) => const ImportPackSheet(),
+    if (!auth.isAuthenticated) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Memory')),
+        body: const _AuthGate(),
+      );
+    }
+
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Memory'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.download),
+              tooltip: 'Import Pack',
+              onPressed: () => showModalBottomSheet(
+                context: context,
+                builder: (_) => const ImportPackSheet(),
+              ),
             ),
+          ],
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: 'Overview'),
+              Tab(text: 'Graph'),
+            ],
           ),
-        ],
+        ),
+        body: const TabBarView(
+          children: [
+            _StatsBody(),
+            _GraphTab(),
+          ],
+        ),
       ),
-      body: auth.isAuthenticated
-          ? const _StatsBody()
-          : const _AuthGate(),
+    );
+  }
+}
+
+class _GraphTab extends ConsumerWidget {
+  const _GraphTab();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final asyncGraph = ref.watch(graphProvider);
+
+    return asyncGraph.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, size: 48,
+                color: Theme.of(context).colorScheme.error),
+            const SizedBox(height: 12),
+            Text(error.toString(), textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => ref.invalidate(graphProvider),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+      data: (graph) => ForceGraphWidget(graph: graph),
     );
   }
 }

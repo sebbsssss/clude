@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'api_exceptions.dart';
 import 'models/agent.dart';
 import 'models/chat_model.dart';
+import 'models/graph_data.dart';
 import 'models/conversation.dart';
 import 'models/memory_stats.dart';
 import 'models/memory_summary.dart';
@@ -209,6 +210,13 @@ class ApiClient {
               .map((e) => MemorySummary.fromJson(e as Map<String, dynamic>))
               .toList();
         },
+      );
+
+  Future<GraphData> getMemoryGraph({int limit = 200}) => _fetchJson(
+        '/api/cortex/brain/graph',
+        queryParameters: {'limit': limit},
+        fromJson: (json) =>
+            GraphData.fromJson(json as Map<String, dynamic>),
       );
 
   Future<ImportResult> importMemoryPack(Map<String, dynamic> pack) =>
