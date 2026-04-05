@@ -50,6 +50,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              CircleAvatar(
+                radius: 32,
+                backgroundColor: Theme.of(context).colorScheme.onSurface,
+                child: Text(
+                  'C',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.surface,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
               const Text(
                 'Clude',
                 style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
@@ -57,7 +70,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Sign in with your API key',
+                'Persistent memory for your AI agents',
                 style: TextStyle(
                   fontSize: 16,
                   color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),

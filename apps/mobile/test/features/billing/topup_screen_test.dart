@@ -100,7 +100,7 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      expect(find.text('Waiting for payment...'), findsOneWidget);
+      expect(find.text('Complete in your wallet'), findsOneWidget);
       expect(find.text('Cancel'), findsOneWidget);
     });
 

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../features/balance/balance_notifier.dart';
 import 'topup_notifier.dart';
 import 'topup_state.dart';
 
@@ -113,12 +114,30 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
   Widget _buildAmountSelection(ColorScheme colorScheme, {bool loading = false}) {
     final ctaEnabled = _selectedAmount != null && _customError == null && !loading;
     final ctaLabel = _chain == 'solana' ? 'Pay with Wallet' : "I've sent USDC";
+    final balance = ref.watch(balanceNotifierProvider);
 
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Text(
+            'Current Balance',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: colorScheme.onSurface.withAlpha(120),
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            balance.balanceUsdc != null
+                ? '\$${balance.balanceUsdc!.toStringAsFixed(2)}'
+                : '—',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+          const SizedBox(height: 20),
           Text('Select Amount',
               style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 12),
@@ -171,6 +190,25 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : Text(ctaLabel),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Sending to: 81MV...iqFu',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: colorScheme.onSurface.withAlpha(80),
+              fontSize: 10,
+              fontFamily: 'monospace',
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Minimum \$1 USDC · Transfers are non-refundable',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: colorScheme.onSurface.withAlpha(80),
+              fontSize: 10,
+            ),
           ),
         ],
       ),
@@ -250,7 +288,21 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
           ],
           if (isSolana) ...[
             const SizedBox(height: 16),
-            const Text('Waiting for payment...'),
+            Text(
+              'Complete in your wallet',
+              style: Theme.of(context).textTheme.titleSmall,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 4),
+            if (_selectedAmount != null)
+              Text(
+                '\$${_selectedAmount!.toStringAsFixed(2)} USDC',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: colorScheme.onSurface.withAlpha(150),
+                  fontSize: 13,
+                ),
+              ),
             const SizedBox(height: 8),
             const CircularProgressIndicator(),
           ],
