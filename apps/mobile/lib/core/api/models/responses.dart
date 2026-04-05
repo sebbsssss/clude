@@ -36,6 +36,8 @@ class TopupIntent with _$TopupIntent {
     @JsonKey(name: 'amount_usdc') required double amountUsdc,
     required String chain,
     @JsonKey(name: 'dest_address') required String destAddress,
+    @JsonKey(name: 'solana_pay_url') String? solanaPayUrl,
+    String? reference,
   }) = _TopupIntent;
 
   factory TopupIntent.fromJson(Map<String, dynamic> json) =>

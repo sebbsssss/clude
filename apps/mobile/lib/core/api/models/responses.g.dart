@@ -45,6 +45,8 @@ _$TopupIntentImpl _$$TopupIntentImplFromJson(Map<String, dynamic> json) =>
       amountUsdc: (json['amount_usdc'] as num).toDouble(),
       chain: json['chain'] as String,
       destAddress: json['dest_address'] as String,
+      solanaPayUrl: json['solana_pay_url'] as String?,
+      reference: json['reference'] as String?,
     );
 
 Map<String, dynamic> _$$TopupIntentImplToJson(_$TopupIntentImpl instance) =>
@@ -54,6 +56,8 @@ Map<String, dynamic> _$$TopupIntentImplToJson(_$TopupIntentImpl instance) =>
       'amount_usdc': instance.amountUsdc,
       'chain': instance.chain,
       'dest_address': instance.destAddress,
+      'solana_pay_url': instance.solanaPayUrl,
+      'reference': instance.reference,
     };
 
 _$TopupConfirmationImpl _$$TopupConfirmationImplFromJson(
