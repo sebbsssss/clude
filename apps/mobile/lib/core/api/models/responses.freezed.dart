@@ -481,6 +481,9 @@ mixin _$TopupIntent {
   String get chain => throw _privateConstructorUsedError;
   @JsonKey(name: 'dest_address')
   String get destAddress => throw _privateConstructorUsedError;
+  @JsonKey(name: 'solana_pay_url')
+  String? get solanaPayUrl => throw _privateConstructorUsedError;
+  String? get reference => throw _privateConstructorUsedError;
 
   /// Serializes this TopupIntent to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -505,6 +508,8 @@ abstract class $TopupIntentCopyWith<$Res> {
     @JsonKey(name: 'amount_usdc') double amountUsdc,
     String chain,
     @JsonKey(name: 'dest_address') String destAddress,
+    @JsonKey(name: 'solana_pay_url') String? solanaPayUrl,
+    String? reference,
   });
 }
 
@@ -528,6 +533,8 @@ class _$TopupIntentCopyWithImpl<$Res, $Val extends TopupIntent>
     Object? amountUsdc = null,
     Object? chain = null,
     Object? destAddress = null,
+    Object? solanaPayUrl = freezed,
+    Object? reference = freezed,
   }) {
     return _then(
       _value.copyWith(
@@ -551,6 +558,14 @@ class _$TopupIntentCopyWithImpl<$Res, $Val extends TopupIntent>
                 ? _value.destAddress
                 : destAddress // ignore: cast_nullable_to_non_nullable
                       as String,
+            solanaPayUrl: freezed == solanaPayUrl
+                ? _value.solanaPayUrl
+                : solanaPayUrl // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            reference: freezed == reference
+                ? _value.reference
+                : reference // ignore: cast_nullable_to_non_nullable
+                      as String?,
           )
           as $Val,
     );
@@ -572,6 +587,8 @@ abstract class _$$TopupIntentImplCopyWith<$Res>
     @JsonKey(name: 'amount_usdc') double amountUsdc,
     String chain,
     @JsonKey(name: 'dest_address') String destAddress,
+    @JsonKey(name: 'solana_pay_url') String? solanaPayUrl,
+    String? reference,
   });
 }
 
@@ -594,6 +611,8 @@ class __$$TopupIntentImplCopyWithImpl<$Res>
     Object? amountUsdc = null,
     Object? chain = null,
     Object? destAddress = null,
+    Object? solanaPayUrl = freezed,
+    Object? reference = freezed,
   }) {
     return _then(
       _$TopupIntentImpl(
@@ -617,6 +636,14 @@ class __$$TopupIntentImplCopyWithImpl<$Res>
             ? _value.destAddress
             : destAddress // ignore: cast_nullable_to_non_nullable
                   as String,
+        solanaPayUrl: freezed == solanaPayUrl
+            ? _value.solanaPayUrl
+            : solanaPayUrl // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        reference: freezed == reference
+            ? _value.reference
+            : reference // ignore: cast_nullable_to_non_nullable
+                  as String?,
       ),
     );
   }
@@ -631,6 +658,8 @@ class _$TopupIntentImpl implements _TopupIntent {
     @JsonKey(name: 'amount_usdc') required this.amountUsdc,
     required this.chain,
     @JsonKey(name: 'dest_address') required this.destAddress,
+    @JsonKey(name: 'solana_pay_url') this.solanaPayUrl,
+    this.reference,
   });
 
   factory _$TopupIntentImpl.fromJson(Map<String, dynamic> json) =>
@@ -649,10 +678,15 @@ class _$TopupIntentImpl implements _TopupIntent {
   @override
   @JsonKey(name: 'dest_address')
   final String destAddress;
+  @override
+  @JsonKey(name: 'solana_pay_url')
+  final String? solanaPayUrl;
+  @override
+  final String? reference;
 
   @override
   String toString() {
-    return 'TopupIntent(id: $id, walletAddress: $walletAddress, amountUsdc: $amountUsdc, chain: $chain, destAddress: $destAddress)';
+    return 'TopupIntent(id: $id, walletAddress: $walletAddress, amountUsdc: $amountUsdc, chain: $chain, destAddress: $destAddress, solanaPayUrl: $solanaPayUrl, reference: $reference)';
   }
 
   @override
@@ -667,7 +701,11 @@ class _$TopupIntentImpl implements _TopupIntent {
                 other.amountUsdc == amountUsdc) &&
             (identical(other.chain, chain) || other.chain == chain) &&
             (identical(other.destAddress, destAddress) ||
-                other.destAddress == destAddress));
+                other.destAddress == destAddress) &&
+            (identical(other.solanaPayUrl, solanaPayUrl) ||
+                other.solanaPayUrl == solanaPayUrl) &&
+            (identical(other.reference, reference) ||
+                other.reference == reference));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -679,6 +717,8 @@ class _$TopupIntentImpl implements _TopupIntent {
     amountUsdc,
     chain,
     destAddress,
+    solanaPayUrl,
+    reference,
   );
 
   /// Create a copy of TopupIntent
@@ -702,6 +742,8 @@ abstract class _TopupIntent implements TopupIntent {
     @JsonKey(name: 'amount_usdc') required final double amountUsdc,
     required final String chain,
     @JsonKey(name: 'dest_address') required final String destAddress,
+    @JsonKey(name: 'solana_pay_url') final String? solanaPayUrl,
+    final String? reference,
   }) = _$TopupIntentImpl;
 
   factory _TopupIntent.fromJson(Map<String, dynamic> json) =
@@ -720,6 +762,11 @@ abstract class _TopupIntent implements TopupIntent {
   @override
   @JsonKey(name: 'dest_address')
   String get destAddress;
+  @override
+  @JsonKey(name: 'solana_pay_url')
+  String? get solanaPayUrl;
+  @override
+  String? get reference;
 
   /// Create a copy of TopupIntent
   /// with the given fields replaced by the non-null parameter values.
