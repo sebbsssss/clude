@@ -44,7 +44,9 @@ export function walletAuthRoutes(): Router {
         return res.status(400).json({ error: 'Invalid message timestamp' });
       }
 
-      const ageSeconds = (Date.now() - timestamp) / 1000;
+      // Mobile sends seconds, detect and normalize to milliseconds
+      const timestampMs = timestamp < 1e12 ? timestamp * 1000 : timestamp;
+      const ageSeconds = (Date.now() - timestampMs) / 1000;
       if (ageSeconds > MAX_MESSAGE_AGE_SECONDS || ageSeconds < -60) {
         return res.status(400).json({ error: 'Message expired' });
       }
