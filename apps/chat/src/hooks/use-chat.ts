@@ -71,6 +71,14 @@ export function useChat() {
   const contentRef = useRef('');
   const greetedRef = useRef(false);
 
+  // Fetch guest remaining count once on mount (guest only)
+  useEffect(() => {
+    if (!authenticated) {
+      api.getGuestStatus().then(({ remaining }) => setGuestRemaining(remaining)).catch(() => {});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Scroll helper ref — set by the consumer component
   const scrollRef = useRef<() => void>(() => {});
 
@@ -140,8 +148,9 @@ export function useChat() {
         (chunk) => { contentRef.current += chunk; setGuestStreaming(prev => prev ? { ...prev, content: contentRef.current } : prev); },
         (remaining) => {
           if (remaining !== undefined) setGuestRemaining(remaining);
+          const finalContent = contentRef.current;
           setGuestMessages(prev => [...prev, {
-            kind: 'settled', id: assistantId, role: 'assistant', content: contentRef.current,
+            kind: 'settled', id: assistantId, role: 'assistant', content: finalContent,
             model: 'kimi-k2-thinking', cost: { total: 0 },
           }]);
           setGuestStreaming(null);

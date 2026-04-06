@@ -109,6 +109,12 @@ class ChatAPI {
     return res.json();
   }
 
+  async getGuestStatus(): Promise<{ remaining: number; limit: number }> {
+    const res = await fetch(`${API_BASE}/api/chat/guest/status`);
+    if (!res.ok) return { remaining: 10, limit: 10 };
+    return res.json();
+  }
+
   async sendGuestMessage(content: string, history: Array<{ role: string; content: string }>, onChunk: (text: string) => void, onDone: (remaining?: number) => void, signal?: AbortSignal): Promise<void> {
     const res = await fetch(`${API_BASE}/api/chat/guest`, {
       method: 'POST',

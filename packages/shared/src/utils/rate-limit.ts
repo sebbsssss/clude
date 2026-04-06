@@ -33,3 +33,12 @@ export async function checkRateLimit(key: string, maxCount: number, windowMinute
   entry.count++;
   return true;
 }
+
+/** Peek at the current count for a rate-limit key without incrementing. */
+export function getRateLimitCount(key: string, windowMinutes: number): number {
+  const now = Date.now();
+  const windowMs = windowMinutes * 60 * 1000;
+  const entry = cache.get(key);
+  if (!entry || (now - entry.windowStart) >= windowMs) return 0;
+  return entry.count;
+}

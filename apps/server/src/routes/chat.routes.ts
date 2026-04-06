@@ -12,7 +12,7 @@ import { requirePrivyAuth } from '@clude/brain/auth/privy-auth';
 import { withOwnerWallet } from '@clude/shared/core/owner-context';
 import { recallMemories, storeMemory } from '@clude/brain/memory';
 import { checkInputContent } from '@clude/shared/core/guardrails';
-import { checkRateLimit } from '@clude/shared/utils/rate-limit';
+import { checkRateLimit, getRateLimitCount } from '@clude/shared/utils/rate-limit';
 import { getDb } from '@clude/shared/core/database';
 import { createChildLogger } from '@clude/shared/core/logger';
 import { config } from '@clude/shared/config';
@@ -312,6 +312,13 @@ export function chatRoutes(): Router {
     res.json(getAvailableChatModels());
   });
 
+  // GET /guest/status — remaining free messages for this IP
+  router.get('/guest/status', (req: Request, res: Response) => {
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    const remaining = Math.max(0, 10 - getRateLimitCount('chat:guest:' + ip, 1440));
+    res.json({ remaining, limit: 10 });
+  });
+
   // POST /guest — free tier, no auth, no memory, kimi-k2-thinking, 10 msgs/day per IP
   router.post('/guest', async (req: Request, res: Response) => {
     try {
@@ -446,17 +453,8 @@ export function chatRoutes(): Router {
         throw err;
       }
 
-      // Count today's usage for this IP to compute remaining messages
-      const db = getDb();
-      const guestKey = 'chat:guest:' + ip;
-      const windowCutoff = new Date(Date.now() - 1440 * 60 * 1000).toISOString();
-      const { data: rlRow } = await db
-        .from('rate_limits')
-        .select('count, window_start')
-        .eq('key', guestKey)
-        .single();
-      const usedCount = (rlRow && rlRow.window_start >= windowCutoff) ? rlRow.count : 1;
-      const remaining = Math.max(0, 10 - usedCount);
+      // Compute remaining from the same in-memory counter that enforces the limit
+      const remaining = Math.max(0, 10 - getRateLimitCount('chat:guest:' + ip, 1440));
 
       res.write(`data: ${JSON.stringify({ done: true, model: usedModel, guest: true, remaining, cost: { total: 0 } })}\n\n`);
       res.end();

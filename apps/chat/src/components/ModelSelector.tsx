@@ -94,6 +94,16 @@ export function ModelSelector({ selectedModel, onModelChange, byokProviders, onO
 
   const currentName = current ? current.name : 'Select model';
 
+  // Guest mode: show fixed model label, no dropdown
+  if (!authenticated) {
+    return (
+      <div className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-700 text-white text-[13px] rounded-full px-3 h-11 sm:h-8 min-w-[120px] sm:min-w-[150px]">
+        <Zap className="h-3.5 w-3.5 text-blue-400" />
+        <span className="truncate">Kimi K2</span>
+      </div>
+    );
+  }
+
   return (
     <div className="relative" ref={containerRef}>
       <button
