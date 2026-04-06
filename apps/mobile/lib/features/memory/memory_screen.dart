@@ -61,7 +61,7 @@ class MemoryPanelScreen extends ConsumerWidget {
           ],
           bottom: const TabBar(
             tabs: [
-              Tab(text: 'Overview'),
+              Tab(text: 'Feed'),
               Tab(text: 'Graph'),
               Tab(text: 'Entities'),
               Tab(text: 'Health'),
@@ -70,7 +70,7 @@ class MemoryPanelScreen extends ConsumerWidget {
         ),
         body: const TabBarView(
           children: [
-            _StatsBody(),
+            _FeedTab(),
             _GraphTab(),
             EntitiesTab(),
             HealthTab(),
@@ -130,15 +130,17 @@ class _AuthGate extends StatelessWidget {
   }
 }
 
-class _StatsBody extends ConsumerStatefulWidget {
-  const _StatsBody();
+class _FeedTab extends ConsumerStatefulWidget {
+  const _FeedTab();
 
   @override
-  ConsumerState<_StatsBody> createState() => _StatsBodyState();
+  ConsumerState<_FeedTab> createState() => _FeedTabState();
 }
 
-class _StatsBodyState extends ConsumerState<_StatsBody> {
+class _FeedTabState extends ConsumerState<_FeedTab> {
   final _scrollController = ScrollController();
+  String? _selectedType; // null = "All"
+  String _selectedRange = '24h';
 
   @override
   void initState() {
@@ -163,61 +165,194 @@ class _StatsBodyState extends ConsumerState<_StatsBody> {
   Widget build(BuildContext context) {
     final asyncStats = ref.watch(memoryStatsProvider);
     final recentState = ref.watch(recentMemoriesProvider);
+    final muted = Theme.of(context).colorScheme.onSurface.withAlpha(100);
 
-    return asyncStats.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.error_outline, size: 48,
-                color: Theme.of(context).colorScheme.error),
-            const SizedBox(height: 12),
-            Text(error.toString(), textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () =>
-                  ref.read(memoryStatsProvider.notifier).refresh(),
-              child: const Text('Retry'),
-            ),
-          ],
-        ),
-      ),
-      data: (stats) => RefreshIndicator(
-        onRefresh: () async {
-          await Future.wait([
-            ref.read(memoryStatsProvider.notifier).refresh(),
-            ref.read(recentMemoriesProvider.notifier).refresh(),
-          ]);
-        },
-        child: CustomScrollView(
-          controller: _scrollController,
-          slivers: [
-            SliverToBoxAdapter(child: _TotalSection(stats: stats)),
-            SliverToBoxAdapter(child: _ByTypeSection(stats: stats)),
-            SliverToBoxAdapter(child: _MetricsSection(stats: stats)),
-            if (stats.topTags.isNotEmpty)
-              SliverToBoxAdapter(child: _TagsSection(stats: stats)),
-            // Recent memories section
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-                child: Text('Recent Memories',
-                    style: Theme.of(context).textTheme.titleSmall),
+    return RefreshIndicator(
+      onRefresh: () async {
+        await Future.wait([
+          ref.read(memoryStatsProvider.notifier).refresh(),
+          ref.read(recentMemoriesProvider.notifier).refresh(),
+        ]);
+      },
+      child: CustomScrollView(
+        controller: _scrollController,
+        slivers: [
+          // Compact horizontal stats bar
+          SliverToBoxAdapter(
+            child: asyncStats.when(
+              loading: () => const SizedBox.shrink(),
+              error: (_, __) => const SizedBox.shrink(),
+              data: (stats) => SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Row(
+                  children: [
+                    _StatChip(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('${stats.total}',
+                              style: const TextStyle(
+                                  fontSize: 13, fontWeight: FontWeight.w600)),
+                          const SizedBox(width: 5),
+                          Text('memories',
+                              style: TextStyle(fontSize: 10, color: muted)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    ..._typeOrder.map((type) {
+                      final count = stats.byType[type] ?? 0;
+                      final color = kMemoryTypeColors[type] ?? Colors.grey;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: _StatChip(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 6, height: 6,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: color,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Text('$count',
+                                  style: TextStyle(fontSize: 10, color: muted)),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
+                ),
               ),
             ),
-            ..._buildRecentSlivers(recentState),
-          ],
-        ),
+          ),
+
+          // Search bar
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(
+                decoration: InputDecoration(
+                  hintText: 'Search memories...',
+                  prefixIcon: const Icon(Icons.search, size: 18),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+              ),
+            ),
+          ),
+
+          // Type filter chips
+          SliverToBoxAdapter(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Row(
+                children: [
+                  _FilterChip(
+                    label: 'All',
+                    selected: _selectedType == null,
+                    onTap: () => setState(() => _selectedType = null),
+                  ),
+                  const SizedBox(width: 6),
+                  ..._typeOrder.map((type) {
+                    final color = kMemoryTypeColors[type] ?? Colors.grey;
+                    final name = _typeDisplayNames[type] ?? type;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: _FilterChip(
+                        label: name,
+                        dotColor: color,
+                        selected: _selectedType == type,
+                        onTap: () => setState(() => _selectedType = type),
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ),
+
+          // Time range buttons
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Row(
+                children: ['24h', '3d', '1w', '30d'].map((range) {
+                  final selected = _selectedRange == range;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: GestureDetector(
+                      onTap: () => setState(() => _selectedRange = range),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          color: selected
+                              ? const Color(0xFF2244FF).withAlpha(30)
+                              : Colors.transparent,
+                          border: Border.all(
+                            color: selected
+                                ? const Color(0xFF2244FF).withAlpha(64)
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .outline
+                                    .withAlpha(40),
+                          ),
+                        ),
+                        child: Text(
+                          range,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: selected
+                                ? Theme.of(context).colorScheme.onSurface
+                                : muted,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+
+          // Memory feed list
+          ..._buildFeedSlivers(recentState),
+
+          // Import Memory Pack button
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: OutlinedButton.icon(
+                onPressed: () => showModalBottomSheet(
+                  context: context,
+                  builder: (_) => const ImportPackSheet(),
+                ),
+                icon: const Icon(Icons.download, size: 16),
+                label: const Text('Import Memory Pack'),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  List<Widget> _buildRecentSlivers(recentState) {
+  List<Widget> _buildFeedSlivers(recentState) {
     if (recentState.isLoading && recentState.items.isEmpty) {
       return [
         const SliverToBoxAdapter(
-          child: Center(child: Padding(
+          child: Center(
+              child: Padding(
             padding: EdgeInsets.all(32),
             child: CircularProgressIndicator(),
           )),
@@ -248,7 +383,13 @@ class _StatsBodyState extends ConsumerState<_StatsBody> {
       ];
     }
 
-    if (!recentState.isLoading && recentState.items.isEmpty) {
+    final items = _selectedType == null
+        ? recentState.items
+        : recentState.items
+            .where((m) => m.memoryType == _selectedType)
+            .toList();
+
+    if (!recentState.isLoading && items.isEmpty) {
       return [
         const SliverToBoxAdapter(
           child: Center(
@@ -263,11 +404,10 @@ class _StatsBodyState extends ConsumerState<_StatsBody> {
 
     return [
       SliverList.builder(
-        itemCount: recentState.items.length,
-        itemBuilder: (context, index) =>
-            MemoryTile(memory: recentState.items[index]),
+        itemCount: items.length,
+        itemBuilder: (context, index) => MemoryTile(memory: items[index]),
       ),
-      if (recentState.hasMore)
+      if (recentState.hasMore && _selectedType == null)
         const SliverToBoxAdapter(
           child: Center(
             child: Padding(
@@ -280,159 +420,80 @@ class _StatsBodyState extends ConsumerState<_StatsBody> {
   }
 }
 
-class _TotalSection extends StatelessWidget {
-  const _TotalSection({required this.stats});
-  final MemoryStats stats;
+class _StatChip extends StatelessWidget {
+  const _StatChip({required this.child});
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 24),
-      child: Column(
-        children: [
-          Text(
-            '${stats.total}',
-            style: const TextStyle(fontSize: 56, fontWeight: FontWeight.bold),
-          ),
-          Text(
-            'total memories',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurface.withAlpha(150),
-            ),
-          ),
-        ],
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withAlpha(40),
+        ),
+        borderRadius: BorderRadius.circular(20),
       ),
+      child: child,
     );
   }
 }
 
-class _ByTypeSection extends StatelessWidget {
-  const _ByTypeSection({required this.stats});
-  final MemoryStats stats;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Column(
-        children: _typeOrder.map((type) {
-          final count = stats.byType[type] ?? 0;
-          final color = kMemoryTypeColors[type] ?? Colors.grey;
-          final name = _typeDisplayNames[type] ?? type;
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Row(
-              children: [
-                CircleAvatar(radius: 5, backgroundColor: color),
-                const SizedBox(width: 8),
-                Text(name),
-                const Spacer(),
-                Text('$count'),
-              ],
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
-
-class _MetricsSection extends StatelessWidget {
-  const _MetricsSection({required this.stats});
-  final MemoryStats stats;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Column(
-        children: [
-          _MetricRow(
-            label: 'Avg importance',
-            value: stats.avgImportance.clamp(0.0, 1.0),
-            color: Colors.green,
-          ),
-          const SizedBox(height: 16),
-          _MetricRow(
-            label: 'Avg decay',
-            value: stats.avgDecay.clamp(0.0, 1.0),
-            color: Colors.orange,
-            subtitle: 'lower is fresher',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MetricRow extends StatelessWidget {
-  const _MetricRow({
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({
     required this.label,
-    required this.value,
-    required this.color,
-    this.subtitle,
+    required this.selected,
+    required this.onTap,
+    this.dotColor,
   });
 
   final String label;
-  final double value;
-  final Color color;
-  final String? subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+  final Color? dotColor;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          color: selected
+              ? const Color(0xFF2244FF).withAlpha(30)
+              : Colors.transparent,
+          border: Border.all(
+            color: selected
+                ? const Color(0xFF2244FF).withAlpha(64)
+                : Theme.of(context).colorScheme.outline.withAlpha(40),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Text(label),
-            const Spacer(),
-            Text('${(value * 100).toStringAsFixed(0)}%'),
+            if (dotColor != null) ...[
+              Container(
+                width: 6, height: 6,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: dotColor,
+                ),
+              ),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                color: selected
+                    ? Theme.of(context).colorScheme.onSurface
+                    : Theme.of(context).colorScheme.onSurface.withAlpha(150),
+              ),
+            ),
           ],
         ),
-        const SizedBox(height: 4),
-        LinearProgressIndicator(
-          value: value,
-          color: color,
-          backgroundColor: color.withAlpha(38),
-        ),
-        if (subtitle != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Text(
-              subtitle!,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withAlpha(100),
-                  ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _TagsSection extends StatelessWidget {
-  const _TagsSection({required this.stats});
-  final MemoryStats stats;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Top Tags',
-              style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: stats.topTags
-                .map((t) => Chip(label: Text('${t.tag} (${t.count})')))
-                .toList(),
-          ),
-        ],
       ),
     );
   }

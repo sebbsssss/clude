@@ -143,7 +143,7 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
-            children: [5, 10, 25, 50].map((amount) {
+            children: [5, 10, 50].map((amount) {
               final isSelected = _selectedAmount == amount.toDouble() &&
                   _customController.text.isEmpty;
               return OutlinedButton(

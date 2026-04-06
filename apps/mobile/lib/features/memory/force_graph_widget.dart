@@ -322,6 +322,24 @@ class _GraphPainter extends CustomPainter {
       // Node fill
       final nodePaint = Paint()..color = color;
       canvas.drawCircle(center, radius, nodePaint);
+
+      // Label for larger nodes
+      if (importance > 0.6 && n.node.summary.isNotEmpty) {
+        final label = n.node.summary.length > 15
+            ? '${n.node.summary.substring(0, 15)}...'
+            : n.node.summary;
+        final tp = TextPainter(
+          text: TextSpan(
+            text: label,
+            style: TextStyle(
+              color: Colors.white.withAlpha(150),
+              fontSize: 8,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout(maxWidth: 100);
+        tp.paint(canvas, Offset(center.dx - tp.width / 2, center.dy + radius + 3));
+      }
     }
   }
 
