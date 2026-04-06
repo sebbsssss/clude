@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'api_exceptions.dart';
 import 'models/agent.dart';
 import 'models/chat_model.dart';
+import 'models/entity_data.dart';
 import 'models/graph_data.dart';
 import 'models/conversation.dart';
 import 'models/memory_stats.dart';
@@ -217,6 +218,35 @@ class ApiClient {
         queryParameters: {'limit': limit},
         fromJson: (json) =>
             GraphData.fromJson(json as Map<String, dynamic>),
+      );
+
+  Future<List<GraphEntity>> getEntities() => _fetchJson(
+        '/api/graph',
+        fromJson: (json) {
+          final map = json as Map<String, dynamic>;
+          final entities = (map['entities'] ?? []) as List;
+          return entities
+              .map((e) => GraphEntity.fromJson(e as Map<String, dynamic>))
+              .toList();
+        },
+      );
+
+  Future<List<GraphEntity>> searchEntities(String query) => _fetchJson(
+        '/api/graph/search',
+        queryParameters: {'q': query},
+        fromJson: (json) {
+          final map = json as Map<String, dynamic>;
+          final entities = (map['entities'] ?? []) as List;
+          return entities
+              .map((e) => GraphEntity.fromJson(e as Map<String, dynamic>))
+              .toList();
+        },
+      );
+
+  Future<EntityDetail> getEntityDetail(int id) => _fetchJson(
+        '/api/graph/entity/$id',
+        fromJson: (json) =>
+            EntityDetail.fromJson(json as Map<String, dynamic>),
       );
 
   Future<ImportResult> importMemoryPack(Map<String, dynamic> pack) =>
