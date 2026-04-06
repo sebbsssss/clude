@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api/models/conversation.dart';
+import '../../shared/utils/model_display_name.dart';
 import '../../shared/utils/relative_time.dart';
 import '../../shared/widgets/empty_state_widget.dart';
 import '../../shared/widgets/error_view.dart';
@@ -171,7 +172,7 @@ class _ConversationTile extends ConsumerWidget {
               : null,
         ),
         subtitle: Text(
-          '${relativeTime(conversation.updatedAt)} · ${conversation.model}',
+          '${relativeTime(conversation.updatedAt)} · ${modelDisplayName(conversation.model)}',
           style: TextStyle(
             color: colorScheme.onSurface.withAlpha(100),
             fontSize: 12,

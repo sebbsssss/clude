@@ -5,11 +5,14 @@ import 'package:mocktail/mocktail.dart';
 import 'package:clude_mobile/core/api/api_client.dart';
 import 'package:clude_mobile/core/api/api_client_provider.dart';
 import 'package:clude_mobile/core/api/models/memory_stats.dart';
+import 'package:clude_mobile/core/api/models/memory_summary.dart';
 import 'package:clude_mobile/core/auth/auth_notifier.dart';
 import 'package:clude_mobile/core/auth/auth_provider.dart';
 import 'package:clude_mobile/core/auth/auth_state.dart';
 import 'package:clude_mobile/features/memory/memory_screen.dart';
 import 'package:clude_mobile/features/memory/memory_stats_provider.dart';
+import 'package:clude_mobile/features/memory/recent_memories_provider.dart';
+import 'package:clude_mobile/features/memory/recent_memories_state.dart';
 
 class MockApiClient extends Mock implements ApiClient {}
 
@@ -23,26 +26,36 @@ class _MockAuthNotifier extends StateNotifier<AuthState>
 const _testStats = MemoryStats(
   total: 142,
   byType: {
-    'episodic': 50,
-    'semantic': 40,
-    'procedural': 30,
-    'self_model': 22,
+    'episodic': 52,
+    'semantic': 45,
+    'procedural': 28,
+    'self_model': 17,
   },
   avgImportance: 0.72,
-  avgDecay: 0.35,
+  avgDecay: 0.84,
   topTags: [
-    TagCount(tag: 'coding', count: 8),
-    TagCount(tag: 'work', count: 5),
+    TagCount(tag: 'flutter', count: 18),
   ],
 );
 
-const _emptyTagsStats = MemoryStats(
-  total: 10,
-  byType: {'episodic': 10},
-  avgImportance: 0.5,
-  avgDecay: 0.2,
-  topTags: [],
-);
+final _testMemories = [
+  const MemorySummary(
+    id: 1,
+    memoryType: 'episodic',
+    summary: 'Test memory about Flutter',
+    importance: 0.8,
+    createdAt: '2026-04-05T10:00:00Z',
+    decay: 0.9,
+  ),
+  const MemorySummary(
+    id: 2,
+    memoryType: 'semantic',
+    summary: 'Dart language facts',
+    importance: 0.6,
+    createdAt: '2026-04-04T08:00:00Z',
+    decay: 0.7,
+  ),
+];
 
 void main() {
   late MockApiClient mockClient;
@@ -54,6 +67,7 @@ void main() {
   Widget buildSubject({
     bool isAuthenticated = true,
     AsyncValue<MemoryStats>? statsOverride,
+    RecentMemoriesState? recentOverride,
   }) {
     return ProviderScope(
       overrides: [
@@ -65,6 +79,11 @@ void main() {
           memoryStatsProvider.overrideWith(
             (ref) => MemoryStatsNotifier(ref, skipInit: true)
               ..setStateForTest(statsOverride),
+          ),
+        if (recentOverride != null)
+          recentMemoriesProvider.overrideWith(
+            (ref) => RecentMemoriesNotifier(ref, skipInit: true)
+              ..setStateForTest(recentOverride),
           ),
       ],
       child: const MaterialApp(
@@ -82,92 +101,129 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Sign in to view your memories'), findsOneWidget);
-      expect(find.byIcon(Icons.lock_outline), findsOneWidget);
     });
 
-    testWidgets('shows loading indicator', (tester) async {
-      await tester.pumpWidget(buildSubject(
-        statsOverride: const AsyncValue.loading(),
-      ));
-      await tester.pump();
-
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
-    });
-
-    testWidgets('shows total memory count', (tester) async {
+    testWidgets('shows 4 tabs', (tester) async {
       await tester.pumpWidget(buildSubject(
         statsOverride: const AsyncValue.data(_testStats),
+        recentOverride: RecentMemoriesState(
+          items: _testMemories,
+          isLoading: false,
+          hasMore: false,
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Feed'), findsOneWidget);
+      expect(find.text('Graph'), findsOneWidget);
+      expect(find.text('Entities'), findsOneWidget);
+      expect(find.text('Health'), findsOneWidget);
+    });
+
+    testWidgets('shows compact stats bar with total and type counts',
+        (tester) async {
+      await tester.pumpWidget(buildSubject(
+        statsOverride: const AsyncValue.data(_testStats),
+        recentOverride: RecentMemoriesState(
+          items: _testMemories,
+          isLoading: false,
+          hasMore: false,
+        ),
       ));
       await tester.pumpAndSettle();
 
       expect(find.text('142'), findsOneWidget);
-      expect(find.text('total memories'), findsOneWidget);
+      expect(find.text('memories'), findsOneWidget);
     });
 
-    testWidgets('shows by-type rows with counts', (tester) async {
+    testWidgets('shows search bar', (tester) async {
       await tester.pumpWidget(buildSubject(
         statsOverride: const AsyncValue.data(_testStats),
+        recentOverride: RecentMemoriesState(
+          items: _testMemories,
+          isLoading: false,
+          hasMore: false,
+        ),
       ));
       await tester.pumpAndSettle();
 
+      expect(find.text('Search memories...'), findsOneWidget);
+    });
+
+    testWidgets('shows type filter chips', (tester) async {
+      await tester.pumpWidget(buildSubject(
+        statsOverride: const AsyncValue.data(_testStats),
+        recentOverride: RecentMemoriesState(
+          items: _testMemories,
+          isLoading: false,
+          hasMore: false,
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('All'), findsOneWidget);
       expect(find.text('Episodic'), findsOneWidget);
-      expect(find.text('50'), findsOneWidget);
       expect(find.text('Semantic'), findsOneWidget);
-      expect(find.text('40'), findsOneWidget);
-      expect(find.text('Procedural'), findsOneWidget);
-      expect(find.text('30'), findsOneWidget);
-      expect(find.text('Self Model'), findsOneWidget);
-      expect(find.text('22'), findsOneWidget);
     });
 
-    testWidgets('shows importance progress bar', (tester) async {
+    testWidgets('shows time range buttons', (tester) async {
       await tester.pumpWidget(buildSubject(
         statsOverride: const AsyncValue.data(_testStats),
+        recentOverride: RecentMemoriesState(
+          items: _testMemories,
+          isLoading: false,
+          hasMore: false,
+        ),
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('Avg importance'), findsOneWidget);
-      expect(find.text('72%'), findsOneWidget);
+      expect(find.text('24h'), findsOneWidget);
+      expect(find.text('3d'), findsOneWidget);
+      expect(find.text('1w'), findsOneWidget);
+      expect(find.text('30d'), findsOneWidget);
     });
 
-    testWidgets('shows decay progress bar', (tester) async {
+    testWidgets('shows memory feed items', (tester) async {
       await tester.pumpWidget(buildSubject(
         statsOverride: const AsyncValue.data(_testStats),
+        recentOverride: RecentMemoriesState(
+          items: _testMemories,
+          isLoading: false,
+          hasMore: false,
+        ),
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('Avg decay'), findsOneWidget);
-      expect(find.text('35%'), findsOneWidget);
-      expect(find.text('lower is fresher'), findsOneWidget);
+      expect(find.text('Test memory about Flutter'), findsOneWidget);
+      expect(find.text('Dart language facts'), findsOneWidget);
     });
 
-    testWidgets('shows tag chips', (tester) async {
+    testWidgets('shows empty state when no memories', (tester) async {
       await tester.pumpWidget(buildSubject(
         statsOverride: const AsyncValue.data(_testStats),
+        recentOverride: const RecentMemoriesState(
+          items: [],
+          isLoading: false,
+          hasMore: false,
+        ),
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('coding (8)'), findsOneWidget);
-      expect(find.text('work (5)'), findsOneWidget);
+      expect(find.text('No memories yet'), findsOneWidget);
     });
 
-    testWidgets('hides tags section when empty', (tester) async {
+    testWidgets('shows Import Memory Pack button', (tester) async {
       await tester.pumpWidget(buildSubject(
-        statsOverride: const AsyncValue.data(_emptyTagsStats),
+        statsOverride: const AsyncValue.data(_testStats),
+        recentOverride: RecentMemoriesState(
+          items: _testMemories,
+          isLoading: false,
+          hasMore: false,
+        ),
       ));
       await tester.pumpAndSettle();
 
-      expect(find.byType(Chip), findsNothing);
-    });
-
-    testWidgets('shows error with retry button', (tester) async {
-      await tester.pumpWidget(buildSubject(
-        statsOverride: AsyncValue.error(Exception('Server error'), StackTrace.current),
-      ));
-      await tester.pumpAndSettle();
-
-      expect(find.textContaining('Server error'), findsOneWidget);
-      expect(find.text('Retry'), findsOneWidget);
+      expect(find.text('Import Memory Pack'), findsOneWidget);
     });
   });
 }

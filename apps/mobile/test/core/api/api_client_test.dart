@@ -274,7 +274,7 @@ void main() {
               '/api/cortex/recent',
               options: any(named: 'options'),
               data: any(named: 'data'),
-              queryParameters: {'limit': 5},
+              queryParameters: {'limit': 5, 'offset': 0},
             )).thenAnswer((_) async => _ok<dynamic>({
               'memories': [
                 {
