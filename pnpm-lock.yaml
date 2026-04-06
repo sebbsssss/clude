@@ -232,6 +232,9 @@ importers:
       ai:
         specifier: ^6.0.142
         version: 6.0.142(zod@4.3.6)
+      bs58:
+        specifier: ^6.0.0
+        version: 6.0.0
       compression:
         specifier: ^1.8.1
         version: 1.8.1

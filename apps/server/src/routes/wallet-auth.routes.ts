@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { PublicKey } from '@solana/web3.js';
 import nacl from 'tweetnacl';
+import bs58 from 'bs58';
 import { findOrCreateAgentForWallet } from '@clude/brain/features/agent-tier';
 import { createChildLogger } from '@clude/shared/core/logger';
 import { getDb } from '@clude/shared/core/database';
@@ -51,9 +52,9 @@ export function walletAuthRoutes(): Router {
         return res.status(400).json({ error: 'Message expired' });
       }
 
-      // Verify signature
+      // Verify signature — Phantom returns base58-encoded signatures
       const messageBytes = new TextEncoder().encode(message);
-      const signatureBytes = Uint8Array.from(Buffer.from(signature, 'base64'));
+      const signatureBytes = bs58.decode(signature);
       const publicKeyBytes = new PublicKey(wallet).toBytes();
 
       const valid = nacl.sign.detached.verify(messageBytes, signatureBytes, publicKeyBytes);
