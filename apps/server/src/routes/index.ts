@@ -16,6 +16,7 @@ import { compoundRoutes } from './compound.routes.js';
 import { memoryRoutes } from './memory.routes.js';
 import { memoryPacksRoutes } from './memory-packs.routes.js';
 import { demoRoutes } from './demo.routes.js';
+import { walletAuthRoutes } from './wallet-auth.routes.js';
 import { createChildLogger } from '@clude/shared/core/logger';
 import rateLimit from 'express-rate-limit';
 
@@ -92,6 +93,9 @@ export function mountApiRoutes(app: express.Application): void {
 
   // Chat billing: balance, top-up confirmation, history
   app.use('/api/chat', topupApiRoutes());
+
+  // Wallet auth (direct Phantom signature verification for mobile)
+  app.use('/api/wallet-auth', walletAuthRoutes());
 
   // Helius webhook (USDC payment detection — outside /api to avoid API rate limiter)
   app.use('/webhook', topupWebhookRoutes());
