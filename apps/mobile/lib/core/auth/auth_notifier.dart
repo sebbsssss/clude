@@ -76,6 +76,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = const AuthState(isGuest: true);
   }
 
+  /// Enter demo mode with fake credentials (no server needed).
+  /// To remove: delete this method + the "Try Demo" button in login_screen.dart.
+  void loginAsDemo() {
+    state = const AuthState(
+      isAuthenticated: true,
+      cortexKey: 'clk_demo_mode',
+      authMode: AuthMode.apiKey,
+    );
+  }
+
   /// Clear all auth state and stored credentials.
   Future<void> logout() async {
     await _ref.read(secureStorageProvider).clearAll();

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/api/api_client_provider.dart';
 import '../../core/auth/auth_provider.dart';
 import 'widgets/api_key_input.dart';
 import 'widgets/wallet_connect_button.dart';
@@ -97,8 +98,35 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       : const Text('Sign in'),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  const Expanded(child: Divider()),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text('or',
+                        style: TextStyle(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withAlpha(100),
+                          fontSize: 12,
+                        )),
+                  ),
+                  const Expanded(child: Divider()),
+                ],
+              ),
+              const SizedBox(height: 16),
               const WalletConnectButton(),
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: () {
+                  ref.read(demoModeProvider.notifier).state = true;
+                  ref.read(authNotifierProvider.notifier).loginAsDemo();
+                },
+                icon: const Icon(Icons.play_circle_outline),
+                label: const Text('Try Demo'),
+              ),
               const SizedBox(height: 16),
               GestureDetector(
                 onTap: _continueAsGuest,

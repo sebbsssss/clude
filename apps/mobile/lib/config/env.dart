@@ -3,7 +3,7 @@ class Env {
     'API_BASE_URL',
     defaultValue: 'https://clude.io',
   );
-  static const String devBaseUrl = 'http://localhost:3000';
+  static const String devBaseUrl = 'https://cludebot-test-preview.up.railway.app';
 
   static String get apiBaseUrl =>
       const bool.fromEnvironment('dart.vm.product') ? baseUrl : devBaseUrl;
