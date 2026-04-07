@@ -25,7 +25,6 @@ import {
 } from '@clude/brain/memory';
 import { findClinamen } from '@clude/brain/memory/clinamen';
 import {
-  getKnowledgeGraph,
   findSimilarEntities,
   getMemoriesByEntity,
   type EntityType,
@@ -910,15 +909,33 @@ ${memoryDump}`;
       const minMentions = parseInt(req.query.minMentions as string) || 1;
       const limit = Math.min(parseInt(req.query.limit as string) || 100, 500);
 
-      const graph = await getKnowledgeGraph({
-        entityTypes,
-        minMentions,
-        includeMemories: false,
-        limit,
-      });
+      const db = getDb();
+      let query = db
+        .from('entities')
+        .select('id, entity_type, name, aliases, description, mention_count, first_seen, last_seen')
+        .gte('mention_count', minMentions)
+        .order('mention_count', { ascending: false })
+        .limit(limit);
+
+      if (entityTypes) {
+        query = query.in('entity_type', entityTypes);
+      }
+
+      const { data: entities, error } = await query;
+      if (error) throw error;
 
       res.json({
-        ...graph,
+        entities: (entities || []).map((e: any) => ({
+          id: e.id,
+          type: e.entity_type,
+          name: e.name,
+          aliases: e.aliases,
+          description: e.description,
+          mentionCount: e.mention_count,
+          firstSeen: e.first_seen,
+          lastSeen: e.last_seen,
+        })),
+        count: (entities || []).length,
         timestamp: new Date().toISOString(),
       });
     } catch (err) {
