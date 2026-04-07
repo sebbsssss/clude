@@ -30,16 +30,25 @@ class _WalletConnectButtonState extends ConsumerState<WalletConnectButton> {
 
     try {
       _service = WalletAuthService();
+      debugPrint('[WALLET] Starting connectAndSign...');
       final result = await _service!.connectAndSign();
+      debugPrint('[WALLET] Got result: apiKey=${result.apiKey.substring(0, 8)}..., wallet=${result.wallet}');
 
-      if (!mounted) return;
+      if (!mounted) {
+        debugPrint('[WALLET] Widget not mounted after connectAndSign!');
+        return;
+      }
 
+      debugPrint('[WALLET] Calling loginWithWallet...');
       await ref
           .read(authNotifierProvider.notifier)
           .loginWithWallet(result.apiKey, result.wallet);
 
+      debugPrint('[WALLET] Navigating to /chat...');
       if (mounted) context.go('/chat');
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('[WALLET] ERROR: $e');
+      debugPrint('[WALLET] STACK: $st');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(e.toString())),

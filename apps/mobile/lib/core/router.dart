@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -11,15 +12,28 @@ import '../features/settings/settings_screen.dart';
 import '../shared/widgets/bottom_nav.dart';
 import 'auth/auth_provider.dart';
 
+/// Bridges Riverpod auth state changes to GoRouter's refreshListenable.
+class _AuthNotifierBridge extends ChangeNotifier {
+  _AuthNotifierBridge(Ref ref) {
+    ref.listen(authNotifierProvider, (_, __) {
+      notifyListeners();
+    });
+  }
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
-  final auth = ref.watch(authNotifierProvider);
+  final authBridge = _AuthNotifierBridge(ref);
 
   return GoRouter(
     initialLocation: '/chat',
+    refreshListenable: authBridge,
     redirect: (context, state) {
+      final auth = ref.read(authNotifierProvider);
       final isLoginRoute = state.matchedLocation == '/login';
       final isGuestRoute = state.matchedLocation == '/guest';
       final hasAccess = auth.isAuthenticated || auth.isGuest;
+
+      debugPrint('[ROUTER] redirect: location=${state.matchedLocation}, isAuth=${auth.isAuthenticated}, isGuest=${auth.isGuest}, hasAccess=$hasAccess');
 
       if (!hasAccess && !isLoginRoute) return '/login';
       if (hasAccess && isLoginRoute) {

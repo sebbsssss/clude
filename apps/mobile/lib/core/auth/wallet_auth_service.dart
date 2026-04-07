@@ -41,13 +41,15 @@ class WalletAuthService {
       },
     );
 
+    // 3. Start listening BEFORE launching Phantom to avoid race condition
+    final connectFuture = _waitForDeepLink('wallet-connect');
+
     if (!await launchUrl(connectUri, mode: LaunchMode.externalApplication)) {
+      _linkSub?.cancel();
       throw Exception('Could not open Phantom. Is it installed?');
     }
 
-    // 3. Wait for connect callback
-    final connectCallback =
-        await _waitForDeepLink('wallet-connect');
+    final connectCallback = await connectFuture;
 
     // Check for errors
     final errorCode = connectCallback.queryParameters['errorCode'];
@@ -104,12 +106,15 @@ class WalletAuthService {
       },
     );
 
+    // 6. Start listening BEFORE launching Phantom
+    final signFuture = _waitForDeepLink('wallet-sign');
+
     if (!await launchUrl(signUri, mode: LaunchMode.externalApplication)) {
+      _linkSub?.cancel();
       throw Exception('Could not open Phantom for signing.');
     }
 
-    // 6. Wait for sign callback
-    final signCallback = await _waitForDeepLink('wallet-sign');
+    final signCallback = await signFuture;
 
     final signErrorCode = signCallback.queryParameters['errorCode'];
     if (signErrorCode != null) {
