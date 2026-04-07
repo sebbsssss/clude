@@ -24,6 +24,12 @@ import {
   type MemoryType,
 } from '@clude/brain/memory';
 import { findClinamen } from '@clude/brain/memory/clinamen';
+import {
+  getKnowledgeGraph,
+  findSimilarEntities,
+  getMemoriesByEntity,
+  type EntityType,
+} from '@clude/brain/memory/graph';
 import type { MemoryLinkType } from '@clude/shared/utils/constants';
 import { checkRateLimit } from '@clude/shared/utils/rate-limit';
 import { getDb } from '@clude/shared/core/database';
@@ -858,6 +864,199 @@ ${memoryDump}`;
     } catch (err) {
       log.error({ err }, 'Smart export error');
       res.status(500).json({ error: 'Smart export failed' });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Agents (mobile-compatible — same data as /api/dashboard/agents)
+  // ---------------------------------------------------------------------------
+
+  router.get('/agents', async (req: Request, res: Response) => {
+    try {
+      const cortexReq = req as CortexRequest;
+      const db = getDb();
+      const { data, error } = await db
+        .from('agent_keys')
+        .select('agent_id, agent_name, owner_wallet, registered_at, last_used, is_active')
+        .eq('owner_wallet', cortexReq.ownerWallet!)
+        .eq('is_active', true)
+        .order('registered_at', { ascending: true });
+
+      if (error) throw error;
+
+      await recordAgentInteraction(cortexReq.agent!.agent_id);
+      res.json((data || []).map(a => ({
+        id: a.agent_id,
+        name: a.agent_name,
+        wallet: a.owner_wallet,
+        created_at: a.registered_at,
+        last_active: a.last_used,
+      })));
+    } catch (err) {
+      log.error({ err }, 'Cortex agents error');
+      res.status(500).json({ error: 'Failed to list agents' });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Entities (mobile-compatible — same data as /api/graph)
+  // ---------------------------------------------------------------------------
+
+  router.get('/entities', async (req: Request, res: Response) => {
+    try {
+      const entityTypes = req.query.entityTypes
+        ? String(req.query.entityTypes).split(',') as EntityType[]
+        : undefined;
+      const minMentions = parseInt(req.query.minMentions as string) || 1;
+      const limit = Math.min(parseInt(req.query.limit as string) || 100, 500);
+
+      const graph = await getKnowledgeGraph({
+        entityTypes,
+        minMentions,
+        includeMemories: false,
+        limit,
+      });
+
+      res.json({
+        ...graph,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) {
+      log.error({ err }, 'Cortex entities error');
+      res.status(500).json({ error: 'Failed to fetch entities' });
+    }
+  });
+
+  router.get('/entities/search', async (req: Request, res: Response) => {
+    try {
+      const query = String(req.query.q || '');
+      if (!query) {
+        res.status(400).json({ error: 'Query parameter q is required' });
+        return;
+      }
+
+      const entityTypes = req.query.types
+        ? String(req.query.types).split(',') as EntityType[]
+        : undefined;
+      const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
+
+      const entities = await findSimilarEntities(query, { limit, entityTypes });
+
+      res.json({
+        entities: entities.map(e => ({
+          id: e.id,
+          type: e.entity_type,
+          name: e.name,
+          aliases: e.aliases,
+          description: e.description,
+          mentionCount: e.mention_count,
+          firstSeen: e.first_seen,
+          lastSeen: e.last_seen,
+        })),
+        count: entities.length,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) {
+      log.error({ err }, 'Cortex entity search error');
+      res.status(500).json({ error: 'Entity search failed' });
+    }
+  });
+
+  router.get('/entities/:id', async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        res.status(400).json({ error: 'Invalid entity ID' });
+        return;
+      }
+
+      const db = getDb();
+      const { data: entity, error } = await db
+        .from('entities')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error || !entity) {
+        res.status(404).json({ error: 'Entity not found' });
+        return;
+      }
+
+      const memories = await getMemoriesByEntity(id, { limit: 20 });
+
+      const { data: cooccurrence } = await db.rpc('get_entity_cooccurrence', {
+        entity_id: id,
+        min_cooccurrence: 1,
+        max_results: 10,
+      });
+
+      const { data: relations } = await db
+        .from('entity_relations')
+        .select(`
+          id,
+          relation_type,
+          strength,
+          target_entity_id,
+          target:entities!target_entity_id (id, name, entity_type)
+        `)
+        .eq('source_entity_id', id);
+
+      const { data: reverseRelations } = await db
+        .from('entity_relations')
+        .select(`
+          id,
+          relation_type,
+          strength,
+          source_entity_id,
+          source:entities!source_entity_id (id, name, entity_type)
+        `)
+        .eq('target_entity_id', id);
+
+      res.json({
+        entity: {
+          id: entity.id,
+          type: entity.entity_type,
+          name: entity.name,
+          aliases: entity.aliases,
+          description: entity.description,
+          mentionCount: entity.mention_count,
+          firstSeen: entity.first_seen,
+          lastSeen: entity.last_seen,
+          metadata: entity.metadata,
+        },
+        memories: memories.map((m: any) => ({
+          id: m.id,
+          type: m.memory_type,
+          summary: m.summary,
+          importance: m.importance,
+          createdAt: m.created_at,
+        })),
+        relatedEntities: (cooccurrence || []).map((c: any) => ({
+          entityId: c.related_entity_id,
+          cooccurrenceCount: c.cooccurrence_count,
+          avgSalience: c.avg_salience,
+        })),
+        relations: [
+          ...(relations || []).map((r: any) => ({
+            id: r.id,
+            type: r.relation_type,
+            strength: r.strength,
+            direction: 'outgoing',
+            target: r.target,
+          })),
+          ...(reverseRelations || []).map((r: any) => ({
+            id: r.id,
+            type: r.relation_type,
+            strength: r.strength,
+            direction: 'incoming',
+            source: r.source,
+          })),
+        ],
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) {
+      log.error({ err }, 'Cortex entity details error');
+      res.status(500).json({ error: 'Failed to fetch entity details' });
     }
   });
 
