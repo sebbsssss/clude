@@ -33,6 +33,13 @@ class GuestChatScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Chat'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            ref.read(authNotifierProvider.notifier).logout();
+            context.go('/login');
+          },
+        ),
         actions: [
           if (isStreaming)
             IconButton(

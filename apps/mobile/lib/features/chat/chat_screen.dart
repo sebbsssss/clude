@@ -30,6 +30,16 @@ class _ConversationListScreenState
     extends ConsumerState<ConversationListScreen> {
   bool _isCreating = false;
 
+  @override
+  void initState() {
+    super.initState();
+    Future(() {
+      ref.read(modelsNotifierProvider.notifier).fetchModels().then((models) {
+        ref.read(selectedModelNotifierProvider.notifier).resolveDefault(models);
+      }).catchError((_) {});
+    });
+  }
+
   Future<void> _createConversation() async {
     if (_isCreating) return;
     setState(() => _isCreating = true);
@@ -56,7 +66,9 @@ class _ConversationListScreenState
     return Scaffold(
       appBar: AppBar(
         title: const Text('Conversations'),
-        actions: const [BalanceChip(), ModelChip()],
+        centerTitle: false,
+        titleSpacing: 20,
+        actions: const [ModelChip(), BalanceChip(), SizedBox(width: 8)],
       ),
       body: asyncConversations.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -153,43 +165,69 @@ class _ConversationTile extends ConsumerWidget {
         color: colorScheme.error,
         child: const Icon(Icons.delete, color: Colors.white),
       ),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: colorScheme.secondary,
-          radius: 20,
-          child: Icon(
-            Icons.chat_bubble_outline,
-            size: 18,
-            color: colorScheme.onSecondary,
-          ),
-        ),
-        title: Text(
-          title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: isMuted
-              ? TextStyle(color: colorScheme.onSurface.withAlpha(120))
-              : null,
-        ),
-        subtitle: Text(
-          '${relativeTime(conversation.updatedAt)} · ${modelDisplayName(conversation.model)}',
-          style: TextStyle(
-            color: colorScheme.onSurface.withAlpha(100),
-            fontSize: 12,
-          ),
-        ),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: colorScheme.primary.withAlpha(30),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            '${conversation.messageCount}',
-            style: TextStyle(color: colorScheme.primary, fontSize: 12),
-          ),
-        ),
+      child: InkWell(
         onTap: () => context.go('/chat/${conversation.id}'),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withAlpha(20),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: colorScheme.primary.withAlpha(60)),
+                ),
+                child: Icon(
+                  Icons.chat_bubble_outline_rounded,
+                  size: 18,
+                  color: colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: isMuted
+                      ? TextStyle(color: colorScheme.onSurface.withAlpha(120))
+                      : const TextStyle(fontWeight: FontWeight.w500),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    relativeTime(conversation.updatedAt),
+                    style: TextStyle(
+                      color: colorScheme.onSurface.withAlpha(100),
+                      fontSize: 11,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: colorScheme.onSurface.withAlpha(40)),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      modelDisplayName(conversation.model),
+                      style: TextStyle(
+                        color: colorScheme.onSurface.withAlpha(120),
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

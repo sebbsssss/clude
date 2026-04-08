@@ -19,7 +19,9 @@ class SseDone extends SseEvent {
 
 /// Parses an SSE byte stream (from Dio ResponseType.stream) into [SseEvent]s.
 ///
-/// Port of `readSSE` from `apps/chat/src/lib/api.ts`.
+/// Supports both:
+/// - Vercel AI SDK v6 UI message stream protocol (text-delta, finish, etc.)
+/// - Legacy format (content/chunk fields, done flag)
 Stream<SseEvent> parseSseStream(Stream<List<int>> byteStream) async* {
   final decoder = const Utf8Decoder(allowMalformed: true);
   var buffer = '';
@@ -60,11 +62,29 @@ SseEvent? _processLine(String line) {
     if (data['error'] != null) {
       throw ApiException(data['error'].toString());
     }
+
+    final type = data['type'] as String?;
+
+    // Vercel AI SDK v6 UI message stream protocol
+    if (type != null) {
+      switch (type) {
+        case 'text-delta':
+        case 'reasoning-delta':
+          final delta = data['delta'] as String?;
+          if (delta != null) return SseChunk(delta);
+        case 'finish':
+          return SseDone(data['messageMetadata'] as Map<String, dynamic>?);
+        case 'error':
+          throw ApiException(data['errorText']?.toString() ?? 'Stream error');
+        // text-start, text-end, start, start-step, finish-step, etc. — skip
+      }
+      return null;
+    }
+
+    // Legacy format (greeting, guest chat)
     if (data['done'] == true) {
       return SseDone(data);
     }
-    // TS version checks both fields independently; API never sends both in
-    // one payload so early-return is safe here.
     final content = data['content'] as String?;
     if (content != null) return SseChunk(content);
     final chunk = data['chunk'] as String?;

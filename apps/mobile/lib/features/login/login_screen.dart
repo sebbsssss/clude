@@ -119,15 +119,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               const SizedBox(height: 16),
               const WalletConnectButton(),
               const SizedBox(height: 16),
-              OutlinedButton.icon(
-                onPressed: () {
-                  ref.read(demoModeProvider.notifier).state = true;
-                  ref.read(authNotifierProvider.notifier).loginAsDemo();
-                },
-                icon: const Icon(Icons.play_circle_outline),
-                label: const Text('Try Demo'),
-              ),
-              const SizedBox(height: 16),
               GestureDetector(
                 onTap: _continueAsGuest,
                 child: Text(

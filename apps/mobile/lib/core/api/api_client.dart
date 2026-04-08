@@ -78,7 +78,11 @@ class ApiClient {
       if (e.response?.statusCode == 429) {
         throw RateLimitException();
       }
-      final msg = e.response?.data?.toString() ?? e.message ?? 'Stream failed';
+      String msg = e.message ?? 'Stream failed';
+      final data = e.response?.data;
+      if (data is Map) {
+        msg = data['error']?.toString() ?? msg;
+      }
       throw ApiException(msg);
     }
 
@@ -169,8 +173,12 @@ class ApiClient {
     CancelToken? cancelToken,
   }) =>
       _streamSse(
-        '/api/chat/conversations/$conversationId/messages',
-        data: {'content': content, 'model': model},
+        '/api/chat/messages',
+        data: {
+          'conversationId': conversationId,
+          'content': content,
+          'model': model,
+        },
         cancelToken: cancelToken,
       );
 
@@ -221,7 +229,7 @@ class ApiClient {
       );
 
   Future<List<GraphEntity>> getEntities() => _fetchJson(
-        '/api/graph',
+        '/api/cortex/entities',
         fromJson: (json) {
           final map = json as Map<String, dynamic>;
           final entities = (map['entities'] ?? []) as List;
@@ -232,7 +240,7 @@ class ApiClient {
       );
 
   Future<List<GraphEntity>> searchEntities(String query) => _fetchJson(
-        '/api/graph/search',
+        '/api/cortex/entities/search',
         queryParameters: {'q': query},
         fromJson: (json) {
           final map = json as Map<String, dynamic>;
@@ -244,7 +252,7 @@ class ApiClient {
       );
 
   Future<EntityDetail> getEntityDetail(int id) => _fetchJson(
-        '/api/graph/entity/$id',
+        '/api/cortex/entities/$id',
         fromJson: (json) =>
             EntityDetail.fromJson(json as Map<String, dynamic>),
       );
@@ -300,7 +308,7 @@ class ApiClient {
   Future<List<UsageRecord>> getUsageHistory() => _fetchJson(
         '/api/chat/usage/history',
         fromJson: (json) =>
-            ((json as Map<String, dynamic>)['records'] as List)
+            ((json as Map<String, dynamic>)['records'] as List? ?? [])
                 .map((e) => UsageRecord.fromJson(e as Map<String, dynamic>))
                 .toList(),
       );
@@ -308,7 +316,7 @@ class ApiClient {
   Future<List<TopupRecord>> getTopupHistory() => _fetchJson(
         '/api/chat/topup/history',
         fromJson: (json) =>
-            ((json as Map<String, dynamic>)['topups'] as List)
+            ((json as Map<String, dynamic>)['topups'] as List? ?? [])
                 .map((e) => TopupRecord.fromJson(e as Map<String, dynamic>))
                 .toList(),
       );
@@ -318,7 +326,7 @@ class ApiClient {
   // ---------------------------------------------------------------------------
 
   Future<List<Agent>> listAgents() => _fetchJson(
-        '/api/dashboard/agents',
+        '/api/cortex/agents',
         fromJson: (json) =>
             (json as List<dynamic>).map((e) => Agent.fromJson(e as Map<String, dynamic>)).toList(),
       );

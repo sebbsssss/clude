@@ -25,10 +25,21 @@ const _typeDisplayNames = <String, String>{
   'episodic': 'Episodic',
   'semantic': 'Semantic',
   'procedural': 'Procedural',
-  'self_model': 'Self Model',
+  'self_model': 'Self',
 };
 
 const _typeOrder = ['episodic', 'semantic', 'procedural', 'self_model'];
+
+String _formatCount(int n) {
+  if (n < 1000) return '$n';
+  final s = n.toString();
+  final buf = StringBuffer();
+  for (var i = 0; i < s.length; i++) {
+    if (i > 0 && (s.length - i) % 3 == 0) buf.write(',');
+    buf.write(s[i]);
+  }
+  return buf.toString();
+}
 
 class MemoryPanelScreen extends ConsumerWidget {
   const MemoryPanelScreen({super.key});
@@ -49,18 +60,16 @@ class MemoryPanelScreen extends ConsumerWidget {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Memory'),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.download),
-              tooltip: 'Import Pack',
-              onPressed: () => showModalBottomSheet(
-                context: context,
-                builder: (_) => const ImportPackSheet(),
-              ),
-            ),
-          ],
-          bottom: const TabBar(
-            tabs: [
+          centerTitle: false,
+          bottom: TabBar(
+            indicatorWeight: 3,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            labelColor: Theme.of(context).colorScheme.onSurface,
+            unselectedLabelColor: Theme.of(context).colorScheme.onSurface,
+            dividerColor: Colors.white.withAlpha(15),
+            dividerHeight: 0.5,
+            tabs: const [
               Tab(text: 'Feed'),
               Tab(text: 'Graph'),
               Tab(text: 'Entities'),
@@ -177,56 +186,58 @@ class _FeedTabState extends ConsumerState<_FeedTab> {
       child: CustomScrollView(
         controller: _scrollController,
         slivers: [
-          // Compact horizontal stats bar
+          // Compact horizontal stats bar — chips always visible, numbers load in
           SliverToBoxAdapter(
-            child: asyncStats.when(
-              loading: () => const SizedBox.shrink(),
-              error: (_, __) => const SizedBox.shrink(),
-              data: (stats) => SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                child: Row(
-                  children: [
-                    _StatChip(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                children: [
+                  _StatChip(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          asyncStats.whenOrNull(
+                                  data: (s) => _formatCount(s.total)) ??
+                              '—',
+                          style: const TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(width: 6),
+                        Text('memories',
+                            style: TextStyle(fontSize: 12, color: muted)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ..._typeOrder.map((type) {
+                    final count = asyncStats.whenOrNull(
+                      data: (s) =>
+                          _formatCount(s.byType[type] ?? 0),
+                    );
+                    final color = kMemoryTypeColors[type] ?? Colors.grey;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text('${stats.total}',
-                              style: const TextStyle(
-                                  fontSize: 13, fontWeight: FontWeight.w600)),
-                          const SizedBox(width: 5),
-                          Text('memories',
-                              style: TextStyle(fontSize: 10, color: muted)),
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: color,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(count ?? '—',
+                              style: TextStyle(fontSize: 12, color: muted)),
                         ],
                       ),
-                    ),
-                    const SizedBox(width: 6),
-                    ..._typeOrder.map((type) {
-                      final count = stats.byType[type] ?? 0;
-                      final color = kMemoryTypeColors[type] ?? Colors.grey;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 6),
-                        child: _StatChip(
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 6, height: 6,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: color,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              Text('$count',
-                                  style: TextStyle(fontSize: 10, color: muted)),
-                            ],
-                          ),
-                        ),
-                      );
-                    }),
-                  ],
-                ),
+                    );
+                  }),
+                ],
               ),
             ),
           ),
@@ -234,16 +245,16 @@ class _FeedTabState extends ConsumerState<_FeedTab> {
           // Search bar
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: TextField(
                 decoration: InputDecoration(
                   hintText: 'Search memories...',
-                  prefixIcon: const Icon(Icons.search, size: 18),
+                  prefixIcon: const Icon(Icons.search, size: 20),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                   isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
                 ),
               ),
             ),
@@ -253,7 +264,7 @@ class _FeedTabState extends ConsumerState<_FeedTab> {
           SliverToBoxAdapter(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 children: [
                   _FilterChip(
@@ -261,12 +272,12 @@ class _FeedTabState extends ConsumerState<_FeedTab> {
                     selected: _selectedType == null,
                     onTap: () => setState(() => _selectedType = null),
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 8),
                   ..._typeOrder.map((type) {
                     final color = kMemoryTypeColors[type] ?? Colors.grey;
                     final name = _typeDisplayNames[type] ?? type;
                     return Padding(
-                      padding: const EdgeInsets.only(right: 6),
+                      padding: const EdgeInsets.only(right: 8),
                       child: _FilterChip(
                         label: name,
                         dotColor: color,
@@ -283,17 +294,17 @@ class _FeedTabState extends ConsumerState<_FeedTab> {
           // Time range buttons
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: Row(
                 children: ['24h', '3d', '1w', '30d'].map((range) {
                   final selected = _selectedRange == range;
                   return Padding(
-                    padding: const EdgeInsets.only(right: 4),
+                    padding: const EdgeInsets.only(right: 8),
                     child: GestureDetector(
                       onTap: () => setState(() => _selectedRange = range),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
+                            horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(20),
                           color: selected
@@ -311,7 +322,7 @@ class _FeedTabState extends ConsumerState<_FeedTab> {
                         child: Text(
                           range,
                           style: TextStyle(
-                            fontSize: 10,
+                            fontSize: 12,
                             color: selected
                                 ? Theme.of(context).colorScheme.onSurface
                                 : muted,
@@ -403,9 +414,16 @@ class _FeedTabState extends ConsumerState<_FeedTab> {
     }
 
     return [
-      SliverList.builder(
+      SliverList.separated(
         itemCount: items.length,
         itemBuilder: (context, index) => MemoryTile(memory: items[index]),
+        separatorBuilder: (context, index) => Divider(
+          height: 1,
+          thickness: 0.5,
+          indent: 16,
+          endIndent: 16,
+          color: Colors.white.withAlpha(20),
+        ),
       ),
       if (recentState.hasMore && _selectedType == null)
         const SliverToBoxAdapter(
@@ -427,7 +445,7 @@ class _StatChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         border: Border.all(
@@ -458,7 +476,7 @@ class _FilterChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           color: selected
@@ -475,18 +493,18 @@ class _FilterChip extends StatelessWidget {
           children: [
             if (dotColor != null) ...[
               Container(
-                width: 6, height: 6,
+                width: 8, height: 8,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: dotColor,
                 ),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 6),
             ],
             Text(
               label,
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 12,
                 color: selected
                     ? Theme.of(context).colorScheme.onSurface
                     : Theme.of(context).colorScheme.onSurface.withAlpha(150),
@@ -535,23 +553,22 @@ class _MemoryTileState extends State<MemoryTile> {
     return InkWell(
       onTap: () => setState(() => _expanded = !_expanded),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: color.withAlpha(38),
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: color.withAlpha(100)),
+                color: color,
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
                 label,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 10,
-                  color: color,
-                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -567,9 +584,10 @@ class _MemoryTileState extends State<MemoryTile> {
                       m.summary,
                       maxLines: _expanded ? null : 2,
                       overflow: _expanded ? null : TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 14, height: 1.4),
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Row(
                     children: [
                       Container(
@@ -582,13 +600,25 @@ class _MemoryTileState extends State<MemoryTile> {
                       ),
                       const SizedBox(width: 6),
                       Text(
+                        m.importance.toStringAsFixed(2),
+                        style:
+                            Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface
+                                      .withAlpha(100),
+                                ),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
                         relativeTime(m.createdAt),
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurface
-                                  .withAlpha(100),
-                            ),
+                        style:
+                            Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface
+                                      .withAlpha(100),
+                                ),
                       ),
                     ],
                   ),

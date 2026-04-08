@@ -8,7 +8,12 @@ import 'core/router.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final container = ProviderContainer();
-  await container.read(authNotifierProvider.notifier).restoreSession();
+  try {
+    await container.read(authNotifierProvider.notifier).restoreSession()
+        .timeout(const Duration(seconds: 3));
+  } catch (_) {
+    // If session restore fails or times out, continue with fresh state
+  }
   runApp(
     UncontrolledProviderScope(
       container: container,

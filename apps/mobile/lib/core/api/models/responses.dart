@@ -19,7 +19,7 @@ class AutoRegisterResponse with _$AutoRegisterResponse {
 class Balance with _$Balance {
   const factory Balance({
     @JsonKey(name: 'balance_usdc') required double balanceUsdc,
-    @JsonKey(name: 'wallet_address') required String walletAddress,
+    @JsonKey(name: 'wallet_address') String? walletAddress,
     bool? promo,
     @JsonKey(name: 'promo_credit_usdc') double? promoCreditUsdc,
   }) = _Balance;
@@ -94,7 +94,7 @@ class MessageReceipt with _$MessageReceipt {
 @freezed
 class StreamDoneData with _$StreamDoneData {
   const factory StreamDoneData({
-    required bool done,
+    @Default(true) bool done,
     @JsonKey(name: 'message_id') String? messageId,
     String? model,
     @JsonKey(name: 'memories_used') int? memoriesUsed,

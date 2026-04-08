@@ -39,8 +39,8 @@ class ScaffoldWithBottomNav extends StatelessWidget {
             label: 'Chat',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.memory_outlined),
-            activeIcon: Icon(Icons.memory),
+            icon: Icon(Icons.place_outlined),
+            activeIcon: Icon(Icons.place),
             label: 'Memory',
           ),
           BottomNavigationBarItem(

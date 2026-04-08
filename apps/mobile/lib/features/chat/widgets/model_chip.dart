@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../shared/utils/model_display_name.dart';
 import '../models_provider.dart';
 import 'model_selector_sheet.dart';
 
@@ -10,12 +11,7 @@ class ModelChip extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedId = ref.watch(selectedModelNotifierProvider);
-    final modelsAsync = ref.watch(modelsNotifierProvider);
-
-    final modelName = modelsAsync.whenOrNull(
-      data: (models) =>
-          models.where((m) => m.id == selectedId).firstOrNull?.name,
-    );
+    final modelName = selectedId != null ? modelDisplayName(selectedId) : null;
 
     return ActionChip(
       avatar: const Icon(Icons.bolt, size: 14),
@@ -23,6 +19,7 @@ class ModelChip extends ConsumerWidget {
         modelName ?? 'Select model',
         style: const TextStyle(fontSize: 12),
       ),
+      side: BorderSide.none,
       onPressed: () => showModalBottomSheet(
         context: context,
         isScrollControlled: true,

@@ -7,6 +7,9 @@ String modelDisplayName(String modelId) {
   if (id.contains('haiku')) return 'Haiku 3.5';
   if (id.contains('gpt-4o')) return 'GPT-4o';
   if (id.contains('gpt-4')) return 'GPT-4';
+  if (id.contains('kimi')) return 'Kimi K2';
   if (id.contains('llama')) return 'Llama 3.1';
+  if (id.contains('gemini')) return 'Gemini';
+  if (id.contains('grok')) return 'Grok';
   return modelId;
 }
