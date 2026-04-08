@@ -52,7 +52,7 @@ describe('JepaClient', () => {
         ageHours: 10,
         concepts: ['nextjs'],
       },
-      relationTypes: ['supports'],
+      relationTypes: ['supports'] as const,
     })
     expect(result?.predictions).toHaveLength(1)
     expect(fetchMock).toHaveBeenCalledOnce()
@@ -64,7 +64,7 @@ describe('JepaClient', () => {
       memoryId: 1,
       embedding: [],
       metadata: { memoryType: 'semantic', importance: 0, decayFactor: 0, ageHours: 0, concepts: [] },
-      relationTypes: ['supports'],
+      relationTypes: ['supports'] as const,
     })
     expect(result).toBeNull()
   })
@@ -78,10 +78,10 @@ describe('JepaClient', () => {
       token: 'test-token',
       enabled: true,
     })
-    const req = {
+    const req: Parameters<JepaClient['predict']>[0] = {
       memoryId: 1,
       embedding: [],
-      metadata: { memoryType: 'semantic' as const, importance: 0, decayFactor: 0, ageHours: 0, concepts: [] },
+      metadata: { memoryType: 'semantic', importance: 0, decayFactor: 0, ageHours: 0, concepts: [] },
       relationTypes: ['supports'],
     }
     for (let i = 0; i < 5; i++) {
