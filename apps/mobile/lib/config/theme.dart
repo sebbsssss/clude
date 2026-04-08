@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 class AppTheme {
   AppTheme._();
 
-  static const _background = Color(0xFF000000);
-  static const _surface = Color(0xFF111111);
-  static const _surfaceVariant = Color(0xFF1A1A1A);
+  static const _background = Color(0xFF0E0E18);
+  static const _surface = Color(0xFF1A1A28);
+  static const _surfaceVariant = Color(0xFF222232);
   static const _primary = Color(0xFF2244FF);
   static const _onPrimary = Color(0xFFFFFFFF);
   static const _textPrimary = Color(0xFFFFFFFF);
@@ -31,13 +31,13 @@ class AppTheme {
       colorScheme: colorScheme,
       scaffoldBackgroundColor: _background,
       appBarTheme: const AppBarTheme(
-        backgroundColor: _surface,
+        backgroundColor: _background,
         foregroundColor: _textPrimary,
         elevation: 0,
-        centerTitle: true,
+        centerTitle: false,
       ),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-        backgroundColor: _surface,
+        backgroundColor: _background,
         selectedItemColor: _primary,
         unselectedItemColor: _textSecondary,
         type: BottomNavigationBarType.fixed,

@@ -63,12 +63,12 @@ class HealthTab extends ConsumerWidget {
         // Section header
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Row(
               children: [
                 Text('Weakest memories first',
                     style: Theme.of(context).textTheme.titleSmall),
+                const Spacer(),
                 Text('decay < 0.5 need attention',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Theme.of(context)
@@ -126,10 +126,17 @@ class HealthTab extends ConsumerWidget {
               ];
             }
             return [
-              SliverList.builder(
+              SliverList.separated(
                 itemCount: memories.length,
                 itemBuilder: (context, index) =>
                     _HealthRow(memory: memories[index]),
+                separatorBuilder: (context, index) => Divider(
+                  height: 1,
+                  thickness: 0.5,
+                  indent: 16,
+                  endIndent: 16,
+                  color: Colors.white.withAlpha(20),
+                ),
               ),
             ];
           },
@@ -152,27 +159,51 @@ class _SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
-            const SizedBox(height: 4),
-            Text('${(value * 100).toStringAsFixed(0)}%',
-                style: Theme.of(context)
-                    .textTheme
-                    .headlineSmall
-                    ?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            LinearProgressIndicator(
-              value: value,
-              color: color,
-              backgroundColor: color.withAlpha(38),
-            ),
-          ],
+    final muted = Theme.of(context).colorScheme.onSurface.withAlpha(120);
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withAlpha(25),
         ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label.toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: muted,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  value.toStringAsFixed(2),
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+          LinearProgressIndicator(
+            value: value,
+            minHeight: 4,
+            color: color,
+            backgroundColor: Colors.transparent,
+          ),
+        ],
       ),
     );
   }
@@ -189,74 +220,71 @@ class _HealthRow extends StatelessWidget {
     final typeColor = kMemoryTypeColors[memory.memoryType] ?? Colors.grey;
     final label = _typeBadgeLabels[memory.memoryType] ??
         memory.memoryType.substring(0, 3).toUpperCase();
-    final textOpacity = 0.4 + (decay * 0.6);
+    final muted = Theme.of(context).colorScheme.onSurface.withAlpha(100);
 
     return Container(
       decoration: BoxDecoration(
-        color: typeColor.withAlpha(10),
-        border: Border(
-          left: BorderSide(color: decayClr, width: 4),
-        ),
+        border: Border(left: BorderSide(color: decayClr, width: 3)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Type badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: typeColor.withAlpha(38),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                label,
-                style: TextStyle(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: typeColor,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  label,
+                  style: const TextStyle(
                     fontSize: 10,
-                    color: typeColor,
-                    fontWeight: FontWeight.w600),
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            // Decay score
-            Text(
-              decay.toStringAsFixed(2),
-              style: TextStyle(
-                fontSize: 12,
-                color: decayClr,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(width: 8),
-            // Content
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Opacity(
-                    opacity: textOpacity,
-                    child: Text(
-                      memory.summary,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+              const SizedBox(width: 8),
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: decay.toStringAsFixed(2),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: decayClr,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${relativeTime(memory.createdAt)} · importance ${(memory.importance * 100).toStringAsFixed(0)}%',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withAlpha(100),
-                        ),
-                  ),
-                ],
+                    TextSpan(
+                      text: ' decay',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: muted,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            memory.summary,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 14, height: 1.4),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${relativeTime(memory.createdAt)} · importance ${memory.importance.toStringAsFixed(2)}',
+            style: TextStyle(fontSize: 12, color: muted),
+          ),
+        ],
       ),
     );
   }

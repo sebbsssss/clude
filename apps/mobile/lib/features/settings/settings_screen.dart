@@ -22,7 +22,7 @@ class SettingsScreen extends ConsumerWidget {
     String maskedKey = '—';
     if (authState.cortexKey != null && authState.cortexKey!.length > 4) {
       maskedKey =
-          'clk_••••••••${authState.cortexKey!.substring(authState.cortexKey!.length - 4)}';
+          'clk_••••••••••••${authState.cortexKey!.substring(authState.cortexKey!.length - 4)}';
     }
 
     // Truncated wallet address display.
@@ -43,52 +43,61 @@ class SettingsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         children: [
           // ── Account section ──────────────────────────────────────────────
           _SectionHeader(label: 'Account'),
-          ListTile(
-            title: const Text('API Key'),
-            subtitle: Text(
-              maskedKey,
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-            ),
-            trailing: authState.cortexKey != null
-                ? IconButton(
-                    icon: const Icon(Icons.copy, size: 18),
-                    onPressed: () =>
-                        copyToClipboard(authState.cortexKey!, 'API key'),
-                  )
-                : null,
+          _CardGroup(
+            children: [
+              ListTile(
+                title: const Text('API Key'),
+                subtitle: Text(
+                  maskedKey,
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                ),
+                trailing: authState.cortexKey != null
+                    ? IconButton(
+                        icon: Icon(Icons.copy, size: 18, color: colorScheme.onSurface.withAlpha(120)),
+                        onPressed: () =>
+                            copyToClipboard(authState.cortexKey!, 'API key'),
+                      )
+                    : null,
+              ),
+              Divider(height: 1, color: colorScheme.outline),
+              ListTile(
+                title: const Text('Wallet'),
+                subtitle: Text(
+                  truncatedWallet,
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                ),
+                trailing: authState.walletAddress != null
+                    ? IconButton(
+                        icon: Icon(Icons.copy, size: 18, color: colorScheme.onSurface.withAlpha(120)),
+                        onPressed: () =>
+                            copyToClipboard(authState.walletAddress!, 'Wallet address'),
+                      )
+                    : null,
+              ),
+            ],
           ),
-          ListTile(
-            title: const Text('Wallet'),
-            subtitle: Text(
-              truncatedWallet,
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-            ),
-            trailing: authState.walletAddress != null
-                ? IconButton(
-                    icon: const Icon(Icons.copy, size: 18),
-                    onPressed: () =>
-                        copyToClipboard(authState.walletAddress!, 'Wallet address'),
-                  )
-                : null,
-          ),
-          const Divider(),
 
           // ── Billing section ──────────────────────────────────────────────
           _SectionHeader(label: 'Billing'),
-          ListTile(
-            title: const Text('Top Up Balance'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => context.push('/topup'),
+          _CardGroup(
+            children: [
+              ListTile(
+                title: const Text('Top Up Balance'),
+                trailing: Icon(Icons.chevron_right, color: colorScheme.onSurface.withAlpha(100)),
+                onTap: () => context.push('/topup'),
+              ),
+              Divider(height: 1, color: colorScheme.outline),
+              ListTile(
+                title: const Text('Usage History'),
+                trailing: Icon(Icons.chevron_right, color: colorScheme.onSurface.withAlpha(100)),
+                onTap: () => context.push('/settings/history'),
+              ),
+            ],
           ),
-          ListTile(
-            title: const Text('Usage History'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => context.push('/settings/history'),
-          ),
-          const Divider(),
 
           // ── Agent section — only shown for multi-agent users ─────────────
           ...agentsAsync.when(
@@ -102,46 +111,57 @@ class SettingsScreen extends ConsumerWidget {
 
               return <Widget>[
                 _SectionHeader(label: 'Agent'),
-                ListTile(
-                  title: const Text('Active Agent'),
-                  subtitle: Text(selectedAgent?.name ?? 'Not selected'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    showModalBottomSheet(
-                      context: context,
-                      builder: (_) => const AgentSelectorSheet(),
-                    );
-                  },
+                _CardGroup(
+                  children: [
+                    ListTile(
+                      title: const Text('Active Agent'),
+                      subtitle: Text(selectedAgent?.name ?? 'Not selected'),
+                      trailing: Icon(Icons.chevron_right, color: colorScheme.onSurface.withAlpha(100)),
+                      onTap: () {
+                        showModalBottomSheet(
+                          context: context,
+                          builder: (_) => const AgentSelectorSheet(),
+                        );
+                      },
+                    ),
+                  ],
                 ),
-                const Divider(),
               ];
             },
           ),
 
           // ── App section ───────────────────────────────────────────────────
           _SectionHeader(label: 'App'),
-          const ListTile(
-            title: Text('Version'),
-            trailing: Text(
-              '1.0.0 (build 1)',
-              style: TextStyle(fontSize: 13),
-            ),
+          _CardGroup(
+            children: [
+              const ListTile(
+                title: Text('Version'),
+                subtitle: Text(
+                  '1.0.0 (build 1)',
+                  style: TextStyle(fontSize: 13),
+                ),
+              ),
+            ],
           ),
-          const Divider(),
 
           // ── Logout button ─────────────────────────────────────────────────
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: colorScheme.error,
-                foregroundColor: colorScheme.onError,
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: colorScheme.error,
+                side: BorderSide(color: colorScheme.error),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
+              icon: const Icon(Icons.logout, size: 18),
+              label: const Text('Log Out'),
               onPressed: () async {
                 await ref.read(authNotifierProvider.notifier).logout();
                 if (context.mounted) context.go('/login');
               },
-              child: const Text('Log Out'),
             ),
           ),
         ],
@@ -158,15 +178,39 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      padding: const EdgeInsets.fromLTRB(4, 20, 4, 8),
       child: Text(
         label.toUpperCase(),
         style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w600,
-          color: Theme.of(context).colorScheme.onSurface.withAlpha(120),
-          letterSpacing: 0.8,
+          color: Theme.of(context).colorScheme.onSurface.withAlpha(100),
+          letterSpacing: 1.5,
         ),
+      ),
+    );
+  }
+}
+
+class _CardGroup extends StatelessWidget {
+  const _CardGroup({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withAlpha(60),
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: children,
       ),
     );
   }

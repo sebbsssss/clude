@@ -86,7 +86,7 @@ class TopupNotifier extends StateNotifier<TopupState> {
           _pollTimer?.cancel();
           _pollTimer = null;
           state = TopupState.confirmed(
-            newBalance: status.balanceUsdc ?? 0,
+            newBalance: status.amountUsdc ?? 0,
           );
           _ref.read(balanceNotifierProvider.notifier).fetchBalance();
         }

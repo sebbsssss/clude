@@ -66,15 +66,18 @@ class _EntitiesTabState extends ConsumerState<EntitiesTab> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: TextField(
             controller: _searchController,
             onChanged: _onSearchChanged,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               hintText: 'Search entities...',
-              prefixIcon: Icon(Icons.search),
-              border: OutlineInputBorder(),
+              prefixIcon: const Icon(Icons.search, size: 20),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               isDense: true,
+              contentPadding: const EdgeInsets.symmetric(vertical: 12),
             ),
           ),
         ),
@@ -120,32 +123,26 @@ class _EntitiesTabState extends ConsumerState<EntitiesTab> {
             .where((t) => grouped.containsKey(t) && grouped[t]!.isNotEmpty)
             .toList();
 
-        return ListView.builder(
-          itemCount: sections.length,
-          itemBuilder: (context, index) {
-            final type = sections[index];
-            final items = grouped[type]!;
-            final config =
-                _entityTypeConfig[type] ?? _EntityTypeConfig(Colors.grey, Icons.label, type);
+        final widgets = <Widget>[];
+        for (final type in sections) {
+          final items = grouped[type]!;
+          final config = _entityTypeConfig[type] ??
+              _EntityTypeConfig(Colors.grey, Icons.label, type);
+          widgets.add(_SectionHeader(
+            icon: config.icon,
+            label: config.label.toUpperCase(),
+            count: items.length,
+          ));
+          for (final e in items) {
+            widgets.add(_EntityRow(
+              entity: e,
+              onTap: () => _showDetail(e.id),
+            ));
+          }
+          widgets.add(const SizedBox(height: 8));
+        }
 
-            return ExpansionTile(
-              initiallyExpanded: true,
-              leading: Icon(config.icon, color: config.color, size: 20),
-              title: Text(
-                config.label,
-                style: TextStyle(
-                  color: config.color,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              trailing: Text('${items.length}',
-                  style: Theme.of(context).textTheme.bodySmall),
-              children: items
-                  .map((e) => _EntityRow(entity: e, onTap: () => _showDetail(e.id)))
-                  .toList(),
-            );
-          },
-        );
+        return ListView(children: widgets);
       },
     );
   }
@@ -188,6 +185,45 @@ class _EntitiesTabState extends ConsumerState<EntitiesTab> {
   }
 }
 
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
+    required this.icon,
+    required this.label,
+    required this.count,
+  });
+  final IconData icon;
+  final String label;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = Theme.of(context).colorScheme.onSurface.withAlpha(120);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: muted),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: muted,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            '$count',
+            style: TextStyle(fontSize: 12, color: muted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _EntityRow extends StatelessWidget {
   const _EntityRow({required this.entity, required this.onTap});
   final GraphEntity entity;
@@ -195,19 +231,47 @@ class _EntityRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final config = _entityTypeConfig[entity.type];
-    return ListTile(
+    final muted = Theme.of(context).colorScheme.onSurface.withAlpha(100);
+    return InkWell(
       onTap: onTap,
-      leading: config != null
-          ? Icon(config.icon, color: config.color, size: 18)
-          : null,
-      title: Text(entity.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(
-        '${entity.mentionCount} mentions'
-        '${entity.lastSeen != null ? ' · ${relativeTime(entity.lastSeen!)}' : ''}',
-        style: Theme.of(context).textTheme.bodySmall,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outline.withAlpha(25),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entity.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '${entity.mentionCount} mentions'
+                    '${entity.lastSeen != null ? ' · last seen ${relativeTime(entity.lastSeen!)}' : ''}',
+                    style: TextStyle(fontSize: 12, color: muted),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, size: 18, color: muted),
+          ],
+        ),
       ),
-      trailing: const Icon(Icons.chevron_right, size: 18),
     );
   }
 }
