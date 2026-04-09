@@ -175,6 +175,8 @@ export interface Memory {
   encrypted: boolean;
   encryption_pubkey: string | null;
   owner_wallet?: string | null;
+  // Recall instrumentation — populated during recallMemories(), not persisted to DB
+  link_path?: Array<'vector' | 'bm25' | 'entity' | 'jepa'>;
 }
 
 /** Lightweight memory summary for progressive disclosure (no content field). */
@@ -731,6 +733,15 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
 
     if (candidates.length === 0) return [];
 
+    // Build link_path map — tracks which retrieval signals surfaced each memory
+    const linkPathMap = new Map<number, Set<'vector' | 'bm25' | 'entity' | 'jepa'>>();
+    const addLinkPath = (id: number, path: 'vector' | 'bm25' | 'entity' | 'jepa') => {
+      if (!linkPathMap.has(id)) linkPathMap.set(id, new Set());
+      linkPathMap.get(id)!.add(path);
+    };
+    for (const id of vectorScores.keys()) addLinkPath(id, 'vector');
+    for (const id of bm25Scores.keys()) addLinkPath(id, 'bm25');
+
     // Phase 4: Score and rank with enhanced composite formula
     const scoredOpts = vectorScores.size > 0 || bm25Scores.size > 0
       ? { ...opts, _vectorScores: vectorScores, _bm25Scores: bm25Scores }
@@ -757,6 +768,7 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
               memoryTypes: opts.memoryTypes,
             });
             for (const mem of entityMemories) {
+              addLinkPath(mem.id, 'entity');
               if (!resultIdSet.has(mem.id)) {
                 results.push({
                   ...mem,
@@ -782,6 +794,7 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
               });
               for (const mem of coMems) {
                 if (cooccurrenceAdded >= limit) break;
+                addLinkPath(mem.id, 'entity');
                 if (!resultIdSet.has(mem.id)) {
                   const normalizedStrength = Math.min(cooc.cooccurrence_count / 5, 1);
                   results.push({
@@ -843,6 +856,8 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
                 const weightedStrength = (l.strength || 0.5) * bondWeight;
                 const current = linkBoostMap.get(l.memory_id) || 0;
                 linkBoostMap.set(l.memory_id, Math.max(current, weightedStrength));
+                // Tag memories surfaced via graph links as 'jepa' (JEPA dream cycle populates these links)
+                addLinkPath(l.memory_id, 'jepa');
               }
 
               const graphScored = (graphMemories as Memory[]).map(mem => ({
@@ -916,12 +931,21 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
       reinforceCoRetrievedLinks(ids).catch(err => log.debug({ err }, 'Link reinforcement failed'));
     }
 
+    // Attach link_path instrumentation to each result (mutate in place to preserve _score type)
+    for (const m of results) {
+      const paths = linkPathMap.get(m.id);
+      if (paths && paths.size > 0) {
+        m.link_path = [...paths] as Array<'vector' | 'bm25' | 'entity' | 'jepa'>;
+      }
+    }
+
     log.debug({
       recalled: results.length,
       topScore: results[0]?._score?.toFixed(3),
       query: opts.query?.slice(0, 40),
       vectorAssisted: vectorScores.size > 0,
       typeSpread: [...new Set(results.map((m: Memory) => m.memory_type))].join(','),
+      jepaPaths: results.filter((m: Memory) => m.link_path?.includes('jepa')).length,
     }, 'Memories recalled');
 
     return results;
