@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/deep_link_service.dart';
 import '../../features/balance/balance_notifier.dart';
 import 'topup_notifier.dart';
 import 'topup_state.dart';
@@ -29,6 +30,19 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
   void initState() {
     super.initState();
     _customController.addListener(_onCustomChanged);
+    _checkDeepLinkCallback();
+  }
+
+  /// If we arrived via a `clude://topup/callback` deep link, consume the
+  /// stashed params and resume the confirmation flow.
+  void _checkDeepLinkCallback() {
+    final params = ref.read(deepLinkServiceProvider).consumeTopupParams();
+    if (params == null) return;
+    final (intentId, txHash) = params;
+    // Schedule after the first frame so the widget tree is built.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(topupNotifierProvider.notifier).resumeFromCallback(intentId, txHash);
+    });
   }
 
   @override

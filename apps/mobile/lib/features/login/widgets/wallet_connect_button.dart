@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/auth/auth_provider.dart';
 import '../../../core/auth/wallet_auth_service.dart';
+import '../../../core/deep_link_service.dart';
+import '../../../core/router.dart';
 
 class WalletConnectButton extends ConsumerStatefulWidget {
   const WalletConnectButton({super.key});
@@ -28,7 +30,9 @@ class _WalletConnectButtonState extends ConsumerState<WalletConnectButton> {
 
     setState(() => _isLoading = true);
 
+    final deepLinks = ref.read(deepLinkServiceProvider);
     try {
+      deepLinks.pause();
       _service = WalletAuthService();
       final result = await _service!.connectAndSign();
 
@@ -38,7 +42,14 @@ class _WalletConnectButtonState extends ConsumerState<WalletConnectButton> {
           .read(authNotifierProvider.notifier)
           .loginWithWallet(result.apiKey, result.wallet);
 
-      if (mounted) context.go('/chat');
+      if (mounted) {
+        final router = ref.read(routerProvider);
+        if (deepLinks.pendingRoute != null) {
+          deepLinks.consumePendingRoute(router);
+        } else {
+          context.go('/chat');
+        }
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -46,6 +57,7 @@ class _WalletConnectButtonState extends ConsumerState<WalletConnectButton> {
         );
       }
     } finally {
+      deepLinks.resume();
       _service = null;
       if (mounted) setState(() => _isLoading = false);
     }

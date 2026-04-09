@@ -96,6 +96,20 @@ class TopupNotifier extends StateNotifier<TopupState> {
     });
   }
 
+  /// Resume from a deep link callback (`clude://topup/callback`).
+  ///
+  /// If a top-up is currently awaiting payment with a matching intent,
+  /// confirm it via the server. Otherwise no-op gracefully.
+  Future<void> resumeFromCallback(String intentId, String txHash) async {
+    final current = state;
+    if (current is! TopupAwaitingPayment) return;
+    if (current.intentId != intentId) return;
+
+    _pollTimer?.cancel();
+    _pollTimer = null;
+    await confirmBase(intentId, txHash);
+  }
+
   void cancelPolling() {
     _pollTimer?.cancel();
     _pollTimer = null;

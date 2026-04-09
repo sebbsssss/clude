@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'config/theme.dart';
 import 'core/auth/auth_provider.dart';
+import 'core/deep_link_service.dart';
 import 'core/router.dart';
 
 Future<void> main() async {
@@ -14,6 +15,12 @@ Future<void> main() async {
   } catch (_) {
     // If session restore fails or times out, continue with fresh state
   }
+
+  // Initialise deep link handling after auth state is resolved.
+  final deepLinks = container.read(deepLinkServiceProvider);
+  final router = container.read(routerProvider);
+  await deepLinks.initialise(router);
+
   runApp(
     UncontrolledProviderScope(
       container: container,

@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/api/api_client_provider.dart';
 import '../../core/auth/auth_provider.dart';
+import '../../core/deep_link_service.dart';
+import '../../core/router.dart';
 import 'widgets/api_key_input.dart';
 import 'widgets/wallet_connect_button.dart';
 
@@ -30,7 +31,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final notifier = ref.read(authNotifierProvider.notifier);
     final success = await notifier.loginWithApiKey(_controller.text.trim());
     if (success && mounted) {
-      context.go('/chat');
+      final deepLinks = ref.read(deepLinkServiceProvider);
+      final router = ref.read(routerProvider);
+      if (deepLinks.pendingRoute != null) {
+        deepLinks.consumePendingRoute(router);
+      } else {
+        context.go('/chat');
+      }
     }
   }
 
