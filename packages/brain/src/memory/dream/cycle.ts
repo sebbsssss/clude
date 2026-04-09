@@ -23,6 +23,7 @@ import {
   TWEET_MAX_LENGTH,
 } from '@clude/shared/utils/constants';
 import { timeAgo } from '@clude/shared/utils/format';
+import { runDeepConnectionPhase } from './deep-connection.js';
 
 const log = createChildLogger('dream-cycle');
 
@@ -134,6 +135,14 @@ async function triggerReflection(): Promise<void> {
         await runContradictionResolution();
         await sleep(3000);
         await runLearning();      // Self-learning: track outcomes + refine strategies
+        await sleep(3000);
+        // Phase 4.5: Deep Connection — JEPA-predicted latent links
+        try {
+          const deepResult = await runDeepConnectionPhase();
+          log.info({ linksCreated: deepResult.linksCreated }, 'JEPA deep connection complete');
+        } catch (err) {
+          log.warn({ err }, 'JEPA deep connection phase failed, continuing');
+        }
         await sleep(3000);
         await runEmergence();
       })(),
