@@ -133,6 +133,7 @@ class DemoApiClient extends ApiClient {
     String content,
     String model, {
     CancelToken? cancelToken,
+    Map<String, dynamic>? extra,
   }) async* {
     await _delay();
     const chunks = [

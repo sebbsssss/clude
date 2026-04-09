@@ -24,6 +24,8 @@ _$ChatModelImpl _$$ChatModelImplFromJson(Map<String, dynamic> json) =>
       isDefault: json['default'] as bool? ?? false,
       tier: json['tier'] as String,
       cost: ModelCost.fromJson(json['cost'] as Map<String, dynamic>),
+      requiresByok: json['requiresByok'] as bool? ?? false,
+      byokProvider: json['byokProvider'] as String?,
     );
 
 Map<String, dynamic> _$$ChatModelImplToJson(_$ChatModelImpl instance) =>
@@ -35,4 +37,6 @@ Map<String, dynamic> _$$ChatModelImplToJson(_$ChatModelImpl instance) =>
       'default': instance.isDefault,
       'tier': instance.tier,
       'cost': instance.cost,
+      'requiresByok': instance.requiresByok,
+      'byokProvider': instance.byokProvider,
     };

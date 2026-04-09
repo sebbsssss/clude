@@ -24,6 +24,8 @@ class ChatModel with _$ChatModel {
     @JsonKey(name: 'default') @Default(false) bool isDefault,
     required String tier,
     required ModelCost cost,
+    @Default(false) bool requiresByok,
+    String? byokProvider,
   }) = _ChatModel;
 
   factory ChatModel.fromJson(Map<String, dynamic> json) =>

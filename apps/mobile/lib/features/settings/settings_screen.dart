@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/auth/auth_provider.dart';
 import '../../core/auth/selected_agent_provider.dart';
+import '../byok/byok_provider.dart';
 import 'agent_selector_sheet.dart';
 import 'agents_provider.dart';
 
@@ -16,6 +17,7 @@ class SettingsScreen extends ConsumerWidget {
     final agentsAsync = ref.watch(agentsProvider);
     final selectedId = ref.watch(selectedAgentNotifierProvider).valueOrNull;
     final authState = ref.watch(authNotifierProvider);
+    final byokKeys = ref.watch(byokKeysNotifierProvider);
     final colorScheme = Theme.of(context).colorScheme;
 
     // Masked API key display: show last 4 chars if available.
@@ -79,6 +81,15 @@ class SettingsScreen extends ConsumerWidget {
                     : null,
               ),
             ],
+          ),
+          ListTile(
+            title: const Text('API Keys (BYOK)'),
+            subtitle: Text(
+              '${byokKeys.length} of ${byokProviders.length} providers',
+              style: const TextStyle(fontSize: 12),
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/settings/byok'),
           ),
 
           // ── Billing section ──────────────────────────────────────────────

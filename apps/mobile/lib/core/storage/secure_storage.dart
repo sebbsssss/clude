@@ -39,6 +39,20 @@ class SecureStorageService {
   Future<void> deleteSelectedAgentId() =>
       _storage.delete(key: StorageKeys.selectedAgentId);
 
+  // BYOK API keys (per provider)
+  Future<String?> getByokKey(String provider) =>
+      _storage.read(key: '${StorageKeys.byokKeyPrefix}$provider');
+  Future<void> setByokKey(String provider, String key) =>
+      _storage.write(key: '${StorageKeys.byokKeyPrefix}$provider', value: key);
+  Future<void> deleteByokKey(String provider) =>
+      _storage.delete(key: '${StorageKeys.byokKeyPrefix}$provider');
+  static const byokProviderNames = ['anthropic', 'openai', 'google', 'xai', 'deepseek', 'minimax'];
+  Future<void> deleteAllByokKeys() async {
+    for (final p in byokProviderNames) {
+      await _storage.delete(key: '${StorageKeys.byokKeyPrefix}$p');
+    }
+  }
+
   /// Wipes all persisted auth state (called on logout).
   Future<void> clearAll() => _storage.deleteAll();
 }

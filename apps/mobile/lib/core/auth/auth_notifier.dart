@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../config/env.dart';
+import '../../features/byok/byok_provider.dart';
 import '../storage/secure_storage_provider.dart';
 import 'auth_state.dart';
 
@@ -89,6 +90,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// Clear all auth state and stored credentials.
   Future<void> logout() async {
     await _ref.read(secureStorageProvider).clearAll();
+    await _ref.read(byokKeysNotifierProvider.notifier).clearAll();
     state = const AuthState();
   }
 

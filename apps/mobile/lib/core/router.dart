@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/billing/topup_screen.dart';
+import '../features/byok/byok_screen.dart';
 import '../features/chat/chat_screen.dart';
 import '../features/chat/guest_chat_screen.dart';
 import '../features/login/login_screen.dart';
@@ -78,6 +79,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/topup',
         builder: (context, state) => const TopUpScreen(),
+      ),
+      GoRoute(
+        path: '/settings/byok',
+        builder: (context, state) => const ByokScreen(),
       ),
       GoRoute(
         path: '/settings/history',

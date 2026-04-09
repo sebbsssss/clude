@@ -6,11 +6,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_client_provider.dart';
 import '../../core/api/api_exceptions.dart';
 import '../balance/balance_notifier.dart';
+import '../byok/byok_provider.dart';
 import '../../core/api/models/responses.dart';
 import '../../core/api/sse_parser.dart';
 import 'chat_state.dart';
 import 'conversation_list_provider.dart';
 import 'models/display_message.dart';
+import 'models_provider.dart';
 
 class ChatNotifier extends StateNotifier<ChatState> {
   ChatNotifier(this._ref) : super(const ChatState());
@@ -87,12 +89,28 @@ class ChatNotifier extends StateNotifier<ChatState> {
     _startFlushTimer();
 
     try {
+      // Build BYOK extra if the selected model requires it.
+      Map<String, dynamic>? byokExtra;
+      final models = _ref.read(modelsNotifierProvider).valueOrNull;
+      final chatModel = models?.where((m) => m.id == model).firstOrNull;
+      if (chatModel != null && chatModel.requiresByok && chatModel.byokProvider != null) {
+        final byokKeys = _ref.read(byokKeysNotifierProvider);
+        final key = byokKeys[chatModel.byokProvider];
+        if (key != null) {
+          byokExtra = {
+            'byokKey': key,
+            'byokProvider': chatModel.byokProvider,
+          };
+        }
+      }
+
       final client = _ref.read(apiClientProvider);
       final stream = client.sendMessage(
         _conversationId!,
         content,
         model,
         cancelToken: _cancelToken,
+        extra: byokExtra,
       );
 
       _sseSubscription = stream.listen(

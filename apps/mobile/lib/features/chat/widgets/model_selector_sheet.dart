@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/api/models/chat_model.dart';
 import '../../../core/auth/auth_provider.dart';
+import '../../byok/byok_provider.dart';
 import '../models_provider.dart';
 
 class ModelSelectorSheet extends ConsumerStatefulWidget {
@@ -27,6 +28,7 @@ class _ModelSelectorSheetState extends ConsumerState<ModelSelectorSheet> {
     final modelsAsync = ref.watch(modelsNotifierProvider);
     final selectedId = ref.watch(selectedModelNotifierProvider);
     final isAuthed = ref.watch(authNotifierProvider).isAuthenticated;
+    final byokKeys = ref.watch(byokKeysNotifierProvider);
     final colorScheme = Theme.of(context).colorScheme;
 
     return DraggableScrollableSheet(
@@ -72,10 +74,15 @@ class _ModelSelectorSheetState extends ConsumerState<ModelSelectorSheet> {
                 ),
               ),
               data: (models) {
-                final privateModels =
-                    models.where((m) => m.privacy == 'private').toList();
-                final anonModels =
-                    models.where((m) => m.privacy == 'anonymized').toList();
+                final privateModels = models
+                    .where((m) => m.privacy == 'private' && !m.requiresByok)
+                    .toList();
+                final anonModels = models
+                    .where((m) => m.privacy == 'anonymized' && !m.requiresByok)
+                    .toList();
+                final byokModels = models
+                    .where((m) => m.requiresByok)
+                    .toList();
 
                 return ListView(
                   controller: scrollController,
@@ -100,6 +107,18 @@ class _ModelSelectorSheetState extends ConsumerState<ModelSelectorSheet> {
                             model: m,
                             isSelected: m.id == selectedId,
                             isAuthed: isAuthed,
+                          )),
+                    ],
+                    if (byokModels.isNotEmpty && isAuthed) ...[
+                      _SectionHeader(
+                        icon: Icons.vpn_key_outlined,
+                        label: 'Bring Your Own Key',
+                      ),
+                      ...byokModels.map((m) => _ModelRow(
+                            model: m,
+                            isSelected: m.id == selectedId,
+                            isAuthed: isAuthed,
+                            hasByokKey: byokKeys.containsKey(m.byokProvider),
                           )),
                     ],
                   ],
@@ -145,13 +164,16 @@ class _ModelRow extends ConsumerWidget {
     required this.model,
     required this.isSelected,
     required this.isAuthed,
+    this.hasByokKey = true,
   });
 
   final ChatModel model;
   final bool isSelected;
   final bool isAuthed;
+  final bool hasByokKey;
 
   String get _costLabel {
+    if (model.requiresByok) return 'Your API key';
     if (model.cost.input == 0) return 'Free';
     final perMsg = (model.cost.input + model.cost.output) * 0.0005;
     return '~\$${perMsg.toStringAsFixed(4)}/msg';
@@ -162,7 +184,8 @@ class _ModelRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
-    final isLocked = model.tier == 'pro' && !isAuthed;
+    final isLocked = (model.tier == 'pro' && !isAuthed) ||
+        (model.requiresByok && !hasByokKey);
 
     return ListTile(
       title: Row(
@@ -191,6 +214,11 @@ class _ModelRow extends ConsumerWidget {
           ? Icon(Icons.circle, size: 10, color: colorScheme.primary)
           : null,
       onTap: () {
+        if (model.requiresByok && !hasByokKey) {
+          Navigator.of(context).pop();
+          context.push('/settings/byok');
+          return;
+        }
         if (isLocked) {
           Navigator.of(context).pop();
           context.go('/login');
