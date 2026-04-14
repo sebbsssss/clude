@@ -68,25 +68,30 @@ export function useAuth(): AuthState {
   useEffect(() => {
     if (cortexInitRef.current || loggingOutRef.current || !privyReady || !privyAuth || cortexKey) return;
 
-    // Prefer the wallet already selected in dashboard (shared via localStorage)
     const savedWallet = localStorage.getItem(STORAGE_KEYS.wallet);
     const wallet = (savedWallet && wallets?.find((w: { address: string }) => w.address === savedWallet)?.address)
       || wallets?.[0]?.address;
-    if (!wallet) return;
+
+    // For wallet login: wait until wallet is available
+    // For email login: wallets will be empty, proceed without wallet
+    const hasWallets = wallets && wallets.length > 0;
+    if (hasWallets && !wallet) return; // Wallets loading, wait
 
     (async () => {
       try {
         const token = await getAccessToken();
         if (!token) return;
 
-        const result = await api.autoRegister(token, wallet);
+        const result = await api.autoRegister(token, wallet || undefined);
         api.setKey(result.api_key);
         setCortexKey(result.api_key);
-        setWalletAddress(wallet);
+        setWalletAddress(result.wallet || wallet || null);
         setAuthMode('privy');
 
         localStorage.setItem(STORAGE_KEYS.cortexKey, result.api_key);
-        localStorage.setItem(STORAGE_KEYS.wallet, wallet);
+        if (result.wallet || wallet) {
+          localStorage.setItem(STORAGE_KEYS.wallet, result.wallet || wallet);
+        }
       } catch (err) {
         console.error('Auto-register failed:', err);
       }

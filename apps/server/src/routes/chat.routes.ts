@@ -7,7 +7,7 @@
  */
 import { Router, Request, Response, NextFunction } from 'express';
 import { createHash } from 'crypto';
-import { authenticateAgent, type AgentRegistration, findOrCreateAgentForWallet } from '@clude/brain/features/agent-tier';
+import { authenticateAgent, authenticateAgentByDid, type AgentRegistration, findOrCreateAgentForWallet, findOrCreateAgentForDid } from '@clude/brain/features/agent-tier';
 import { requirePrivyAuth } from '@clude/brain/auth/privy-auth';
 import { withOwnerWallet } from '@clude/shared/core/owner-context';
 import { recallMemories, storeMemory } from '@clude/brain/memory';
@@ -165,12 +165,29 @@ async function chatAuth(req: Request, res: Response, next: NextFunction): Promis
   // Privy JWT path — req.privyUser is set by optionalPrivyAuth middleware upstream
   if (req.privyUser) {
     const wallet = req.query.wallet as string;
-    if (!wallet || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet)) {
-      res.status(400).json({ error: 'Valid Solana wallet address required as ?wallet= query param' });
+
+    // If wallet provided, validate and use it (existing behavior)
+    if (wallet) {
+      if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet)) {
+        res.status(400).json({ error: 'Valid Solana wallet address required as ?wallet= query param' });
+        return;
+      }
+      (req as ChatRequest).ownerWallet = wallet;
+      next();
       return;
     }
-    (req as ChatRequest).ownerWallet = wallet;
-    next();
+
+    // No wallet param — resolve via DID (email-only users)
+    try {
+      const agent = await authenticateAgentByDid(req.privyUser.userId);
+      if (agent) {
+        (req as ChatRequest).ownerWallet = agent.owner_wallet!;
+        next();
+        return;
+      }
+    } catch {}
+
+    res.status(401).json({ error: 'No agent registered for this account' });
     return;
   }
 
@@ -470,21 +487,19 @@ export function chatRoutes(): Router {
     }
   });
 
-  // Auto-register: create or retrieve Cortex key for a Privy-authenticated wallet
+  // Auto-register: create or retrieve Cortex key for a Privy-authenticated user.
+  // wallet is optional — email-only users get a synthetic owner_wallet via DID.
   router.post('/auto-register', requirePrivyAuth, async (req: Request, res: Response) => {
     try {
       const { wallet } = req.body;
+      const did = req.privyUser!.userId;
 
-      if (!wallet || typeof wallet !== 'string') {
-        return res.status(400).json({ error: 'wallet is required' });
-      }
-
-      // Validate Solana address format
-      if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet)) {
+      // Validate wallet format only if provided
+      if (wallet && (typeof wallet !== 'string' || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet))) {
         return res.status(400).json({ error: 'Invalid Solana wallet address' });
       }
 
-      const { apiKey, agentId, isNew } = await findOrCreateAgentForWallet(wallet);
+      const { apiKey, agentId, isNew, ownerWallet } = await findOrCreateAgentForDid(did, wallet || undefined);
 
       // Auto-credit promo balance for new users (respects expiry)
       const promoExpiry = config.features.freePromoExpiry;
@@ -496,7 +511,7 @@ export function chatRoutes(): Router {
         const { error: creditErr } = await db
           .from('chat_balances')
           .upsert({
-            wallet_address: wallet,
+            wallet_address: ownerWallet,
             balance_usdc: promoCredit,
             total_deposited: promoCredit,
             total_spent: 0,
@@ -504,16 +519,16 @@ export function chatRoutes(): Router {
           }, { onConflict: 'wallet_address', ignoreDuplicates: false });
 
         if (creditErr) {
-          log.error({ err: creditErr, wallet }, 'Failed to auto-credit promo balance');
+          log.error({ err: creditErr, ownerWallet }, 'Failed to auto-credit promo balance');
         } else {
-          log.info({ wallet, promoCredit }, 'Promo balance credited on registration');
+          log.info({ ownerWallet, promoCredit }, 'Promo balance credited on registration');
         }
       }
 
       res.json({
         api_key: apiKey,
         agent_id: agentId,
-        wallet,
+        wallet: ownerWallet,
         created: isNew,
       });
     } catch (err: any) {

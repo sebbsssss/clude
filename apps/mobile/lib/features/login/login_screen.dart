@@ -6,6 +6,7 @@ import '../../core/auth/auth_provider.dart';
 import '../../core/deep_link_service.dart';
 import '../../core/router.dart';
 import 'widgets/api_key_input.dart';
+import 'widgets/email_login_button.dart';
 import 'widgets/wallet_connect_button.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -125,6 +126,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               const SizedBox(height: 16),
               const WalletConnectButton(),
+              const SizedBox(height: 16),
+              const EmailLoginButton(),
               const SizedBox(height: 16),
               GestureDetector(
                 onTap: _continueAsGuest,

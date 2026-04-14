@@ -98,13 +98,13 @@ class ApiClient {
   // ---------------------------------------------------------------------------
 
   Future<AutoRegisterResponse> autoRegister(
-    String privyToken,
-    String wallet,
-  ) =>
+    String privyToken, [
+    String? wallet,
+  ]) =>
       _fetchJson(
         '/api/chat/auto-register',
         method: 'POST',
-        data: {'wallet': wallet},
+        data: wallet != null ? {'wallet': wallet} : {},
         options: Options(
           headers: {'Authorization': 'Bearer $privyToken'},
           extra: {'skipAuth': true},

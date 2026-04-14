@@ -2,15 +2,21 @@ import { Router, Request, Response } from 'express';
 import { getMemoryStats, getRecentMemories, storeMemory } from '@clude/brain/memory';
 import { getDb } from '@clude/shared/core/database';
 import { requirePrivyAuth, optionalPrivyAuth } from '@clude/brain/auth/privy-auth';
+import { optionalOwnership } from '@clude/brain/auth/require-ownership';
 import { withOwnerWallet } from '@clude/shared/core/owner-context';
 import { createChildLogger } from '@clude/shared/core/logger';
 
 const log = createChildLogger('memory-packs-routes');
 
+/**
+ * Resolve owner scope from request.
+ * Priority: req.verifiedWallet (set by requireOwnership/optionalOwnership) > ?wallet= param.
+ * DID fallback is handled upstream by ownership middleware.
+ */
 function getRequestOwner(req: Request): string | null {
+  if (req.verifiedWallet) return req.verifiedWallet;
   const wallet = req.query.wallet as string | undefined;
   if (wallet) return wallet;
-  if (req.privyUser?.userId) return req.privyUser.userId;
   return null;
 }
 
@@ -18,7 +24,7 @@ export function memoryPacksRoutes(): Router {
   const router = Router();
 
   // Export memory pack (paginated — handles 25K+ memories)
-  router.post('/export', requirePrivyAuth, async (req: Request, res: Response) => {
+  router.post('/export', requirePrivyAuth, optionalOwnership, async (req: Request, res: Response) => {
     try {
       const { name, description, tags, types } = req.body;
       if (!name) { res.status(400).json({ error: 'name is required' }); return; }
@@ -106,7 +112,7 @@ export function memoryPacksRoutes(): Router {
   });
 
   // Import memory pack
-  router.post('/import', requirePrivyAuth, async (req: Request, res: Response) => {
+  router.post('/import', requirePrivyAuth, optionalOwnership, async (req: Request, res: Response) => {
     try {
       const pack = req.body;
       if (!pack || !Array.isArray(pack.memories)) {
@@ -139,7 +145,7 @@ export function memoryPacksRoutes(): Router {
   });
 
   // Smart export (AI-synthesized context brief)
-  router.post('/smart-export', requirePrivyAuth, async (req: Request, res: Response) => {
+  router.post('/smart-export', requirePrivyAuth, optionalOwnership, async (req: Request, res: Response) => {
     try {
       const { name, provider } = req.body;
       if (!name) { res.status(400).json({ error: 'name is required' }); return; }

@@ -12,7 +12,7 @@
 
 import type { Request, Response, NextFunction } from 'express';
 import { resolveWalletsForDid } from './privy-wallet-resolver';
-import { authenticateAgent } from '../features/agent-tier';
+import { authenticateAgent, authenticateAgentByDid } from '../features/agent-tier';
 import { createChildLogger } from '@clude/shared/core/logger';
 
 const log = createChildLogger('require-ownership');
@@ -55,6 +55,20 @@ export async function requireOwnership(
   next: NextFunction,
 ): Promise<void> {
   const wallet = extractClaimedWallet(req);
+
+  // No wallet claimed — try DID-based resolution for email-only users
+  if (!wallet && req.privyUser) {
+    try {
+      const agent = await authenticateAgentByDid(req.privyUser.userId);
+      if (agent?.owner_wallet) {
+        req.verifiedWallet = agent.owner_wallet;
+        next();
+        return;
+      }
+    } catch {}
+    res.status(401).json({ error: 'No agent registered for this account' });
+    return;
+  }
 
   if (!wallet || !SOLANA_ADDR_RE.test(wallet)) {
     res.status(400).json({ error: 'Valid Solana wallet address required (?wallet= or body.wallet)' });

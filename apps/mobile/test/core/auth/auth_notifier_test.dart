@@ -5,6 +5,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:privy_flutter/privy_flutter.dart' as privy_sdk;
 
+import 'package:privy_flutter/src/modules/email/login_with_email.dart';
+
+import 'package:clude_mobile/core/api/api_client.dart';
+import 'package:clude_mobile/core/api/api_client_provider.dart';
+import 'package:clude_mobile/core/api/models/responses.dart';
 import 'package:clude_mobile/core/auth/auth_notifier.dart';
 import 'package:clude_mobile/core/auth/auth_provider.dart';
 import 'package:clude_mobile/core/auth/auth_state.dart';
@@ -20,13 +25,19 @@ class MockPrivy extends Mock implements privy_sdk.Privy {}
 
 class MockWalletAuthService extends Mock implements WalletAuthService {}
 
+class MockApiClient extends Mock implements ApiClient {}
+
+class MockLoginWithEmail extends Mock implements LoginWithEmail {}
+
 void main() {
   late MockSecureStorage mockStorage;
   late MockPrivy mockPrivy;
+  late MockApiClient mockApiClient;
 
   setUp(() {
     mockStorage = MockSecureStorage();
     mockPrivy = MockPrivy();
+    mockApiClient = MockApiClient();
 
     // Default stubs
     when(() => mockStorage.getCortexApiKey()).thenAnswer((_) async => null);
@@ -48,6 +59,7 @@ void main() {
       overrides: [
         secureStorageProvider.overrideWithValue(mockStorage),
         privyProvider.overrideWithValue(mockPrivy),
+        apiClientProvider.overrideWithValue(mockApiClient),
         // Override byok provider to avoid real storage access
         byokKeysNotifierProvider.overrideWith((ref) => ByokKeysNotifier(ref)),
       ],

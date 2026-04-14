@@ -101,6 +101,68 @@ class AuthNotifier extends StateNotifier<AuthState> {
     );
   }
 
+  /// Send a one-time passcode to [email] via Privy.
+  /// Returns true on success; sets error state on failure.
+  Future<bool> sendEmailCode(String email) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final privy = _ref.read(privyProvider);
+      final result = await privy.email.sendCode(email);
+      state = state.copyWith(isLoading: false);
+      return switch (result) {
+        privy_sdk.Success() => true,
+        privy_sdk.Failure(error: final e) => throw Exception(e.message),
+      };
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+      return false;
+    }
+  }
+
+  /// Verify the OTP [code] sent to [email] and complete authentication.
+  /// Returns true on success; sets error state on failure.
+  Future<bool> loginWithEmailCode({
+    required String email,
+    required String code,
+  }) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final privy = _ref.read(privyProvider);
+      final loginResult = await privy.email.loginWithCode(
+        email: email,
+        code: code,
+      );
+      final user = switch (loginResult) {
+        privy_sdk.Success(value: final u) => u,
+        privy_sdk.Failure(error: final e) =>
+          throw Exception(e.message),
+      };
+
+      final tokenResult = await user.getAccessToken();
+      final jwt = switch (tokenResult) {
+        privy_sdk.Success(value: final t) => t,
+        privy_sdk.Failure(error: final e) =>
+          throw Exception(e.message),
+      };
+
+      final registered =
+          await _ref.read(apiClientProvider).autoRegister(jwt);
+
+      final storage = _ref.read(secureStorageProvider);
+      await storage.setCortexApiKey(registered.apiKey);
+
+      state = AuthState(
+        isAuthenticated: true,
+        cortexKey: registered.apiKey,
+        authMode: AuthMode.privy,
+      );
+      return true;
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+      return false;
+    }
+  }
+
   /// Continue without authentication.
   void continueAsGuest() {
     state = const AuthState(isGuest: true);

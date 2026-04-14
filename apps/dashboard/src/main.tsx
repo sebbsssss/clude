@@ -38,7 +38,7 @@ if (
             accentColor: "#2244ff",
             walletList: ["phantom", "solflare", "backpack"],
           },
-          loginMethods: ["wallet"],
+          loginMethods: ["wallet", "email"],
           solana: {
             rpcs: {
               'solana:mainnet': { rpc: "https://api.mainnet-beta.solana.com" },

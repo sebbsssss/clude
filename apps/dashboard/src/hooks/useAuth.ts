@@ -56,7 +56,12 @@ export function useAuth(): AuthState {
   // Privy auth: ONLY if cortex is not active or initializing
   useEffect(() => {
     if (cortexInitRef.current || cortexAuth) return;
-    if (privyAuth && !tokenReady) {
+    if (!ready || !privyAuth || tokenReady) return;
+
+    const hasWallet = solanaWallets && solanaWallets.length > 0;
+
+    if (hasWallet) {
+      // Existing wallet flow — use Privy JWT + wallet param (legacy mode)
       setAuthMode('privy');
       api.setMode('legacy');
       getAccessTokenRef.current().then(token => {
@@ -70,8 +75,35 @@ export function useAuth(): AuthState {
           }
         }
       });
+    } else {
+      // Email-only login — call auto-register to get clk_* key, use cortex mode
+      getAccessTokenRef.current().then(async (token) => {
+        if (!token) return;
+        try {
+          const res = await fetch(`${import.meta.env.VITE_API_BASE || ''}/api/chat/auto-register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: '{}',
+          });
+          if (!res.ok) throw new Error('Auto-register failed');
+          const data = await res.json();
+
+          cortexInitRef.current = true;
+          api.setToken(data.api_key);
+          api.setMode('cortex');
+          api.setWalletAddress(null);
+          localStorage.setItem('cortex_api_key', data.api_key);
+          setCortexAuth(true);
+          setAuthMode('cortex');
+          setTokenReady(true);
+          hasRefreshed.current = true;
+          api.emitRefresh();
+        } catch (err) {
+          console.error('Email auto-register failed:', err);
+        }
+      });
     }
-  }, [privyAuth, cortexAuth, tokenReady, walletAddress]);
+  }, [ready, privyAuth, cortexAuth, tokenReady, walletAddress, solanaWallets]);
 
   // Update wallet when it loads (Privy wallets are async)
   useEffect(() => {
