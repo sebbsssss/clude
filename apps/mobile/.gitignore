@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Xcode — auto-generated, causes merge conflicts
+**/xcshareddata/swiftpm/
+**/xcshareddata/WorkspaceSettings.xcsettings
