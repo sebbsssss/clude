@@ -171,7 +171,7 @@ export function useAuth(): AuthState {
     return () => api.onAuthExpired(null);
   }, [privyAuth, cortexAuth, tokenReady]);
 
-  const isAuthenticated = privyAuth || cortexAuth;
+  const isAuthenticated = (privyAuth || cortexAuth) && tokenReady;
 
   return {
     authenticated: isAuthenticated,
