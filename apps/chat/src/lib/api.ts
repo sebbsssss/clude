@@ -99,11 +99,11 @@ class ChatAPI {
     return models;
   }
 
-  async autoRegister(privyToken: string, wallet: string): Promise<{ api_key: string; agent_id: string; created: boolean }> {
+  async autoRegister(privyToken: string, wallet?: string): Promise<{ api_key: string; agent_id: string; wallet: string; created: boolean }> {
     const res = await fetch(`${API_BASE}/api/chat/auto-register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${privyToken}` },
-      body: JSON.stringify({ wallet }),
+      body: JSON.stringify(wallet ? { wallet } : {}),
     });
     if (!res.ok) throw new Error('Auto-register failed');
     return res.json();

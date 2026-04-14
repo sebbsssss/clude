@@ -38,15 +38,14 @@ if (
             accentColor: "#2244ff",
             walletList: ["phantom", "solflare", "backpack"],
           },
-          loginMethods: ["wallet"],
+          loginMethods: ["wallet", "email"],
           solana: {
             rpcs: {
               'solana:mainnet': { rpc: "https://api.mainnet-beta.solana.com" },
             } as any,
           },
           embeddedWallets: {
-            ethereum: { createOnLogin: "off" },
-            solana: { createOnLogin: "off" },
+            solana: { createOnLogin: "users-without-wallets" },
           },
           externalWallets: {
             solana: { connectors: solanaConnectors },

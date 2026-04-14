@@ -18,6 +18,34 @@ scripts/.longmemeval-cache/
 .gstack/
 .mcp.json
 .DS_Store
+.agents/
+docs/superpowers/
+
+# Local experiments / prototypes (not part of the monorepo)
+Clude-Chat-Agent/
+chat/
+clude/
+agents/
+experiments/
+programs/
+video/
+tmp/
+src/
+migrations/
+
+# One-off scripts and artifacts
+clu*.json
+clude-cost-test.ts
+clude-memories.json
+clude-article-draft.md
+test-memory-pack.json
+pitch-script.md
+upload-article.py
+clu294-upload.py
+package-lock.json
+misc/scripts/.longmemeval-cache/
+misc/scripts/longmemeval-*.ts
+misc/src
 
 # AI spec-driven development (local dev aids, not committed)
 rules/

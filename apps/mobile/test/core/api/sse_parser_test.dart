@@ -145,5 +145,80 @@ void main() {
       expect((events[1] as SseChunk).text, 'b');
       expect(events[2], isA<SseDone>());
     });
+
+    // Vercel AI SDK v6 UI message stream protocol tests
+
+    test('emits SseChunk for text-delta events', () async {
+      final stream = _toByteStream([
+        'data: {"type":"start","messageId":"msg-1"}\n',
+        'data: {"type":"text-start","id":"text-1"}\n',
+        'data: {"type":"text-delta","id":"text-1","delta":"Hello"}\n',
+        'data: {"type":"text-delta","id":"text-1","delta":" world"}\n',
+        'data: {"type":"text-end","id":"text-1"}\n',
+        'data: [DONE]\n',
+      ]);
+
+      final events = await parseSseStream(stream).toList();
+      expect(events, hasLength(3)); // 2 chunks + DONE
+      expect((events[0] as SseChunk).text, 'Hello');
+      expect((events[1] as SseChunk).text, ' world');
+      expect(events[2], isA<SseDone>());
+    });
+
+    test('emits SseDone with messageMetadata on finish', () async {
+      final stream = _toByteStream([
+        'data: {"type":"text-delta","id":"t1","delta":"Hi"}\n',
+        'data: {"type":"finish","finishReason":"stop","messageMetadata":{"message_id":"m1","model":"gpt-4o","memory_ids":[1,2,3],"cost":{"total":0.05}}}\n',
+      ]);
+
+      final events = await parseSseStream(stream).toList();
+      expect(events, hasLength(2));
+      expect((events[0] as SseChunk).text, 'Hi');
+      final done = events[1] as SseDone;
+      expect(done.data?['message_id'], 'm1');
+      expect(done.data?['model'], 'gpt-4o');
+      expect(done.data?['memory_ids'], [1, 2, 3]);
+    });
+
+    test('emits SseChunk for reasoning-delta events (thinking models)', () async {
+      final stream = _toByteStream([
+        'data: {"type":"reasoning-delta","id":"r1","delta":"Let me think..."}\n',
+        'data: {"type":"text-delta","id":"t1","delta":"The answer is 42"}\n',
+        'data: [DONE]\n',
+      ]);
+
+      final events = await parseSseStream(stream).toList();
+      expect(events, hasLength(3));
+      expect((events[0] as SseChunk).text, 'Let me think...');
+      expect((events[1] as SseChunk).text, 'The answer is 42');
+    });
+
+    test('throws ApiException on Vercel error event', () async {
+      final stream = _toByteStream([
+        'data: {"type":"error","errorText":"Rate limit exceeded"}\n',
+      ]);
+
+      expect(
+        () => parseSseStream(stream).toList(),
+        throwsA(isA<ApiException>()),
+      );
+    });
+
+    test('skips non-content Vercel events (start, text-start, text-end)', () async {
+      final stream = _toByteStream([
+        'data: {"type":"start","messageId":"msg-1"}\n',
+        'data: {"type":"start-step"}\n',
+        'data: {"type":"text-start","id":"t1"}\n',
+        'data: {"type":"text-delta","id":"t1","delta":"ok"}\n',
+        'data: {"type":"text-end","id":"t1"}\n',
+        'data: {"type":"finish-step"}\n',
+        'data: {"type":"finish","finishReason":"stop"}\n',
+      ]);
+
+      final events = await parseSseStream(stream).toList();
+      expect(events, hasLength(2)); // 1 chunk + finish done
+      expect((events[0] as SseChunk).text, 'ok');
+      expect(events[1], isA<SseDone>());
+    });
   });
 }

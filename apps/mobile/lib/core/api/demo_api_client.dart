@@ -26,7 +26,7 @@ class DemoApiClient extends ApiClient {
   // ── Auth ──────────────────────────────────────────────────────────────
 
   @override
-  Future<AutoRegisterResponse> autoRegister(String privyToken, String wallet) async {
+  Future<AutoRegisterResponse> autoRegister(String privyToken, [String? wallet]) async {
     await _delay();
     return const AutoRegisterResponse(apiKey: 'clk_demo_mode', agentId: 'agent-demo', created: false);
   }
@@ -133,6 +133,7 @@ class DemoApiClient extends ApiClient {
     String content,
     String model, {
     CancelToken? cancelToken,
+    Map<String, dynamic>? extra,
   }) async* {
     await _delay();
     const chunks = [

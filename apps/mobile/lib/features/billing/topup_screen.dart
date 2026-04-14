@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/deep_link_service.dart';
 import '../../features/balance/balance_notifier.dart';
 import 'topup_notifier.dart';
 import 'topup_state.dart';
@@ -16,7 +18,7 @@ class TopUpScreen extends ConsumerStatefulWidget {
 }
 
 class _TopUpScreenState extends ConsumerState<TopUpScreen> {
-  double? _selectedAmount;
+  double? _selectedAmount = 10.0;
   String _chain = 'solana';
   final _customController = TextEditingController();
   final _txHashController = TextEditingController();
@@ -28,6 +30,19 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
   void initState() {
     super.initState();
     _customController.addListener(_onCustomChanged);
+    _checkDeepLinkCallback();
+  }
+
+  /// If we arrived via a `clude://topup/callback` deep link, consume the
+  /// stashed params and resume the confirmation flow.
+  void _checkDeepLinkCallback() {
+    final params = ref.read(deepLinkServiceProvider).consumeTopupParams();
+    if (params == null) return;
+    final (intentId, txHash) = params;
+    // Schedule after the first frame so the widget tree is built.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(topupNotifierProvider.notifier).resumeFromCallback(intentId, txHash);
+    });
   }
 
   @override
@@ -75,10 +90,10 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
 
   Future<void> _tryLaunchWallet(String url) async {
     final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
+    try {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
       setState(() => _walletLaunched = true);
-    } else {
+    } catch (_) {
       setState(() => _walletLaunched = false);
     }
   }
@@ -88,8 +103,8 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
     final topupState = ref.watch(topupNotifierProvider);
     final colorScheme = Theme.of(context).colorScheme;
 
-    // Launch wallet when entering awaitingPayment for Solana.
     ref.listen<TopupState>(topupNotifierProvider, (prev, next) {
+      // Launch wallet when entering awaitingPayment for Solana.
       if (next is TopupAwaitingPayment &&
           next.chain == 'solana' &&
           next.solanaPayUrl != null &&
@@ -113,101 +128,209 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
 
   Widget _buildAmountSelection(ColorScheme colorScheme, {bool loading = false}) {
     final ctaEnabled = _selectedAmount != null && _customError == null && !loading;
-    final ctaLabel = _chain == 'solana' ? 'Pay with Wallet' : "I've sent USDC";
+    final amountStr = _selectedAmount != null
+        ? '\$${_selectedAmount!.toStringAsFixed(2)}'
+        : '';
+    final ctaLabel = _chain == 'solana'
+        ? 'Pay $amountStr with Wallet'
+        : "I've sent USDC";
     final balance = ref.watch(balanceNotifierProvider);
+    final muted = colorScheme.onSurface.withAlpha(120);
+    if (balance.balanceUsdc == null && !balance.isLoading) {
+      Future(() => ref.read(balanceNotifierProvider.notifier).fetchBalance());
+    }
 
-    return Padding(
-      padding: const EdgeInsets.all(16),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // #1 already done externally — Current Balance label
           Text(
             'Current Balance',
             textAlign: TextAlign.center,
+            style: TextStyle(color: muted, fontSize: 12),
+          ),
+          const SizedBox(height: 6),
+          // #2: Dollar sign small, amount large
+          Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: '\$',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: colorScheme.onSurface.withAlpha(180),
+                  ),
+                ),
+                TextSpan(
+                  text: balance.balanceUsdc != null
+                      ? balance.balanceUsdc!.toStringAsFixed(2)
+                      : '—',
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineLarge
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 28),
+
+          // #3 label
+          Text(
+            'AMOUNT (USDC)',
             style: TextStyle(
-              color: colorScheme.onSurface.withAlpha(120),
-              fontSize: 12,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: muted,
+              letterSpacing: 0.5,
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            balance.balanceUsdc != null
-                ? '\$${balance.balanceUsdc!.toStringAsFixed(2)}'
-                : '—',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
-          const SizedBox(height: 20),
-          Text('Select Amount',
-              style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
+          const SizedBox(height: 10),
+
+          // #4/#5: Equal-width amount buttons
+          Row(
             children: [5, 10, 50].map((amount) {
               final isSelected = _selectedAmount == amount.toDouble() &&
                   _customController.text.isEmpty;
-              return OutlinedButton(
-                onPressed: () => _selectPreset(amount.toDouble()),
-                style: OutlinedButton.styleFrom(
-                  backgroundColor:
-                      isSelected ? colorScheme.primary.withAlpha(30) : null,
-                  side: BorderSide(
-                    color: isSelected
-                        ? colorScheme.primary
-                        : colorScheme.outline,
+              return Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                      right: amount == 50 ? 0 : 8),
+                  child: OutlinedButton(
+                    onPressed: () => _selectPreset(amount.toDouble()),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      backgroundColor:
+                          isSelected ? colorScheme.primary.withAlpha(30) : null,
+                      side: BorderSide(
+                        color: isSelected
+                            ? colorScheme.primary
+                            : colorScheme.outline.withAlpha(60),
+                        width: isSelected ? 2 : 1,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: Text(
+                      '\$$amount',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: isSelected
+                            ? colorScheme.primary
+                            : colorScheme.onSurface,
+                      ),
+                    ),
                   ),
                 ),
-                child: Text('\$$amount'),
               );
             }).toList(),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+
+          // #6: Custom amount
           TextField(
             controller: _customController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: InputDecoration(
-              hintText: 'Custom amount',
+              hintText: 'Custom (min \$1)',
               prefixText: '\$ ',
               errorText: _customError,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // #7: Network dropdown
+          Text(
+            'NETWORK',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: muted,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            initialValue: _chain,
+            decoration: InputDecoration(
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            ),
+            items: const [
+              DropdownMenuItem(
+                value: 'solana',
+                child: Row(
+                  children: [
+                    Text('◆ ', style: TextStyle(fontSize: 12)),
+                    Text('Solana (recommended)'),
+                  ],
+                ),
+              ),
+              DropdownMenuItem(
+                value: 'base',
+                child: Row(
+                  children: [
+                    Text('◆ ', style: TextStyle(fontSize: 12)),
+                    Text('Base'),
+                  ],
+                ),
+              ),
+            ],
+            onChanged: (v) {
+              if (v != null) setState(() => _chain = v);
+            },
+          ),
+          const SizedBox(height: 28),
+
+          // #8: Pay button — filled, with icon and amount
+          SizedBox(
+            height: 52,
+            child: FilledButton.icon(
+              onPressed: ctaEnabled ? _onCta : null,
+              icon: loading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.account_balance_wallet_outlined),
+              label: Text(
+                loading ? '' : ctaLabel,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
             ),
           ),
           const SizedBox(height: 16),
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'solana', label: Text('Solana')),
-              ButtonSegment(value: 'base', label: Text('Base')),
-            ],
-            selected: {_chain},
-            onSelectionChanged: (s) => setState(() => _chain = s.first),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: ctaEnabled ? _onCta : null,
-            child: loading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text(ctaLabel),
-          ),
-          const SizedBox(height: 12),
           Text(
             'Sending to: 81MV...iqFu',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: colorScheme.onSurface.withAlpha(80),
-              fontSize: 10,
+              fontSize: 11,
               fontFamily: 'monospace',
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(
             'Minimum \$1 USDC · Transfers are non-refundable',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: colorScheme.onSurface.withAlpha(80),
-              fontSize: 10,
+              fontSize: 11,
             ),
           ),
         ],
@@ -222,18 +345,21 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           if (isSolana && s.solanaPayUrl != null) ...[
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: QrImageView(
-                data: s.solanaPayUrl!,
-                version: QrVersions.auto,
-                size: 220,
+            Center(
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: QrImageView(
+                  data: s.solanaPayUrl!,
+                  version: QrVersions.auto,
+                  size: 220,
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -321,22 +447,36 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
     if (!_navigated) {
       _navigated = true;
       Future.delayed(const Duration(seconds: 2), () {
-        if (mounted) Navigator.of(context).pop();
+        if (mounted) {
+          ref.read(topupNotifierProvider.notifier).reset();
+          context.go('/chat');
+        }
       });
     }
 
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.check_circle, size: 64, color: colorScheme.primary),
-          const SizedBox(height: 16),
-          Text('Top-up confirmed!',
-              style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 8),
-          Text('\$${s.newBalance.toStringAsFixed(2)}',
-              style: Theme.of(context).textTheme.headlineMedium),
-        ],
+      child: GestureDetector(
+        onTap: () {
+          ref.read(topupNotifierProvider.notifier).reset();
+          context.go('/chat');
+        },
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.check_circle, size: 64, color: colorScheme.primary),
+            const SizedBox(height: 16),
+            Text('Top-up confirmed!',
+                style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            Text('+\$${s.newBalance.toStringAsFixed(2)} USDC',
+                style: Theme.of(context).textTheme.headlineMedium),
+            const SizedBox(height: 24),
+            Text('Tap to continue',
+                style: TextStyle(
+                    color: colorScheme.onSurface.withAlpha(120),
+                    fontSize: 13)),
+          ],
+        ),
       ),
     );
   }

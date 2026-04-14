@@ -25,7 +25,7 @@ Map<String, dynamic> _$$AutoRegisterResponseImplToJson(
 _$BalanceImpl _$$BalanceImplFromJson(Map<String, dynamic> json) =>
     _$BalanceImpl(
       balanceUsdc: (json['balance_usdc'] as num).toDouble(),
-      walletAddress: json['wallet_address'] as String,
+      walletAddress: json['wallet_address'] as String?,
       promo: json['promo'] as bool?,
       promoCreditUsdc: (json['promo_credit_usdc'] as num?)?.toDouble(),
     );
@@ -115,7 +115,7 @@ Map<String, dynamic> _$$MessageReceiptImplToJson(
 
 _$StreamDoneDataImpl _$$StreamDoneDataImplFromJson(Map<String, dynamic> json) =>
     _$StreamDoneDataImpl(
-      done: json['done'] as bool,
+      done: json['done'] as bool? ?? true,
       messageId: json['message_id'] as String?,
       model: json['model'] as String?,
       memoriesUsed: (json['memories_used'] as num?)?.toInt(),

@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/auth/auth_provider.dart';
-import '../../../core/auth/wallet_auth_service.dart';
+import '../../../core/deep_link_service.dart';
+import '../../../core/router.dart';
 
 class WalletConnectButton extends ConsumerStatefulWidget {
   const WalletConnectButton({super.key});
@@ -14,31 +15,29 @@ class WalletConnectButton extends ConsumerStatefulWidget {
 }
 
 class _WalletConnectButtonState extends ConsumerState<WalletConnectButton> {
-  WalletAuthService? _service;
   bool _isLoading = false;
-
-  @override
-  void dispose() {
-    _service?.cancel();
-    super.dispose();
-  }
 
   Future<void> _connectWallet() async {
     if (_isLoading) return;
 
     setState(() => _isLoading = true);
 
+    final deepLinks = ref.read(deepLinkServiceProvider);
     try {
-      _service = WalletAuthService();
-      final result = await _service!.connectAndSign();
+      deepLinks.pause();
+      final success =
+          await ref.read(authNotifierProvider.notifier).loginWithPrivy();
 
       if (!mounted) return;
 
-      await ref
-          .read(authNotifierProvider.notifier)
-          .loginWithWallet(result.apiKey, result.wallet);
-
-      if (mounted) context.go('/chat');
+      if (success) {
+        final router = ref.read(routerProvider);
+        if (deepLinks.pendingRoute != null) {
+          deepLinks.consumePendingRoute(router);
+        } else {
+          context.go('/chat');
+        }
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -46,7 +45,7 @@ class _WalletConnectButtonState extends ConsumerState<WalletConnectButton> {
         );
       }
     } finally {
-      _service = null;
+      deepLinks.resume();
       if (mounted) setState(() => _isLoading = false);
     }
   }

@@ -2,7 +2,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'auth_state.freezed.dart';
 
-enum AuthMode { apiKey, wallet }
+enum AuthMode { apiKey, privy }
 
 @freezed
 class AuthState with _$AuthState {

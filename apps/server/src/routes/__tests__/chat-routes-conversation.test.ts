@@ -14,7 +14,7 @@ import http from 'http';
 
 // ---- Mocks (hoisted before imports) ----
 
-vi.mock('../../core/logger', () => ({
+vi.mock('@clude/shared/core/logger', () => ({
   createChildLogger: () => ({
     info: vi.fn(),
     warn: vi.fn(),
@@ -24,45 +24,48 @@ vi.mock('../../core/logger', () => ({
 }));
 
 const mockAuthenticateAgent = vi.fn();
-vi.mock('../../features/agent-tier', () => ({
+vi.mock('@clude/brain/features/agent-tier', () => ({
   authenticateAgent: (...args: any[]) => mockAuthenticateAgent(...args),
+  authenticateAgentByDid: vi.fn().mockResolvedValue(null),
   findOrCreateAgentForWallet: vi.fn(),
+  findOrCreateAgentForDid: vi.fn(),
 }));
 
-vi.mock('../privy-auth', () => ({
+vi.mock('@clude/brain/auth/privy-auth', () => ({
   requirePrivyAuth: (_req: any, _res: any, next: any) => next(),
   optionalPrivyAuth: (_req: any, _res: any, next: any) => next(),
 }));
 
-vi.mock('../../core/owner-context', () => ({
+vi.mock('@clude/shared/core/owner-context', () => ({
   withOwnerWallet: (_wallet: any, fn: any) => fn(),
 }));
 
 const mockRecallMemories = vi.fn();
-vi.mock('../../memory', () => ({
+vi.mock('@clude/brain/memory', () => ({
   recallMemories: (...args: any[]) => mockRecallMemories(...args),
   storeMemory: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('../../core/guardrails', () => ({
+vi.mock('@clude/shared/core/guardrails', () => ({
   checkInputContent: vi.fn().mockReturnValue({ allowed: true }),
 }));
 
-vi.mock('../../core/embeddings', () => ({
+vi.mock('@clude/shared/core/embeddings', () => ({
   generateQueryEmbedding: vi.fn().mockResolvedValue(null),
   isEmbeddingEnabled: vi.fn().mockReturnValue(false),
 }));
 
-vi.mock('../../experimental/temporal-bonds', () => ({
+vi.mock('@clude/brain/experimental/temporal-bonds', () => ({
   detectTemporalConstraints: vi.fn().mockReturnValue(null),
   matchMemoriesTemporal: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock('../../config', () => ({
+vi.mock('@clude/shared/config', () => ({
   config: {
     privy: { appId: null, jwksUrl: null },
     openrouter: { apiKey: 'test-openrouter-key' },
     chat: { llmTimeoutSec: 60, maxContextTokens: 128000 },
+    features: { freePromoEnabled: false, freePromoCreditUsdc: 5, freePromoExpiry: null },
   },
 }));
 
@@ -94,7 +97,7 @@ function chainBuilder(): any {
 vi.mock('@clude/shared/utils/rate-limit', () => ({
   checkRateLimit: (...args: any[]) => mockCheckRateLimit(...args),
 }));
-vi.mock('../../core/database', () => ({
+vi.mock('@clude/shared/core/database', () => ({
   getDb: () => ({ from: () => chainBuilder() }),
 }));
 

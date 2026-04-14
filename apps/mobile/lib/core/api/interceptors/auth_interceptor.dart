@@ -26,6 +26,14 @@ class AuthInterceptor extends Interceptor {
       options.queryParameters['agent_id'] = agentId;
     }
 
+    // BYOK headers passed via options.extra by ChatNotifier.send()
+    final byokKey = options.extra['byokKey'] as String?;
+    final byokProvider = options.extra['byokProvider'] as String?;
+    if (byokKey != null && byokProvider != null) {
+      options.headers['X-BYOK-Key'] = byokKey;
+      options.headers['X-BYOK-Provider'] = byokProvider;
+    }
+
     handler.next(options);
   }
 }

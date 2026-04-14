@@ -408,6 +408,9 @@ importers:
       multer:
         specifier: ^2.1.1
         version: 2.1.1
+      murmurhash3js:
+        specifier: ^3.0.1
+        version: 3.0.1
       pino:
         specifier: ^9.0.0
         version: 9.14.0
@@ -427,6 +430,9 @@ importers:
       '@types/multer':
         specifier: ^2.1.0
         version: 2.1.0
+      '@types/murmurhash3js':
+        specifier: ^3.0.7
+        version: 3.0.7
       '@types/node':
         specifier: ^22.19.11
         version: 22.19.15
@@ -3029,6 +3035,9 @@ packages:
   '@types/multer@2.1.0':
     resolution: {integrity: sha512-zYZb0+nJhOHtPpGDb3vqPjwpdeGlGC157VpkqNQL+UU2qwoacoQ7MpsAmUptI/0Oa127X32JzWDqQVEXp2RcIA==}
 
+  '@types/murmurhash3js@3.0.7':
+    resolution: {integrity: sha512-jN3Z37nILIW1DZyP6N/NK+aw/zjFHPVb7hjrmdw7jx7FayrhKgkNpo6ZDwAsH8HSANjebBOxoXXtA39gKwyeGw==}
+
   '@types/node-cron@3.0.11':
     resolution: {integrity: sha512-0ikrnug3/IyneSHqCBeslAhlK2aBfYek1fGo4bP4QnZPmiqSGRK+Oy7ZMisLWkesffJvQ1cqAcBnJC+8+nxIAg==}
 
@@ -4968,6 +4977,10 @@ packages:
 
   multiformats@9.9.0:
     resolution: {integrity: sha512-HoMUjhH9T8DDBNT+6xzkrd9ga/XiBI4xLr58LJACwK6G3HTOPeMz4nB4KJs33L2BelrIJa7P0VuNaVF3hMYfjg==}
+
+  murmurhash3js@3.0.1:
+    resolution: {integrity: sha512-KL8QYUaxq7kUbcl0Yto51rMcYt7E/4N4BG3/c96Iqw1PQrTRspu8Cpx4TZ4Nunib1d4bEkIH3gjCYlP2RLBdow==}
+    engines: {node: '>=0.10.0'}
 
   nanoid@3.3.11:
     resolution: {integrity: sha512-N8SpfPUnUp1bK+PMYW8qSWdl9U+wwNWI4QKxOYDy9JAro3WMX7p2OeVRF9v+347pnakNevPmiHhNmZ2HbFA76w==}
@@ -10993,6 +11006,8 @@ snapshots:
     dependencies:
       '@types/express': 4.17.25
 
+  '@types/murmurhash3js@3.0.7': {}
+
   '@types/node-cron@3.0.11': {}
 
   '@types/node-fetch@2.6.13':
@@ -14768,6 +14783,8 @@ snapshots:
       type-is: 1.6.18
 
   multiformats@9.9.0: {}
+
+  murmurhash3js@3.0.1: {}
 
   nanoid@3.3.11: {}
 

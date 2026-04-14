@@ -1,7 +1,10 @@
 import 'package:clude_mobile/core/api/api_client_provider.dart';
 import 'package:clude_mobile/core/api/interceptors/auth_interceptor.dart';
 import 'package:clude_mobile/core/api/interceptors/auth_expired_interceptor.dart';
-import 'package:clude_mobile/core/router.dart';
+import 'package:clude_mobile/core/auth/auth_notifier.dart';
+import 'package:clude_mobile/core/auth/auth_provider.dart';
+import 'package:clude_mobile/core/auth/auth_state.dart';
+import 'package:clude_mobile/core/auth/selected_agent_provider.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,6 +17,12 @@ class MockRequestInterceptorHandler extends Mock
 
 class MockErrorInterceptorHandler extends Mock
     implements ErrorInterceptorHandler {}
+
+class _MockAuthNotifier extends StateNotifier<AuthState>
+    with Mock
+    implements AuthNotifier {
+  _MockAuthNotifier() : super(const AuthState());
+}
 
 void main() {
   group('AuthInterceptor', () {
@@ -29,6 +38,8 @@ void main() {
 
     test('adds Bearer header when cortexKey is set', () {
       when(() => mockRef.read(cortexKeyProvider)).thenReturn('clk_test123');
+      when(() => mockRef.read(selectedAgentNotifierProvider))
+          .thenReturn(const AsyncValue.data(null));
       final options = RequestOptions(path: '/api/test');
 
       interceptor.onRequest(options, handler);
@@ -39,6 +50,8 @@ void main() {
 
     test('does not add header when cortexKey is null', () {
       when(() => mockRef.read(cortexKeyProvider)).thenReturn(null);
+      when(() => mockRef.read(selectedAgentNotifierProvider))
+          .thenReturn(const AsyncValue.data(null));
       final options = RequestOptions(path: '/api/test');
 
       interceptor.onRequest(options, handler);
@@ -65,73 +78,104 @@ void main() {
     late MockRef mockRef;
     late AuthExpiredInterceptor interceptor;
     late MockErrorInterceptorHandler handler;
+    late _MockAuthNotifier mockAuthNotifier;
 
     setUp(() {
       mockRef = MockRef();
       interceptor = AuthExpiredInterceptor(mockRef);
       handler = MockErrorInterceptorHandler();
+      mockAuthNotifier = _MockAuthNotifier();
     });
 
-    test('clears auth on 401 when key exists', () {
-      when(() => mockRef.read(cortexKeyProvider)).thenReturn('clk_test');
-
-      final mockKeyNotifier = MockStateNotifier<String?>();
-      when(() => mockRef.read(cortexKeyProvider.notifier))
-          .thenReturn(mockKeyNotifier);
-
-      final mockAuthNotifier = MockStateNotifier<bool>();
-      when(() => mockRef.read(authStateProvider.notifier))
+    test('clears auth on 401 from cortex endpoint', () {
+      when(() => mockRef.read(authNotifierProvider))
+          .thenReturn(const AuthState(isAuthenticated: true, cortexKey: 'clk_test'));
+      when(() => mockRef.read(authNotifierProvider.notifier))
           .thenReturn(mockAuthNotifier);
 
       final error = DioException(
-        requestOptions: RequestOptions(path: '/api/test'),
+        requestOptions: RequestOptions(path: '/api/cortex/stats'),
         response: Response(
           statusCode: 401,
-          requestOptions: RequestOptions(path: '/api/test'),
+          requestOptions: RequestOptions(path: '/api/cortex/stats'),
         ),
       );
 
       interceptor.onError(error, handler);
 
-      verify(() => mockKeyNotifier.state = null).called(1);
-      verify(() => mockAuthNotifier.state = false).called(1);
+      verify(() => mockAuthNotifier.clearAuth()).called(1);
       verify(() => handler.next(error)).called(1);
     });
 
-    test('does not clear auth on 401 when key is null', () {
-      when(() => mockRef.read(cortexKeyProvider)).thenReturn(null);
+    test('clears auth on 401 from chat endpoint', () {
+      when(() => mockRef.read(authNotifierProvider))
+          .thenReturn(const AuthState(isAuthenticated: true, cortexKey: 'clk_test'));
+      when(() => mockRef.read(authNotifierProvider.notifier))
+          .thenReturn(mockAuthNotifier);
 
       final error = DioException(
-        requestOptions: RequestOptions(path: '/api/test'),
+        requestOptions: RequestOptions(path: '/api/chat/conversations'),
         response: Response(
           statusCode: 401,
-          requestOptions: RequestOptions(path: '/api/test'),
+          requestOptions: RequestOptions(path: '/api/chat/conversations'),
         ),
       );
 
       interceptor.onError(error, handler);
 
-      verifyNever(() => mockRef.read(cortexKeyProvider.notifier));
+      verify(() => mockAuthNotifier.clearAuth()).called(1);
+      verify(() => handler.next(error)).called(1);
+    });
+
+    test('does NOT clear auth on 401 from dashboard endpoint', () {
+      when(() => mockRef.read(authNotifierProvider))
+          .thenReturn(const AuthState(isAuthenticated: true, cortexKey: 'clk_test'));
+
+      final error = DioException(
+        requestOptions: RequestOptions(path: '/api/dashboard/agents'),
+        response: Response(
+          statusCode: 401,
+          requestOptions: RequestOptions(path: '/api/dashboard/agents'),
+        ),
+      );
+
+      interceptor.onError(error, handler);
+
+      verifyNever(() => mockRef.read(authNotifierProvider.notifier));
+      verify(() => handler.next(error)).called(1);
+    });
+
+    test('does NOT clear auth on 401 from graph endpoint', () {
+      when(() => mockRef.read(authNotifierProvider))
+          .thenReturn(const AuthState(isAuthenticated: true, cortexKey: 'clk_test'));
+
+      final error = DioException(
+        requestOptions: RequestOptions(path: '/api/graph/search'),
+        response: Response(
+          statusCode: 401,
+          requestOptions: RequestOptions(path: '/api/graph/search'),
+        ),
+      );
+
+      interceptor.onError(error, handler);
+
+      verifyNever(() => mockRef.read(authNotifierProvider.notifier));
       verify(() => handler.next(error)).called(1);
     });
 
     test('does not clear auth on non-401 errors', () {
-      when(() => mockRef.read(cortexKeyProvider)).thenReturn('clk_test');
-
       final error = DioException(
-        requestOptions: RequestOptions(path: '/api/test'),
+        requestOptions: RequestOptions(path: '/api/cortex/stats'),
         response: Response(
           statusCode: 500,
-          requestOptions: RequestOptions(path: '/api/test'),
+          requestOptions: RequestOptions(path: '/api/cortex/stats'),
         ),
       );
 
       interceptor.onError(error, handler);
 
-      verifyNever(() => mockRef.read(cortexKeyProvider.notifier));
+      verifyNever(() => mockRef.read(authNotifierProvider));
       verify(() => handler.next(error)).called(1);
     });
   });
 }
-
-class MockStateNotifier<T> extends Mock implements StateController<T> {}

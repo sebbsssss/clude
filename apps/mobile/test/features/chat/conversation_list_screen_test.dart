@@ -38,6 +38,7 @@ void main() {
     mockStorage = MockSecureStorage();
     when(() => mockStorage.getSelectedModel()).thenAnswer((_) async => null);
     when(() => mockStorage.setSelectedModel(any())).thenAnswer((_) async {});
+    when(() => mockStorage.isOnboardingComplete()).thenAnswer((_) async => true);
     when(() => mockClient.getModels()).thenAnswer((_) async => []);
     when(() => mockClient.getBalance()).thenAnswer((_) async =>
         throw Exception('not mocked'));

@@ -1,29 +1,39 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:dio/dio.dart';
 import 'package:pinenacl/x25519.dart';
+import 'package:privy_flutter/privy_flutter.dart';
 import 'package:uni_links/uni_links.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../config/env.dart';
+import '../api/api_client.dart';
 
 /// Base58 alphabet used by Solana / Phantom.
 const _base58Alphabet =
     '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
-/// Handles direct Phantom wallet deep-link auth.
+/// Handles Phantom wallet deep-link connect + sign, then authenticates via
+/// Privy SIWS and exchanges the Privy JWT for a Cortex API key.
 ///
 /// Flow:
 /// 1. Connect to Phantom (get wallet public key + session)
-/// 2. Sign message (prove wallet ownership)
-/// 3. POST /api/wallet-auth/verify (get API key)
+/// 2. Generate SIWS message via Privy SDK
+/// 3. Sign SIWS message via Phantom
+/// 4. Authenticate with Privy SIWS (get Privy user)
+/// 5. Get Privy JWT via user.getAccessToken()
+/// 6. POST /api/chat/auto-register with JWT (same as web)
 class WalletAuthService {
+  final Privy _privy;
+  final ApiClient _apiClient;
+
   StreamSubscription<Uri?>? _linkSub;
   PrivateKey? _dappPrivateKey;
   PublicKey? _phantomPublicKey;
   Uint8List? _session;
 
-  /// Runs the full connect → sign → verify flow.
+  WalletAuthService(this._privy, this._apiClient);
+
+  /// Runs the full connect → sign → Privy SIWS → auto-register flow.
   /// Returns API key and wallet address on success.
   Future<({String apiKey, String wallet})> connectAndSign() async {
     // 1. Generate ephemeral X25519 keypair
@@ -41,19 +51,22 @@ class WalletAuthService {
       },
     );
 
+    // 3. Start listening BEFORE launching Phantom to avoid race condition
+    final connectFuture = _waitForDeepLink('wallet-connect');
+
     if (!await launchUrl(connectUri, mode: LaunchMode.externalApplication)) {
+      _linkSub?.cancel();
       throw Exception('Could not open Phantom. Is it installed?');
     }
 
-    // 3. Wait for connect callback
-    final connectCallback =
-        await _waitForDeepLink('wallet-connect');
+    final connectCallback = await connectFuture;
 
     // Check for errors
     final errorCode = connectCallback.queryParameters['errorCode'];
     if (errorCode != null) {
       final errorMessage =
-          connectCallback.queryParameters['errorMessage'] ?? 'Connection rejected';
+          connectCallback.queryParameters['errorMessage'] ??
+              'Connection rejected';
       throw Exception(errorMessage);
     }
 
@@ -63,7 +76,9 @@ class WalletAuthService {
     final dataBase58 = connectCallback.queryParameters['data'];
     final nonceBase58 = connectCallback.queryParameters['nonce'];
 
-    if (phantomPubKeyBase58 == null || dataBase58 == null || nonceBase58 == null) {
+    if (phantomPubKeyBase58 == null ||
+        dataBase58 == null ||
+        nonceBase58 == null) {
       throw Exception('Incomplete connect response from Phantom.');
     }
 
@@ -74,16 +89,30 @@ class WalletAuthService {
       _base58Decode(dataBase58),
       _base58Decode(nonceBase58),
     );
-    final connectJson = jsonDecode(utf8.decode(connectData)) as Map<String, dynamic>;
+    final connectJson =
+        jsonDecode(utf8.decode(connectData)) as Map<String, dynamic>;
     final walletPublicKey = connectJson['public_key'] as String;
     _session = _base58Decode(connectJson['session'] as String);
 
-    // 4. Build sign message with timestamp for replay protection
-    final timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final message = 'Sign in to Clude: $timestamp';
-    final messageBytes = Uint8List.fromList(utf8.encode(message));
+    // 4. Ensure Privy SDK is ready before SIWS calls
+    await _privy.getAuthState();
 
-    // 5. Sign message via Phantom
+    // 5. Generate SIWS message via Privy
+    final siwsParams = SiwsMessageParams(
+      appDomain: 'clude.io',
+      appUri: 'https://clude.io',
+      walletAddress: walletPublicKey,
+    );
+
+    final messageResult = await _privy.siws.generateMessage(siwsParams);
+    final siwsMessage = switch (messageResult) {
+      Success(value: final msg) => msg,
+      Failure(error: final err) =>
+        throw Exception('Failed to generate SIWS message: ${err.message}'),
+    };
+
+    // 5. Sign SIWS message via Phantom
+    final messageBytes = Uint8List.fromList(utf8.encode(siwsMessage));
     final signPayload = jsonEncode({
       'message': _base58Encode(messageBytes),
       'session': _base58Encode(_session!),
@@ -104,12 +133,14 @@ class WalletAuthService {
       },
     );
 
+    final signFuture = _waitForDeepLink('wallet-sign');
+
     if (!await launchUrl(signUri, mode: LaunchMode.externalApplication)) {
+      _linkSub?.cancel();
       throw Exception('Could not open Phantom for signing.');
     }
 
-    // 6. Wait for sign callback
-    final signCallback = await _waitForDeepLink('wallet-sign');
+    final signCallback = await signFuture;
 
     final signErrorCode = signCallback.queryParameters['errorCode'];
     if (signErrorCode != null) {
@@ -129,31 +160,44 @@ class WalletAuthService {
       _base58Decode(signDataBase58),
       _base58Decode(signNonceBase58),
     );
-    final signJson = jsonDecode(utf8.decode(signData)) as Map<String, dynamic>;
+    final signJson =
+        jsonDecode(utf8.decode(signData)) as Map<String, dynamic>;
     final signatureBase58 = signJson['signature'] as String;
 
-    // 7. Verify on server
-    final dio = Dio();
-    final res = await dio.post(
-      '${Env.apiBaseUrl}/api/wallet-auth/verify',
-      data: {
-        'wallet': walletPublicKey,
-        'signature': signatureBase58,
-        'message': message,
-      },
-      options: Options(
-        headers: {'Content-Type': 'application/json'},
-        validateStatus: (status) => true,
-      ),
+    // Convert signature from base58 (Phantom format) to base64 (Privy format)
+    final signatureBytes = _base58Decode(signatureBase58);
+    final signatureBase64 = base64Encode(signatureBytes);
+
+    // 6. Authenticate with Privy SIWS
+    final metadata = WalletLoginMetadata(
+      walletClientType: WalletClientType.other,
+      connectorType: 'phantom_deeplink',
     );
 
-    if (res.statusCode != 200) {
-      final error = res.data is Map ? res.data['error'] : 'Verification failed';
-      throw Exception(error);
-    }
+    final loginResult = await _privy.siws.login(
+      message: siwsMessage,
+      signature: signatureBase64,
+      params: siwsParams,
+      metadata: metadata,
+    );
 
-    final apiKey = res.data['api_key'] as String;
-    return (apiKey: apiKey, wallet: walletPublicKey);
+    final privyUser = switch (loginResult) {
+      Success(value: final user) => user,
+      Failure(error: final err) =>
+        throw Exception('Privy SIWS login failed: ${err.message}'),
+    };
+
+    // 7. Get Privy JWT
+    final tokenResult = await privyUser.getAccessToken();
+    final jwt = switch (tokenResult) {
+      Success(value: final token) => token,
+      Failure(error: final err) =>
+        throw Exception('Failed to get Privy access token: ${err.message}'),
+    };
+
+    // 8. Exchange JWT for Cortex API key (same endpoint as web)
+    final registered = await _apiClient.autoRegister(jwt, walletPublicKey);
+    return (apiKey: registered.apiKey, wallet: walletPublicKey);
   }
 
   /// Wait for a deep link with the given host.
@@ -184,14 +228,16 @@ class WalletAuthService {
 
   /// NaCl box encrypt using dapp private key + phantom public key.
   Uint8List _encrypt(Uint8List data, Uint8List nonce) {
-    final box = Box(myPrivateKey: _dappPrivateKey!, theirPublicKey: _phantomPublicKey!);
+    final box =
+        Box(myPrivateKey: _dappPrivateKey!, theirPublicKey: _phantomPublicKey!);
     final encrypted = box.encrypt(data, nonce: nonce);
     return Uint8List.fromList(encrypted.cipherText);
   }
 
   /// NaCl box decrypt using dapp private key + phantom public key.
   Uint8List _decrypt(Uint8List ciphertext, Uint8List nonce) {
-    final box = Box(myPrivateKey: _dappPrivateKey!, theirPublicKey: _phantomPublicKey!);
+    final box =
+        Box(myPrivateKey: _dappPrivateKey!, theirPublicKey: _phantomPublicKey!);
     return Uint8List.fromList(
       box.decrypt(ByteList(ciphertext), nonce: Uint8List.fromList(nonce)),
     );

@@ -195,6 +195,8 @@ mixin _$ChatModel {
   bool get isDefault => throw _privateConstructorUsedError;
   String get tier => throw _privateConstructorUsedError;
   ModelCost get cost => throw _privateConstructorUsedError;
+  bool get requiresByok => throw _privateConstructorUsedError;
+  String? get byokProvider => throw _privateConstructorUsedError;
 
   /// Serializes this ChatModel to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -219,6 +221,8 @@ abstract class $ChatModelCopyWith<$Res> {
     @JsonKey(name: 'default') bool isDefault,
     String tier,
     ModelCost cost,
+    bool requiresByok,
+    String? byokProvider,
   });
 
   $ModelCostCopyWith<$Res> get cost;
@@ -246,6 +250,8 @@ class _$ChatModelCopyWithImpl<$Res, $Val extends ChatModel>
     Object? isDefault = null,
     Object? tier = null,
     Object? cost = null,
+    Object? requiresByok = null,
+    Object? byokProvider = freezed,
   }) {
     return _then(
       _value.copyWith(
@@ -277,6 +283,14 @@ class _$ChatModelCopyWithImpl<$Res, $Val extends ChatModel>
                 ? _value.cost
                 : cost // ignore: cast_nullable_to_non_nullable
                       as ModelCost,
+            requiresByok: null == requiresByok
+                ? _value.requiresByok
+                : requiresByok // ignore: cast_nullable_to_non_nullable
+                      as bool,
+            byokProvider: freezed == byokProvider
+                ? _value.byokProvider
+                : byokProvider // ignore: cast_nullable_to_non_nullable
+                      as String?,
           )
           as $Val,
     );
@@ -310,6 +324,8 @@ abstract class _$$ChatModelImplCopyWith<$Res>
     @JsonKey(name: 'default') bool isDefault,
     String tier,
     ModelCost cost,
+    bool requiresByok,
+    String? byokProvider,
   });
 
   @override
@@ -337,6 +353,8 @@ class __$$ChatModelImplCopyWithImpl<$Res>
     Object? isDefault = null,
     Object? tier = null,
     Object? cost = null,
+    Object? requiresByok = null,
+    Object? byokProvider = freezed,
   }) {
     return _then(
       _$ChatModelImpl(
@@ -368,6 +386,14 @@ class __$$ChatModelImplCopyWithImpl<$Res>
             ? _value.cost
             : cost // ignore: cast_nullable_to_non_nullable
                   as ModelCost,
+        requiresByok: null == requiresByok
+            ? _value.requiresByok
+            : requiresByok // ignore: cast_nullable_to_non_nullable
+                  as bool,
+        byokProvider: freezed == byokProvider
+            ? _value.byokProvider
+            : byokProvider // ignore: cast_nullable_to_non_nullable
+                  as String?,
       ),
     );
   }
@@ -384,6 +410,8 @@ class _$ChatModelImpl implements _ChatModel {
     @JsonKey(name: 'default') this.isDefault = false,
     required this.tier,
     required this.cost,
+    this.requiresByok = false,
+    this.byokProvider,
   });
 
   factory _$ChatModelImpl.fromJson(Map<String, dynamic> json) =>
@@ -404,10 +432,15 @@ class _$ChatModelImpl implements _ChatModel {
   final String tier;
   @override
   final ModelCost cost;
+  @override
+  @JsonKey()
+  final bool requiresByok;
+  @override
+  final String? byokProvider;
 
   @override
   String toString() {
-    return 'ChatModel(id: $id, name: $name, privacy: $privacy, context: $context, isDefault: $isDefault, tier: $tier, cost: $cost)';
+    return 'ChatModel(id: $id, name: $name, privacy: $privacy, context: $context, isDefault: $isDefault, tier: $tier, cost: $cost, requiresByok: $requiresByok, byokProvider: $byokProvider)';
   }
 
   @override
@@ -422,7 +455,11 @@ class _$ChatModelImpl implements _ChatModel {
             (identical(other.isDefault, isDefault) ||
                 other.isDefault == isDefault) &&
             (identical(other.tier, tier) || other.tier == tier) &&
-            (identical(other.cost, cost) || other.cost == cost));
+            (identical(other.cost, cost) || other.cost == cost) &&
+            (identical(other.requiresByok, requiresByok) ||
+                other.requiresByok == requiresByok) &&
+            (identical(other.byokProvider, byokProvider) ||
+                other.byokProvider == byokProvider));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -436,6 +473,8 @@ class _$ChatModelImpl implements _ChatModel {
     isDefault,
     tier,
     cost,
+    requiresByok,
+    byokProvider,
   );
 
   /// Create a copy of ChatModel
@@ -461,6 +500,8 @@ abstract class _ChatModel implements ChatModel {
     @JsonKey(name: 'default') final bool isDefault,
     required final String tier,
     required final ModelCost cost,
+    final bool requiresByok,
+    final String? byokProvider,
   }) = _$ChatModelImpl;
 
   factory _ChatModel.fromJson(Map<String, dynamic> json) =
@@ -481,6 +522,10 @@ abstract class _ChatModel implements ChatModel {
   String get tier;
   @override
   ModelCost get cost;
+  @override
+  bool get requiresByok;
+  @override
+  String? get byokProvider;
 
   /// Create a copy of ChatModel
   /// with the given fields replaced by the non-null parameter values.

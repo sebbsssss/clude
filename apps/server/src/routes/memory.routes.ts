@@ -15,16 +15,14 @@ import { checkRateLimit } from '@clude/shared/utils/rate-limit';
 const log = createChildLogger('memory-routes');
 
 /**
- * Resolve owner scope from request: ?wallet= param preferred (Solana address).
- * Falls back to Privy user ID only if no wallet param.
+ * Resolve owner scope from request.
+ * Priority: req.verifiedWallet (set by requireOwnership) > ?wallet= param.
+ * DID fallback is handled upstream by requireOwnership middleware.
  */
 function getRequestOwner(req: Request): string | null {
+  if (req.verifiedWallet) return req.verifiedWallet;
   const wallet = req.query.wallet as string | undefined;
   if (wallet) return wallet;
-  if (req.privyUser?.userId) {
-    log.debug({ privyUserId: req.privyUser.userId }, 'No wallet param, falling back to Privy DID');
-    return req.privyUser.userId;
-  }
   return null;
 }
 

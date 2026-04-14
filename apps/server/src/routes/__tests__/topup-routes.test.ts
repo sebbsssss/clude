@@ -18,7 +18,7 @@ import http from 'http';
 
 // ---- Mocks (hoisted before imports) ----
 
-vi.mock('../../core/logger', () => ({
+vi.mock('@clude/shared/core/logger', () => ({
   createChildLogger: () => ({
     info: vi.fn(),
     warn: vi.fn(),
@@ -28,11 +28,12 @@ vi.mock('../../core/logger', () => ({
 }));
 
 const mockAuthenticateAgent = vi.fn();
-vi.mock('../../features/agent-tier', () => ({
+vi.mock('@clude/brain/features/agent-tier', () => ({
   authenticateAgent: (...args: any[]) => mockAuthenticateAgent(...args),
+  authenticateAgentByDid: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock('../../config', () => ({
+vi.mock('@clude/shared/config', () => ({
   config: {
     helius: { webhookSecret: 'test-webhook-secret' },
     usdc: {
@@ -46,7 +47,7 @@ vi.mock('../../config', () => ({
 
 const mockGetParsedTransaction = vi.fn();
 const mockGetSignaturesForAddress = vi.fn().mockResolvedValue([]);
-vi.mock('../../core/solana-client', () => ({
+vi.mock('@clude/shared/core/solana-client', () => ({
   getConnection: () => ({
     getParsedTransaction: (...args: any[]) => mockGetParsedTransaction(...args),
     getSignaturesForAddress: (...args: any[]) => mockGetSignaturesForAddress(...args),
@@ -79,7 +80,7 @@ const mockCheckRateLimit = vi.fn().mockResolvedValue(true);
 vi.mock('@clude/shared/utils/rate-limit', () => ({
   checkRateLimit: (...args: any[]) => mockCheckRateLimit(...args),
 }));
-vi.mock('../../core/database', () => ({
+vi.mock('@clude/shared/core/database', () => ({
   getDb: () => ({ from: () => chainBuilder() }),
 }));
 
@@ -98,7 +99,8 @@ const WEBHOOK_SECRET = 'test-webhook-secret';
 const AGENT_MOCK = {
   id: 1,
   agent_id: 'agent-1',
-  owner_wallet: 'walletABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890AB',
+  // Valid Solana base58 address (no 0, O, I, l characters)
+  owner_wallet: 'So11111111111111111111111111111111111111112',
 };
 const CORTEX_AUTH = { Authorization: 'Bearer clk_validtopupkey' };
 

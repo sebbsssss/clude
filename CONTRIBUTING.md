@@ -21,41 +21,44 @@ npm run dev
 ## Project structure
 
 ```
-src/
-  core/        — Memory system, embeddings, database, Solana client
-  sdk/         — Public SDK (what npm users import)
-  features/    — Dream cycle, shift reports, market monitor
-  services/    — Response pipeline
-  webhook/     — Express server + route handlers
-  character/   — Bot personality and voice
-  mentions/    — X/Twitter mention processing
-  mcp/         — Model Context Protocol server
-  types/       — Shared TypeScript types
-  utils/       — Helpers and constants
+apps/
+  server/      — Cortex API (Express)
+  chat/        — Web chat UI (React)
+  dashboard/   — Memory visualization (3D graph, entities)
+  mobile/      — Mobile app (Flutter)
+  workers/     — Background jobs (Twitter monitor)
+
+packages/
+  brain/       — Memory system, dream cycle, SDK, agents
+  shared/      — Config, database, logger, utilities
+  database/    — Supabase migrations
+  tsconfig/    — Shared TypeScript configs
 ```
 
 Key entry points:
-- `src/sdk/cortex.ts` — The public `Cortex` class
-- `src/core/memory.ts` — Memory storage, recall, scoring, decay
-- `src/features/dream-cycle.ts` — Dream cycle (consolidation, reflection, emergence)
+- `packages/brain/src/memory/memory.ts` — Memory storage, recall, scoring, decay
+- `packages/brain/src/memory/dream/cycle.ts` — Dream cycle (consolidation, reflection, emergence)
+- `apps/server/src/routes/` — API routes
 
 ## Making changes
 
-1. Create a branch from `main`
+1. Create a branch from `staging`
 2. Make your changes
-3. Verify TypeScript compiles: `npx tsc --noEmit`
-4. Verify SDK builds: `npm run build:sdk`
-5. Open a PR with a clear description of what changed and why
+3. Verify TypeScript compiles: `pnpm --filter @clude/server typecheck`
+4. Verify SDK builds: `pnpm --filter @clude/server build:sdk`
+5. Run tests: `pnpm --filter brain test`
+6. Open a PR targeting `staging` with a clear description
 
 ## Code style
 
 - **Strict TypeScript** — the project uses `strict: true`
 - **CommonJS** — module system is CommonJS (not ESM)
-- **Pino logger** — use the shared logger from `src/utils/logger.ts`, not `console.log`
+- **Pino logger** — use `createChildLogger()` from `@clude/shared/core/logger`, not `console.log`
+- **Conventional commits** — `feat:`, `fix:`, `chore:`, `docs:` prefixes
 
 ## Tests
 
-The project doesn't have a test suite yet. If you'd like to add one, that's a great first contribution — open an issue to discuss the approach.
+Tests use Vitest. Run with `pnpm --filter brain test`. Core memory and dream cycle modules have test coverage. New features should include tests.
 
 ## Good first issues
 

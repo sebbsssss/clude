@@ -53,25 +53,38 @@ export function useAuth(): AuthState {
     setCortexReady(true);
   }, []);
 
-  // Privy auth: ONLY if cortex is not active or initializing
+  // Privy auth: auto-register to get a clk_* key (works for both wallet and email login)
   useEffect(() => {
     if (cortexInitRef.current || cortexAuth) return;
-    if (privyAuth && !tokenReady) {
-      setAuthMode('privy');
-      api.setMode('legacy');
-      getAccessTokenRef.current().then(token => {
-        if (token) {
-          api.setToken(token);
-          api.setWalletAddress(walletAddress);
-          setTokenReady(true);
-          if (walletAddress && !hasRefreshed.current) {
-            hasRefreshed.current = true;
-            api.emitRefresh();
-          }
-        }
-      });
-    }
-  }, [privyAuth, cortexAuth, tokenReady, walletAddress]);
+    if (!ready || !privyAuth || tokenReady) return;
+
+    getAccessTokenRef.current().then(async (token) => {
+      if (!token) return;
+      try {
+        const wallet = walletAddress || undefined;
+        const res = await fetch(`${import.meta.env.VITE_API_BASE || ''}/api/chat/auto-register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify(wallet ? { wallet } : {}),
+        });
+        if (!res.ok) throw new Error('Auto-register failed');
+        const data = await res.json();
+
+        cortexInitRef.current = true;
+        api.setToken(data.api_key);
+        api.setMode('cortex');
+        api.setWalletAddress(null);
+        localStorage.setItem('cortex_api_key', data.api_key);
+        setCortexAuth(true);
+        setAuthMode('cortex');
+        setTokenReady(true);
+        hasRefreshed.current = true;
+        api.emitRefresh();
+      } catch (err) {
+        console.error('Auto-register failed:', err);
+      }
+    });
+  }, [ready, privyAuth, cortexAuth, tokenReady, walletAddress]);
 
   // Update wallet when it loads (Privy wallets are async)
   useEffect(() => {
@@ -145,42 +158,20 @@ export function useAuth(): AuthState {
   const handleLogoutRef = useRef(handleLogout);
   handleLogoutRef.current = handleLogout;
 
-  // On 401: refresh token silently, re-fetch data. Logout if refresh fails.
+  // On 401: logout. Only active after auth is fully ready (tokenReady)
+  // to avoid race conditions during auto-register.
   useEffect(() => {
+    if (!tokenReady) return;
     if (!privyAuth && !cortexAuth) return;
 
     api.onAuthExpired(() => {
-      // Cortex API keys can't be refreshed — a 401 means the key is invalid
-      if (cortexAuth) {
-        handleLogoutRef.current();
-        return;
-      }
-
-      if (refreshingRef.current) return;
-
-      refreshingRef.current = getAccessTokenRef.current()
-        .then((newToken) => {
-          if (newToken) {
-            api.setToken(newToken);
-            api.emitRefresh();
-          } else {
-            handleLogoutRef.current();
-          }
-          return newToken;
-        })
-        .catch(() => {
-          handleLogoutRef.current();
-          return null;
-        })
-        .finally(() => {
-          refreshingRef.current = null;
-        });
+      handleLogoutRef.current();
     });
 
     return () => api.onAuthExpired(null);
-  }, [privyAuth, cortexAuth]);
+  }, [privyAuth, cortexAuth, tokenReady]);
 
-  const isAuthenticated = privyAuth || cortexAuth;
+  const isAuthenticated = (privyAuth || cortexAuth) && tokenReady;
 
   return {
     authenticated: isAuthenticated,

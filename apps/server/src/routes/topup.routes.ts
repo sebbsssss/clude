@@ -15,7 +15,7 @@ import { getDb } from '@clude/shared/core/database';
 import { getConnection } from '@clude/shared/core/solana-client';
 import { config } from '@clude/shared/config';
 import { createChildLogger } from '@clude/shared/core/logger';
-import { authenticateAgent } from '@clude/brain/features/agent-tier';
+import { authenticateAgent, authenticateAgentByDid } from '@clude/brain/features/agent-tier';
 import { Keypair, PublicKey } from '@solana/web3.js';
 
 const log = createChildLogger('topup');
@@ -88,12 +88,29 @@ async function topupAuth(req: Request, res: Response, next: NextFunction): Promi
   // Privy JWT path
   if (req.privyUser) {
     const wallet = req.query.wallet as string;
-    if (!wallet || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet)) {
-      res.status(400).json({ error: 'Valid Solana wallet address required as ?wallet= query param' });
+
+    // If wallet provided, validate and use it (existing behavior)
+    if (wallet) {
+      if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet)) {
+        res.status(400).json({ error: 'Valid Solana wallet address required as ?wallet= query param' });
+        return;
+      }
+      (req as TopupRequest).ownerWallet = wallet;
+      next();
       return;
     }
-    (req as TopupRequest).ownerWallet = wallet;
-    next();
+
+    // No wallet param — resolve via DID (email-only users)
+    try {
+      const agent = await authenticateAgentByDid(req.privyUser.userId);
+      if (agent) {
+        (req as TopupRequest).ownerWallet = agent.owner_wallet!;
+        next();
+        return;
+      }
+    } catch {}
+
+    res.status(401).json({ error: 'No agent registered for this account' });
     return;
   }
 
@@ -475,6 +492,14 @@ export function topupApiRoutes(): Router {
    */
   router.post('/topup/intent', topupAuth, async (req: Request, res: Response) => {
     const wallet = (req as TopupRequest).ownerWallet!;
+
+    // Guard: Solana Pay requires a real Solana address (email-only users have synthetic hex wallets)
+    const SOLANA_ADDR_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+    if (!SOLANA_ADDR_RE.test(wallet)) {
+      res.status(400).json({ error: 'Connect a Solana wallet to use top-up' });
+      return;
+    }
+
     const { amount_usdc, chain } = req.body;
 
     if (!amount_usdc || typeof amount_usdc !== 'number' || amount_usdc < 1) {

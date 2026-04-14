@@ -125,32 +125,66 @@ class _SettledBubble extends StatelessWidget {
   }
 }
 
-class _MemoryPillRow extends StatelessWidget {
+class _MemoryPillRow extends StatefulWidget {
   const _MemoryPillRow({required this.memoryIds});
 
   final List<int> memoryIds;
 
   @override
+  State<_MemoryPillRow> createState() => _MemoryPillRowState();
+}
+
+class _MemoryPillRowState extends State<_MemoryPillRow> {
+  bool _expanded = false;
+  static const _collapsedMax = 4;
+
+  Widget _buildPill(int id) {
+    final color = _kTypeColors[id % _kTypeColors.length];
+    return Chip(
+      label: Text(
+        '$id',
+        style: TextStyle(fontSize: 11, color: color),
+      ),
+      backgroundColor: color.withAlpha(30),
+      side: BorderSide(color: color.withAlpha(76)),
+      padding: EdgeInsets.zero,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final ids = widget.memoryIds;
+    final showExpand = ids.length > _collapsedMax;
+    final visible = _expanded ? ids : ids.take(_collapsedMax).toList();
+
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: Wrap(
         spacing: 4,
         runSpacing: 4,
-        children: memoryIds.map((id) {
-          final color = _kTypeColors[id % _kTypeColors.length];
-          return Chip(
-            label: Text(
-              '$id',
-              style: TextStyle(fontSize: 11, color: color),
+        children: [
+          ...visible.map(_buildPill),
+          if (showExpand)
+            GestureDetector(
+              onTap: () => setState(() => _expanded = !_expanded),
+              child: Chip(
+                label: Text(
+                  _expanded ? '−' : '+${ids.length - _collapsedMax}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                side: BorderSide.none,
+                padding: EdgeInsets.zero,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+              ),
             ),
-            backgroundColor: color.withAlpha(30),
-            side: BorderSide(color: color.withAlpha(76)),
-            padding: EdgeInsets.zero,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            visualDensity: VisualDensity.compact,
-          );
-        }).toList(),
+        ],
       ),
     );
   }

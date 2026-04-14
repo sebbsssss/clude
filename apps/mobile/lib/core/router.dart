@@ -1,22 +1,36 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/billing/topup_screen.dart';
+import '../features/byok/byok_screen.dart';
 import '../features/chat/chat_screen.dart';
 import '../features/chat/guest_chat_screen.dart';
 import '../features/login/login_screen.dart';
 import '../features/memory/memory_screen.dart';
+import '../features/onboarding/onboarding_overlay.dart';
 import '../features/settings/history_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../shared/widgets/bottom_nav.dart';
 import 'auth/auth_provider.dart';
 
+/// Bridges Riverpod auth state changes to GoRouter's refreshListenable.
+class _AuthNotifierBridge extends ChangeNotifier {
+  _AuthNotifierBridge(Ref ref) {
+    ref.listen(authNotifierProvider, (_, __) {
+      notifyListeners();
+    });
+  }
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
-  final auth = ref.watch(authNotifierProvider);
+  final authBridge = _AuthNotifierBridge(ref);
 
   return GoRouter(
     initialLocation: '/chat',
+    refreshListenable: authBridge,
     redirect: (context, state) {
+      final auth = ref.read(authNotifierProvider);
       final isLoginRoute = state.matchedLocation == '/login';
       final isGuestRoute = state.matchedLocation == '/guest';
       final hasAccess = auth.isAuthenticated || auth.isGuest;
@@ -39,7 +53,9 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const GuestChatScreen(),
       ),
       ShellRoute(
-        builder: (context, state, child) => ScaffoldWithBottomNav(child: child),
+        builder: (context, state, child) => OnboardingOverlay(
+          child: ScaffoldWithBottomNav(child: child),
+        ),
         routes: [
           GoRoute(
             path: '/chat',
@@ -66,6 +82,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/topup',
         builder: (context, state) => const TopUpScreen(),
+      ),
+      GoRoute(
+        path: '/settings/byok',
+        builder: (context, state) => const ByokScreen(),
       ),
       GoRoute(
         path: '/settings/history',

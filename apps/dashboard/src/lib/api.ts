@@ -506,6 +506,21 @@ class CludeAPI {
   // List agents (scoped to current user's wallet or API key)
   async listAgents(): Promise<Agent[]> {
     try {
+      if (this.mode === 'cortex') {
+        // Cortex mode: derive agent info from the authenticated key's stats
+        const stats = await this.fetch<any>('/api/cortex/stats');
+        if (stats?.agent_id) {
+          return [{
+            id: stats.agent_id,
+            name: stats.agent_name || stats.agent_id,
+            wallet_address: stats.owner_wallet || null,
+            created_at: stats.registered_at || new Date().toISOString(),
+            last_active: stats.last_used || null,
+            memory_count: stats.total_memories || 0,
+          }];
+        }
+        return [];
+      }
       const url = this.appendWallet('/api/dashboard/agents');
       const result = await this.fetch<any>(url);
       return Array.isArray(result) ? result : (result?.agents || []);

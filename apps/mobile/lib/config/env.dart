@@ -12,4 +12,14 @@ class Env {
     'SOLANA_CLUSTER',
     defaultValue: 'mainnet-beta',
   );
+
+  static const String privyAppId = String.fromEnvironment(
+    'PRIVY_APP_ID',
+    defaultValue: 'cmm8y16dq037y0cjr4nsqjtaa',
+  );
+
+  static const String privyClientId = String.fromEnvironment(
+    'PRIVY_CLIENT_ID',
+    defaultValue: 'client-WY6Wj8WFZ9B3kWRDb4Cw8BsCj9WkcgDmYt9jY5PzoVsEH',
+  );
 }

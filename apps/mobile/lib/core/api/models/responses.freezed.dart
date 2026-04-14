@@ -240,7 +240,7 @@ mixin _$Balance {
   @JsonKey(name: 'balance_usdc')
   double get balanceUsdc => throw _privateConstructorUsedError;
   @JsonKey(name: 'wallet_address')
-  String get walletAddress => throw _privateConstructorUsedError;
+  String? get walletAddress => throw _privateConstructorUsedError;
   bool? get promo => throw _privateConstructorUsedError;
   @JsonKey(name: 'promo_credit_usdc')
   double? get promoCreditUsdc => throw _privateConstructorUsedError;
@@ -261,7 +261,7 @@ abstract class $BalanceCopyWith<$Res> {
   @useResult
   $Res call({
     @JsonKey(name: 'balance_usdc') double balanceUsdc,
-    @JsonKey(name: 'wallet_address') String walletAddress,
+    @JsonKey(name: 'wallet_address') String? walletAddress,
     bool? promo,
     @JsonKey(name: 'promo_credit_usdc') double? promoCreditUsdc,
   });
@@ -283,7 +283,7 @@ class _$BalanceCopyWithImpl<$Res, $Val extends Balance>
   @override
   $Res call({
     Object? balanceUsdc = null,
-    Object? walletAddress = null,
+    Object? walletAddress = freezed,
     Object? promo = freezed,
     Object? promoCreditUsdc = freezed,
   }) {
@@ -293,10 +293,10 @@ class _$BalanceCopyWithImpl<$Res, $Val extends Balance>
                 ? _value.balanceUsdc
                 : balanceUsdc // ignore: cast_nullable_to_non_nullable
                       as double,
-            walletAddress: null == walletAddress
+            walletAddress: freezed == walletAddress
                 ? _value.walletAddress
                 : walletAddress // ignore: cast_nullable_to_non_nullable
-                      as String,
+                      as String?,
             promo: freezed == promo
                 ? _value.promo
                 : promo // ignore: cast_nullable_to_non_nullable
@@ -321,7 +321,7 @@ abstract class _$$BalanceImplCopyWith<$Res> implements $BalanceCopyWith<$Res> {
   @useResult
   $Res call({
     @JsonKey(name: 'balance_usdc') double balanceUsdc,
-    @JsonKey(name: 'wallet_address') String walletAddress,
+    @JsonKey(name: 'wallet_address') String? walletAddress,
     bool? promo,
     @JsonKey(name: 'promo_credit_usdc') double? promoCreditUsdc,
   });
@@ -342,7 +342,7 @@ class __$$BalanceImplCopyWithImpl<$Res>
   @override
   $Res call({
     Object? balanceUsdc = null,
-    Object? walletAddress = null,
+    Object? walletAddress = freezed,
     Object? promo = freezed,
     Object? promoCreditUsdc = freezed,
   }) {
@@ -352,10 +352,10 @@ class __$$BalanceImplCopyWithImpl<$Res>
             ? _value.balanceUsdc
             : balanceUsdc // ignore: cast_nullable_to_non_nullable
                   as double,
-        walletAddress: null == walletAddress
+        walletAddress: freezed == walletAddress
             ? _value.walletAddress
             : walletAddress // ignore: cast_nullable_to_non_nullable
-                  as String,
+                  as String?,
         promo: freezed == promo
             ? _value.promo
             : promo // ignore: cast_nullable_to_non_nullable
@@ -374,7 +374,7 @@ class __$$BalanceImplCopyWithImpl<$Res>
 class _$BalanceImpl implements _Balance {
   const _$BalanceImpl({
     @JsonKey(name: 'balance_usdc') required this.balanceUsdc,
-    @JsonKey(name: 'wallet_address') required this.walletAddress,
+    @JsonKey(name: 'wallet_address') this.walletAddress,
     this.promo,
     @JsonKey(name: 'promo_credit_usdc') this.promoCreditUsdc,
   });
@@ -387,7 +387,7 @@ class _$BalanceImpl implements _Balance {
   final double balanceUsdc;
   @override
   @JsonKey(name: 'wallet_address')
-  final String walletAddress;
+  final String? walletAddress;
   @override
   final bool? promo;
   @override
@@ -440,7 +440,7 @@ class _$BalanceImpl implements _Balance {
 abstract class _Balance implements Balance {
   const factory _Balance({
     @JsonKey(name: 'balance_usdc') required final double balanceUsdc,
-    @JsonKey(name: 'wallet_address') required final String walletAddress,
+    @JsonKey(name: 'wallet_address') final String? walletAddress,
     final bool? promo,
     @JsonKey(name: 'promo_credit_usdc') final double? promoCreditUsdc,
   }) = _$BalanceImpl;
@@ -452,7 +452,7 @@ abstract class _Balance implements Balance {
   double get balanceUsdc;
   @override
   @JsonKey(name: 'wallet_address')
-  String get walletAddress;
+  String? get walletAddress;
   @override
   bool? get promo;
   @override
@@ -1808,7 +1808,7 @@ class __$$StreamDoneDataImplCopyWithImpl<$Res>
 @JsonSerializable()
 class _$StreamDoneDataImpl implements _StreamDoneData {
   const _$StreamDoneDataImpl({
-    required this.done,
+    this.done = true,
     @JsonKey(name: 'message_id') this.messageId,
     this.model,
     @JsonKey(name: 'memories_used') this.memoriesUsed,
@@ -1824,6 +1824,7 @@ class _$StreamDoneDataImpl implements _StreamDoneData {
       _$$StreamDoneDataImplFromJson(json);
 
   @override
+  @JsonKey()
   final bool done;
   @override
   @JsonKey(name: 'message_id')
@@ -1925,7 +1926,7 @@ class _$StreamDoneDataImpl implements _StreamDoneData {
 
 abstract class _StreamDoneData implements StreamDoneData {
   const factory _StreamDoneData({
-    required final bool done,
+    final bool done,
     @JsonKey(name: 'message_id') final String? messageId,
     final String? model,
     @JsonKey(name: 'memories_used') final int? memoriesUsed,
