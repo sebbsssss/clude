@@ -239,6 +239,163 @@ function detectAgentsmd(dir: string): boolean {
 // ─── Main Setup Flow ────────────────────────────────────────
 
 export async function runSetup(): Promise<void> {
+  const args = process.argv.slice(3);
+  const isAdvanced = args.includes('--advanced');
+  const isForce = args.includes('--force');
+
+  const configPath = path.join(os.homedir(), '.clude', 'config.json');
+  const hasConfig = fs.existsSync(configPath);
+
+  if (hasConfig && !isForce && !isAdvanced) {
+    return showExistingSetup(configPath);
+  }
+
+  if (isAdvanced) {
+    return runAdvancedSetup();
+  }
+
+  return runZeroConfigSetup();
+}
+
+function showExistingSetup(configPath: string): void {
+  let config: any = {};
+  try {
+    config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+  } catch {
+    // corrupted config — fall through with empty object
+  }
+
+  console.log('\n  CLUDE is already set up.\n');
+  if (config.email) console.log(`  Email:       ${config.email}`);
+  if (config.apiKey) console.log(`  API key:     ${config.apiKey.slice(0, 12)}...`);
+  console.log(`  Database:    ${path.join(os.homedir(), '.clude', 'brain.db')}`);
+  console.log('\n  Options:');
+  console.log('    npx clude-bot status            Show detailed status');
+  console.log('    npx clude-bot setup --force     Re-register (creates new API key)');
+  console.log('    npx clude-bot setup --advanced  Interactive setup (self-hosted options)\n');
+}
+
+async function runZeroConfigSetup(): Promise<void> {
+  printBanner();
+  console.log(`\n  ${c.bold}Setting up Clude memory...${c.reset}\n`);
+
+  // Step 1: Detect email
+  const email = await getEmail();
+  if (!email) {
+    console.error(`  ${c.red}✗${c.reset} Email is required. Aborting.\n`);
+    process.exit(1);
+  }
+  console.log(`  ${c.green}✓${c.reset} Detected email       ${email}`);
+
+  // Step 2: Register via backend
+  const reg = await registerWithBackend(email);
+  if (reg.ok) {
+    console.log(`  ${c.green}✓${c.reset} Registered            ${reg.apiKey!.slice(0, 12)}...`);
+  } else {
+    console.log(`  ${c.yellow}⚠${c.reset} Cloud registration failed: ${reg.error}`);
+    console.log(`    Continuing in local-only mode.`);
+  }
+
+  // Step 3: Write config
+  const configDir = path.join(os.homedir(), '.clude');
+  fs.mkdirSync(configDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(configDir, 'config.json'),
+    JSON.stringify({
+      apiKey: reg.apiKey ?? '',
+      email,
+      wallet: reg.wallet ?? '',
+      agentId: reg.agentId ?? '',
+      did: reg.did ?? '',
+      createdAt: new Date().toISOString(),
+    }, null, 2),
+  );
+  console.log(`  ${c.green}✓${c.reset} Config saved          ~/.clude/config.json`);
+
+  // Step 4: Initialize database (lazy — optional dep may not be available)
+  try {
+    const { SqliteStore } = require('../storage/sqlite-store');
+    const { LocalEmbedder } = require('../storage/embedder');
+    const store = new SqliteStore({
+      dbPath: path.join(configDir, 'brain.db'),
+      embedder: new LocalEmbedder(),
+    });
+    store.close();
+    console.log(`  ${c.green}✓${c.reset} Database ready        ~/.clude/brain.db`);
+  } catch (err: any) {
+    console.log(`  ${c.yellow}⚠${c.reset} Database init failed: ${err.message}`);
+  }
+
+  // Step 5: Detect & install MCP
+  const ides = detectInstalledIDEs();
+  if (ides.length === 0) {
+    console.log(`  ${c.yellow}-${c.reset} No IDEs detected      (install Claude Code or Cursor)`);
+  } else {
+    for (const ide of ides) {
+      try {
+        const merged = installMcpConfig(ide, { apiKey: reg.apiKey, wallet: reg.wallet });
+        console.log(`  ${c.green}✓${c.reset} MCP installed         ${ide.name}${merged ? ' (merged)' : ''}`);
+      } catch (err: any) {
+        console.log(`  ${c.yellow}⚠${c.reset} MCP install failed for ${ide.name}: ${err.message}`);
+      }
+    }
+  }
+
+  // Step 6: Validate
+  const valid = await validateSetup();
+  console.log(valid
+    ? `  ${c.green}✓${c.reset} Validated             store → recall → ✓`
+    : `  ${c.yellow}⚠${c.reset} Validation failed    (non-fatal, run 'clude-bot doctor' to diagnose)`
+  );
+
+  // Step 7: Success message
+  console.log('');
+  console.log(`  ${c.bold}Your agent now has memory.${c.reset}`);
+  console.log('');
+  console.log(`  Dashboard: ${c.cyan}https://clude.io/dashboard${c.reset} (sign in with ${email})`);
+  console.log(`  Docs:      ${c.cyan}https://clude.io/docs${c.reset}`);
+  console.log('');
+}
+
+async function registerWithBackend(email: string): Promise<{
+  ok: boolean;
+  apiKey?: string;
+  wallet?: string;
+  agentId?: string;
+  did?: string;
+  error?: string;
+}> {
+  const hostname = os.hostname().replace(/[^a-zA-Z0-9]/g, '').slice(0, 20) || 'cli';
+  const name = `cli-${hostname}-${Date.now().toString(36)}`;
+  const url = `${process.env.CORTEX_HOST_URL || 'https://clude.io'}/api/cortex/register`;
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email }),
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => 'unknown');
+      return { ok: false, error: `HTTP ${res.status}: ${text.slice(0, 100)}` };
+    }
+
+    const data = await res.json() as any;
+    return {
+      ok: true,
+      apiKey: data.apiKey,
+      wallet: data.wallet,
+      agentId: data.agentId,
+      did: data.did,
+    };
+  } catch (err: any) {
+    return { ok: false, error: err.message };
+  }
+}
+
+async function runAdvancedSetup(): Promise<void> {
   printBanner();
   console.log(`  ${c.bold}Let's get your agent's memory running.${c.reset}`);
   console.log(`  ${c.gray}This takes about 30 seconds.${c.reset}\n`);
