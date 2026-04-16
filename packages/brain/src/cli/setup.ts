@@ -1,6 +1,8 @@
 import * as readline from 'readline';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
+import { execSync } from 'child_process';
 import { printBanner, printStep, printSuccess, printWarn, printError, printInfo, printDivider, printCodeBlock, c } from './banner';
 
 function createPrompt(): readline.Interface {
@@ -92,7 +94,7 @@ function getMcpTargets(): McpTarget[] {
   return targets;
 }
 
-function installMcpConfig(target: McpTarget, agentName: string, wallet: string, apiKey?: string, local?: boolean, selfHostedEnv?: Record<string, string>): { ok: boolean; error?: string } {
+function installMcpConfigLegacy(target: McpTarget, agentName: string, wallet: string, apiKey?: string, local?: boolean, selfHostedEnv?: Record<string, string>): { ok: boolean; error?: string } {
   let mcpEntry: Record<string, any>;
 
   if (local) {
@@ -541,7 +543,7 @@ export async function runSetup(): Promise<void> {
     const isLocal = mode === 'local';
 
     for (const target of toInstall) {
-      const result = installMcpConfig(target, agentName, wallet, apiKey || undefined, isLocal, selfHostedEnv);
+      const result = installMcpConfigLegacy(target, agentName, wallet, apiKey || undefined, isLocal, selfHostedEnv);
       if (result.ok) {
         printSuccess(`Added clude-memory to ${target.label}`);
         printInfo(`  ${c.dim}${target.configPath}${c.reset}`);
@@ -705,7 +707,7 @@ export async function runMcpInstall(): Promise<void> {
   const toInstall = mcpChoice === 'all' ? targets : targets.filter(t => t.key === mcpChoice);
 
   for (const target of toInstall) {
-    const result = installMcpConfig(target, name, '', undefined, isLocal);
+    const result = installMcpConfigLegacy(target, name, '', undefined, isLocal);
     if (result.ok) {
       printSuccess(`Added clude-memory to ${target.label}`);
       printInfo(`  ${c.dim}${target.configPath}${c.reset}`);
@@ -765,4 +767,142 @@ export async function runMcpInstall(): Promise<void> {
   console.log('');
 
   rl.close();
+}
+
+// ─── Zero-config helpers ────────────────────────────────────────
+
+export interface IDEInfo {
+  name: string;
+  configPath: string;
+}
+
+export interface RegistrationResult {
+  apiKey?: string;
+  wallet?: string;
+}
+
+export async function getEmail(opts: { skipPrompt?: boolean } = {}): Promise<string | null> {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  // 1. Env var
+  if (process.env.CLUDE_SETUP_EMAIL) {
+    const trimmed = process.env.CLUDE_SETUP_EMAIL.trim();
+    return emailRegex.test(trimmed) ? trimmed : null;
+  }
+
+  // 2. Git config
+  try {
+    const out = execSync('git config user.email', {
+      encoding: 'utf-8',
+      timeout: 2000,
+    });
+    const email = out.toString().trim();
+    if (email && emailRegex.test(email)) {
+      return email;
+    }
+  } catch {
+    // git not installed or no config — fall through
+  }
+
+  // 3. Prompt (unless skipped)
+  if (opts.skipPrompt) return null;
+
+  const rl = createPrompt();
+  return new Promise((resolve) => {
+    rl.question('  Email: ', (answer: string) => {
+      rl.close();
+      const trimmed = answer.trim();
+      resolve(trimmed && emailRegex.test(trimmed) ? trimmed : null);
+    });
+  });
+}
+
+export function detectInstalledIDEs(): IDEInfo[] {
+  const ides: IDEInfo[] = [];
+  const home = os.homedir();
+
+  if (fs.existsSync(path.join(home, '.claude'))) {
+    ides.push({
+      name: 'Claude Code',
+      configPath: path.join(home, '.claude', '.mcp.json'),
+    });
+  }
+
+  if (fs.existsSync(path.join(home, '.cursor'))) {
+    ides.push({
+      name: 'Cursor',
+      configPath: path.join(home, '.cursor', 'mcp.json'),
+    });
+  }
+
+  // Claude Desktop (macOS)
+  if (process.platform === 'darwin') {
+    const desktopPath = path.join(
+      home, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json',
+    );
+    if (fs.existsSync(path.dirname(desktopPath))) {
+      ides.push({ name: 'Claude Desktop', configPath: desktopPath });
+    }
+  }
+
+  return ides;
+}
+
+export function installMcpConfig(
+  ide: IDEInfo,
+  reg: RegistrationResult,
+): boolean {
+  let existing: any = { mcpServers: {} };
+  let merged = false;
+
+  if (fs.existsSync(ide.configPath)) {
+    try {
+      existing = JSON.parse(fs.readFileSync(ide.configPath, 'utf-8'));
+      if (!existing.mcpServers) existing.mcpServers = {};
+      if (existing.mcpServers['clude-memory']) merged = true;
+    } catch {
+      existing = { mcpServers: {} };
+    }
+  }
+
+  const env: Record<string, string> = {};
+  if (reg.apiKey) env.CORTEX_API_KEY = reg.apiKey;
+  if (reg.wallet) env.CLUDE_WALLET = reg.wallet;
+
+  existing.mcpServers['clude-memory'] = {
+    command: 'npx',
+    args: ['clude-bot', 'mcp-serve'],
+    env,
+  };
+
+  fs.mkdirSync(path.dirname(ide.configPath), { recursive: true });
+  fs.writeFileSync(ide.configPath, JSON.stringify(existing, null, 2));
+  return merged;
+}
+
+export async function validateSetup(): Promise<boolean> {
+  try {
+    const { SqliteStore } = require('../storage/sqlite-store');
+    const { LocalEmbedder } = require('../storage/embedder');
+
+    const embedder = new LocalEmbedder();
+    const store = new SqliteStore({
+      dbPath: path.join(os.homedir(), '.clude', 'brain.db'),
+      embedder,
+    });
+
+    const id = await store.store({
+      type: 'episodic',
+      content: 'Clude setup validation test',
+      summary: 'Setup validation',
+      source: 'cli:setup:validate',
+    });
+    const result = await store.recall({ query: 'Setup validation', limit: 1 });
+    const deleted = store.delete(id);
+    store.close();
+
+    return result.count > 0 && deleted;
+  } catch {
+    return false;
+  }
 }
