@@ -10,7 +10,8 @@
  */
 import { Router, Request, Response, NextFunction } from 'express';
 import { randomUUID, createHash } from 'crypto';
-import { authenticateAgent, registerAgent, recordAgentInteraction, type AgentRegistration } from '@clude/brain/features/agent-tier';
+import { authenticateAgent, registerAgent, recordAgentInteraction, findOrCreateAgentForDid, type AgentRegistration } from '@clude/brain/features/agent-tier';
+import { findOrCreatePrivyUserByEmail } from '@clude/brain/auth/privy-wallet-resolver';
 import { withOwnerWallet } from '@clude/shared/core/owner-context';
 import {
   storeMemory,
@@ -107,7 +108,7 @@ export function cortexRoutes(): Router {
   // Registration endpoint — NO auth required
   router.post('/register', async (req: Request, res: Response) => {
     try {
-      const { name, wallet } = req.body;
+      const { name, wallet, email } = req.body;
 
       if (!name || typeof name !== 'string' || name.length < 2) {
         res.status(400).json({ error: 'name is required (2+ characters)' });
@@ -122,6 +123,35 @@ export function cortexRoutes(): Router {
       if (!allowed) {
         res.status(429).json({ error: 'Too many registration attempts. Try again in an hour.' });
         return;
+      }
+
+      // Email-based registration branch (Privy DID flow)
+      if (email) {
+        if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          res.status(400).json({ error: 'Invalid email format' });
+          return;
+        }
+        try {
+          const did = await findOrCreatePrivyUserByEmail(email);
+          const walletForDid = (wallet && typeof wallet === 'string' && wallet.length > 0) ? wallet : undefined;
+          const result = await findOrCreateAgentForDid(did, walletForDid);
+          res.json({
+            apiKey: result.apiKey,
+            agentId: result.agentId,
+            wallet: result.ownerWallet,
+            email,
+            did,
+            message: 'Registered with email. Sign in to the dashboard with this email.',
+          });
+          return;
+        } catch (err: any) {
+          log.error({ err, email }, 'Email registration failed');
+          res.status(500).json({
+            error: `Registration failed: ${err.message}`,
+            fallback: 'Retry without email for anonymous registration',
+          });
+          return;
+        }
       }
 
       const db = getDb();
