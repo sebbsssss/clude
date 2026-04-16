@@ -17,7 +17,7 @@ describeIf('Privy email integration (real API)', () => {
     process.env.PRIVY_APP_SECRET = process.env.PRIVY_TEST_APP_SECRET!;
 
     // Import after setting env vars
-    const { findOrCreatePrivyUserByEmail } = await import('../privy-wallet-resolver');
+    const { findOrCreatePrivyUserByEmail } = await import('../privy-wallet-resolver.js');
 
     const did = await findOrCreatePrivyUserByEmail(testEmail);
     expect(did).toMatch(/^did:privy:/);
@@ -25,7 +25,7 @@ describeIf('Privy email integration (real API)', () => {
   }, 15_000);
 
   it('returns the same DID on second call (idempotent)', async () => {
-    const { findOrCreatePrivyUserByEmail } = await import('../privy-wallet-resolver');
+    const { findOrCreatePrivyUserByEmail } = await import('../privy-wallet-resolver.js');
 
     const did1 = await findOrCreatePrivyUserByEmail(testEmail);
     const did2 = await findOrCreatePrivyUserByEmail(testEmail);
