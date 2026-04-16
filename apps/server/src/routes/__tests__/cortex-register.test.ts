@@ -66,7 +66,7 @@ describe('POST /api/cortex/register', () => {
   beforeAll(async () => {
     const app = express();
     app.use(express.json());
-    const { cortexRoutes } = await import('../cortex.routes');
+    const { cortexRoutes } = await import('../cortex.routes.js');
     app.use('/api/cortex', cortexRoutes());
     server = app.listen(0);
   });
