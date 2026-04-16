@@ -5,14 +5,12 @@ const mockGetByEmailAddress = vi.fn();
 const mockCreate = vi.fn();
 
 vi.mock('@privy-io/node', () => ({
-  PrivyClient: vi.fn(function () {
-    return {
-      users: {
-        getByEmailAddress: mockGetByEmailAddress,
-        create: mockCreate,
-      },
-    };
-  }),
+  PrivyClient: vi.fn(function (this: any) {
+    this.users = () => ({
+      getByEmailAddress: mockGetByEmailAddress,
+      create: mockCreate,
+    });
+  } as any),
 }));
 
 // Mock config so getPrivyClient() builds a client (no importActual — shared/config has no dist)

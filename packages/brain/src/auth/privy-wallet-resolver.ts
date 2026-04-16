@@ -141,7 +141,7 @@ export async function findOrCreatePrivyUserByEmail(email: string): Promise<strin
 
   // Lookup first — this makes the function idempotent
   try {
-    const user = await client.users.getByEmailAddress({ address: email });
+    const user = await client.users().getByEmailAddress({ address: email });
     if (user?.id) return user.id;
   } catch (err: any) {
     const status = err?.status ?? err?.statusCode;
@@ -152,7 +152,7 @@ export async function findOrCreatePrivyUserByEmail(email: string): Promise<strin
   }
 
   // Create new user
-  const user = await client.users.create({
+  const user = await client.users().create({
     linked_accounts: [{ type: 'email', address: email }],
   });
 
