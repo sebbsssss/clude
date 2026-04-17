@@ -61,4 +61,10 @@ pub mod memory_registry {
     ) -> Result<()> {
         instructions::store_memory_in_pool::handler(ctx, content_hash, memory_id)
     }
+
+    /// Cite a memory in a shared pool. Citer pays pool.citation_fee in $CLUDE
+    /// to the memory's original author (royalty). Self-citation disallowed.
+    pub fn cite_memory(ctx: Context<CiteMemory>) -> Result<()> {
+        instructions::cite_memory::handler(ctx)
+    }
 }
