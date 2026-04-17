@@ -124,3 +124,41 @@ export async function didOwnsWallet(did: string, wallet: string, idToken?: strin
   const wallets = await resolveWalletsForDid(did, idToken);
   return wallets.includes(wallet);
 }
+
+/**
+ * Find or create a Privy user by email address.
+ *
+ * Idempotent: tries lookup first via getByEmailAddress, falls back to create
+ * when the email is not yet registered. Returns the Privy DID.
+ *
+ * @throws if Privy is not configured or the API call fails
+ */
+export async function findOrCreatePrivyUserByEmail(email: string): Promise<string> {
+  const client = getPrivyClient();
+  if (!client) {
+    throw new Error('Privy not configured (missing PRIVY_APP_ID or PRIVY_APP_SECRET)');
+  }
+
+  // Lookup first — this makes the function idempotent
+  try {
+    const user = await client.users().getByEmailAddress({ address: email });
+    if (user?.id) return user.id;
+  } catch (err: any) {
+    const status = err?.status ?? err?.statusCode;
+    if (status !== 404) {
+      throw err;
+    }
+    // 404 = not found, fall through to create
+  }
+
+  // Create new user
+  const user = await client.users().create({
+    linked_accounts: [{ type: 'email', address: email }],
+  });
+
+  if (!user?.id) {
+    throw new Error('Privy user creation returned no DID');
+  }
+
+  return user.id;
+}

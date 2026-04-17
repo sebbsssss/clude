@@ -5,7 +5,9 @@ import { z } from 'zod';
 /**
  * MCP Server — expose Clude's memory and capabilities as tools.
  *
- * Supports two modes:
+ * Supports four modes:
+ * - SQLite (default): local-first storage at ~/.clude/brain.db (no env vars required)
+ * - Local: JSON file store (--local flag or CLUDE_LOCAL=true)
  * - Hosted: uses CORTEX_API_KEY to call the Cortex HTTP API (no Supabase needed)
  * - Self-hosted: uses direct imports from core/memory (requires Supabase + full env)
  *
@@ -18,8 +20,38 @@ const CORTEX_API_KEY = process.env.CORTEX_API_KEY || '';
 const CORTEX_HOST_URL = process.env.CORTEX_HOST_URL || 'https://clude.io';
 const isLocalMode = process.argv.includes('--local') || process.env.CLUDE_LOCAL === 'true';
 const isHostedMode = !isLocalMode && !!CORTEX_API_KEY;
+const SUPABASE_URL = process.env.SUPABASE_URL || '';
+const isSqliteMode = !isLocalMode && !isHostedMode && !SUPABASE_URL;
 
 const FETCH_TIMEOUT_MS = 30_000;
+
+// ── SQLite lazy store ────────────────────────────────────────────────
+
+import type { SqliteStore as SqliteStoreType } from '../storage/sqlite-store';
+
+let _sqliteStore: SqliteStoreType | null = null;
+
+async function getSqliteStore(): Promise<SqliteStoreType> {
+  if (_sqliteStore) return _sqliteStore;
+
+  const path = require('path');
+  const os = require('os');
+  const fs = require('fs');
+  const { SqliteStore } = require('../storage/sqlite-store');
+  const { LocalEmbedder } = require('../storage/embedder');
+
+  const dbDir = path.join(os.homedir(), '.clude');
+  fs.mkdirSync(dbDir, { recursive: true });
+
+  const embedder = new LocalEmbedder();
+  const store = new SqliteStore({
+    dbPath: path.join(dbDir, 'brain.db'),
+    embedder,
+  });
+  _sqliteStore = store;
+
+  return store;
+}
 
 // ── Hosted-mode HTTP helpers ─────────────────────────────────────────
 
@@ -135,7 +167,31 @@ server.tool(
     try {
       let memories: MemoryResult[];
 
-      if (isLocalMode) {
+      if (isSqliteMode) {
+        const store = await getSqliteStore();
+        const result = await store.recall({
+          query: args.query || '',
+          tags: args.tags,
+          memory_types: args.memory_types,
+          limit: args.limit,
+          min_importance: args.min_importance,
+          min_decay: args.min_decay,
+          related_user: args.related_user,
+          related_wallet: args.related_wallet,
+        });
+        memories = result.memories.map(m => ({
+          id: m.id as any,
+          memory_type: m.memory_type,
+          summary: m.summary,
+          content: m.content,
+          tags: m.tags,
+          importance: m.importance,
+          decay_factor: m.decay_factor,
+          created_at: m.created_at,
+          access_count: m.access_count,
+          _score: m.relevance_score,
+        }));
+      } else if (isLocalMode) {
         const { localRecall } = require('./local-store');
         memories = localRecall({
           query: args.query,
@@ -242,7 +298,24 @@ server.tool(
     try {
       let memoryId: number | null;
 
-      if (isLocalMode) {
+      if (isSqliteMode) {
+        const store = await getSqliteStore();
+        const id = await store.store({
+          type: args.type,
+          content: args.content,
+          summary: args.summary,
+          tags: args.tags,
+          concepts: args.concepts,
+          importance: args.importance,
+          emotional_valence: args.emotional_valence,
+          source: args.source,
+          source_id: args.source_id,
+          related_user: args.related_user,
+          related_wallet: args.related_wallet,
+          metadata: args.metadata,
+        });
+        memoryId = id as any;
+      } else if (isLocalMode) {
         const { localStore } = require('./local-store');
         memoryId = localStore({
           type: args.type,
@@ -330,7 +403,10 @@ server.tool(
     try {
       let stats: unknown;
 
-      if (isLocalMode) {
+      if (isSqliteMode) {
+        const store = await getSqliteStore();
+        stats = store.stats();
+      } else if (isLocalMode) {
         const { localStats } = require('./local-store');
         stats = localStats();
       } else if (isHostedMode) {
@@ -371,7 +447,14 @@ server.tool(
     try {
       let memories: any[];
 
-      if (isLocalMode) {
+      if (isSqliteMode) {
+        const store = await getSqliteStore();
+        memories = store.clinamen(args.context, {
+          limit: args.limit,
+          min_importance: args.min_importance,
+          memory_types: args.memory_types,
+        }) as any[];
+      } else if (isLocalMode) {
         const { localClinamen } = require('./local-store');
         memories = localClinamen({
           context: args.context,
@@ -439,7 +522,10 @@ server.tool(
     try {
       let deleted: boolean;
 
-      if (isLocalMode) {
+      if (isSqliteMode) {
+        const store = await getSqliteStore();
+        deleted = store.delete(String(args.memory_id));
+      } else if (isLocalMode) {
         const { localDelete } = require('./local-store');
         deleted = localDelete(args.memory_id);
       } else if (isHostedMode) {
@@ -489,7 +575,15 @@ server.tool(
       };
       let updated: boolean;
 
-      if (isLocalMode) {
+      if (isSqliteMode) {
+        const store = await getSqliteStore();
+        updated = store.update(String(args.memory_id), {
+          summary: patches.summary,
+          content: patches.content,
+          tags: patches.tags,
+          importance: patches.importance,
+        });
+      } else if (isLocalMode) {
         const { localUpdate } = require('./local-store');
         updated = localUpdate(args.memory_id, patches);
       } else if (isHostedMode) {
@@ -532,7 +626,16 @@ server.tool(
     try {
       let result: { memories: any[]; total: number };
 
-      if (isLocalMode) {
+      if (isSqliteMode) {
+        const store = await getSqliteStore();
+        result = store.list({
+          page: args.page,
+          page_size: args.page_size,
+          memory_type: args.memory_type,
+          min_importance: args.min_importance,
+          order: args.order,
+        });
+      } else if (isLocalMode) {
         const { localList } = require('./local-store');
         result = localList({
           page: args.page,
@@ -623,7 +726,24 @@ server.tool(
         try {
           let memoryId: number | null;
 
-          if (isLocalMode) {
+          if (isSqliteMode) {
+            const store = await getSqliteStore();
+            const id = await store.store({
+              type: m.type,
+              content: m.content,
+              summary: m.summary,
+              tags: m.tags,
+              concepts: m.concepts,
+              importance: m.importance,
+              emotional_valence: m.emotional_valence,
+              source: m.source,
+              source_id: m.source_id,
+              related_user: m.related_user,
+              related_wallet: m.related_wallet,
+              metadata: m.metadata,
+            });
+            memoryId = id as any;
+          } else if (isLocalMode) {
             const { localStore } = require('./local-store');
             memoryId = localStore(m);
           } else if (isHostedMode) {
@@ -730,9 +850,9 @@ server.tool(
   },
   async (args) => {
     try {
-      if (isLocalMode) {
+      if (isSqliteMode || isLocalMode) {
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify({ error: 'extract_skill is not available in local mode — requires Supabase for entity graph and embeddings.' }) }],
+          content: [{ type: 'text' as const, text: JSON.stringify({ error: 'extract_skill is not available in local/SQLite mode — requires Supabase for entity graph and embeddings.' }) }],
           isError: true,
         };
       }
@@ -796,14 +916,16 @@ server.tool(
 // --- Start ---
 async function main() {
   // Validate configuration
-  if (isLocalMode) {
-    console.error('[clude-mcp] Local mode — memories stored in ~/.clude/memories.json');
+  if (isSqliteMode) {
+    console.error('[clude-mcp] SQLite mode: local-first storage at ~/.clude/brain.db');
+  } else if (isLocalMode) {
+    console.error('[clude-mcp] Local mode: JSON storage at ~/.clude/memories.json');
     console.error('[clude-mcp] No API keys required. Fully offline.');
   } else if (isHostedMode) {
     if (CORTEX_API_KEY.length < 10) {
       console.error('[clude-mcp] Warning: CORTEX_API_KEY looks invalid (too short)');
     }
-    console.error(`[clude-mcp] Hosted mode — API: ${CORTEX_HOST_URL}`);
+    console.error(`[clude-mcp] Hosted mode: using Cortex API — ${CORTEX_HOST_URL}`);
   } else {
     const hasSupabase = !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY);
     if (!hasSupabase) {
@@ -828,7 +950,7 @@ async function main() {
         }
       }
     }
-    console.error('[clude-mcp] Self-hosted mode — direct database access');
+    console.error('[clude-mcp] Self-hosted mode: using Supabase');
   }
 
   const transport = new StdioServerTransport();

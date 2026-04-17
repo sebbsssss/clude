@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:pinenacl/x25519.dart';
 import 'package:privy_flutter/privy_flutter.dart';
-import 'package:uni_links/uni_links.dart';
+import 'package:app_links/app_links.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../config/env.dart';
@@ -207,9 +207,10 @@ class WalletAuthService {
   }) {
     final completer = Completer<Uri>();
 
-    _linkSub = uriLinkStream.listen(
+    final appLinks = AppLinks();
+    _linkSub = appLinks.uriLinkStream.listen(
       (uri) {
-        if (uri != null && uri.scheme == 'clude' && uri.host == host) {
+        if (uri.scheme == 'clude' && uri.host == host) {
           _linkSub?.cancel();
           completer.complete(uri);
         }

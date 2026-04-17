@@ -69,6 +69,18 @@ if (command === 'setup') {
     console.error('Extract failed:', err.message);
     process.exit(1);
   });
+} else if (command === 'doctor') {
+  const { runDoctor } = require('./doctor');
+  runDoctor().catch((err: Error) => {
+    console.error('Doctor failed:', err.message);
+    process.exit(1);
+  });
+} else if (command === 'dream') {
+  const { runDream } = require('./dream');
+  runDream().catch((err: Error) => {
+    console.error('Dream failed:', err.message);
+    process.exit(1);
+  });
 } else if (command === 'mcp-serve') {
   // Start the MCP server (used by IDE integrations)
   require('../mcp/server');
@@ -97,6 +109,8 @@ if (command === 'setup') {
   console.log(`    ${c.cyan}npx clude-bot import${c.reset}        Import from ChatGPT export, markdown, JSON`);
   console.log(`    ${c.cyan}npx clude-bot sync${c.reset}          Auto-update system prompt file`);
   console.log(`    ${c.cyan}npx clude-bot ship "msg"${c.reset}    Broadcast to Telegram channel`);
+  console.log(`    ${c.cyan}npx clude-bot doctor${c.reset}        Run diagnostics`);
+  console.log(`    ${c.cyan}npx clude-bot dream${c.reset}         Trigger dream cycle manually`);
   console.log(`    ${c.cyan}npx clude-bot start${c.reset}         Start the Clude bot\n`);
   console.log(`  ${c.bold}As a library:${c.reset}\n`);
   console.log(`    ${c.dim}const { Cortex } = require('clude-bot');${c.reset}`);

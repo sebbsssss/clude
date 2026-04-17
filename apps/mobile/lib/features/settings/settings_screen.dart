@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/auth/auth_provider.dart';
 import '../../core/auth/selected_agent_provider.dart';
@@ -141,6 +142,24 @@ class SettingsScreen extends ConsumerWidget {
             },
           ),
 
+          // ── Legal section ──────────────────────────────────────────────────
+          _SectionHeader(label: 'Legal'),
+          _CardGroup(
+            children: [
+              ListTile(
+                title: const Text('Privacy Policy'),
+                trailing: Icon(Icons.open_in_new, size: 16, color: colorScheme.onSurface.withAlpha(100)),
+                onTap: () => launchUrl(Uri.parse('https://clude.io/privacy'), mode: LaunchMode.externalApplication),
+              ),
+              Divider(height: 1, color: colorScheme.outline),
+              ListTile(
+                title: const Text('Terms of Service'),
+                trailing: Icon(Icons.open_in_new, size: 16, color: colorScheme.onSurface.withAlpha(100)),
+                onTap: () => launchUrl(Uri.parse('https://clude.io/terms'), mode: LaunchMode.externalApplication),
+              ),
+            ],
+          ),
+
           // ── App section ───────────────────────────────────────────────────
           _SectionHeader(label: 'App'),
           _CardGroup(
@@ -154,6 +173,20 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ],
           ),
+
+          // ── Delete Account ────────────────────────────────────────────────
+          if (authState.isAuthenticated)
+            Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: TextButton.icon(
+                style: TextButton.styleFrom(
+                  foregroundColor: colorScheme.error.withAlpha(180),
+                ),
+                icon: const Icon(Icons.delete_forever, size: 18),
+                label: const Text('Delete Account'),
+                onPressed: () => _showDeleteAccountDialog(context, ref),
+              ),
+            ),
 
           // ── Logout button ─────────────────────────────────────────────────
           Padding(
@@ -179,6 +212,36 @@ class SettingsScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+void _showDeleteAccountDialog(BuildContext context, WidgetRef ref) {
+  final colorScheme = Theme.of(context).colorScheme;
+  showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Delete Account'),
+      content: const Text(
+        'This will permanently delete your account and all associated data. This action cannot be undone.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          style: TextButton.styleFrom(foregroundColor: colorScheme.error),
+          onPressed: () {
+            Navigator.of(ctx).pop();
+            launchUrl(
+              Uri.parse('https://clude.io/delete-account'),
+              mode: LaunchMode.externalApplication,
+            );
+          },
+          child: const Text('Delete Account'),
+        ),
+      ],
+    ),
+  );
 }
 
 class _SectionHeader extends StatelessWidget {

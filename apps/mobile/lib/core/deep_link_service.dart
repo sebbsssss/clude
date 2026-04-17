@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:uni_links/uni_links.dart';
+import 'package:app_links/app_links.dart';
 
 import 'auth/auth_provider.dart';
 import 'auth/auth_state.dart';
@@ -134,25 +134,25 @@ class DeepLinkService {
 
   /// Initialise deep link handling for cold start and ongoing links.
   Future<void> initialise(GoRouter router) async {
+    final appLinks = AppLinks();
+
     // Cold start: process the initial link that launched the app.
     try {
-      final initialUri = await getInitialUri();
+      final initialUri = await appLinks.getInitialLink();
       if (initialUri != null) {
         final auth = _ref.read(authNotifierProvider);
         handleUri(initialUri, router, auth);
       }
     } catch (_) {
-      // getInitialUri can throw on some platforms — ignore.
+      // getInitialLink can throw on some platforms — ignore.
     }
 
     // Warm start / foreground: listen for incoming links.
     // Read live auth state on each event — not a stale snapshot.
     _linkSub?.cancel();
-    _linkSub = uriLinkStream.listen((uri) {
-      if (uri != null) {
-        final auth = _ref.read(authNotifierProvider);
-        handleUri(uri, router, auth);
-      }
+    _linkSub = appLinks.uriLinkStream.listen((uri) {
+      final auth = _ref.read(authNotifierProvider);
+      handleUri(uri, router, auth);
     });
   }
 
