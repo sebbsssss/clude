@@ -3,40 +3,42 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CLUDE — Memory Explorer</title>
-  <meta name="description" content="Visualize, search, and explore your agent's mind. Load memories from cloud or local files.">
+  <title>Memory Explorer · Clude</title>
+  <meta name="description" content="Visualise, search, and explore your agent's mind. Load memories from cloud or local files." />
   <meta name="privy-app-id" content="">
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" type="image/svg+xml" href="/logo/Clude-Icon-Blue.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Funnel+Sans:ital,wght@0,300..800;1,300..800&family=Inconsolata:wght@300..700&family=Nothing+You+Could+Do&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #f5f5f0;
-      --bg-warm: #eeeee8;
-      --surface: rgba(255, 255, 255, 0.92);
-      --text: #111;
-      --text-muted: #666;
-      --text-faint: #999;
-      --border: rgba(0, 0, 0, 0.08);
+      --bg-warm: #ecece6;
+      --surface: rgba(245, 245, 240, 0.92);
+      --text: #1a1b1f;
+      --text-muted: #5b5f68;
+      --text-faint: #8a8f98;
+      --border: rgba(26, 27, 31, 0.12);
       --accent: #2244ff;
       --accent-light: #5566ff;
-      --episodic: #1a3abf;
+      --episodic: #2244ff;
       --semantic: #3a4a7a;
-      --procedural: #2a6a3a;
-      --selfmodel: #5a3a80;
-      --mono: 'JetBrains Mono', monospace;
-      --error: #9a3030;
+      --procedural: #2a8547;
+      --selfmodel: #6b3fb8;
+      --mono: 'Inconsolata', monospace;
+      --sans: 'Funnel Sans', sans-serif;
+      --script: 'Nothing You Could Do', cursive;
+      --error: #b94330;
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     html, body {
       width: 100%;
-      font-family: var(--mono);
+      font-family: var(--sans);
       background: var(--bg);
       color: var(--text);
-      font-size: 12px;
+      font-size: 15px;
       -webkit-font-smoothing: antialiased;
     }
 
@@ -1738,7 +1740,7 @@
     }
 
     var md = '# Clude Memory Export\n\n';
-    md += '> ' + allNodes.length + ' memories — exported ' + new Date().toISOString() + '\n\n---\n\n';
+    md += '> ' + allNodes.length + ' memories · exported ' + new Date().toISOString() + '\n\n---\n\n';
 
     var types = ['episodic', 'semantic', 'procedural', 'self_model'];
     var titles = { episodic: 'Episodic', semantic: 'Semantic', procedural: 'Procedural', self_model: 'Self Model' };
@@ -2142,7 +2144,7 @@
         ctx.beginPath(); ctx.arc(n.x,n.y,n.r,0,Math.PI*2);
         ctx.fillStyle=n.color; ctx.globalAlpha=0.25+n.importance*0.75; ctx.fill();
         ctx.globalAlpha=1; ctx.strokeStyle=n.color; ctx.lineWidth=n.cat==='root'?2:1; ctx.stroke();
-        if (n.r>=7) { ctx.font=(n.cat==='root'?9:7)+'px JetBrains Mono'; ctx.fillStyle='#333'; ctx.textAlign='center'; ctx.fillText(n.label,n.x,n.y+n.r+10); }
+        if (n.r>=7) { ctx.font=(n.cat==='root'?9:7)+'px Inconsolata'; ctx.fillStyle='#1a1b1f'; ctx.textAlign='center'; ctx.fillText(n.label,n.x,n.y+n.r+10); }
       }
     }
     let frame=0;
