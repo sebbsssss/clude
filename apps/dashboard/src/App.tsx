@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { AuthContext } from './hooks/AuthContext';
 import { AgentProvider } from './context/AgentContext';
@@ -13,6 +13,7 @@ import { Settings } from './pages/Settings';
 import { Setup } from './pages/Setup';
 import { FileMemory } from './pages/file-memory';
 import { Explore } from './pages/explore';
+import { Growth } from './pages/Growth';
 
 function AuthenticatedApp() {
   return (
@@ -38,6 +39,12 @@ function AuthenticatedApp() {
 
 export default function App() {
   const auth = useAuth();
+  const location = useLocation();
+
+  // Public /growth dashboard — no auth required
+  if (location.pathname === '/growth') {
+    return <Growth />;
+  }
 
   if (!auth.ready) return null;
 

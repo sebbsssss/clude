@@ -17,6 +17,7 @@ import { memoryRoutes } from './memory.routes.js';
 import { memoryPacksRoutes } from './memory-packs.routes.js';
 import { demoRoutes } from './demo.routes.js';
 import { walletAuthRoutes } from './wallet-auth.routes.js';
+import { growthRoutes } from './growth.routes.js';
 import { createChildLogger } from '@clude/shared/core/logger';
 import rateLimit from 'express-rate-limit';
 
@@ -96,6 +97,9 @@ export function mountApiRoutes(app: express.Application): void {
 
   // Wallet auth (direct Phantom signature verification for mobile)
   app.use('/api/wallet-auth', walletAuthRoutes());
+
+  // Growth swarm: public KPI snapshots for /growth dashboard
+  app.use('/api/growth', apiLimiter, growthRoutes());
 
   // Helius webhook (USDC payment detection — outside /api to avoid API rate limiter)
   app.use('/webhook', topupWebhookRoutes());
