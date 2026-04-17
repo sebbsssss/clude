@@ -1,6 +1,6 @@
 {
   "name": "@clude/server",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "private": true,
   "description": "Clude HTTP server — serves API routes + static files",
   "main": "dist/index.js",

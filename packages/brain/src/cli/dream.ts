@@ -7,7 +7,7 @@ export async function runDream(): Promise<void> {
 
   const dbPath = path.join(os.homedir(), '.clude', 'brain.db');
   if (!fs.existsSync(dbPath)) {
-    console.log('  ✗ No database found. Run "npx clude setup" first.\n');
+    console.log('  ✗ No database found. Run "npx @clude/sdk setup" first.\n');
     return;
   }
 

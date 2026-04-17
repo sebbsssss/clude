@@ -1,5 +1,5 @@
 #!/bin/bash
-# Smoke test for `npx clude setup` against a deployment with Privy configured.
+# Smoke test for `npx @clude/sdk setup` against a deployment with Privy configured.
 #
 # Requirements:
 #   - Built clude dist: pnpm --filter @clude/brain build

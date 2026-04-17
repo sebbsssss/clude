@@ -100,13 +100,13 @@ function installMcpConfigLegacy(target: McpTarget, agentName: string, wallet: st
   if (local) {
     mcpEntry = {
       command: 'npx',
-      args: ['clude', 'mcp-serve', '--local'],
+      args: ['@clude/sdk', 'mcp-serve', '--local'],
       env: {},
     };
   } else if (selfHostedEnv) {
     mcpEntry = {
       command: 'npx',
-      args: ['clude', 'mcp-serve'],
+      args: ['@clude/sdk', 'mcp-serve'],
       env: {
         ...selfHostedEnv,
         ...(wallet ? { CLUDE_WALLET: wallet } : {}),
@@ -116,7 +116,7 @@ function installMcpConfigLegacy(target: McpTarget, agentName: string, wallet: st
   } else {
     mcpEntry = {
       command: 'npx',
-      args: ['clude', 'mcp-serve'],
+      args: ['@clude/sdk', 'mcp-serve'],
       env: {
         ...(apiKey ? { CORTEX_API_KEY: apiKey } : {}),
         CORTEX_HOST_URL: 'https://clude.io',
@@ -270,9 +270,9 @@ function showExistingSetup(configPath: string): void {
   if (config.apiKey) console.log(`  API key:     ${config.apiKey.slice(0, 12)}...`);
   console.log(`  Database:    ${path.join(os.homedir(), '.clude', 'brain.db')}`);
   console.log('\n  Options:');
-  console.log('    npx clude status            Show detailed status');
-  console.log('    npx clude setup --force     Re-register (creates new API key)');
-  console.log('    npx clude setup --advanced  Interactive setup (self-hosted options)\n');
+  console.log('    npx @clude/sdk status            Show detailed status');
+  console.log('    npx @clude/sdk setup --force     Re-register (creates new API key)');
+  console.log('    npx @clude/sdk setup --advanced  Interactive setup (self-hosted options)\n');
 }
 
 async function runZeroConfigSetup(): Promise<void> {
@@ -590,7 +590,7 @@ async function runAdvancedSetup(): Promise<void> {
         } else {
           const errData = await res.json().catch(() => ({})) as { error?: string };
           printWarn(`Registration failed: ${errData.error || res.statusText}`);
-          printInfo('You can register manually later: npx clude register');
+          printInfo('You can register manually later: npx @clude/sdk register');
           apiKey = await ask(rl, 'Paste an API key (or Enter to skip): ');
         }
       } catch (err) {
@@ -609,7 +609,7 @@ async function runAdvancedSetup(): Promise<void> {
         } else {
           printWarn(`Could not reach clude.io: ${msg}`);
         }
-        printInfo('You can register manually later: npx clude register');
+        printInfo('You can register manually later: npx @clude/sdk register');
         apiKey = await ask(rl, 'Paste an API key (or Enter to skip): ');
       }
     } else {
@@ -709,7 +709,7 @@ async function runAdvancedSetup(): Promise<void> {
       }
     }
   } else {
-    printInfo('Skipped — run `npx clude mcp-install` anytime to set this up');
+    printInfo('Skipped — run `npx @clude/sdk mcp-install` anytime to set this up');
   }
 
   // ─── Instruction Injection ───────────────────────────
@@ -730,7 +730,7 @@ async function runAdvancedSetup(): Promise<void> {
         printSuccess(`Updated Clude memory section in ${targetFile}`);
       }
     } else {
-      printWarn(`Could not write to ${targetFile} — run \`npx clude inject-instructions\` manually`);
+      printWarn(`Could not write to ${targetFile} — run \`npx @clude/sdk inject-instructions\` manually`);
     }
   }
 
@@ -742,7 +742,7 @@ async function runAdvancedSetup(): Promise<void> {
     if (apiKey) {
       printSuccess('API key configured');
     } else {
-      printWarn('No API key yet — run: npx clude register');
+      printWarn('No API key yet — run: npx @clude/sdk register');
     }
     printSuccess('.env created');
   } else if (mode === 'selfhosted') {
@@ -777,7 +777,7 @@ async function runAdvancedSetup(): Promise<void> {
 
   if (mode === 'selfhosted') {
     printCodeBlock(
-      `const { Cortex } = require('clude');\n` +
+      `const { Cortex } = require('@clude/sdk');\n` +
       `\n` +
       `const brain = new Cortex();\n` +
       `await brain.init();\n` +
@@ -807,7 +807,7 @@ async function runAdvancedSetup(): Promise<void> {
     );
   } else {
     printCodeBlock(
-      `const { Cortex } = require('clude');\n` +
+      `const { Cortex } = require('@clude/sdk');\n` +
       `\n` +
       `const brain = new Cortex({\n` +
       `  hosted: { apiKey: process.env.CORTEX_API_KEY },\n` +
@@ -830,7 +830,7 @@ async function runAdvancedSetup(): Promise<void> {
 
   console.log(`  ${c.dim}Dashboard:${c.reset}  ${c.cyan}https://clude.io/explore${c.reset}`);
   console.log(`  ${c.dim}Docs:${c.reset}       ${c.cyan}https://clude.io/docs${c.reset}`);
-  console.log(`  ${c.dim}Export:${c.reset}     ${c.cyan}npx clude export${c.reset}`);
+  console.log(`  ${c.dim}Export:${c.reset}     ${c.cyan}npx @clude/sdk export${c.reset}`);
   printDivider();
   console.log('');
 
@@ -910,7 +910,7 @@ export async function runMcpInstall(): Promise<void> {
       printSuccess(`Updated Clude memory section in ${targetFile}`);
     }
   } else {
-    printWarn(`Could not write to ${targetFile} — run \`npx clude inject-instructions\` manually`);
+    printWarn(`Could not write to ${targetFile} — run \`npx @clude/sdk inject-instructions\` manually`);
   }
 
   console.log('');
@@ -919,7 +919,7 @@ export async function runMcpInstall(): Promise<void> {
     printInfo('No API keys needed. ~30MB model downloads on first use.');
   }
   printInfo('Restart your IDE to activate the MCP server.');
-  printInfo(`Run ${c.cyan}npx clude status${c.reset} anytime to check if Clude is active.`);
+  printInfo(`Run ${c.cyan}npx @clude/sdk status${c.reset} anytime to check if Clude is active.`);
   printDivider();
   console.log('');
 
@@ -1028,7 +1028,7 @@ export function installMcpConfig(
 
   existing.mcpServers['clude-memory'] = {
     command: 'npx',
-    args: ['clude', 'mcp-serve'],
+    args: ['@clude/sdk', 'mcp-serve'],
     env,
   };
 

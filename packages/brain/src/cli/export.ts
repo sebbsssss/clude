@@ -179,7 +179,7 @@ export async function runExport(): Promise<void> {
 
   if (hasFlag(args, '--help') || hasFlag(args, '-h')) {
     console.log(`
-  ${c.bold}Usage:${c.reset}  npx clude export [options]
+  ${c.bold}Usage:${c.reset}  npx @clude/sdk export [options]
 
   ${c.bold}Options:${c.reset}
     --format <format>      Output format: json, md, chatgpt, gemini, clipboard
@@ -195,12 +195,12 @@ export async function runExport(): Promise<void> {
     ${c.cyan}clipboard${c.reset}   ChatGPT format, copied to clipboard
 
   ${c.bold}Examples:${c.reset}
-    ${c.cyan}npx clude export${c.reset}                          Export all as JSON
-    ${c.cyan}npx clude export --format chatgpt${c.reset}         For ChatGPT
-    ${c.cyan}npx clude export --format gemini${c.reset}          For Gemini Gems
-    ${c.cyan}npx clude export --format clipboard${c.reset}       Copy to clipboard
-    ${c.cyan}npx clude export --format md${c.reset}              Export as Markdown
-    ${c.cyan}npx clude export --types episodic,semantic${c.reset} Filter by type
+    ${c.cyan}npx @clude/sdk export${c.reset}                          Export all as JSON
+    ${c.cyan}npx @clude/sdk export --format chatgpt${c.reset}         For ChatGPT
+    ${c.cyan}npx @clude/sdk export --format gemini${c.reset}          For Gemini Gems
+    ${c.cyan}npx @clude/sdk export --format clipboard${c.reset}       Copy to clipboard
+    ${c.cyan}npx @clude/sdk export --format md${c.reset}              Export as Markdown
+    ${c.cyan}npx @clude/sdk export --types episodic,semantic${c.reset} Filter by type
 `);
     return;
   }
@@ -234,7 +234,7 @@ export async function runExport(): Promise<void> {
 
   if (!isLocal && !isHosted && !isSelfHosted) {
     printError('No memory store configured.');
-    console.log(`\n  Use ${c.cyan}--local${c.reset} for local memories, or run ${c.cyan}npx clude init${c.reset} to configure.\n`);
+    console.log(`\n  Use ${c.cyan}--local${c.reset} for local memories, or run ${c.cyan}npx @clude/sdk init${c.reset} to configure.\n`);
     process.exit(1);
   }
 
@@ -281,7 +281,7 @@ export async function runExport(): Promise<void> {
         },
         body: JSON.stringify({
           name: 'CLI Export',
-          description: 'Exported via npx clude export',
+          description: 'Exported via npx @clude/sdk export',
           limit: 10000,
           types,
         }),

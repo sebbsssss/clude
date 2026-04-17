@@ -78,7 +78,7 @@ export async function runRegister(): Promise<void> {
     console.log('');
 
     printInfo('Install MCP for your IDE:');
-    console.log(`    npx clude mcp-install\n`);
+    console.log(`    npx @clude/sdk mcp-install\n`);
 
     printInfo('Or use in code:');
     console.log(`    const brain = new Cortex({`);

@@ -446,10 +446,10 @@
       <table class="doc-table">
         <tr><th>Install</th><th>Package</th><th>Description</th></tr>
         <tr><td><code>pip install clude</code></td><td><strong>clude</strong></td><td>Python SDK</td></tr>
-        <tr><td><code>npm install clude-brain</code></td><td><strong>clude-brain</strong></td><td>Core memory engine (scoring, decay, graph)</td></tr>
-        <tr><td><code>npm install clude-cloud</code></td><td><strong>clude-cloud</strong></td><td>Supabase + Voyage providers</td></tr>
-        <tr><td><code>npm install clude-local</code></td><td><strong>clude-local</strong></td><td>SQLite + local embeddings (offline)</td></tr>
-        <tr><td><code>npm install clude</code></td><td><strong>clude</strong></td><td>Full bot + MCP server + CLI</td></tr>
+        <tr><td><code>npm install @clude/sdk-brain</code></td><td><strong>clude-brain</strong></td><td>Core memory engine (scoring, decay, graph)</td></tr>
+        <tr><td><code>npm install @clude/sdk-cloud</code></td><td><strong>clude-cloud</strong></td><td>Supabase + Voyage providers</td></tr>
+        <tr><td><code>npm install @clude/sdk-local</code></td><td><strong>clude-local</strong></td><td>SQLite + local embeddings (offline)</td></tr>
+        <tr><td><code>npm install @clude/sdk</code></td><td><strong>clude</strong></td><td>Full bot + MCP server + CLI</td></tr>
       </table>
 
       <h3>Architecture</h3>
@@ -471,7 +471,7 @@
       <h3>3 Ways to Use Clude</h3>
       <p><strong>Python</strong> — <code>pip install clude</code> and call the Cortex API with a clean async interface.</p>
       <p><strong>TypeScript</strong> — Compose <code>clude-brain</code> with your choice of provider (<code>clude-cloud</code> or <code>clude-local</code>).</p>
-      <p><strong>MCP</strong> — <code>npx clude mcp-serve</code> to use memory from any MCP-compatible editor (Claude Code, Cursor, etc.).</p>
+      <p><strong>MCP</strong> — <code>npx @clude/sdk mcp-serve</code> to use memory from any MCP-compatible editor (Claude Code, Cursor, etc.).</p>
     </div>
 
     <!-- ═══════ QUICK START ═══════ -->
@@ -481,19 +481,19 @@
 
       <h3>Install</h3>
       <div class="code">
-        <span class="prompt">$</span> <span class="cmd">npm install clude</span>
+        <span class="prompt">$</span> <span class="cmd">npm install @clude/sdk</span>
       </div>
 
       <h3>Option A: Local-first (recommended)</h3>
       <p>No API keys. No network. Fully offline with SQLite + local embeddings.</p>
       <div class="code">
-<span class="prompt">$</span> <span class="cmd">npx clude mcp-install --local</span>    <span class="cmt"># Auto-configures your IDE</span>
+<span class="prompt">$</span> <span class="cmd">npx @clude/sdk mcp-install --local</span>    <span class="cmt"># Auto-configures your IDE</span>
       </div>
 
       <h3>Option B: Hosted (cloud sync)</h3>
       <p>Memories sync across devices. Register for an API key.</p>
       <div class="code">
-<span class="prompt">$</span> <span class="cmd">npx clude mcp-install</span>    <span class="cmt"># Prompts for API key</span>
+<span class="prompt">$</span> <span class="cmd">npx @clude/sdk mcp-install</span>    <span class="cmt"># Prompts for API key</span>
       </div>
       <div class="code">
 <span class="kw">import</span> { Cortex } <span class="kw">from</span> <span class="str">'clude'</span>;
@@ -547,13 +547,13 @@
       <h3>Export &amp; Visualize</h3>
       <p>Export your agent's memories and explore them visually:</p>
       <div class="code">
-<span class="prompt">$</span> <span class="cmd">npx clude export</span>     <span class="cmt"># → clude-memories.json</span>
+<span class="prompt">$</span> <span class="cmd">npx @clude/sdk export</span>     <span class="cmt"># → clude-memories.json</span>
       </div>
       <p>Then drag the file into <a href="/explore" style="color:var(--blue)">clude.io/explore</a> to see your agent's neural map.</p>
 
       <div class="callout">
         <div class="callout-label">No lock-in</div>
-        Both modes use the same SDK API. Switch between hosted and self-hosted anytime. Export your memories with <code>npx clude export</code> at any point.
+        Both modes use the same SDK API. Switch between hosted and self-hosted anytime. Export your memories with <code>npx @clude/sdk export</code> at any point.
       </div>
     </div>
 
@@ -617,7 +617,7 @@ query expansion → vector search → entity matching → graph traversal → sc
 
       <h3>1. Register for an API key</h3>
       <div class="code">
-<span class="prompt">$</span> <span class="cmd">npx clude register</span>
+<span class="prompt">$</span> <span class="cmd">npx @clude/sdk register</span>
       </div>
       <p>You'll be asked for your agent name and Solana wallet address. Save the API key — it won't be shown again.</p>
 
@@ -646,8 +646,8 @@ query expansion → vector search → entity matching → graph traversal → sc
       <h3>3. Export your memories</h3>
       <p>Download your agent's memories to a file at any time:</p>
       <div class="code">
-<span class="prompt">$</span> <span class="cmd">npx clude export</span>                     <span class="cmt"># → clude-memories.json</span>
-<span class="prompt">$</span> <span class="cmd">npx clude export</span> <span class="flag">--format md</span>          <span class="cmt"># → clude-memories.md</span>
+<span class="prompt">$</span> <span class="cmd">npx @clude/sdk export</span>                     <span class="cmt"># → clude-memories.json</span>
+<span class="prompt">$</span> <span class="cmd">npx @clude/sdk export</span> <span class="flag">--format md</span>          <span class="cmt"># → clude-memories.md</span>
       </div>
       <p>Then visualize them at <a href="/explore" style="color:var(--blue)">clude.io/explore</a> — drag and drop the file to see your agent's neural map.</p>
 
@@ -700,7 +700,7 @@ query expansion → vector search → entity matching → graph traversal → sc
       <h3>hosted (zero-setup)</h3>
       <table class="doc-table">
         <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-        <tr><td><code>apiKey</code></td><td class="required">string</td><td>API key from <code>npx clude register</code></td></tr>
+        <tr><td><code>apiKey</code></td><td class="required">string</td><td>API key from <code>npx @clude/sdk register</code></td></tr>
         <tr><td><code>baseUrl</code></td><td class="optional">string</td><td>API base URL. Default: <code>https://clude.io</code></td></tr>
       </table>
 
@@ -851,10 +851,10 @@ score = (<span class="num">0.5</span> * recency) + (<span class="num">3.0</span>
       <h3>CLI Export</h3>
       <p>The fastest way to get your memories out:</p>
       <div class="code">
-<span class="prompt">$</span> <span class="cmd">npx clude export</span>                           <span class="cmt"># → clude-memories.json</span>
-<span class="prompt">$</span> <span class="cmd">npx clude export</span> <span class="flag">--format md</span>                <span class="cmt"># → clude-memories.md</span>
-<span class="prompt">$</span> <span class="cmd">npx clude export</span> <span class="flag">--types</span> episodic,semantic  <span class="cmt"># Filter by type</span>
-<span class="prompt">$</span> <span class="cmd">npx clude export</span> <span class="flag">--output</span> backup.json       <span class="cmt"># Custom filename</span>
+<span class="prompt">$</span> <span class="cmd">npx @clude/sdk export</span>                           <span class="cmt"># → clude-memories.json</span>
+<span class="prompt">$</span> <span class="cmd">npx @clude/sdk export</span> <span class="flag">--format md</span>                <span class="cmt"># → clude-memories.md</span>
+<span class="prompt">$</span> <span class="cmd">npx @clude/sdk export</span> <span class="flag">--types</span> episodic,semantic  <span class="cmt"># Filter by type</span>
+<span class="prompt">$</span> <span class="cmd">npx @clude/sdk export</span> <span class="flag">--output</span> backup.json       <span class="cmt"># Custom filename</span>
       </div>
       <p>Works with both hosted and self-hosted modes — reads your <code>.env</code> to detect which.</p>
 
@@ -1024,7 +1024,7 @@ brain.<span class="fn">stopReflectionSchedule</span>();
 
       <h3>Quick Setup</h3>
       <div class="code">
-<span class="prompt">$</span> <span class="cmd">npx clude mcp-serve</span>
+<span class="prompt">$</span> <span class="cmd">npx @clude/sdk mcp-serve</span>
       </div>
 
       <h3>Two Modes</h3>
@@ -1144,7 +1144,7 @@ stats = <span class="kw">await</span> brain.<span class="fn">stats</span>()
 
       <h3>Install</h3>
       <div class="code">
-<span class="prompt">$</span> <span class="cmd">npx clude mcp-install --local</span>
+<span class="prompt">$</span> <span class="cmd">npx @clude/sdk mcp-install --local</span>
       </div>
       <p>This auto-configures your IDE's MCP settings for local-only memory.</p>
 
@@ -1161,7 +1161,7 @@ stats = <span class="kw">await</span> brain.<span class="fn">stats</span>()
 
       <div class="callout">
         <div class="callout-label">Upgrade Path</div>
-        Start local, switch to cloud anytime. Export with <code>npx clude export</code> and import into a hosted instance. Same data, same format.
+        Start local, switch to cloud anytime. Export with <code>npx @clude/sdk export</code> and import into a hosted instance. Same data, same format.
       </div>
     </div>
 

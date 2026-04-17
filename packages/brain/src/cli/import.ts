@@ -306,7 +306,7 @@ export async function runImport(): Promise<void> {
 
   if (hasFlag(args, '--help') || hasFlag(args, '-h') || args.length === 0) {
     console.log(`
-  ${c.bold}Usage:${c.reset}  npx clude import <file> [options]
+  ${c.bold}Usage:${c.reset}  npx @clude/sdk import <file> [options]
 
   ${c.bold}Supported formats:${c.reset}
     ${c.cyan}chatgpt-export.zip${c.reset}     ChatGPT data export (ZIP with conversations.json)
@@ -318,10 +318,10 @@ export async function runImport(): Promise<void> {
     -h, --help             Show this help
 
   ${c.bold}Examples:${c.reset}
-    ${c.cyan}npx clude import chatgpt-export.zip${c.reset}
-    ${c.cyan}npx clude import notes.md${c.reset}
-    ${c.cyan}npx clude import backup.json${c.reset}
-    ${c.cyan}npx clude import data.zip --dry-run${c.reset}
+    ${c.cyan}npx @clude/sdk import chatgpt-export.zip${c.reset}
+    ${c.cyan}npx @clude/sdk import notes.md${c.reset}
+    ${c.cyan}npx @clude/sdk import backup.json${c.reset}
+    ${c.cyan}npx @clude/sdk import data.zip --dry-run${c.reset}
 `);
     return;
   }
@@ -350,7 +350,7 @@ export async function runImport(): Promise<void> {
 
   if (!isLocal && !isHosted && !isSelfHosted) {
     printError('No memory store configured.');
-    console.log(`\n  Use ${c.cyan}--local${c.reset} for local memories, or run ${c.cyan}npx clude init${c.reset} to configure.\n`);
+    console.log(`\n  Use ${c.cyan}--local${c.reset} for local memories, or run ${c.cyan}npx @clude/sdk init${c.reset} to configure.\n`);
     process.exit(1);
   }
 

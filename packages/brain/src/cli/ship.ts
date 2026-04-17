@@ -2,7 +2,7 @@ import { printSuccess, printError, c } from './banner';
 
 export async function runShip(rawMessage: string): Promise<void> {
   if (!rawMessage || rawMessage.trim().length === 0) {
-    printError(`Usage: npx clude ship "your message"`);
+    printError(`Usage: npx @clude/sdk ship "your message"`);
     process.exit(1);
   }
 

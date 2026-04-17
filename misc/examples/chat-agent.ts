@@ -8,7 +8,7 @@
  *   SUPABASE_URL=... SUPABASE_KEY=... ANTHROPIC_API_KEY=... npx tsx examples/chat-agent.ts
  */
 
-import { Cortex } from 'clude';
+import { Cortex } from '@clude/sdk';
 import Anthropic from '@anthropic-ai/sdk';
 import * as readline from 'readline';
 

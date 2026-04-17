@@ -282,7 +282,7 @@
           <span class="mode-badge" style="background: var(--blue); color: #fff;">Fastest</span>
         </div>
         <div class="mode-desc">Use Clude's hosted infrastructure. Register, get an API key, start storing memories in 30 seconds.</div>
-        <code class="mode-cmd">npm install clude && npx clude setup</code>
+        <code class="mode-cmd">npm install @clude/sdk && npx @clude/sdk setup</code>
       </div>
 
       <div onclick="selectMode('selfhosted')" class="mode-card" id="modeSelfHosted">
@@ -291,7 +291,7 @@
           <span class="mode-badge" style="background: #666; color: #fff;">Your infra</span>
         </div>
         <div class="mode-desc">You bring your own Supabase + Voyage AI keys. Full power, you own the data. No Clude API key needed.</div>
-        <code class="mode-cmd">npm install clude && npx clude setup</code>
+        <code class="mode-cmd">npm install @clude/sdk && npx @clude/sdk setup</code>
       </div>
 
       <div onclick="selectMode('local')" class="mode-card" id="modeLocal">
@@ -300,7 +300,7 @@
           <span class="mode-badge" style="background: #2d8a4e; color: #fff;">Zero config</span>
         </div>
         <div class="mode-desc">Runs on your machine. No API keys, no accounts, fully offline. Best for trying Clude or privacy-first use.</div>
-        <code class="mode-cmd">npm install clude && npx clude setup</code>
+        <code class="mode-cmd">npm install @clude/sdk && npx @clude/sdk setup</code>
       </div>
     </div>
   </div>
@@ -311,16 +311,16 @@
     <p class="subtitle">No API key needed. Everything runs on your machine.</p>
 
     <div class="snippet-label">Setup wizard (recommended)</div>
-    <pre data-raw="npm install clude
-npx clude setup"><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button><span class="cmt"># Install and run the setup wizard</span>
-npm install clude
-npx clude setup
+    <pre data-raw="npm install @clude/sdk
+npx @clude/sdk setup"><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button><span class="cmt"># Install and run the setup wizard</span>
+npm install @clude/sdk
+npx @clude/sdk setup
 <span class="cmt"># → Select "Local"</span>
 <span class="cmt"># → Installs MCP server for your IDE</span></pre>
 
     <div class="snippet-label">Or install MCP directly</div>
-    <pre data-raw="npx clude mcp-install --local"><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button><span class="cmt"># One command, done</span>
-npx clude mcp-install --local</pre>
+    <pre data-raw="npx @clude/sdk mcp-install --local"><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button><span class="cmt"># One command, done</span>
+npx @clude/sdk mcp-install --local</pre>
 
     <div class="snippet-label">Or add manually to Claude Desktop config</div>
     <pre data-raw='{"mcpServers":{"clude":{"command":"npx","args":["clude","mcp-serve","--local"]}}}'><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button>{
@@ -333,17 +333,17 @@ npx clude mcp-install --local</pre>
 }</pre>
 
     <div class="snippet-label">For Node.js / TypeScript</div>
-    <pre data-raw="npm install clude
+    <pre data-raw="npm install @clude/sdk
 
-import { Cortex } from 'clude';
+import { Cortex } from '@clude/sdk';
 const brain = new Cortex({ local: true });
 await brain.init();
 await brain.store({ content: 'Hello!', type: 'episodic' });
 const memories = await brain.recall({ query: 'hello' });"><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button><span class="cmt"># Install</span>
-npm install clude
+npm install @clude/sdk
 
 <span class="cmt"># Use</span>
-import { Cortex } from 'clude';
+import { Cortex } from '@clude/sdk';
 const brain = new Cortex({ local: true });
 await brain.init();
 await brain.store({ content: 'Hello!', type: 'episodic' });
@@ -367,10 +367,10 @@ const memories = await brain.recall({ query: 'hello' });</pre>
     </div>
 
     <div class="snippet-label">Setup wizard (recommended)</div>
-    <pre data-raw="npm install clude
-npx clude setup"><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button><span class="cmt"># Install and run the setup wizard</span>
-npm install clude
-npx clude setup
+    <pre data-raw="npm install @clude/sdk
+npx @clude/sdk setup"><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button><span class="cmt"># Install and run the setup wizard</span>
+npm install @clude/sdk
+npx @clude/sdk setup
 <span class="cmt"># → Select "Self-hosted"</span>
 <span class="cmt"># → Enter your Supabase URL + service key</span>
 <span class="cmt"># → Enter your Voyage AI key</span>
@@ -378,7 +378,7 @@ npx clude setup
 <span class="cmt"># → Creates .env + installs MCP server</span></pre>
 
     <div class="snippet-label">Or configure manually</div>
-    <pre data-raw="import { Cortex } from 'clude';
+    <pre data-raw="import { Cortex } from '@clude/sdk';
 
 const brain = new Cortex({
   supabase: {
@@ -393,7 +393,7 @@ const brain = new Cortex({
   },
   agentId: 'my-agent',
 });
-await brain.init();"><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button>import { Cortex } from 'clude';
+await brain.init();"><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button>import { Cortex } from '@clude/sdk';
 
 const brain = new Cortex({
   supabase: {
@@ -418,7 +418,7 @@ await brain.init();</pre>
   <div id="registerForm" style="display:none;">
     <h1>Cloud mode — Get your API key</h1>
     <p class="subtitle">Register your agent and start storing memories in 30 seconds. No infra to manage.<br>
-    <span style="color: var(--text-faint);">Or skip the form — run <code style="background: rgba(0,0,0,0.06); padding: 2px 6px; border-radius: 3px;">npx clude setup</code> and select "Cloud".</span></p>
+    <span style="color: var(--text-faint);">Or skip the form — run <code style="background: rgba(0,0,0,0.06); padding: 2px 6px; border-radius: 3px;">npx @clude/sdk setup</code> and select "Cloud".</span></p>
 
     <div class="global-error" id="globalError"></div>
 
@@ -458,7 +458,7 @@ await brain.init();</pre>
     <div style="margin-top: 36px; padding: 20px 24px; background: var(--card-bg); border: 2px solid var(--blue); border-radius: 8px;">
       <div style="font-weight: 700; font-size: 14px; margin-bottom: 8px;">Next: Install MCP Server</div>
       <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.7;">Give Claude Desktop, Cursor, or Claude Code persistent memory with one command:</div>
-      <pre style="margin: 0 0 12px; font-size: 12px; padding: 14px 18px;"><button class="snippet-copy" onclick="copyToClipboard('npx clude mcp-install', this)">Copy</button>npx clude mcp-install</pre>
+      <pre style="margin: 0 0 12px; font-size: 12px; padding: 14px 18px;"><button class="snippet-copy" onclick="copyToClipboard('npx @clude/sdk mcp-install', this)">Copy</button>npx @clude/sdk mcp-install</pre>
       <div style="font-size: 12px; color: var(--text-faint);">Or use the <a href="/setup" style="color: var(--blue); text-decoration: none;">guided setup wizard</a> for step-by-step installation.</div>
     </div>
 

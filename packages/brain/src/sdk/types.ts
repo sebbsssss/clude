@@ -10,7 +10,7 @@ export interface CortexConfig {
 
   /** Hosted mode — memories stored on CLUDE infrastructure. Mutually exclusive with `supabase`. */
   hosted?: {
-    /** API key from `npx clude register` or POST /api/cortex/register. */
+    /** API key from `npx @clude/sdk register` or POST /api/cortex/register. */
     apiKey: string;
     /** API base URL. Defaults to 'https://clude.io'. */
     baseUrl?: string;

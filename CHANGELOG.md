@@ -4,17 +4,21 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [3.0.0] — 2026-04-17
+## [3.0.1] — 2026-04-17
 
 ### Changed
-- **BREAKING: npm package renamed from `clude-bot` to `clude`.** Users should now run `npx clude setup` (previously `npx clude-bot setup`) and `npm install clude` (previously `npm install clude-bot`). The `clude-bot` package will be deprecated on npm with a redirect notice. Existing installs continue to work.
-- **BREAKING: CLI binary renamed from `clude-bot` to `clude`.** After installing, the command is now `clude <subcommand>`.
+- **BREAKING: npm package is now `@clude/sdk` (scoped).** Original plan to publish as unscoped `clude` was blocked by npm's name-collision policy (`clui`/`code`/`clone`). Scoped package lives under the `@clude` organization on npm.
+- **Self-contained publish bundle.** The monorepo refactor had broken publish since 2.7.8 — `scripts/build-publish.mjs` uses esbuild to inline `@clude/shared` and `@clude/brain` into a single tarball.
 
 ### Migration
-- Replace `npx clude-bot <cmd>` with `npx clude <cmd>` in scripts, docs, and MCP configs.
-- In `import { Cortex } from 'clude-bot'` → `from 'clude'`.
-- MCP args `["clude-bot", "mcp-serve"]` → `["clude", "mcp-serve"]`.
-- Config files (`~/.clude/config.json`, `~/.clude/brain.db`, `CLUDE_*` env vars) are unchanged — no user-side data migration needed.
+- `npx clude-bot <cmd>` → `npx @clude/sdk <cmd>` (or `npm i -g @clude/sdk` then `clude <cmd>` — binary name is still `clude`)
+- `import { Cortex } from 'clude-bot'` → `from '@clude/sdk'`
+- MCP args `["clude-bot", "mcp-serve"]` → `["@clude/sdk", "mcp-serve"]`
+- Config files (`~/.clude/config.json`, `~/.clude/brain.db`, `CLUDE_*` env vars) unchanged — no user-side data migration needed.
+
+## [3.0.0] — 2026-04-17 (unpublished)
+
+Initial unscoped rename attempt. Superseded by 3.0.1 after npm rejected `clude` as too similar to existing names.
 
 ## [2.6.0] — 2026-03-02
 

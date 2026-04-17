@@ -20,7 +20,7 @@ export async function runDoctor(): Promise<void> {
       console.log(`  ✗ Database      ${dbPath} (error: ${e.message})`);
     }
   } else {
-    console.log(`  ✗ Database      Not found (run 'npx clude setup')`);
+    console.log(`  ✗ Database      Not found (run 'npx @clude/sdk setup')`);
   }
 
   // 2. Check embedding model cache

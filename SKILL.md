@@ -69,13 +69,13 @@ The MCP server auto-detects its mode from environment:
 ## Setup
 
 ```bash
-npx clude setup
+npx @clude/sdk setup
 ```
 
 Or install manually:
 
 ```bash
-npm install -g clude
+npm install -g @clude/sdk
 clude mcp-install
 ```
 

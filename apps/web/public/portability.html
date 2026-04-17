@@ -117,7 +117,7 @@
     <h3>Export to ChatGPT</h3>
     <ol class="steps">
       <li>Run the export command:
-        <pre><span class="cmd">npx clude export</span> <span class="flag">--format chatgpt</span></pre>
+        <pre><span class="cmd">npx @clude/sdk export</span> <span class="flag">--format chatgpt</span></pre>
       </li>
       <li>Open <strong>ChatGPT</strong> → Settings → Personalization → Custom Instructions</li>
       <li>Paste the output into the <strong>"What would you like ChatGPT to know about you?"</strong> field</li>
@@ -133,7 +133,7 @@
       <li>In ChatGPT, go to Settings → Data Controls → Export Data</li>
       <li>Download the ZIP file (contains <code>conversations.json</code>)</li>
       <li>Run:
-        <pre><span class="cmd">npx clude import</span> <span class="string">chatgpt-export.zip</span></pre>
+        <pre><span class="cmd">npx @clude/sdk import</span> <span class="string">chatgpt-export.zip</span></pre>
       </li>
     </ol>
     <p>Clude will extract key facts, preferences, and context from your ChatGPT conversations and store them as structured memories.</p>
@@ -150,7 +150,7 @@
     <h3>Option A: Export as Project Knowledge</h3>
     <ol class="steps">
       <li>Run:
-        <pre><span class="cmd">npx clude export</span> <span class="flag">--format md</span></pre>
+        <pre><span class="cmd">npx @clude/sdk export</span> <span class="flag">--format md</span></pre>
       </li>
       <li>Open <strong>Claude</strong> → Create a Project</li>
       <li>Upload the exported <code>.md</code> file as Project Knowledge</li>
@@ -161,7 +161,7 @@
     <p>Connect Clude directly to Claude Desktop or Claude Code as a persistent memory layer.</p>
     <ol class="steps">
       <li>Run:
-        <pre><span class="cmd">npx clude mcp-install</span></pre>
+        <pre><span class="cmd">npx @clude/sdk mcp-install</span></pre>
       </li>
       <li>Restart Claude Desktop</li>
       <li>Claude can now <code>store_memory</code> and <code>recall_memories</code> directly. No manual export needed.</li>
@@ -192,7 +192,7 @@
     <h3>Export to Gemini Gems</h3>
     <ol class="steps">
       <li>Run:
-        <pre><span class="cmd">npx clude export</span> <span class="flag">--format gemini</span></pre>
+        <pre><span class="cmd">npx @clude/sdk export</span> <span class="flag">--format gemini</span></pre>
       </li>
       <li>Open <strong>Gemini</strong> → Gems → Create a Gem</li>
       <li>Paste the output into the Gem's instructions</li>
@@ -215,7 +215,7 @@
     <h3>MCP Integration</h3>
     <ol class="steps">
       <li>Run:
-        <pre><span class="cmd">npx clude mcp-install</span></pre>
+        <pre><span class="cmd">npx @clude/sdk mcp-install</span></pre>
       </li>
       <li>Select your IDE when prompted (Cursor, VS Code, or Windsurf)</li>
       <li>Restart your IDE</li>
@@ -233,7 +233,7 @@
     </div>
     
     <h3>Export as Markdown</h3>
-    <pre><span class="cmd">npx clude export</span> <span class="flag">--format md</span></pre>
+    <pre><span class="cmd">npx @clude/sdk export</span> <span class="flag">--format md</span></pre>
     <p>Produces a structured Markdown file with all memories grouped by type. Works with:</p>
     <ul style="padding-left: 20px; margin: 12px 0; font-size: 14px;">
       <li>Claude Projects (upload as knowledge)</li>
@@ -247,14 +247,14 @@
   <h2>Advanced Options</h2>
   
   <h3>Filter by memory type</h3>
-  <pre><span class="cmd">npx clude export</span> <span class="flag">--format chatgpt --types semantic,procedural</span></pre>
+  <pre><span class="cmd">npx @clude/sdk export</span> <span class="flag">--format chatgpt --types semantic,procedural</span></pre>
   
   <h3>Export as JSON (full data)</h3>
-  <pre><span class="cmd">npx clude export</span> <span class="flag">--format json</span></pre>
+  <pre><span class="cmd">npx @clude/sdk export</span> <span class="flag">--format json</span></pre>
   <p>Includes all metadata: importance scores, decay factors, timestamps, tags, concepts, access counts. Use this for backups or building custom integrations.</p>
 
   <h3>Quick copy to clipboard</h3>
-  <pre><span class="cmd">npx clude export</span> <span class="flag">--format clipboard</span></pre>
+  <pre><span class="cmd">npx @clude/sdk export</span> <span class="flag">--format clipboard</span></pre>
   <p>Copies formatted memories directly to your clipboard. Paste anywhere.</p>
 
   <h2>Import Sources</h2>
@@ -262,17 +262,17 @@
     <tr><th>Source</th><th>Command</th><th>Notes</th></tr>
     <tr>
       <td>ChatGPT Export</td>
-      <td><code>npx clude import chatgpt-export.zip</code></td>
+      <td><code>npx @clude/sdk import chatgpt-export.zip</code></td>
       <td>Extracts facts and preferences from conversations</td>
     </tr>
     <tr>
       <td>Markdown Files</td>
-      <td><code>npx clude import memories.md</code></td>
+      <td><code>npx @clude/sdk import memories.md</code></td>
       <td>Each bullet point becomes a memory</td>
     </tr>
     <tr>
       <td>JSON (Clude format)</td>
-      <td><code>npx clude import backup.json</code></td>
+      <td><code>npx @clude/sdk import backup.json</code></td>
       <td>Full restore with metadata</td>
     </tr>
   </table>

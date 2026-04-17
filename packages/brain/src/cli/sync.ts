@@ -92,7 +92,7 @@ export async function runSync(): Promise<void> {
 
   if (hasFlag(args, '--help') || hasFlag(args, '-h')) {
     console.log(`
-  ${c.bold}Usage:${c.reset}  npx clude sync [options]
+  ${c.bold}Usage:${c.reset}  npx @clude/sdk sync [options]
 
   Watches for memory changes and keeps an up-to-date system prompt file.
 
@@ -104,9 +104,9 @@ export async function runSync(): Promise<void> {
     -h, --help                 Show this help
 
   ${c.bold}Examples:${c.reset}
-    ${c.cyan}npx clude sync${c.reset}                              Watch mode
-    ${c.cyan}npx clude sync --once${c.reset}                       Generate once
-    ${c.cyan}npx clude sync --format gemini -o prompt.txt${c.reset}
+    ${c.cyan}npx @clude/sdk sync${c.reset}                              Watch mode
+    ${c.cyan}npx @clude/sdk sync --once${c.reset}                       Generate once
+    ${c.cyan}npx @clude/sdk sync --format gemini -o prompt.txt${c.reset}
 `);
     return;
   }

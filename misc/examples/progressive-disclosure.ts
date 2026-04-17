@@ -9,7 +9,7 @@
  *   SUPABASE_URL=... SUPABASE_KEY=... npx tsx examples/progressive-disclosure.ts
  */
 
-import { Cortex } from 'clude';
+import { Cortex } from '@clude/sdk';
 
 async function main() {
   const brain = new Cortex({

@@ -4,7 +4,7 @@ import { printBanner, printSuccess, printWarn, printInfo, printDivider, c } from
 import { injectInstructions } from './setup';
 
 /**
- * npx clude inject-instructions
+ * npx @clude/sdk inject-instructions
  *
  * Idempotent command that writes/updates the Clude memory usage section
  * in CLAUDE.md or AGENTS.md. Migration path for existing installs.

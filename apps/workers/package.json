@@ -1,6 +1,6 @@
 {
   "name": "@clude/workers",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "private": true,
   "description": "Clude background jobs — scheduling, polling, dream cycles",
   "main": "dist/jobs/index.js",

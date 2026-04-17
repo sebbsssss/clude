@@ -151,7 +151,7 @@ function generateEnvFile(config: InitConfig): string {
 }
 
 function generateCodeSnippet(config: InitConfig): string {
-  let snippet = `const { Cortex } = require('clude');\n\n`;
+  let snippet = `const { Cortex } = require('@clude/sdk');\n\n`;
 
   if (config.mode === 'hosted') {
     snippet += `const brain = new Cortex({\n`;
@@ -315,7 +315,7 @@ export async function runInit(): Promise<void> {
           } else {
             const errData = await res.json().catch(() => ({})) as { error?: string };
             printWarn(`Registration failed: ${errData.error || res.statusText}`);
-            printInfo('You can register manually later: npx clude register');
+            printInfo('You can register manually later: npx @clude/sdk register');
           }
         } catch (err) {
           if (process.stdout.clearLine) {
@@ -325,7 +325,7 @@ export async function runInit(): Promise<void> {
             console.log('');
           }
           printWarn(`Could not reach server: ${(err as Error).message}`);
-          printInfo('You can register manually later: npx clude register');
+          printInfo('You can register manually later: npx @clude/sdk register');
         }
       }
 
@@ -519,7 +519,7 @@ export async function runInit(): Promise<void> {
     if (config.cortexApiKey) {
       printSuccess('Hosted mode — store & recall via CLUDE API');
     } else {
-      printWarn('API key not configured — run: npx clude register');
+      printWarn('API key not configured — run: npx @clude/sdk register');
     }
     if (config.ownerWallet) {
       printSuccess('Memory ownership (' + config.ownerWallet.slice(0, 8) + '...)');

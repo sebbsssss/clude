@@ -11,7 +11,7 @@ import { z } from 'zod';
  * - Hosted: uses CORTEX_API_KEY to call the Cortex HTTP API (no Supabase needed)
  * - Self-hosted: uses direct imports from core/memory (requires Supabase + full env)
  *
- * Run with: npx clude mcp-serve
+ * Run with: npx @clude/sdk mcp-serve
  */
 
 // ── Mode Detection ───────────────────────────────────────────────────

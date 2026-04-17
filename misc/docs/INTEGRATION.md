@@ -117,13 +117,13 @@ Get your API key at [clude.io/register](https://clude.io/register).
 ### Node.js SDK
 
 ```bash
-npm install clude
+npm install @clude/sdk
 ```
 
 #### Hosted mode (recommended to start)
 
 ```typescript
-import { Cortex } from 'clude';
+import { Cortex } from '@clude/sdk';
 
 const brain = new Cortex({
   hosted: {
@@ -174,7 +174,7 @@ brain.startReflectionSchedule(); // Every 3h
 ### MCP (Claude Desktop / Cursor / Windsurf)
 
 ```bash
-npx clude mcp-install --local
+npx @clude/sdk mcp-install --local
 ```
 
 Or add manually to your MCP config:
@@ -184,7 +184,7 @@ Or add manually to your MCP config:
   "mcpServers": {
     "clude": {
       "command": "npx",
-      "args": ["clude", "mcp-serve", "--local"]
+      "args": ["@clude/sdk", "mcp-serve", "--local"]
     }
   }
 }
@@ -233,6 +233,6 @@ GitHub: [github.com/sebbsssss/clude-memory-skill](https://github.com/sebbsssss/c
 
 - **Register:** [clude.io/register](https://clude.io/register)
 - **GitHub:** [github.com/sebbsssss/cludebot](https://github.com/sebbsssss/cludebot)
-- **npm:** [clude](https://www.npmjs.com/package/clude)
+- **npm:** [clude](https://www.npmjs.com/package/@clude/sdk)
 - **PyPI:** [clude](https://pypi.org/project/clude/)
 - **Benchmark:** [clude.io/benchmark](https://clude.io/benchmark) (83.9/100)

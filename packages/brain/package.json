@@ -1,6 +1,6 @@
 {
   "name": "@clude/brain",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "private": true,
   "description": "Clude brain — memory, dreams, agents, personality, SDK",
   "main": "dist/index.js",

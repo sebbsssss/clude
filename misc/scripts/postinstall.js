@@ -202,7 +202,7 @@ try {
   const env = fs.readFileSync(envPath, 'utf-8');
   if (env.includes('CORTEX_API_KEY=') && !env.includes('CORTEX_API_KEY=your-api-key')) {
     writeTty(`  ${gray}Already configured — .env found with API key.${reset}\n`);
-    writeTty(`  ${gray}Run ${reset}${cyan}npx clude setup${reset}${gray} to reconfigure.${reset}\n\n`);
+    writeTty(`  ${gray}Run ${reset}${cyan}npx @clude/sdk setup${reset}${gray} to reconfigure.${reset}\n\n`);
     writeTty(`${dim}────────────────────────────────────────────────────${reset}\n`);
     process.exit(0);
   }
@@ -218,7 +218,7 @@ try {
 } catch {}
 
 if (!canReadTty) {
-  writeTty(`\n  ${bold}To set up, run:${reset}  ${cyan}npx clude setup${reset}\n`);
+  writeTty(`\n  ${bold}To set up, run:${reset}  ${cyan}npx @clude/sdk setup${reset}\n`);
   writeTty(`  ${gray}Or visit:${reset}       ${cyan}https://clude.io/setup${reset}\n\n`);
   writeTty(`${dim}────────────────────────────────────────────────────${reset}\n`);
   process.exit(0);
@@ -270,7 +270,7 @@ if (existingKey) {
       if (data.agentId) info(`Agent ID: ${data.agentId}`);
     } else if (data.error) {
       warn(`Registration failed: ${data.error}`);
-      info('Run npx clude register later to get a key');
+      info('Run npx @clude/sdk register later to get a key');
     }
   } catch (err) {
     writeTty('\r' + ' '.repeat(50) + '\r');
@@ -282,7 +282,7 @@ if (existingKey) {
     } else {
       warn('Could not reach clude.io');
     }
-    info('Run npx clude register later to get a key');
+    info('Run npx @clude/sdk register later to get a key');
   }
 }
 
@@ -369,7 +369,7 @@ writeTty('\n');
 function installMcp(configPath) {
   const entry = {
     command: 'npx',
-    args: ['clude', 'mcp-serve'],
+    args: ['@clude/sdk', 'mcp-serve'],
     env: {
       ...(apiKey ? { CORTEX_API_KEY: apiKey } : {}),
       CORTEX_HOST_URL: 'https://clude.io',
@@ -395,7 +395,7 @@ if (mcpChoice && mcpChoice !== '5') {
   const toInstall = mcpChoice === '4' ? targets : targets.filter(t => t.key === mcpChoice);
 
   if (toInstall.length === 0) {
-    info('Skipped — run npx clude mcp-install anytime');
+    info('Skipped — run npx @clude/sdk mcp-install anytime');
   } else {
     for (const t of toInstall) {
       if (installMcp(t.path)) {
@@ -407,7 +407,7 @@ if (mcpChoice && mcpChoice !== '5') {
     }
   }
 } else {
-  info('Skipped — run npx clude mcp-install anytime');
+  info('Skipped — run npx @clude/sdk mcp-install anytime');
 }
 
 // ─── Done ────────────────────────────────────────────────
@@ -416,11 +416,11 @@ writeTty(`\n${dim}────────────────────�
 writeTty(`\n  ${bold}${green}You're all set!${reset}\n\n`);
 
 if (apiKey) ok('API key configured');
-else warn('No API key yet — run: npx clude register');
+else warn('No API key yet — run: npx @clude/sdk register');
 ok('.env created');
 
 writeTty(`\n  ${bold}Next steps:${reset}\n`);
 writeTty(`  ${dim}Explorer:${reset}   ${cyan}https://clude.io/explore${reset}\n`);
 writeTty(`  ${dim}Docs:${reset}       ${cyan}https://clude.io/docs${reset}\n`);
-writeTty(`  ${dim}Reconfigure:${reset} ${cyan}npx clude setup${reset}\n`);
+writeTty(`  ${dim}Reconfigure:${reset} ${cyan}npx @clude/sdk setup${reset}\n`);
 writeTty(`${dim}────────────────────────────────────────────────────${reset}\n\n`);
