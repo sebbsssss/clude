@@ -2,6 +2,7 @@ import { randomBytes, createHash } from 'crypto';
 import { getDb } from '@clude/shared/core/database';
 import { createChildLogger } from '@clude/shared/core/logger';
 import type { AgentTier } from '../character/agent-tier-modifiers';
+import { resolveWalletsForDid } from '../auth/privy-wallet-resolver';
 
 const log = createChildLogger('agent-tier');
 
@@ -269,6 +270,47 @@ export async function findOrCreateAgentForDid(
       .eq('agent_id', result.agentId);
 
     return { ...result, ownerWallet: wallet };
+  }
+
+  // 2.5. No wallet passed, but the Privy user may have linked wallets from
+  //      prior dashboard logins. If any linked wallet already owns an agent
+  //      that isn't yet claimed by another DID, adopt it instead of creating
+  //      a duplicate. Only rows with privy_did=null are eligible so we never
+  //      hijack another user's account.
+  try {
+    const linkedWallets = await resolveWalletsForDid(did);
+    for (const linkedWallet of linkedWallets) {
+      const { data: adoptable } = await db
+        .from('agent_keys')
+        .select('agent_id, api_key')
+        .eq('owner_wallet', linkedWallet)
+        .eq('is_active', true)
+        .is('privy_did', null)
+        .limit(1)
+        .single();
+
+      if (adoptable) {
+        await db
+          .from('agent_keys')
+          .update({ privy_did: did })
+          .eq('agent_id', adoptable.agent_id);
+        log.info(
+          { did, agentId: adoptable.agent_id, linkedWallet },
+          'Adopted existing wallet-based agent via Privy linked_accounts',
+        );
+        return {
+          apiKey: adoptable.api_key,
+          agentId: adoptable.agent_id,
+          isNew: false,
+          ownerWallet: linkedWallet,
+        };
+      }
+    }
+  } catch (err: any) {
+    log.warn(
+      { did, err: err.message },
+      'Linked-wallet adoption check failed — falling through to synthetic wallet',
+    );
   }
 
   // 3. No wallet (email-only user) — generate synthetic owner_wallet
