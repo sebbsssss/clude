@@ -7,7 +7,7 @@ pub mod state;
 use instructions::*;
 
 // Program ID — generated via `anchor keys list`
-declare_id!("MemRYEnFVuMPH8qQd4W5Rk2dkNFUsRkqDRyEGfP9uZ");
+declare_id!("6xENjJhDQx7iTxJ8Kd9VmQtCYUoYTGPatVsC4zhenuop");
 
 #[program]
 pub mod memory_registry {

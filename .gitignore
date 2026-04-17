@@ -27,8 +27,11 @@ chat/
 clude/
 agents/
 experiments/
-programs/
-video/
+# programs/ — un-ignored 2026-04-17 for Colosseum Frontier hackathon (memory-registry Anchor program is load-bearing)
+programs/**/target/
+programs/**/Cargo.lock
+# video/ — un-ignored 2026-04-17 for Colosseum Frontier hackathon (Remotion scenes for submission video)
+video/node_modules/
 tmp/
 src/
 migrations/
