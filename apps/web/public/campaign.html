@@ -3,37 +3,39 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CLUDE — 10 Days of Growing a Blockchain Brain</title>
-  <meta name="description" content="100,000,000 $CLUDE awarded over 10 days. Content rewards, gacha machines, hackathon grants, and holder airdrops.">
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <title>10 Days · Clude</title>
+  <meta name="description" content="100,000,000 $CLUDE awarded over 10 days. Content rewards, gacha machines, hackathon grants, and holder airdrops." />
+  <link rel="icon" type="image/svg+xml" href="/logo/Clude-Icon-Blue.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Funnel+Sans:ital,wght@0,300..800;1,300..800&family=Inconsolata:wght@300..700&family=Nothing+You+Could+Do&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #f5f5f0;
-      --bg-warm: #eeeee8;
-      --text: #111;
-      --text-muted: #666;
-      --text-faint: #999;
-      --accent: #111;
+      --bg-warm: #ecece6;
+      --text: #1a1b1f;
+      --text-muted: #5b5f68;
+      --text-faint: #8a8f98;
+      --accent: #1a1b1f;
       --blue: #2244ff;
-      --mono: 'JetBrains Mono', monospace;
+      --mono: 'Inconsolata', monospace;
+      --sans: 'Funnel Sans', sans-serif;
+      --script: 'Nothing You Could Do', cursive;
       --section-pad: 120px;
-      --green: #4a8a5a;
-      --gold: #c8a832;
-      --purple: #7a5aa0;
-      --red: #d4473a;
+      --green: #2a8547;
+      --gold: #b07510;
+      --purple: #6b3fb8;
+      --red: #b94330;
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html { scroll-behavior: smooth; }
     body {
-      font-family: var(--mono);
+      font-family: var(--sans);
       background: var(--bg);
       color: var(--text);
-      font-size: 14px;
-      line-height: 1.7;
+      font-size: 15px;
+      line-height: 1.65;
       -webkit-font-smoothing: antialiased;
       overflow-x: hidden;
     }
@@ -883,7 +885,7 @@
     </div>
 
     <div id="leaderboardBody">
-      <div class="lb-empty">Pending — Campaign hasn't started yet. Check back soon.</div>
+      <div class="lb-empty">Pending. Campaign hasn't started yet. Check back soon.</div>
     </div>
   </aside>
 
@@ -947,7 +949,7 @@
 
       <div class="status-badge" id="statusBadge">Loading...</div>
 
-      <p class="hero-context">Following in the footsteps of Pump.fun's Build in Public hackathon — every day as 1% of supply unlocks, it goes straight back to Clude builders and believers.</p>
+      <p class="hero-context">Following in the footsteps of Pump.fun's Build in Public hackathon, every day as 1% of supply unlocks, it goes straight back to Clude builders and believers.</p>
     </div>
   </section>
 
@@ -1012,7 +1014,7 @@
   <!-- ═══════════════ HACKATHON GRANTS ═══════════════ -->
   <section class="section section-alt">
     <div class="section-inner reveal">
-      <div class="section-label">Clude Builders — Hackathon Grants</div>
+      <div class="section-label">Clude Builders · Hackathon Grants</div>
       <div class="section-title">30M $CLUDE for builders.</div>
       <div class="section-desc">Three grants of 10M tokens each. Vested linearly over one week. Build something on Clude.</div>
       <div class="grants-grid" id="grantsGrid">
@@ -1069,7 +1071,7 @@
   <!-- ═══════════════ FOOTER ═══════════════ -->
   <footer class="footer">
     <div class="footer-inner">
-      <div class="footer-left">Clude — The cognitive layer for AI agents</div>
+      <div class="footer-left">Clude · The cognitive layer for AI agents</div>
       <div class="footer-links">
         <a href="https://x.com/cludeproject" target="_blank">Twitter</a>
         <a href="https://github.com/sebbsssss/cludebot" target="_blank">GitHub</a>
@@ -1390,7 +1392,7 @@
         front.className = 'grant-front';
         front.innerHTML =
           '<div class="grant-front-question">?</div>' +
-          '<div class="grant-front-label">Grant ' + grant.number + ' — Classified</div>' +
+          '<div class="grant-front-label">Grant ' + grant.number + ' · Classified</div>' +
           '<div class="grant-front-reveal">Reveals Day ' + grant.revealDay + '</div>' +
           '<div class="grant-front-amount">10,000,000 $CLUDE</div>';
 
@@ -1406,7 +1408,7 @@
             '<div class="grant-back-name">' + grant.name + '</div>' +
             '<div class="grant-back-desc">' + (grant.description || 'Building on Clude infrastructure.') + '</div>' +
             '<div class="grant-back-amount">10,000,000 $CLUDE</div>' +
-            '<div class="grant-back-vesting">Vested linearly — 7 days</div>' +
+            '<div class="grant-back-vesting">Vested linearly · 7 days</div>' +
             '<a href="#" class="btn btn-outline" style="font-size:10px;padding:10px 20px;">View Project</a>';
         } else {
           back.innerHTML =
@@ -1414,7 +1416,7 @@
             '<div class="grant-back-name">To Be Announced</div>' +
             '<div class="grant-back-desc">This grant recipient will be revealed.</div>' +
             '<div class="grant-back-amount">10,000,000 $CLUDE</div>' +
-            '<div class="grant-back-vesting">Vested linearly — 7 days</div>';
+            '<div class="grant-back-vesting">Vested linearly · 7 days</div>';
         }
 
         card.appendChild(front);
@@ -1431,7 +1433,7 @@
       var feed = $('tweetFeed');
 
       if (!state.tweets || state.tweets.length === 0) {
-        feed.innerHTML = '<div class="feed-empty">No submissions yet. Be the first — tag @cludeproject with #CludeHackathon</div>';
+        feed.innerHTML = '<div class="feed-empty">No submissions yet. Be the first to tag @cludeproject with #CludeHackathon</div>';
         return;
       }
 
@@ -1499,7 +1501,7 @@
       var data = state.leaderboardData[state.leaderboardDay];
 
       if (!data || data.length === 0) {
-        container.innerHTML = '<div class="lb-empty">Pending — Campaign hasn\'t started yet. Check back soon.</div>';
+        container.innerHTML = '<div class="lb-empty">Pending. Campaign hasn\'t started yet. Check back soon.</div>';
         return;
       }
 

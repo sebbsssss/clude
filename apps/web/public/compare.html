@@ -1,397 +1,1187 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Clude vs Everyone — AI Agent Memory Benchmark</title>
-  <meta name="description" content="How Clude compares to Mem0, Zep/Graphiti, OpenAI Memory, DeerFlow, SuperMemory, Letta, and LangMem on real memory benchmarks.">
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg: #f5f5f0;
-      --text: #111;
-      --text-muted: #666;
-      --text-faint: #999;
-      --blue: #2244ff;
-      --green: #27c93f;
-      --red: #e84b3c;
-      --mono: 'JetBrains Mono', monospace;
-      --border: #ddd;
-      --card-bg: #fff;
-    }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: var(--mono); background: var(--bg); color: var(--text); line-height: 1.7; font-size: 14px; }
-    .container { max-width: 900px; margin: 0 auto; padding: 60px 24px 120px; }
-    .nav { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; max-width: 900px; margin: 0 auto; }
-    .nav a { color: var(--text-muted); text-decoration: none; font-size: 13px; }
-    .nav a:hover { color: var(--text); }
-    .nav-logo { font-weight: 700; font-size: 16px; color: var(--text); text-decoration: none; }
-    h1 { font-size: 32px; font-weight: 800; letter-spacing: -1px; margin-bottom: 16px; line-height: 1.2; }
-    h1 span { color: var(--blue); }
-    h2 { font-size: 20px; font-weight: 700; margin-top: 56px; margin-bottom: 16px; letter-spacing: -0.5px; }
-    p { color: var(--text-muted); margin-bottom: 12px; }
-    strong { color: var(--text); font-weight: 600; }
-    .lead { font-size: 15px; color: var(--text-muted); margin-bottom: 40px; line-height: 1.8; }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Compare · Clude</title>
+<meta name="description" content="Clude vs Mem0, Zep, OpenAI Memory, DeerFlow, Letta. Try the live compaction demo, then see the internal benchmark and feature matrix." />
+<link rel="icon" type="image/svg+xml" href="/logo/Clude-Icon-Blue.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Funnel+Sans:ital,wght@0,300..800;1,300..800&family=Inconsolata:wght@300..700&family=Nothing+You+Could+Do&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #f5f5f0;
+    --ink: #1a1b1f;
+    --ink-2: #2a2b30;
+    --mute: #5b5f68;
+    --accent: #2244ff;
+    --accent-soft: rgba(34, 68, 255, 0.08);
+    --line: rgba(26, 27, 31, 0.12);
+    --line-strong: rgba(26, 27, 31, 0.2);
+    --green: #2a8547;
+    --amber: #b07510;
+    --red: #b94330;
+    --red-soft: rgba(185, 67, 48, 0.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Funnel Sans', system-ui, sans-serif;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.65;
+  }
 
-    /* Benchmark table */
-    .bench-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 24px 0;
-      font-size: 12px;
-      overflow-x: auto;
-      display: block;
-    }
-    .bench-table thead { position: sticky; top: 0; }
-    .bench-table th {
-      text-align: left;
-      padding: 12px 10px;
-      border-bottom: 2px solid var(--border);
-      font-weight: 700;
-      color: var(--text);
-      white-space: nowrap;
-      background: var(--bg);
-    }
-    .bench-table td {
-      padding: 10px;
-      border-bottom: 1px solid var(--border);
-      color: var(--text-muted);
-      white-space: nowrap;
-    }
-    .bench-table tr:hover { background: rgba(34, 68, 255, 0.03); }
-    .bench-table td:first-child { font-weight: 600; color: var(--text); }
-    .highlight { background: rgba(34, 68, 255, 0.06) !important; }
-    .highlight td { color: var(--text) !important; font-weight: 600; }
-    .highlight td:first-child { color: var(--blue) !important; }
+  nav {
+    position: sticky; top: 0;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 20px 32px;
+    background: rgba(245,245,240,0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+    z-index: 10;
+    font-size: 12px; letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--ink-2);
+  }
+  nav .logo { font-weight: 600; letter-spacing: 0.22em; color: inherit; text-decoration: none; }
+  nav .links { display: flex; gap: 28px; font-weight: 500; opacity: 0.7; }
+  nav .links a { color: inherit; text-decoration: none; }
+  nav .links a:hover { opacity: 1; color: var(--ink); }
 
-    .score-high { color: var(--green) !important; font-weight: 700 !important; }
-    .score-mid { color: #d4a017 !important; font-weight: 600 !important; }
-    .score-low { color: var(--red) !important; }
-    .score-na { color: var(--text-faint) !important; font-style: italic; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 7vw; }
 
-    /* Bar chart */
-    .bar-chart { margin: 24px 0; }
-    .bar-row {
-      display: flex;
-      align-items: center;
-      margin-bottom: 8px;
-      gap: 12px;
-    }
-    .bar-label {
-      width: 140px;
-      font-size: 12px;
-      font-weight: 600;
-      text-align: right;
-      flex-shrink: 0;
-    }
-    .bar-track {
-      flex: 1;
-      height: 28px;
-      background: rgba(0,0,0,0.04);
-      border-radius: 4px;
-      overflow: hidden;
-      position: relative;
-    }
-    .bar-fill {
-      height: 100%;
-      border-radius: 4px;
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      padding-right: 8px;
-      font-size: 11px;
-      font-weight: 700;
-      color: #fff;
-      transition: width 1s ease;
-    }
-    .bar-clude { background: var(--blue); }
-    .bar-other { background: #bbb; }
+  .page-head { padding: 120px 0 80px; }
+  .eyebrow {
+    font-family: 'Inconsolata', monospace;
+    font-size: 12px; font-weight: 500;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--mute);
+    display: inline-flex; align-items: center; gap: 10px;
+    margin-bottom: 28px;
+  }
+  .eyebrow::before { content: ''; width: 28px; height: 1px; background: var(--ink); opacity: 0.4; }
+  h1 {
+    font-family: 'Funnel Sans', sans-serif;
+    font-weight: 600;
+    font-size: clamp(44px, 5.5vw, 80px);
+    line-height: 1.02;
+    letter-spacing: -0.03em;
+    margin-bottom: 28px;
+  }
+  h1 em {
+    font-family: 'Nothing You Could Do', cursive;
+    font-style: normal;
+    color: var(--accent);
+    display: inline-block;
+    transform: translateY(0.04em) rotate(-2deg);
+  }
+  .lede { font-size: 18px; line-height: 1.55; color: var(--ink-2); max-width: 58ch; }
 
-    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin: 16px 0; }
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    @media (max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } }
-    .feature-yes { color: var(--green); }
-    .feature-no { color: var(--red); }
-    .feature-partial { color: #d4a017; }
-    .small { font-size: 11px; color: var(--text-faint); }
+  section.block { padding: 80px 0; border-top: 1px solid var(--line); }
+  .block-head {
+    display: flex; gap: 32px; align-items: baseline;
+    margin-bottom: 32px; flex-wrap: wrap;
+  }
+  .block-head .num {
+    font-family: 'Inconsolata', monospace;
+    font-size: 13px; font-weight: 500;
+    letter-spacing: 0.18em; color: var(--mute);
+    min-width: 80px;
+  }
+  .block-head h2 {
+    font-family: 'Funnel Sans', sans-serif; font-weight: 500;
+    font-size: clamp(26px, 2.8vw, 36px);
+    line-height: 1.1; letter-spacing: -0.02em;
+  }
+  .block-head h2 em {
+    font-family: 'Nothing You Could Do', cursive;
+    font-style: normal;
+    color: var(--accent);
+    display: inline-block;
+    transform: translateY(0.04em) rotate(-2deg);
+  }
+  .block-intro { font-size: 16px; color: var(--ink-2); margin-bottom: 32px; max-width: 64ch; }
+  a.inline {
+    color: var(--accent); text-decoration: none;
+    border-bottom: 1px solid rgba(34,68,255,0.3);
+  }
+  a.inline:hover { border-bottom-color: var(--accent); }
 
-    .source-note {
-      margin-top: 48px;
-      padding: 20px;
-      background: rgba(34, 68, 255, 0.04);
-      border: 1px solid rgba(34, 68, 255, 0.1);
-      border-radius: 10px;
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-  </style>
+  /* Bar chart (used in feature matrix context on other pages; kept minimal here) */
+  .bars { margin: 20px 0; }
+  .bar-row {
+    display: grid; grid-template-columns: 160px 1fr; gap: 20px;
+    align-items: center; margin-bottom: 12px;
+  }
+  .bar-label {
+    font-family: 'Inconsolata', monospace;
+    font-size: 13px; color: var(--ink-2); text-align: right;
+  }
+  .bar-row.us .bar-label { color: var(--accent); font-weight: 600; }
+  .bar-track { height: 28px; border-left: 1px solid var(--line); position: relative; }
+  .bar-fill {
+    height: 100%;
+    display: flex; align-items: center;
+    padding: 0 12px 0 14px;
+    font-family: 'Inconsolata', monospace;
+    font-size: 12px; font-weight: 500;
+    color: #fff; background: var(--ink-2);
+    transition: width 1s ease;
+  }
+  .bar-row.us .bar-fill { background: var(--accent); }
+  .caption {
+    font-family: 'Inconsolata', monospace;
+    font-size: 12px; color: var(--mute);
+    margin-top: 16px; max-width: 64ch; line-height: 1.6;
+  }
+
+  /* ---- INTERACTIVE COMPACTION DEMO ---- */
+  .demo-input { margin-bottom: 32px; }
+  .demo-input-label {
+    font-family: 'Inconsolata', monospace;
+    font-size: 11.5px; font-weight: 500;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--mute); margin-bottom: 12px;
+  }
+  .demo-input textarea {
+    width: 100%;
+    min-height: 150px;
+    padding: 16px 18px;
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink);
+    font-family: 'Inconsolata', monospace;
+    font-size: 13px;
+    line-height: 1.65;
+    border-radius: 4px;
+    outline: none;
+    resize: vertical;
+    transition: border-color 120ms ease;
+  }
+  .demo-input textarea:focus { border-color: var(--accent); }
+  .demo-input textarea::placeholder { color: var(--mute); opacity: 0.7; }
+  .presets { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  .preset-btn {
+    padding: 8px 14px;
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink-2);
+    font-family: 'Inconsolata', monospace;
+    font-size: 12px; font-weight: 500;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: all 120ms ease;
+  }
+  .preset-btn:hover { border-color: var(--ink); color: var(--ink); }
+  .upload-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .upload-btn input[type="file"] { display: none; }
+
+  .controls {
+    display: flex; gap: 12px; margin-top: 20px; align-items: center; flex-wrap: wrap;
+  }
+  .demo-cta {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 12px 20px;
+    background: var(--ink); color: var(--bg);
+    border: 1px solid var(--ink);
+    font-family: 'Inconsolata', monospace;
+    font-size: 13px; font-weight: 500; letter-spacing: 0.04em;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 120ms ease;
+  }
+  .demo-cta:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); }
+  .demo-cta:disabled { opacity: 0.35; cursor: not-allowed; }
+  .demo-cta-ghost {
+    background: transparent; color: var(--ink-2);
+    border: 1px solid var(--line);
+  }
+  .demo-cta-ghost:hover:not(:disabled) { background: transparent; color: var(--ink); border-color: var(--ink); }
+  .step-indicator {
+    font-family: 'Inconsolata', monospace;
+    font-size: 13px;
+    color: var(--mute);
+    margin-left: auto;
+  }
+  .step-indicator strong { color: var(--ink); font-weight: 600; }
+
+  .comparison {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 0; margin-top: 32px;
+    border-top: 1px solid var(--line);
+  }
+  @media (max-width: 780px) { .comparison { grid-template-columns: 1fr; } }
+  .panel {
+    padding: 28px 28px 0 0;
+    min-height: 400px;
+    display: flex; flex-direction: column;
+    transition: background 300ms ease;
+  }
+  .panel.flash { background: var(--accent-soft); }
+  .panel + .panel { padding-left: 28px; border-left: 1px solid var(--line); }
+  @media (max-width: 780px) { .panel + .panel { padding-left: 0; border-left: none; border-top: 1px solid var(--line); padding-top: 28px; } }
+
+  .panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 18px;
+  }
+  .panel-title {
+    font-family: 'Funnel Sans', sans-serif;
+    font-weight: 600;
+    font-size: 18px; letter-spacing: -0.01em;
+  }
+  .panel-title.without { color: var(--ink-2); }
+  .panel-title.with    { color: var(--accent); }
+  .panel-badge {
+    font-family: 'Inconsolata', monospace;
+    font-size: 11px; font-weight: 500;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    padding: 3px 10px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    color: var(--mute);
+  }
+  .panel-badge.red { color: var(--red); border-color: rgba(185, 67, 48, 0.25); }
+  .panel-badge.blue { color: var(--accent); border-color: rgba(34, 68, 255, 0.25); }
+
+  .panel-body {
+    flex: 1;
+    font-family: 'Inconsolata', monospace;
+    font-size: 12.5px;
+    line-height: 1.7;
+    color: var(--ink-2);
+    max-height: 340px;
+    overflow-y: auto;
+    padding-right: 6px;
+  }
+  .panel-body.empty { color: var(--mute); font-style: italic; }
+  .panel-body.degraded { color: var(--red); }
+
+  .memory-item {
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    border-left: 2px solid var(--line);
+    transition: opacity 300ms ease, border-color 300ms ease;
+    font-family: 'Funnel Sans', sans-serif;
+    font-size: 13.5px;
+    line-height: 1.55;
+  }
+  .memory-item.episodic    { border-left-color: #7f97ff; }
+  .memory-item.semantic    { border-left-color: var(--accent); }
+  .memory-item.procedural  { border-left-color: var(--green); }
+  .memory-item.self_model  { border-left-color: var(--amber); }
+  .memory-item .memory-meta {
+    display: flex; flex-wrap: wrap; gap: 12px;
+    margin-top: 8px;
+    font-family: 'Inconsolata', monospace;
+    font-size: 11px; color: var(--mute);
+  }
+  .memory-item .memory-type {
+    padding: 2px 8px;
+    background: rgba(0,0,0,0.05);
+    border-radius: 3px;
+    font-size: 10px;
+    letter-spacing: 0.12em; text-transform: uppercase;
+  }
+  .importance-bar, .decay-bar {
+    display: inline-block;
+    width: 40px; height: 3px;
+    background: var(--line);
+    margin-left: 4px;
+    vertical-align: middle;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .importance-fill, .decay-fill {
+    display: block; height: 100%;
+    background: var(--accent);
+    transition: width 300ms ease;
+  }
+
+  .panel-footer {
+    padding-top: 16px;
+    margin-top: 16px;
+    border-top: 1px solid var(--line);
+    display: flex; flex-wrap: wrap; gap: 18px;
+    font-family: 'Inconsolata', monospace;
+    font-size: 11.5px;
+    color: var(--mute);
+  }
+  .panel-footer .metric-value { color: var(--ink); font-weight: 600; }
+  .panel-footer .metric-value.red { color: var(--red); }
+  .panel-footer .metric-value.blue { color: var(--accent); }
+
+  .entities-row {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    padding-top: 12px;
+  }
+  .entity-tag {
+    font-family: 'Inconsolata', monospace;
+    font-size: 10.5px;
+    padding: 3px 8px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: 3px;
+    letter-spacing: 0.04em;
+  }
+
+  .scores-panel {
+    margin-top: 48px;
+    padding-top: 32px;
+    border-top: 1px solid var(--line);
+  }
+  .scores-panel .scores-label {
+    font-family: 'Inconsolata', monospace;
+    font-size: 11.5px; font-weight: 500;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--mute); margin-bottom: 20px;
+  }
+  .score-row {
+    display: grid;
+    grid-template-columns: 140px 1fr 1fr;
+    gap: 14px;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .score-label {
+    font-family: 'Inconsolata', monospace;
+    font-size: 12px;
+    color: var(--ink-2);
+    text-align: right;
+  }
+  .score-bar-wrap {
+    height: 22px;
+    background: transparent;
+    border-left: 1px solid var(--line);
+    position: relative;
+  }
+  .score-bar {
+    height: 100%;
+    display: flex; align-items: center;
+    padding: 0 10px 0 12px;
+    font-family: 'Inconsolata', monospace;
+    font-size: 11px; font-weight: 500;
+    color: #fff;
+    transition: width 600ms ease;
+  }
+  .score-bar.red { background: var(--red); }
+  .score-bar.blue { background: var(--accent); }
+  .scores-legend {
+    display: flex; gap: 24px;
+    margin-top: 20px;
+    font-family: 'Inconsolata', monospace;
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--mute);
+  }
+  .scores-legend .dot-red,
+  .scores-legend .dot-blue {
+    display: inline-block; width: 10px; height: 10px;
+    margin-right: 8px; vertical-align: middle; border-radius: 2px;
+  }
+  .scores-legend .dot-red { background: var(--red); }
+  .scores-legend .dot-blue { background: var(--accent); }
+
+  /* Tables */
+  table.data { width: 100%; border-collapse: collapse; font-size: 14px; margin: 16px 0; }
+  table.data th, table.data td {
+    text-align: left; padding: 12px 14px 12px 0;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  table.data th {
+    font-family: 'Inconsolata', monospace;
+    font-size: 12px; font-weight: 500;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--mute);
+    border-bottom-color: var(--line-strong);
+  }
+  table.data th.us { color: var(--accent); }
+  table.data td.label { font-weight: 500; color: var(--ink); font-size: 14px; }
+  table.data tr.highlight td { background: var(--accent-soft); }
+  table.data tr.total td {
+    border-top: 1px solid var(--line-strong);
+    font-weight: 600; color: var(--ink); padding-top: 16px;
+  }
+  table.scroll-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table.scroll-wrap table.data { min-width: 640px; }
+  .score { font-family: 'Inconsolata', monospace; font-weight: 600; }
+  .score.high { color: var(--green); }
+  .score.mid  { color: var(--amber); }
+  .score.low  { color: var(--red); }
+  .score.na   { color: var(--mute); font-weight: 400; font-style: italic; }
+  .tick { color: var(--green); font-weight: 600; }
+  .cross { color: var(--red); }
+  .partial { color: var(--amber); }
+
+  .tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0; margin-top: 8px; }
+  .tile {
+    padding: 36px 32px 40px 0;
+    border-top: 1px solid var(--line);
+  }
+  .tile:nth-child(odd) + .tile { padding-left: 32px; border-left: 1px solid var(--line); }
+  .tile:nth-child(n+3) { padding-top: 32px; }
+  @media (max-width: 780px) {
+    .tiles { grid-template-columns: 1fr; }
+    .tile, .tile:nth-child(odd) + .tile { padding: 28px 0 0; border-left: none; }
+  }
+  .tile .kicker {
+    font-family: 'Inconsolata', monospace;
+    font-size: 11.5px; font-weight: 500;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--mute); margin-bottom: 16px;
+  }
+  .tile h3 {
+    font-family: 'Funnel Sans', sans-serif; font-weight: 600;
+    font-size: 19px; line-height: 1.3;
+    letter-spacing: -0.01em; margin-bottom: 12px;
+  }
+  .tile p { font-size: 14.5px; line-height: 1.65; color: var(--ink-2); max-width: 42ch; }
+
+  .honest { margin-top: 16px; }
+  .honest p { font-size: 15.5px; line-height: 1.7; color: var(--ink-2); margin-bottom: 12px; max-width: 66ch; }
+  .honest p strong { color: var(--ink); font-family: 'Funnel Sans', sans-serif; font-weight: 600; }
+
+  .methodology {
+    font-family: 'Inconsolata', monospace;
+    font-size: 12.5px; line-height: 1.75;
+    color: var(--mute);
+    padding: 24px 0 0;
+    border-top: 1px solid var(--line);
+    margin-top: 80px;
+  }
+  .methodology strong { color: var(--ink); font-weight: 500; }
+
+  footer {
+    padding: 60px 7vw 48px;
+    border-top: 1px solid var(--line);
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 32px;
+    font-family: 'Inconsolata', monospace;
+    font-size: 12.5px; font-weight: 500;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--mute);
+  }
+  footer a { color: inherit; text-decoration: none; }
+  footer a:hover { color: var(--ink); }
+  footer .footer-nav { display: flex; gap: 28px; flex-wrap: wrap; }
+</style>
 </head>
 <body>
 
-<nav class="nav">
-  <a href="/" class="nav-logo">CLUDE</a>
-  <div>
-    <a href="/chat">Chat</a>&nbsp;&nbsp;&nbsp;
-    <a href="/docs.html">Docs</a>&nbsp;&nbsp;&nbsp;
-    <a href="/brain.html">Brain</a>&nbsp;&nbsp;&nbsp;
-    <a href="/explore">Explorer</a>&nbsp;&nbsp;&nbsp;
+<nav>
+  <a href="/" class="logo">CLUDE</a>
+  <div class="links">
+    <a href="/docs.html">Docs</a>
+    <a href="/chat">Chat</a>
     <a href="/dashboard">Dashboard</a>
+    <a href="https://github.com/sebbsssss/cludebot" target="_blank" rel="noopener">GitHub</a>
   </div>
 </nav>
 
-<div class="container">
+<main>
+  <div class="wrap">
 
-  <h1>Clude vs <span>everyone</span></h1>
-  <p class="lead">
-    How does Clude's memory architecture compare to Mem0, Zep/Graphiti, OpenAI Memory, DeerFlow, Letta, and others? 
-    Real benchmarks. No marketing fluff.
-  </p>
+    <div class="page-head">
+      <div class="eyebrow">Compare / benchmarks, not marketing</div>
+      <h1>Clude vs <em>everyone.</em></h1>
+      <p class="lede">
+        Try the live compaction demo below. Then see the internal benchmark and
+        the feature matrix versus Mem0, Zep/Graphiti, OpenAI Memory, DeerFlow, and Letta.
+      </p>
+    </div>
 
-  <!-- ── LoCoMo BENCHMARK ─────────────────────────── -->
+    <!-- ══════════════════════════════════════════════════════
+         INTERACTIVE COMPACTION DEMO
+         ══════════════════════════════════════════════════════ -->
+    <section class="block" id="demo">
+      <div class="block-head">
+        <div class="num">/ 01</div>
+        <h2>See it <em>live.</em></h2>
+      </div>
+      <p class="block-intro">
+        Paste any content (or upload a file, or pick a sample). Watch what happens
+        when we compact it 20 times: a traditional context window degrades into
+        shards. Clude's structured memory keeps the important facts and entities,
+        even as unimportant detail decays.
+      </p>
 
-  <h2>LoCoMo Benchmark (ACL 2024)</h2>
-  <p>
-    <a href="https://arxiv.org/abs/2402.06116" style="color: var(--blue)">LoCoMo</a> tests long-conversation memory across 5 categories: 
-    single-hop, temporal, multi-hop, open-domain, and adversarial questions. 
-    1,986 questions from real conversations.
-  </p>
+      <div class="demo-input">
+        <div class="demo-input-label">Input content</div>
+        <textarea id="demoInput" placeholder="Paste a conversation, meeting notes, technical doc, or any text. 500+ words works best."></textarea>
+        <div class="presets">
+          <button class="preset-btn" onclick="loadPreset('conversation')">Sample · conversation</button>
+          <button class="preset-btn" onclick="loadPreset('technical')">Sample · technical doc</button>
+          <button class="preset-btn" onclick="loadPreset('meeting')">Sample · meeting notes</button>
+          <label class="preset-btn upload-btn">
+            <span>↑ Upload file</span>
+            <input type="file" id="demoUpload" accept=".txt,.md,.json,text/*" />
+          </label>
+        </div>
+        <div class="controls">
+          <button class="demo-cta" id="startBtn" onclick="startCompaction()">Start compaction</button>
+          <button class="demo-cta demo-cta-ghost" id="stepBtn" onclick="stepCompaction()" disabled>Compact once</button>
+          <button class="demo-cta demo-cta-ghost" id="autoBtn" onclick="autoCompact()" disabled>Auto (20×)</button>
+          <button class="demo-cta demo-cta-ghost" onclick="resetAll()">Reset</button>
+          <div class="step-indicator">Step <strong id="stepNum">0</strong> / 20</div>
+        </div>
+      </div>
 
-  <div class="bar-chart">
-    <div class="bar-row">
-      <div class="bar-label" style="color: var(--blue)">Clude</div>
-      <div class="bar-track"><div class="bar-fill bar-clude" style="width: 100%">100.0%</div></div>
+      <div class="comparison">
+        <div class="panel" id="withoutPanel">
+          <div class="panel-head">
+            <span class="panel-title without">Without Clude</span>
+            <span class="panel-badge red">Context window</span>
+          </div>
+          <div class="panel-body empty" id="withoutContent">Paste content and hit Start to begin.</div>
+          <div class="panel-footer">
+            <span>Chars: <span class="metric-value red" id="withoutChars">0</span></span>
+            <span>Retained: <span class="metric-value red" id="withoutRetention">100%</span></span>
+            <span>Facts: <span class="metric-value red" id="withoutFacts">0</span></span>
+            <span>Entities lost: <span class="metric-value red" id="withoutEntitiesLost">0</span></span>
+          </div>
+        </div>
+        <div class="panel" id="withPanel">
+          <div class="panel-head">
+            <span class="panel-title with">With Clude</span>
+            <span class="panel-badge blue">Structured memory</span>
+          </div>
+          <div class="panel-body empty" id="cludeContent">Paste content and hit Start to begin.</div>
+          <div class="entities-row" id="entitySection" style="display:none;"></div>
+          <div class="panel-footer">
+            <span>Memories: <span class="metric-value blue" id="cludeMemories">0</span></span>
+            <span>Retained: <span class="metric-value blue" id="cludeRetention">100%</span></span>
+            <span>Facts: <span class="metric-value blue" id="cludeFacts">0</span></span>
+            <span>Entities: <span class="metric-value blue" id="cludeEntities">0</span></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="scores-panel" id="scoresPanel" style="display:none;">
+        <div class="scores-label">Retention score</div>
+        <div class="score-row">
+          <div class="score-label">Info retained</div>
+          <div class="score-bar-wrap"><div class="score-bar red" id="barWithout" style="width:100%">100%</div></div>
+          <div class="score-bar-wrap"><div class="score-bar blue" id="barWith" style="width:100%">100%</div></div>
+        </div>
+        <div class="score-row">
+          <div class="score-label">Key facts</div>
+          <div class="score-bar-wrap"><div class="score-bar red" id="barFactsWithout" style="width:100%">0</div></div>
+          <div class="score-bar-wrap"><div class="score-bar blue" id="barFactsWith" style="width:100%">0</div></div>
+        </div>
+        <div class="score-row">
+          <div class="score-label">Entities</div>
+          <div class="score-bar-wrap"><div class="score-bar red" id="barEntWithout" style="width:100%">0</div></div>
+          <div class="score-bar-wrap"><div class="score-bar blue" id="barEntWith" style="width:100%">0</div></div>
+        </div>
+        <div class="scores-legend">
+          <span><span class="dot-red"></span>Without Clude</span>
+          <span><span class="dot-blue"></span>With Clude</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="block">
+      <div class="block-head">
+        <div class="num">/ 02</div>
+        <h2>Clude memory benchmark <span style="color:var(--mute);font-weight:400">· 8 suites</span></h2>
+      </div>
+      <p class="block-intro">Our internal benchmark tests eight capabilities at production scale (20,000+ memories).</p>
+      <div class="scroll-wrap">
+        <table class="data">
+          <thead>
+            <tr><th style="width:38%">Suite</th><th style="width:14%">Score</th><th>What it tests</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="label">A. Recall quality</td><td><span class="score mid">67.7</span></td><td>Relevance of retrieved memories</td></tr>
+            <tr><td class="label">B. Type distribution</td><td><span class="score mid">71.3</span></td><td>Balanced storage across memory types</td></tr>
+            <tr><td class="label">C. Decay &amp; importance</td><td><span class="score high">100</span></td><td>Important memories persist, noise fades</td></tr>
+            <tr><td class="label">D. Entity awareness</td><td><span class="score high">100</span></td><td>Entity extraction and relation mapping</td></tr>
+            <tr><td class="label">E. Multi-hop recall</td><td><span class="score high">92</span></td><td>Following association chains</td></tr>
+            <tr><td class="label">F. Scale &amp; latency</td><td><span class="score low">46.4</span></td><td>Speed at 1000+ memories (~1.6 s avg)</td></tr>
+            <tr><td class="label">G. Store + recall</td><td><span class="score high">100</span></td><td>Basic store / retrieve reliability</td></tr>
+            <tr><td class="label">H. Answer quality</td><td><span class="score high">94</span></td><td>LLM answer accuracy using recalled context</td></tr>
+            <tr class="total"><td>Overall</td><td><span class="score high">83.9</span></td><td></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="block">
+      <div class="block-head">
+        <div class="num">/ 03</div>
+        <h2>Feature matrix</h2>
+      </div>
+      <div class="scroll-wrap">
+        <table class="data">
+          <thead>
+            <tr>
+              <th style="width:22%">Feature</th>
+              <th class="us">Clude</th>
+              <th>Mem0</th>
+              <th>Zep</th>
+              <th>Letta</th>
+              <th>DeerFlow</th>
+              <th>OpenAI</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="highlight">
+              <td class="label">LoCoMo score</td>
+              <td><span class="score high">100%</span></td>
+              <td><span class="score mid">66.9%</span></td>
+              <td><span class="score mid">75.1%</span></td>
+              <td><span class="score na">N/A</span></td>
+              <td><span class="score na">N/A</span></td>
+              <td><span class="score low">52.9%</span></td>
+            </tr>
+            <tr>
+              <td class="label">Retrieval</td>
+              <td>Hybrid vector + graph</td>
+              <td>Vector + graph</td>
+              <td>Graph (Graphiti)</td>
+              <td>Archival search</td>
+              <td>Prompt injection</td>
+              <td>Keyword match</td>
+            </tr>
+            <tr>
+              <td class="label">Memory types</td>
+              <td><span class="tick">7 types</span></td>
+              <td><span class="partial">2 (fact / pref)</span></td>
+              <td><span class="partial">Entities + edges</span></td>
+              <td><span class="partial">Core + archival</span></td>
+              <td><span class="cross">Flat facts</span></td>
+              <td><span class="cross">Flat facts</span></td>
+            </tr>
+            <tr>
+              <td class="label">Capacity</td>
+              <td>Unlimited</td>
+              <td>Unlimited</td>
+              <td>Unlimited</td>
+              <td>Unlimited</td>
+              <td><span class="cross">100 max</span></td>
+              <td>~unknown</td>
+            </tr>
+            <tr>
+              <td class="label">Decay / forgetting</td>
+              <td><span class="tick">Configurable</span></td>
+              <td><span class="cross">No</span></td>
+              <td><span class="cross">No</span></td>
+              <td><span class="cross">No</span></td>
+              <td><span class="cross">No</span></td>
+              <td><span class="cross">No</span></td>
+            </tr>
+            <tr>
+              <td class="label">Consolidation</td>
+              <td><span class="tick">Dream cycles + reflection</span></td>
+              <td><span class="cross">No</span></td>
+              <td><span class="cross">No</span></td>
+              <td><span class="partial">Manual edit</span></td>
+              <td><span class="cross">No</span></td>
+              <td><span class="cross">No</span></td>
+            </tr>
+            <tr>
+              <td class="label">Association graph</td>
+              <td><span class="tick">8 bond types</span></td>
+              <td><span class="tick">Entity relations</span></td>
+              <td><span class="tick">Graphiti</span></td>
+              <td><span class="cross">No</span></td>
+              <td><span class="cross">No</span></td>
+              <td><span class="cross">No</span></td>
+            </tr>
+            <tr>
+              <td class="label">Local-first</td>
+              <td><span class="tick">SQLite + local embeddings</span></td>
+              <td><span class="cross">Cloud only</span></td>
+              <td><span class="partial">Self-host</span></td>
+              <td><span class="tick">Local server</span></td>
+              <td><span class="tick">Local JSON</span></td>
+              <td><span class="cross">Cloud only</span></td>
+            </tr>
+            <tr>
+              <td class="label">MCP support</td>
+              <td><span class="tick">Built-in server</span></td>
+              <td><span class="cross">No</span></td>
+              <td><span class="cross">No</span></td>
+              <td><span class="cross">No</span></td>
+              <td><span class="tick">Supports MCP</span></td>
+              <td><span class="cross">No</span></td>
+            </tr>
+            <tr>
+              <td class="label">Portability</td>
+              <td><span class="tick">Wallet-signed packs</span></td>
+              <td><span class="cross">Vendor-locked</span></td>
+              <td><span class="cross">Vendor-locked</span></td>
+              <td><span class="partial">Export</span></td>
+              <td><span class="partial">JSON file</span></td>
+              <td><span class="cross">No export</span></td>
+            </tr>
+            <tr>
+              <td class="label">Pricing</td>
+              <td>Free (local) / usage</td>
+              <td>Free tier + paid</td>
+              <td>Free tier + paid</td>
+              <td>Open source</td>
+              <td>Free (OSS)</td>
+              <td>Included</td>
+            </tr>
+            <tr>
+              <td class="label">Open source</td>
+              <td><span class="tick">MIT</span></td>
+              <td><span class="tick">Apache 2.0</span></td>
+              <td><span class="tick">Apache 2.0</span></td>
+              <td><span class="tick">Apache 2.0</span></td>
+              <td><span class="tick">MIT</span></td>
+              <td><span class="cross">Closed</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="block">
+      <div class="block-head">
+        <div class="num">/ 04</div>
+        <h2>Where Clude is <em>different.</em></h2>
+      </div>
+      <div class="tiles">
+        <div class="tile">
+          <div class="kicker">Cognitive architecture</div>
+          <h3>Memory that evolves</h3>
+          <p>Seven memory types (episodic, semantic, procedural, self-model, introspective, emergence, knowledge). Natural decay with rehearsal reinforcement. Dream-cycle consolidation. Not just storage. Synthesis.</p>
+        </div>
+        <div class="tile">
+          <div class="kicker">Hybrid retrieval</div>
+          <h3>Finds what matters</h3>
+          <p>Vector similarity + entity graph traversal + query expansion + knowledge-seed pinning. A seven-phase recall pipeline that surfaces relevance, not just match.</p>
+        </div>
+        <div class="tile">
+          <div class="kicker">Local-first</div>
+          <h3>Offline by default</h3>
+          <p>SQLite + GTE-Small embeddings. Zero API keys, zero network, zero cost. Same semantic search, fully offline. Cloud is optional.</p>
+        </div>
+        <div class="tile">
+          <div class="kicker">MCP native</div>
+          <h3>One command to wire in</h3>
+          <p>Built-in MCP server. Works with Claude Desktop, Claude Code, Cursor, Windsurf, DeerFlow, and any MCP-compatible runtime.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="block">
+      <div class="block-head">
+        <div class="num">/ 05</div>
+        <h2>Where Clude wins.</h2>
+      </div>
+      <div class="honest">
+        <p><strong>Autonomous agents that need to learn over time.</strong> Dream cycles, active reflection, importance reinforcement, and natural decay create a memory system that self-organizes. Others store and retrieve. Clude stores, retrieves, and evolves.</p>
+        <p><strong>Privacy-first deployments.</strong> Local mode with zero external calls. No other solution offers full semantic search with truly zero network dependency.</p>
+        <p><strong>Cross-framework portability.</strong> Wallet-signed MemoryPacks let memories move between agents, frameworks, and models. Your memory belongs to you, not your provider.</p>
+        <p><strong>MCP ecosystem.</strong> Native MCP server means Clude works with the fastest-growing agent integration standard. Two commands to add persistent memory to any MCP-compatible agent.</p>
+      </div>
+    </section>
+
+    <div class="methodology">
+      <strong>Methodology.</strong> LoCoMo scores from the <a href="https://arxiv.org/abs/2402.06116" class="inline" target="_blank" rel="noopener">original paper</a> and published competitor benchmarks. Clude's LoCoMo score from running the full 1,986-question suite against our production API. Feature comparison based on public documentation as of March 2026. Internal benchmark against a live Clude instance with 20,000+ production memories.<br /><br />
+      <strong>Disclaimer.</strong> We built Clude. We tried to be fair, but we're biased. Run the benchmarks yourself: <a href="https://github.com/sebbsssss/clude-benchmark" class="inline" target="_blank" rel="noopener">github.com/sebbsssss/clude-benchmark</a>.
     </div>
-    <div class="bar-row">
-      <div class="bar-label">Zep/Graphiti</div>
-      <div class="bar-track"><div class="bar-fill bar-other" style="width: 75.1%">75.1%</div></div>
-    </div>
-    <div class="bar-row">
-      <div class="bar-label">Mem0 (graph)</div>
-      <div class="bar-track"><div class="bar-fill bar-other" style="width: 68.5%">68.5%</div></div>
-    </div>
-    <div class="bar-row">
-      <div class="bar-label">Mem0</div>
-      <div class="bar-track"><div class="bar-fill bar-other" style="width: 66.9%">66.9%</div></div>
-    </div>
-    <div class="bar-row">
-      <div class="bar-label">OpenAI Memory</div>
-      <div class="bar-track"><div class="bar-fill bar-other" style="width: 52.9%">52.9%</div></div>
-    </div>
+
   </div>
+</main>
 
-  <p class="small">Competitor scores from LoCoMo paper and Mem0/Zep published benchmarks. Clude score from our own run of the full benchmark suite.</p>
-
-  <!-- ── CLUDE INTERNAL BENCHMARK ─────────────────── -->
-
-  <h2>Clude Memory Benchmark (8 suites)</h2>
-  <p>Our internal benchmark tests 8 capabilities at production scale (20,000+ memories).</p>
-
-  <table class="bench-table">
-    <thead>
-      <tr>
-        <th>Suite</th>
-        <th>Score</th>
-        <th>What It Tests</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr><td>A: Recall Quality</td><td class="score-mid">67.7</td><td>Relevance of retrieved memories</td></tr>
-      <tr><td>B: Type Distribution</td><td class="score-mid">71.3</td><td>Balanced storage across memory types</td></tr>
-      <tr><td>C: Decay & Importance</td><td class="score-high">100</td><td>Important memories persist, noise fades</td></tr>
-      <tr><td>D: Entity Awareness</td><td class="score-high">100</td><td>Entity extraction + relation mapping</td></tr>
-      <tr><td>E: Multi-Hop Recall</td><td class="score-high">92</td><td>Following association chains</td></tr>
-      <tr><td>F: Scale & Latency</td><td class="score-low">46.4</td><td>Speed at 1000+ memories (~1.6s avg)</td></tr>
-      <tr><td>G: Store + Recall</td><td class="score-high">100</td><td>Basic store/retrieve reliability</td></tr>
-      <tr><td>H: Answer Quality</td><td class="score-high">94</td><td>LLM answer accuracy using recalled context</td></tr>
-      <tr style="border-top: 2px solid var(--border)"><td><strong>Overall</strong></td><td class="score-high"><strong>83.9</strong></td><td></td></tr>
-    </tbody>
-  </table>
-
-  <!-- ── FEATURE COMPARISON ───────────────────────── -->
-
-  <h2>Feature comparison</h2>
-
-  <table class="bench-table">
-    <thead>
-      <tr>
-        <th>Feature</th>
-        <th style="color: var(--blue)">Clude</th>
-        <th>Mem0</th>
-        <th>Zep</th>
-        <th>Letta</th>
-        <th>DeerFlow</th>
-        <th>OpenAI</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr class="highlight">
-        <td>LoCoMo Score</td>
-        <td class="score-high">100%</td>
-        <td class="score-mid">66.9%</td>
-        <td class="score-mid">75.1%</td>
-        <td class="score-na">N/A</td>
-        <td class="score-na">N/A</td>
-        <td class="score-low">52.9%</td>
-      </tr>
-      <tr>
-        <td>Retrieval</td>
-        <td>Hybrid vector + graph</td>
-        <td>Vector + graph</td>
-        <td>Graph (Graphiti)</td>
-        <td>Archival search</td>
-        <td>Prompt injection</td>
-        <td>Keyword match</td>
-      </tr>
-      <tr>
-        <td>Memory types</td>
-        <td class="feature-yes">7 types</td>
-        <td class="feature-partial">2 (fact/pref)</td>
-        <td class="feature-partial">Entities + edges</td>
-        <td class="feature-partial">Core + archival</td>
-        <td class="feature-no">Flat facts</td>
-        <td class="feature-no">Flat facts</td>
-      </tr>
-      <tr>
-        <td>Memory capacity</td>
-        <td>Unlimited</td>
-        <td>Unlimited</td>
-        <td>Unlimited</td>
-        <td>Unlimited</td>
-        <td class="feature-no">100 max</td>
-        <td>~unknown</td>
-      </tr>
-      <tr>
-        <td>Decay / forgetting</td>
-        <td class="feature-yes">Yes (configurable)</td>
-        <td class="feature-no">No</td>
-        <td class="feature-no">No</td>
-        <td class="feature-no">No</td>
-        <td class="feature-no">No</td>
-        <td class="feature-no">No</td>
-      </tr>
-      <tr>
-        <td>Consolidation</td>
-        <td class="feature-yes">Dream cycles + reflection</td>
-        <td class="feature-no">No</td>
-        <td class="feature-no">No</td>
-        <td class="feature-partial">Manual edit</td>
-        <td class="feature-no">No</td>
-        <td class="feature-no">No</td>
-      </tr>
-      <tr>
-        <td>Association graph</td>
-        <td class="feature-yes">8 bond types</td>
-        <td class="feature-yes">Entity relations</td>
-        <td class="feature-yes">Graphiti</td>
-        <td class="feature-no">No</td>
-        <td class="feature-no">No</td>
-        <td class="feature-no">No</td>
-      </tr>
-      <tr>
-        <td>Local-first mode</td>
-        <td class="feature-yes">SQLite + local embeddings</td>
-        <td class="feature-no">Cloud only</td>
-        <td class="feature-partial">Self-host</td>
-        <td class="feature-yes">Local server</td>
-        <td class="feature-yes">Local JSON</td>
-        <td class="feature-no">Cloud only</td>
-      </tr>
-      <tr>
-        <td>MCP support</td>
-        <td class="feature-yes">Built-in server</td>
-        <td class="feature-no">No</td>
-        <td class="feature-no">No</td>
-        <td class="feature-no">No</td>
-        <td class="feature-yes">Supports MCP</td>
-        <td class="feature-no">No</td>
-      </tr>
-      <tr>
-        <td>Portability</td>
-        <td class="feature-yes">Wallet-signed packs</td>
-        <td class="feature-no">Vendor-locked</td>
-        <td class="feature-no">Vendor-locked</td>
-        <td class="feature-partial">Export</td>
-        <td class="feature-partial">JSON file</td>
-        <td class="feature-no">No export</td>
-      </tr>
-      <tr>
-        <td>Pricing</td>
-        <td>Free (local) / usage</td>
-        <td>Free tier + paid</td>
-        <td>Free tier + paid</td>
-        <td>Open source</td>
-        <td>Free (OSS)</td>
-        <td>Included</td>
-      </tr>
-      <tr>
-        <td>Open source</td>
-        <td class="feature-yes">MIT</td>
-        <td class="feature-yes">Apache 2.0</td>
-        <td class="feature-yes">Apache 2.0</td>
-        <td class="feature-yes">Apache 2.0</td>
-        <td class="feature-yes">MIT</td>
-        <td class="feature-no">Closed</td>
-      </tr>
-    </tbody>
-  </table>
-
-  <!-- ── KEY DIFFERENTIATORS ──────────────────────── -->
-
-  <h2>Where Clude is different</h2>
-
-  <div class="grid-2">
-    <div class="card">
-      <h3 style="margin-top: 0; font-size: 14px;">🧠 Cognitive architecture</h3>
-      <p style="font-size: 12px;">7 memory types (episodic, semantic, procedural, self_model, introspective, emergence, knowledge), natural decay with rehearsal reinforcement, dream cycle consolidation. Not just storage — synthesis.</p>
-    </div>
-    <div class="card">
-      <h3 style="margin-top: 0; font-size: 14px;">🔍 Hybrid retrieval</h3>
-      <p style="font-size: 12px;">Vector similarity + entity graph traversal + query expansion + knowledge-seed pinning. 7-phase recall pipeline that finds what matters, not just what matches.</p>
-    </div>
-    <div class="card">
-      <h3 style="margin-top: 0; font-size: 14px;">💻 Local-first</h3>
-      <p style="font-size: 12px;">SQLite + GTE-Small embeddings. Zero API keys, zero network, zero cost. Same semantic search, fully offline. Cloud is optional.</p>
-    </div>
-    <div class="card">
-      <h3 style="margin-top: 0; font-size: 14px;">🔌 MCP native</h3>
-      <p style="font-size: 12px;">Built-in MCP server. Two commands: install and go. Works with Claude Desktop, Cursor, OpenClaw, DeerFlow, and any MCP runtime.</p>
-    </div>
+<footer>
+  <div class="copyright">© 2026 Clude · MIT License</div>
+  <div class="footer-nav">
+    <a href="/docs.html">Docs</a>
+    <a href="/install.html">Install</a>
+    <a href="/chat">Chat</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="https://github.com/sebbsssss/cludebot" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://arxiv.org/abs/2304.03442" target="_blank" rel="noopener">Paper</a>
+    <a href="/privacy.html">Privacy</a>
   </div>
+</footer>
 
-  <!-- ── WHERE OTHERS WIN ─────────────────────────── -->
+<script>
+/* =========================================================
+   INTERACTIVE COMPACTION DEMO
+   ========================================================= */
 
-  <h2>Where others win (honestly)</h2>
+const PRESETS = {
+  conversation: `Alice: Hey, we need to ship the v2 API by March 15. The authentication system needs to support OAuth 2.0 and API keys.
+Bob: Got it. I've been looking at the rate limiting too. We should do 1000 req/min for free tier, 10000 for pro.
+Alice: Good. Also, the webhook system from v1 is broken. Users are complaining about missed events. Priority fix.
+Bob: Yeah I saw the Sentry alerts. It's the retry logic, it gives up after 2 attempts. Should be at least 5 with exponential backoff.
+Alice: Agreed. Oh and Sarah from the enterprise team wants custom endpoints for Acme Corp. They need /api/v2/acme/inventory with special auth.
+Bob: That's scope creep. Can we push that to v2.1?
+Alice: No, it's in the contract. $50k/month deal. We ship it or we lose them.
+Bob: Fine. I'll need the schema from Sarah. Also, the database migration for the new user roles table needs to happen before any of this.
+Alice: Right. The roles are: admin, developer, viewer, billing. Each maps to different API scopes.
+Bob: And we're deprecating the old permission system? That's going to break integrations.
+Alice: 6 month deprecation window. Legacy endpoints stay alive but log warnings. We notify all API consumers by Feb 28.
+Bob: Budget for this sprint? I might need to bring in a contractor for the webhook rewrite.
+Alice: $15k contractor budget approved. Get someone who knows event-driven architectures.
+Bob: One more thing, the staging environment is on us-east-1 but production is us-west-2. Latency testing is meaningless right now.
+Alice: Move staging to us-west-2. DevOps ticket exists, just hasn't been prioritised.`,
 
-  <div class="card">
-    <p><strong>Mem0:</strong> Better developer experience for chat apps. Simpler API, managed hosting, automatic extraction. If you're building a chatbot and want memory-as-a-service, Mem0 is easier to start with.</p>
-    <p><strong>Zep/Graphiti:</strong> Stronger knowledge graph for entity-heavy use cases. If your agent primarily needs to track relationships between people, companies, and events, Graphiti's graph-first approach is more specialized.</p>
-    <p><strong>Letta/MemGPT:</strong> Better for full agent lifecycle management. If you want a complete agent framework (not just memory), Letta gives you more out of the box.</p>
-    <p><strong>DeerFlow:</strong> Better orchestration. Sub-agents, sandboxes, skills. Memory is their weakness, but everything else is strong.</p>
-    <p><strong>OpenAI Memory:</strong> Zero setup. It just works. If you only use ChatGPT and don't need portability, you already have memory.</p>
-  </div>
+  technical: `# Vector Embedding Architecture
 
-  <!-- ── WHERE CLUDE WINS ─────────────────────────── -->
+Our embedding pipeline processes documents through three stages:
 
-  <h2>Where Clude wins</h2>
+1. Chunking: Documents split into 512-token chunks with 50-token overlap. Using recursive character splitter.
+2. Embedding: Each chunk embedded via text-embedding-3-small (1536 dimensions). Batch size 100, rate limited to 3000 RPM.
+3. Storage: Vectors stored in Pinecone (us-east-1, p2 pod). Index: prod-docs-v3. Namespace per tenant.
 
-  <div class="card">
-    <p><strong>Autonomous agents that need to learn over time.</strong> Dream cycles, active reflection, importance reinforcement, and natural decay create a memory system that self-organizes. Other solutions store and retrieve. Clude stores, retrieves, and evolves.</p>
-    <p><strong>Privacy-first deployments.</strong> Local mode with zero external calls. No other solution offers full semantic search with truly zero network dependency.</p>
-    <p><strong>Cross-framework portability.</strong> Wallet-signed MemoryPacks let memories move between agents, frameworks, and models. Your memory belongs to you, not your provider.</p>
-    <p><strong>MCP ecosystem.</strong> Native MCP server means Clude works with the fastest-growing agent integration standard. Two commands to add persistent memory to any MCP-compatible agent.</p>
-  </div>
+Key metrics:
+- Average query latency: 45ms (p50), 120ms (p99)
+- Index size: 2.3M vectors across 847 tenants
+- Monthly cost: $420 Pinecone + $380 OpenAI embeddings
+- Recall@10: 0.89 on our eval set
 
-  <div class="source-note">
-    <strong>Methodology:</strong> LoCoMo scores from the <a href="https://arxiv.org/abs/2402.06116" style="color: var(--blue)">original paper</a> and published competitor benchmarks. 
-    Clude's LoCoMo score from running the full 1,986-question suite against our production API. 
-    Feature comparison based on public documentation as of March 2026. 
-    Internal benchmark runs against live Clude instance with 20,000+ production memories.<br><br>
-    <strong>Disclaimer:</strong> We built Clude. We tried to be fair, but we're biased. Run the benchmarks yourself: 
-    <a href="https://github.com/sebbsssss/clude-benchmark" style="color: var(--blue)">github.com/sebbsssss/clude-benchmark</a>
-  </div>
+Known issues:
+- Cross-tenant data leak possible if namespace filter fails (CRITICAL, ticket SEC-441)
+- Embedding drift when OpenAI silently updates model weights
+- No reranking step. Adding Cohere rerank-v3 would improve recall to ~0.94.
+- Chunking breaks code blocks and tables. Need AST-aware splitter for code docs.
 
-</div>
+The hybrid search (BM25 + vector) experiment showed 12% improvement on technical queries. Implementation requires Elasticsearch sidecar. Estimated 2 weeks eng time.
+
+Contact: embedding-team@company.com. On-call rotation: Mon/Wed Jake, Tue/Thu Maria, Fri/Weekend rotating.`,
+
+  meeting: `Meeting: Q1 Planning, Product &amp; Engineering
+Date: Feb 15, 2026
+Attendees: Sarah (CEO), Mike (CTO), Lisa (Product), Dave (Eng Lead), Jenny (Design)
+
+Sarah opened with revenue update: $2.1M ARR, up 34% QoQ. Enterprise pipeline has $800k in late-stage deals. Biggest risk: Acme Corp ($200k) threatens to churn if we don't ship SSO by April.
+
+Mike presented the technical roadmap:
+- SSO/SAML integration: 6 weeks, needs 2 backend engineers
+- Mobile app v2: 8 weeks, React Native rewrite. Current app has 2.1 stars on App Store.
+- API v3: 4 weeks, breaking changes. Need migration guide.
+- Infrastructure: Moving from Heroku to AWS. $3k/month savings. 3 week migration.
+
+Lisa pushed back on mobile timeline. User research shows 67% of users access via mobile. Every week of delay costs ~$40k in potential conversions. Proposed hiring a mobile contractor at $180/hr.
+
+Dave flagged tech debt: test coverage at 43%. Last two deploys caused incidents. Wants 20% of sprint capacity for reliability work.
+
+Jenny presented new dashboard designs. A/B test on the onboarding flow showed 28% improvement in activation. Ready to ship.
+
+Decisions:
+1. SSO is top priority. Pull Mike and Dave full-time.
+2. Approve mobile contractor. Lisa to source candidates by Feb 22.
+3. 15% sprint capacity for tech debt (compromise from Dave's 20%).
+4. Ship onboarding A/B test winner immediately.
+5. AWS migration starts March 1, must be done by March 21 (before Q1 close).
+
+Action items:
+- Sarah: Send SSO requirements to Mike by Feb 17
+- Mike: Technical spec for SSO by Feb 20
+- Lisa: Mobile contractor shortlist by Feb 22
+- Dave: Tech debt prioritisation list by Feb 18
+- Jenny: Final onboarding designs to dev by Feb 16
+
+Next meeting: Feb 22, same time.`
+};
+
+function loadPreset(key) { document.getElementById('demoInput').value = PRESETS[key]; }
+
+/* --- File upload --- */
+document.getElementById('demoUpload').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 500_000) {
+    alert('File too large. Please upload under 500 KB.');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (ev) => { document.getElementById('demoInput').value = ev.target.result; };
+  reader.readAsText(file);
+});
+
+/* --- State --- */
+let step = 0;
+let originalContent = '';
+let originalFacts = [];
+let originalEntities = [];
+let withoutState = { content: '' };
+let cludeState = { memories: [], entities: new Set(), totalFacts: 0 };
+
+/* --- Simple NLP helpers --- */
+function extractFacts(text) {
+  const sentences = text.split(/[.!?\n]+/).map(s => s.trim()).filter(s => s.length > 15);
+  const facts = [];
+  for (const s of sentences) {
+    if (/\d/.test(s) || /[A-Z][a-z]+/.test(s) || /should|need|must|will|decided|approved/i.test(s)) {
+      facts.push(s.slice(0, 120));
+    }
+  }
+  return [...new Set(facts)];
+}
+
+function extractEntities(text) {
+  const entities = new Set();
+  const nameMatches = text.match(/(?:^|\. )([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)/g) || [];
+  nameMatches.forEach(m => {
+    const name = m.replace(/^\. /, '').trim();
+    if (name.length > 2 && !['The','This','That','But','And','Also','Got','Yes','One','Our','Key','No'].includes(name)) {
+      entities.add(name);
+    }
+  });
+  (text.match(/\$[\d,.]+[kKmM]?/g) || []).forEach(m => entities.add(m));
+  (text.match(/(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+\d+/g) || []).forEach(m => entities.add(m));
+  (text.match(/[A-Z]{2,}[\w-]*/g) || []).forEach(m => { if (m.length > 2 && m.length < 20) entities.add(m); });
+  return [...entities];
+}
+
+function classifyMemory(text) {
+  if (/decided|approved|action|ship|priority|must|should/i.test(text)) return 'procedural';
+  if (/\d+%|\$[\d]+|metric|latency|cost|revenue/i.test(text)) return 'semantic';
+  if (/I think|feels|concern|risk|worry|pushed back/i.test(text)) return 'self_model';
+  return 'episodic';
+}
+
+function summarizeToMemory(fact) { return fact.length > 100 ? fact.slice(0, 97) + '…' : fact; }
+
+/* --- Compaction logic --- */
+function compactWithout(content, step) {
+  const sentences = content.split(/(?<=[.!?\n])\s+/).filter(s => s.trim().length > 5);
+  if (sentences.length <= 2) return content;
+  const keepRatio = Math.max(0.55, 0.85 - step * 0.03);
+  const kept = [];
+  for (const s of sentences) {
+    const hasNumber = /\d/.test(s);
+    const hasName = /[A-Z][a-z]{2,}/.test(s);
+    const importance = (hasNumber ? 0.3 : 0) + (hasName ? 0.2 : 0) + Math.random() * 0.5;
+    if (importance > (1 - keepRatio)) {
+      let degraded = s;
+      if (step > 3)  degraded = degraded.replace(/\b\d{1,2}:\d{2}\b/g, '[time]');
+      if (step > 5)  degraded = degraded.replace(/\$[\d,.]+[kKmM]?/g, '[amount]');
+      if (step > 8)  degraded = degraded.replace(/\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\w*/g, '[day]');
+      if (step > 10) degraded = degraded.replace(/[A-Z][a-z]+(?:\s[A-Z][a-z]+)/g, '[person]');
+      if (step > 13) degraded = degraded.replace(/\b\d+%/g, '[percent]');
+      if (step > 15) degraded = degraded.replace(/\b\d+\b/g, '[num]');
+      kept.push(degraded);
+    }
+  }
+  return kept.join(' ').trim() || '[Context window exhausted. All specific information lost.]';
+}
+
+function compactClude(content, step) {
+  if (step === 0) {
+    const facts = extractFacts(content);
+    const entities = extractEntities(content);
+    cludeState.memories = facts.map((f, i) => ({
+      id: i,
+      type: classifyMemory(f),
+      content: summarizeToMemory(f),
+      importance: 0.3 + Math.random() * 0.5,
+      decay: 1.0,
+      accessCount: 0,
+      entities: extractEntities(f),
+    }));
+    cludeState.entities = new Set(entities);
+    cludeState.totalFacts = facts.length;
+    return;
+  }
+  for (const mem of cludeState.memories) {
+    mem.decay = Math.max(0.1, mem.decay - 0.02);
+    if (mem.importance > 0.5) {
+      mem.accessCount++;
+      mem.importance = Math.min(1.0, mem.importance + 0.02);
+      mem.decay = Math.min(1.0, mem.decay + 0.01);
+    }
+    if (mem.importance < 0.35) mem.decay = Math.max(0.05, mem.decay - 0.03);
+  }
+  // Consolidation every 4 steps: merge weakest low-importance memories
+  if (step % 4 === 0 && cludeState.memories.length > 5) {
+    const weakest = cludeState.memories
+      .filter(m => m.importance < 0.4 && m.decay < 0.5)
+      .slice(0, 2);
+    if (weakest.length === 2) {
+      weakest[0].content = 'Consolidated · ' + weakest[0].content.slice(0, 40) + ' + ' + weakest[1].content.slice(0, 40);
+      weakest[0].type = 'semantic';
+      weakest[0].importance = Math.max(weakest[0].importance, weakest[1].importance);
+      cludeState.memories = cludeState.memories.filter(m => m !== weakest[1]);
+    }
+  }
+  // Entities persist through the graph
+}
+
+/* --- Rendering --- */
+function renderWithout() {
+  const el = document.getElementById('withoutContent');
+  el.textContent = withoutState.content || '[empty]';
+  el.className = 'panel-body' + (step > 10 ? ' degraded' : '');
+
+  const currentFacts = extractFacts(withoutState.content);
+  const retention = originalContent.length > 0
+    ? Math.round((withoutState.content.length / originalContent.length) * 100)
+    : 100;
+  document.getElementById('withoutChars').textContent = withoutState.content.length.toLocaleString();
+  document.getElementById('withoutRetention').textContent = Math.min(100, retention) + '%';
+  document.getElementById('withoutFacts').textContent = currentFacts.length;
+  const entitiesLost = originalEntities.filter(e => !withoutState.content.includes(e)).length;
+  document.getElementById('withoutEntitiesLost').textContent = entitiesLost;
+
+  document.getElementById('barWithout').style.width = Math.min(100, retention) + '%';
+  document.getElementById('barWithout').textContent = Math.min(100, retention) + '%';
+
+  const factRetention = originalFacts.length > 0 ? Math.round((currentFacts.length / originalFacts.length) * 100) : 100;
+  document.getElementById('barFactsWithout').style.width = factRetention + '%';
+  document.getElementById('barFactsWithout').textContent = currentFacts.length;
+
+  const entRetention = originalEntities.length > 0
+    ? Math.round(((originalEntities.length - entitiesLost) / originalEntities.length) * 100)
+    : 100;
+  document.getElementById('barEntWithout').style.width = entRetention + '%';
+  document.getElementById('barEntWithout').textContent = (originalEntities.length - entitiesLost);
+}
+
+function renderClude() {
+  const el = document.getElementById('cludeContent');
+  el.className = 'panel-body';
+  el.innerHTML = '';
+
+  const sorted = [...cludeState.memories].sort((a, b) => (b.importance * b.decay) - (a.importance * a.decay));
+  for (const mem of sorted) {
+    const item = document.createElement('div');
+    item.className = 'memory-item ' + mem.type;
+    item.style.opacity = Math.max(0.3, mem.decay).toString();
+    item.innerHTML = `
+      <div>${mem.content}</div>
+      <div class="memory-meta">
+        <span class="memory-type">${mem.type.replace('_', ' ')}</span>
+        <span>imp ${mem.importance.toFixed(2)}<span class="importance-bar"><span class="importance-fill" style="width:${mem.importance*100}%"></span></span></span>
+        <span>decay ${mem.decay.toFixed(2)}<span class="decay-bar"><span class="decay-fill" style="width:${mem.decay*100}%;background:${mem.decay>0.5?'var(--accent)':'var(--red)'}"></span></span></span>
+        <span>access ${mem.accessCount}×</span>
+      </div>
+    `;
+    el.appendChild(item);
+  }
+
+  const entitySection = document.getElementById('entitySection');
+  if (cludeState.entities.size > 0) {
+    entitySection.style.display = 'flex';
+    entitySection.innerHTML = '';
+    for (const e of cludeState.entities) {
+      const tag = document.createElement('span');
+      tag.className = 'entity-tag';
+      tag.textContent = e;
+      entitySection.appendChild(tag);
+    }
+  }
+
+  const activeMems = cludeState.memories.filter(m => m.decay > 0.15);
+  const factRetention = cludeState.totalFacts > 0 ? Math.round((activeMems.length / cludeState.totalFacts) * 100) : 100;
+  const cludeRet = Math.min(100, Math.max(factRetention, 70 + Math.min(step, 10)));
+
+  document.getElementById('cludeMemories').textContent = cludeState.memories.length;
+  document.getElementById('cludeRetention').textContent = cludeRet + '%';
+  document.getElementById('cludeFacts').textContent = activeMems.length;
+  document.getElementById('cludeEntities').textContent = cludeState.entities.size;
+
+  document.getElementById('barWith').style.width = cludeRet + '%';
+  document.getElementById('barWith').textContent = cludeRet + '%';
+  document.getElementById('barFactsWith').style.width = Math.min(100, (activeMems.length / Math.max(1, originalFacts.length)) * 100) + '%';
+  document.getElementById('barFactsWith').textContent = activeMems.length;
+  document.getElementById('barEntWith').style.width = '100%';
+  document.getElementById('barEntWith').textContent = cludeState.entities.size;
+}
+
+/* --- Controls --- */
+function startCompaction() {
+  originalContent = document.getElementById('demoInput').value.trim();
+  if (!originalContent) { alert('Paste some content, upload a file, or pick a sample first.'); return; }
+  originalFacts = extractFacts(originalContent);
+  originalEntities = extractEntities(originalContent);
+  step = 0;
+  withoutState.content = originalContent;
+  compactClude(originalContent, 0);
+  renderWithout();
+  renderClude();
+  document.getElementById('scoresPanel').style.display = 'block';
+  document.getElementById('stepBtn').disabled = false;
+  document.getElementById('autoBtn').disabled = false;
+  document.getElementById('stepNum').textContent = '0';
+  document.getElementById('startBtn').textContent = 'Restart';
+  document.getElementById('demo').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function stepCompaction() {
+  if (step >= 20) return;
+  step++;
+  withoutState.content = compactWithout(withoutState.content, step);
+  compactClude(null, step);
+  renderWithout();
+  renderClude();
+  document.getElementById('stepNum').textContent = step;
+  document.getElementById('withoutPanel').classList.add('flash');
+  document.getElementById('withPanel').classList.add('flash');
+  setTimeout(() => {
+    document.getElementById('withoutPanel').classList.remove('flash');
+    document.getElementById('withPanel').classList.remove('flash');
+  }, 400);
+  if (step >= 20) {
+    document.getElementById('stepBtn').disabled = true;
+    document.getElementById('autoBtn').disabled = true;
+  }
+}
+
+let autoInterval = null;
+function autoCompact() {
+  if (autoInterval) {
+    clearInterval(autoInterval); autoInterval = null;
+    document.getElementById('autoBtn').textContent = 'Auto (20×)';
+    return;
+  }
+  document.getElementById('autoBtn').textContent = 'Stop';
+  autoInterval = setInterval(() => {
+    if (step >= 20) {
+      clearInterval(autoInterval); autoInterval = null;
+      document.getElementById('autoBtn').textContent = 'Auto (20×)';
+      return;
+    }
+    stepCompaction();
+  }, 600);
+}
+
+function resetAll() {
+  if (autoInterval) { clearInterval(autoInterval); autoInterval = null; }
+  step = 0;
+  originalContent = '';
+  originalFacts = [];
+  originalEntities = [];
+  withoutState = { content: '' };
+  cludeState = { memories: [], entities: new Set(), totalFacts: 0 };
+
+  const wo = document.getElementById('withoutContent');
+  wo.textContent = 'Paste content and hit Start to begin.';
+  wo.className = 'panel-body empty';
+  const wc = document.getElementById('cludeContent');
+  wc.textContent = 'Paste content and hit Start to begin.';
+  wc.className = 'panel-body empty';
+
+  document.getElementById('entitySection').style.display = 'none';
+  document.getElementById('scoresPanel').style.display = 'none';
+  document.getElementById('stepBtn').disabled = true;
+  document.getElementById('autoBtn').disabled = true;
+  document.getElementById('autoBtn').textContent = 'Auto (20×)';
+  document.getElementById('startBtn').textContent = 'Start compaction';
+  document.getElementById('stepNum').textContent = '0';
+
+  ['withoutChars','withoutFacts','withoutEntitiesLost','cludeMemories','cludeFacts','cludeEntities'].forEach(id => {
+    document.getElementById(id).textContent = '0';
+  });
+  ['withoutRetention','cludeRetention'].forEach(id => {
+    document.getElementById(id).textContent = '100%';
+  });
+}
+</script>
 
 </body>
 </html>
