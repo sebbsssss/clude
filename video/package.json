@@ -1,0 +1,16 @@
+{
+  "name": "clude-hackathon-video",
+  "private": true,
+  "scripts": {
+    "dev": "remotion studio src/index.ts",
+    "render:main": "remotion render src/index.ts MainVideo out/main.mp4 --codec=h264 --crf=18",
+    "render:hero": "remotion render src/index.ts HeroCut out/hero.mp4 --codec=h264 --crf=18"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.439",
+    "@remotion/renderer": "4.0.439",
+    "remotion": "4.0.439",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0"
+  }
+}

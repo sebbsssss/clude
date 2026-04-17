@@ -1,0 +1,3 @@
+export const HeroCut = () => (
+  <div style={{ background: '#000', width: '100%', height: '100%' }} />
+);
