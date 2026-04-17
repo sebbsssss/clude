@@ -54,8 +54,13 @@ pub struct MemoryEntry {
 }
 
 /// A shared memory pool — any wallet can write after paying the write fee.
-/// Seeds: ["pool", namespace]
+/// Seeds: `["pool", namespace]` — namespace is the full zero-padded 32-byte
+/// form (NOT the trimmed string); clients must pad before derivation or the
+/// PDA won't resolve.
+///
+/// Space: use `8 + Pool::INIT_SPACE` at `init` call sites.
 #[account]
+#[derive(InitSpace)]
 pub struct Pool {
     /// Pool creator.
     pub authority: Pubkey,
@@ -73,20 +78,20 @@ pub struct Pool {
     pub treasury_bump: u8,
     /// This pool PDA's bump.
     pub bump: u8,
-    /// Reserved for future fields (add padding without migration).
+    /// Reserved (32 bytes — pool config is most likely to grow: fee schedules,
+    /// access controls, rate limits).
     pub _reserved: [u8; 32],
 }
 
-impl Pool {
-    /// discriminator(8) + authority(32) + namespace(32) + write_fee(8)
-    /// + citation_fee(8) + memory_count(8) + citation_count(8)
-    /// + treasury_bump(1) + bump(1) + reserved(32)
-    pub const LEN: usize = 8 + 32 + 32 + 8 + 8 + 8 + 8 + 1 + 1 + 32;
-}
-
 /// Pooled memory record — scoped to a Pool, authored by a wallet.
-/// Seeds: ["pool_mem", pool, memory_id_le_bytes]
+/// Seeds: `["pool_mem", pool, memory_id.to_le_bytes()]` — memory_id is the
+/// off-chain Supabase row id, serialized little-endian. Uniqueness per pool
+/// is enforced structurally: a second store attempt for the same `(pool,
+/// memory_id)` returns `AccountAlreadyInUse` (implicit dedup).
+///
+/// Space: use `8 + PoolMemoryRecord::INIT_SPACE` at `init` call sites.
 #[account]
+#[derive(InitSpace)]
 pub struct PoolMemoryRecord {
     /// Pool PDA this memory belongs to.
     pub pool: Pubkey,
@@ -106,20 +111,21 @@ pub struct PoolMemoryRecord {
     pub earnings: u64,
     /// PDA bump.
     pub bump: u8,
-    /// Reserved.
+    /// Reserved (16 bytes — per-memory metadata is largely stable).
     pub _reserved: [u8; 16],
 }
 
-impl PoolMemoryRecord {
-    /// discriminator(8) + pool(32) + author(32) + content_hash(32)
-    /// + memory_id(8) + timestamp(8) + fee_paid(8) + citation_count(8)
-    /// + earnings(8) + bump(1) + reserved(16)
-    pub const LEN: usize = 8 + 32 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 1 + 16;
-}
-
 /// Single citation event — emitted when one agent cites another's memory.
-/// Seeds: ["citation", memory_pda, memory.citation_count_le_bytes (before increment)]
+/// Seeds: `["citation", memory_pda, memory.citation_count.to_le_bytes()]`
+/// where citation_count is the value *before* increment.
+///
+/// CitationRecords are the highest-volume account type in this program —
+/// the 8-byte `_reserved` here is important: adding a field later would
+/// force a migration across potentially millions of PDAs.
+///
+/// Space: use `8 + CitationRecord::INIT_SPACE` at `init` call sites.
 #[account]
+#[derive(InitSpace)]
 pub struct CitationRecord {
     /// Pool containing the cited memory.
     pub pool: Pubkey,
@@ -135,10 +141,7 @@ pub struct CitationRecord {
     pub royalty_paid: u64,
     /// PDA bump.
     pub bump: u8,
-}
-
-impl CitationRecord {
-    /// discriminator(8) + pool(32) + memory_pda(32) + citer(32) + author(32)
-    /// + timestamp(8) + royalty_paid(8) + bump(1)
-    pub const LEN: usize = 8 + 32 + 32 + 32 + 32 + 8 + 8 + 1;
+    /// Reserved (8 bytes — citations are unbounded-volume; add room for
+    /// future `kind: u8` discriminator or epoch tag without migration).
+    pub _reserved: [u8; 8],
 }
