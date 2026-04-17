@@ -41,4 +41,14 @@ pub mod memory_registry {
     pub fn verify_memory(ctx: Context<VerifyMemory>, content_hash: [u8; 32]) -> Result<()> {
         instructions::verify_memory::handler(ctx, content_hash)
     }
+
+    /// Create a new shared memory pool with configurable write + citation fees.
+    pub fn create_pool(
+        ctx: Context<CreatePool>,
+        namespace: [u8; 32],
+        write_fee: u64,
+        citation_fee: u64,
+    ) -> Result<()> {
+        instructions::create_pool::handler(ctx, namespace, write_fee, citation_fee)
+    }
 }
