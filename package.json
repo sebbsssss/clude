@@ -69,6 +69,7 @@
   "engines": {
     "node": ">=18.0.0"
   },
+  "packageManager": "pnpm@10.18.1",
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.64",
     "@ai-sdk/google": "^3.0.55",
