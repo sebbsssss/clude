@@ -43,6 +43,10 @@
   nav .logo { font-weight: 600; letter-spacing: 0.22em; color: inherit; text-decoration: none; }
   nav .links { display: flex; gap: 28px; font-weight: 500; opacity: 0.7; }
   nav .links a { color: inherit; text-decoration: none; }
+  @media (max-width: 480px) {
+    nav { padding: 16px 18px; font-size: 11px; letter-spacing: 0.12em; gap: 16px; }
+    nav .links { gap: 16px; }
+  }
   nav .links a:hover { opacity: 1; color: var(--ink); }
 
   .wrap { max-width: 920px; margin: 0 auto; padding: 0 7vw; }
@@ -330,7 +334,7 @@
 <div class="out">  <span class="blue">All systems nominal.</span></div>
           </div>
         </div>
-        <div class="note">Seeing issues? Run <span style="color:#f5f5f0">npx @clude/sdk doctor --verbose</span> for the full trace, or open an issue at <a href="https://github.com/sebbsssss/cludebot/issues" style="color:#7f97ff;text-decoration:none">github.com/sebbsssss/cludebot</a>.</div>
+        <div class="note">Seeing issues? Run <code style="color:#1a1a1a;background:rgba(34,68,255,0.08);padding:1px 6px;border-radius:3px">npx @clude/sdk doctor --verbose</code> for the full trace, or open an issue at <a href="https://github.com/sebbsssss/cludebot/issues" style="color:var(--accent);text-decoration:none">github.com/sebbsssss/cludebot</a>.</div>
       </div>
     </section>
 

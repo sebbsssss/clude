@@ -66,6 +66,10 @@
   nav .links { display: flex; gap: 28px; font-weight: 500; opacity: 0.7; }
   nav .links a { color: inherit; text-decoration: none; }
   nav .links a:hover { opacity: 1; color: var(--ink); }
+  @media (max-width: 480px) {
+    nav { padding: 16px 18px; font-size: 11px; letter-spacing: 0.12em; gap: 16px; }
+    nav .links { gap: 16px; }
+  }
 
   .hero-main {
     position: relative;
@@ -111,6 +115,11 @@
   h1 .line {
     display: block;
     white-space: nowrap;
+  }
+  @media (max-width: 480px) {
+    h1 { font-size: clamp(36px, 10vw, 56px); }
+    h1 .line { white-space: normal; overflow-wrap: break-word; }
+    .hero-main { padding: 0 20px; }
   }
   h1 em {
     font-style: normal;
