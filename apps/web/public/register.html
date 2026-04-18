@@ -1,629 +1,292 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Register — Get Your Clude API Key</title>
-  <meta name="description" content="Get your Cortex API key in 30 seconds. Store your first memory in under 2 minutes.">
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg: #f5f5f0;
-      --text: #111;
-      --text-muted: #666;
-      --text-faint: #999;
-      --blue: #455cfa;
-      --mono: 'JetBrains Mono', monospace;
-      --border: #ddd;
-      --card-bg: #fff;
-      --code-bg: #1a1a1a;
-    }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: var(--mono); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.7; -webkit-font-smoothing: antialiased; }
-    ::selection { background: var(--text); color: var(--bg); }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Register · Clude</title>
+<meta name="description" content="Register for a Clude API key, or choose self-hosted and local modes." />
+<link rel="icon" type="image/svg+xml" href="/logo/Clude-Icon-Blue.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Funnel+Sans:ital,wght@0,300..800;1,300..800&family=Inconsolata:wght@300..700&family=Nothing+You+Could+Do&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #f5f5f0;
+    --ink: #1a1b1f;
+    --ink-2: #2a2b30;
+    --mute: #5b5f68;
+    --accent: #2244ff;
+    --line: rgba(26, 27, 31, 0.12);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Funnel Sans', system-ui, sans-serif;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+  }
 
-    .page {
-      max-width: 580px;
-      margin: 0 auto;
-      padding: 80px 24px 120px;
-    }
+  nav {
+    position: sticky; top: 0;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 20px 32px;
+    background: rgba(245,245,240,0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+    z-index: 10;
+    font-size: 12px; letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--ink-2);
+  }
+  nav .logo { font-weight: 600; letter-spacing: 0.22em; color: inherit; text-decoration: none; }
+  nav .links { display: flex; gap: 28px; font-weight: 500; opacity: 0.7; }
+  nav .links a { color: inherit; text-decoration: none; }
+  nav .links a:hover { opacity: 1; color: var(--ink); }
 
-    .back-link {
-      display: inline-block;
-      font-size: 11px;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--text-faint);
-      text-decoration: none;
-      margin-bottom: 48px;
-      transition: color 0.2s;
-    }
-    .back-link:hover { color: var(--text); }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 0 7vw; }
 
-    h1 {
-      font-size: 28px;
-      font-weight: 800;
-      letter-spacing: -1px;
-      margin-bottom: 12px;
-    }
-    .subtitle {
-      color: var(--text-muted);
-      font-size: 14px;
-      margin-bottom: 48px;
-      line-height: 1.8;
-    }
+  .page-head { padding: 120px 0 80px; }
+  .eyebrow {
+    font-family: 'Inconsolata', monospace;
+    font-size: 12px; font-weight: 500;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--mute);
+    display: inline-flex; align-items: center; gap: 10px;
+    margin-bottom: 28px;
+  }
+  .eyebrow::before { content: ''; width: 28px; height: 1px; background: var(--ink); opacity: 0.4; }
+  h1 {
+    font-family: 'Funnel Sans', sans-serif;
+    font-weight: 600;
+    font-size: clamp(44px, 5.5vw, 80px);
+    line-height: 1.02;
+    letter-spacing: -0.03em;
+    margin-bottom: 28px;
+  }
+  h1 em {
+    font-family: 'Nothing You Could Do', cursive;
+    font-style: normal;
+    color: var(--accent);
+    display: inline-block;
+    transform: translateY(0.04em) rotate(-2deg);
+  }
+  .lede {
+    font-size: 18px; line-height: 1.55;
+    color: var(--ink-2);
+    max-width: 54ch;
+  }
 
-    /* Form */
-    .form-group { margin-bottom: 24px; }
-    label {
-      display: block;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      margin-bottom: 8px;
-    }
-    input[type="text"] {
-      width: 100%;
-      font-family: var(--mono);
-      font-size: 14px;
-      padding: 14px 16px;
-      border: 2px solid var(--border);
-      border-radius: 6px;
-      background: var(--card-bg);
-      color: var(--text);
-      transition: border-color 0.2s;
-      outline: none;
-    }
-    input[type="text"]:focus { border-color: var(--blue); }
-    input[type="text"].error { border-color: #e84b3c; }
+  .easy-path {
+    padding: 44px 48px;
+    background: rgba(34, 68, 255, 0.04);
+    border: 1px solid rgba(34, 68, 255, 0.18);
+    border-radius: 8px;
+    margin-bottom: 80px;
+    position: relative;
+  }
+  .easy-path .badge {
+    position: absolute; top: -12px; left: 32px;
+    background: var(--bg);
+    padding: 2px 14px;
+    font-family: 'Inconsolata', monospace;
+    font-size: 11.5px; font-weight: 500;
+    letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--accent);
+  }
+  .easy-path h2 {
+    font-family: 'Funnel Sans', sans-serif;
+    font-weight: 500;
+    font-size: 26px; letter-spacing: -0.015em;
+    margin-bottom: 14px;
+  }
+  .easy-path p {
+    font-size: 16px; line-height: 1.6;
+    color: var(--ink-2);
+    margin-bottom: 24px;
+    max-width: 62ch;
+  }
+  .cta {
+    display: inline-flex; align-items: center; gap: 12px;
+    padding: 14px 22px;
+    background: var(--ink);
+    color: var(--bg);
+    font-family: 'Inconsolata', monospace;
+    font-size: 14px; font-weight: 500;
+    letter-spacing: 0.02em;
+    border-radius: 2px;
+    text-decoration: none;
+    transition: background 150ms ease;
+  }
+  .cta:hover { background: var(--accent); }
+  .cta .arrow { transition: transform 200ms ease; }
+  .cta:hover .arrow { transform: translateX(4px); }
 
-    .field-hint {
-      font-size: 12px;
-      color: var(--text-faint);
-      margin-top: 6px;
-      line-height: 1.6;
-    }
-    .field-hint a { color: var(--blue); text-decoration: none; }
-    .field-hint a:hover { text-decoration: underline; }
+  .modes-head { margin-bottom: 64px; }
+  .modes-head .num {
+    font-family: 'Inconsolata', monospace;
+    font-size: 13px; font-weight: 500;
+    letter-spacing: 0.18em; color: var(--mute);
+    margin-bottom: 20px;
+    display: block;
+  }
+  .modes-head h2 {
+    font-family: 'Funnel Sans', sans-serif;
+    font-weight: 500;
+    font-size: clamp(28px, 3vw, 40px);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    max-width: 640px;
+  }
 
-    .field-error {
-      font-size: 12px;
-      color: #e84b3c;
-      margin-top: 6px;
-      display: none;
-    }
+  .modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 56px; margin-bottom: 80px; }
+  .mode {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .mode .mode-kicker {
+    font-family: 'Inconsolata', monospace;
+    font-size: 11.5px; font-weight: 500;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--mute);
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    margin-bottom: 28px;
+  }
+  .mode h3 {
+    font-family: 'Funnel Sans', sans-serif;
+    font-weight: 500;
+    font-size: 22px; line-height: 1.25;
+    letter-spacing: -0.015em;
+    margin-bottom: 16px;
+  }
+  .mode p {
+    font-size: 15px; line-height: 1.65;
+    color: var(--ink-2);
+    margin-bottom: 28px;
+    max-width: 32ch;
+    flex: 1;
+  }
+  .mode .mode-cmd {
+    font-family: 'Inconsolata', monospace;
+    font-size: 12.5px; color: var(--mute);
+    padding: 0 0 14px 0;
+    display: block;
+    margin-bottom: 18px;
+    border-bottom: 1px solid var(--line);
+    word-break: break-all;
+    white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .mode a.inline {
+    font-family: 'Inconsolata', monospace;
+    font-size: 12.5px; font-weight: 500;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    text-decoration: none;
+    display: inline-flex; align-items: center; gap: 6px;
+    transition: gap 150ms ease;
+  }
+  .mode a.inline:hover { gap: 10px; }
+  @media (max-width: 900px) {
+    .modes { grid-template-columns: 1fr; gap: 48px; }
+  }
 
-    .btn-register {
-      width: 100%;
-      font-family: var(--mono);
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      padding: 16px 28px;
-      background: var(--blue);
-      color: #fff;
-      border: 2px solid var(--blue);
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.25s ease;
-      margin-top: 8px;
-    }
-    .btn-register:hover { background: #3348d8; border-color: #3348d8; }
-    .btn-register:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    /* Global error */
-    .global-error {
-      background: rgba(232, 75, 60, 0.08);
-      border: 1px solid rgba(232, 75, 60, 0.2);
-      color: #c0392b;
-      padding: 14px 16px;
-      border-radius: 6px;
-      font-size: 13px;
-      margin-bottom: 24px;
-      display: none;
-    }
-
-    /* Success state */
-    .success-panel {
-      display: none;
-    }
-    .success-panel.visible {
-      display: block;
-      animation: fadeUp 0.5s ease;
-    }
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(16px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    .key-box {
-      background: var(--code-bg);
-      border-radius: 8px;
-      padding: 20px 24px;
-      margin: 20px 0 12px;
-      position: relative;
-    }
-    .key-label {
-      font-size: 10px;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: #666;
-      margin-bottom: 8px;
-    }
-    .key-value {
-      color: #4ec9b0;
-      font-size: 14px;
-      font-weight: 600;
-      word-break: break-all;
-      line-height: 1.6;
-      cursor: pointer;
-    }
-    .key-copy {
-      position: absolute;
-      top: 12px;
-      right: 12px;
-      font-family: var(--mono);
-      font-size: 10px;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      color: #888;
-      background: transparent;
-      border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 4px;
-      padding: 4px 10px;
-      cursor: pointer;
-      transition: color 0.2s;
-    }
-    .key-copy:hover { color: #fff; }
-
-    .key-warning {
-      font-size: 12px;
-      color: #e67e22;
-      margin-bottom: 32px;
-      line-height: 1.6;
-    }
-
-    .snippet-label {
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      margin-bottom: 8px;
-      margin-top: 32px;
-    }
-
-    pre {
-      background: var(--code-bg);
-      color: #e0e0e0;
-      padding: 20px 24px;
-      border-radius: 8px;
-      overflow-x: auto;
-      margin: 8px 0 16px;
-      font-size: 12px;
-      line-height: 1.8;
-      position: relative;
-    }
-    pre .cmt { color: #6a9955; }
-    pre .str { color: #ce9178; }
-    pre .key { color: #7ec8e3; }
-
-    .snippet-copy {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      font-family: var(--mono);
-      font-size: 10px;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      color: #666;
-      background: transparent;
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 3px;
-      padding: 3px 8px;
-      cursor: pointer;
-    }
-    .snippet-copy:hover { color: #ccc; }
-
-    .docs-link {
-      display: inline-block;
-      margin-top: 24px;
-      font-size: 12px;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--blue);
-      text-decoration: none;
-      border-bottom: 1px solid transparent;
-      transition: border-color 0.2s;
-    }
-    .docs-link:hover { border-color: var(--blue); }
-
-    /* Mode cards */
-    .mode-card {
-      background: var(--card-bg);
-      border: 2px solid var(--border);
-      border-radius: 8px;
-      padding: 20px 24px;
-      cursor: pointer;
-      transition: border-color 0.2s, transform 0.15s;
-    }
-    .mode-card:hover { border-color: var(--blue); transform: translateY(-1px); }
-    .mode-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-    .mode-name { font-weight: 700; font-size: 15px; }
-    .mode-badge { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; padding: 2px 8px; border-radius: 3px; font-weight: 600; }
-    .mode-desc { font-size: 12px; color: var(--text-muted); line-height: 1.7; margin-bottom: 10px; }
-    .mode-cmd { font-size: 11px; color: var(--text-faint); background: rgba(0,0,0,0.04); padding: 4px 8px; border-radius: 3px; }
-
-    @media (max-width: 640px) {
-      .page { padding: 48px 20px 80px; }
-      h1 { font-size: 24px; }
-      pre { font-size: 11px; padding: 16px; }
-    }
-  </style>
+  footer {
+    padding: 60px 7vw 48px;
+    border-top: 1px solid var(--line);
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 32px;
+    font-family: 'Inconsolata', monospace;
+    font-size: 12.5px; font-weight: 500;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--mute);
+  }
+  footer a { color: inherit; text-decoration: none; }
+  footer a:hover { color: var(--ink); }
+  footer .footer-nav { display: flex; gap: 28px; flex-wrap: wrap; }
+</style>
 </head>
 <body>
 
-<div class="page">
-  <a href="/" class="back-link">← clude.io</a>
+<nav>
+  <a href="/" class="logo">CLUDE</a>
+  <div class="links">
+    <a href="/docs.html">Docs</a>
+    <a href="/chat">Chat</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="https://github.com/sebbsssss/cludebot" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</nav>
 
-  <!-- Mode picker -->
-  <div id="modePicker" style="margin-bottom: 48px;">
-    <h1>Get started with Clude</h1>
-    <p class="subtitle">Choose how you want to run Clude. You can always switch later.</p>
+<main>
+  <div class="wrap">
 
-    <div style="display: flex; flex-direction: column; gap: 12px;">
-      <div onclick="selectMode('cloud')" class="mode-card" id="modeCloud">
-        <div class="mode-header">
-          <span class="mode-name">Cloud</span>
-          <span class="mode-badge" style="background: var(--blue); color: #fff;">Fastest</span>
-        </div>
-        <div class="mode-desc">Use Clude's hosted infrastructure. Register, get an API key, start storing memories in 30 seconds.</div>
-        <code class="mode-cmd">npm install @clude/sdk && npx @clude/sdk setup</code>
+    <div class="page-head">
+      <div class="eyebrow">Register / pick your mode</div>
+      <h1>Three ways to <em>start.</em></h1>
+      <p class="lede">
+        Most people want the first one. It auto-detects everything and
+        registers you with an API key so your memories sync across
+        devices. The other two exist for people with specific needs.
+      </p>
+    </div>
+
+    <div class="easy-path">
+      <span class="badge">Recommended</span>
+      <h2>Just run the installer</h2>
+      <p>Auto-detects your email, creates your agent, installs the MCP server for your IDE. Thirty seconds, no forms, no copying keys around.</p>
+      <a href="/install.html" class="cta">
+        <span>npx @clude/sdk setup</span>
+        <span class="arrow">→</span>
+      </a>
+    </div>
+
+    <div class="modes-head">
+      <span class="num">/ Advanced</span>
+      <h2>Or pick a mode manually</h2>
+    </div>
+
+    <div class="modes">
+      <div class="mode">
+        <div class="mode-kicker">Cloud</div>
+        <h3>API key, nothing else</h3>
+        <p>Memories stored on Clude infrastructure. You get one key, set it as an env var, you're done. Best for agents that need cross-device memory.</p>
+        <code class="mode-cmd">CORTEX_API_KEY=clk_...</code>
+        <a href="/install.html#install" class="inline">Install guide →</a>
       </div>
-
-      <div onclick="selectMode('selfhosted')" class="mode-card" id="modeSelfHosted">
-        <div class="mode-header">
-          <span class="mode-name">Self-hosted</span>
-          <span class="mode-badge" style="background: #666; color: #fff;">Your infra</span>
-        </div>
-        <div class="mode-desc">You bring your own Supabase + Voyage AI keys. Full power, you own the data. No Clude API key needed.</div>
-        <code class="mode-cmd">npm install @clude/sdk && npx @clude/sdk setup</code>
+      <div class="mode">
+        <div class="mode-kicker">Self-hosted</div>
+        <h3>Your Supabase, your data</h3>
+        <p>You run pgvector on your own Supabase. Bring your own Voyage AI or OpenAI key for embeddings. Full ownership, full control.</p>
+        <code class="mode-cmd">SUPABASE_URL=... + SUPABASE_SERVICE_KEY=...</code>
+        <a href="/docs.html#self-hosted" class="inline">Self-hosted docs →</a>
       </div>
-
-      <div onclick="selectMode('local')" class="mode-card" id="modeLocal">
-        <div class="mode-header">
-          <span class="mode-name">Local</span>
-          <span class="mode-badge" style="background: #2d8a4e; color: #fff;">Zero config</span>
-        </div>
-        <div class="mode-desc">Runs on your machine. No API keys, no accounts, fully offline. Best for trying Clude or privacy-first use.</div>
-        <code class="mode-cmd">npm install @clude/sdk && npx @clude/sdk setup</code>
+      <div class="mode">
+        <div class="mode-kicker">Local</div>
+        <h3>Runs on your machine</h3>
+        <p>No API keys, no network, fully offline. SQLite at <code style="font-family:'Inconsolata',monospace;font-size:13px">~/.clude/brain.db</code>. Best for trying Clude or privacy-first agents.</p>
+        <code class="mode-cmd">(no env vars needed)</code>
+        <a href="/install.html" class="inline">Install guide →</a>
       </div>
     </div>
+
   </div>
+</main>
 
-  <!-- Local mode panel -->
-  <div id="localPanel" style="display:none;">
-    <h1>Local mode</h1>
-    <p class="subtitle">No API key needed. Everything runs on your machine.</p>
-
-    <div class="snippet-label">Setup wizard (recommended)</div>
-    <pre data-raw="npm install @clude/sdk
-npx @clude/sdk setup"><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button><span class="cmt"># Install and run the setup wizard</span>
-npm install @clude/sdk
-npx @clude/sdk setup
-<span class="cmt"># → Select "Local"</span>
-<span class="cmt"># → Installs MCP server for your IDE</span></pre>
-
-    <div class="snippet-label">Or install MCP directly</div>
-    <pre data-raw="npx @clude/sdk mcp-install --local"><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button><span class="cmt"># One command, done</span>
-npx @clude/sdk mcp-install --local</pre>
-
-    <div class="snippet-label">Or add manually to Claude Desktop config</div>
-    <pre data-raw='{"mcpServers":{"clude":{"command":"npx","args":["clude","mcp-serve","--local"]}}}'><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button>{
-  <span class="key">"mcpServers"</span>: {
-    <span class="key">"clude"</span>: {
-      <span class="key">"command"</span>: <span class="str">"npx"</span>,
-      <span class="key">"args"</span>: [<span class="str">"clude"</span>, <span class="str">"mcp-serve"</span>, <span class="str">"--local"</span>]
-    }
-  }
-}</pre>
-
-    <div class="snippet-label">For Node.js / TypeScript</div>
-    <pre data-raw="npm install @clude/sdk
-
-import { Cortex } from '@clude/sdk';
-const brain = new Cortex({ local: true });
-await brain.init();
-await brain.store({ content: 'Hello!', type: 'episodic' });
-const memories = await brain.recall({ query: 'hello' });"><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button><span class="cmt"># Install</span>
-npm install @clude/sdk
-
-<span class="cmt"># Use</span>
-import { Cortex } from '@clude/sdk';
-const brain = new Cortex({ local: true });
-await brain.init();
-await brain.store({ content: 'Hello!', type: 'episodic' });
-const memories = await brain.recall({ query: 'hello' });</pre>
-
-    <p style="margin-top: 24px; font-size: 12px; color: var(--text-faint);">Memories stored in <code>~/.clude/memories.json</code>. Embeddings via GTE-Small (~30MB, downloads on first run).</p>
-    <a href="/docs.html" class="docs-link">Full documentation →</a>
-    <br><a href="#" class="docs-link" onclick="showModePicker(); return false;" style="margin-top: 8px;">← Choose a different mode</a>
+<footer>
+  <div class="copyright">© 2026 Clude · MIT License</div>
+  <div class="footer-nav">
+    <a href="/docs.html">Docs</a>
+    <a href="/install.html">Install</a>
+    <a href="/chat">Chat</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="https://github.com/sebbsssss/cludebot" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://arxiv.org/abs/2304.03442" target="_blank" rel="noopener">Paper</a>
+    <a href="/privacy.html">Privacy</a>
   </div>
+</footer>
 
-  <!-- Self-hosted panel -->
-  <div id="selfHostedPanel" style="display:none;">
-    <h1>Self-hosted mode</h1>
-    <p class="subtitle">No Clude API key needed. You connect directly to your own infrastructure.</p>
-
-    <div class="snippet-label">What you need</div>
-    <div style="background: var(--card-bg); border: 2px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 24px; font-size: 13px; line-height: 2;">
-      <strong>Supabase</strong> — memory storage + vector index <span style="color: var(--text-faint);">(free tier works)</span><br>
-      <strong>Voyage AI</strong> — embeddings <span style="color: var(--text-faint);">(voyage-3-large)</span><br>
-      <strong>Anthropic</strong> — dream cycles + reflection <span style="color: var(--text-faint);">(optional)</span>
-    </div>
-
-    <div class="snippet-label">Setup wizard (recommended)</div>
-    <pre data-raw="npm install @clude/sdk
-npx @clude/sdk setup"><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button><span class="cmt"># Install and run the setup wizard</span>
-npm install @clude/sdk
-npx @clude/sdk setup
-<span class="cmt"># → Select "Self-hosted"</span>
-<span class="cmt"># → Enter your Supabase URL + service key</span>
-<span class="cmt"># → Enter your Voyage AI key</span>
-<span class="cmt"># → (Optional) Anthropic key for dream cycles</span>
-<span class="cmt"># → Creates .env + installs MCP server</span></pre>
-
-    <div class="snippet-label">Or configure manually</div>
-    <pre data-raw="import { Cortex } from '@clude/sdk';
-
-const brain = new Cortex({
-  supabase: {
-    url: process.env.SUPABASE_URL,
-    serviceKey: process.env.SUPABASE_SERVICE_KEY,
-  },
-  embedding: {
-    provider: 'voyage',
-    apiKey: process.env.VOYAGE_API_KEY,
-    model: 'voyage-3-large',
-    dimensions: 1024,
-  },
-  agentId: 'my-agent',
-});
-await brain.init();"><button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button>import { Cortex } from '@clude/sdk';
-
-const brain = new Cortex({
-  supabase: {
-    url: process.env.SUPABASE_URL,
-    serviceKey: process.env.SUPABASE_SERVICE_KEY,
-  },
-  embedding: {
-    provider: <span class="str">'voyage'</span>,
-    apiKey: process.env.VOYAGE_API_KEY,
-    model: <span class="str">'voyage-3-large'</span>,
-    dimensions: 1024,
-  },
-  agentId: <span class="str">'my-agent'</span>,
-});
-await brain.init();</pre>
-
-    <a href="/docs.html" class="docs-link">Full documentation →</a>
-    <br><a href="#" class="docs-link" onclick="showModePicker(); return false;" style="margin-top: 8px;">← Choose a different mode</a>
-  </div>
-
-  <!-- Cloud mode (registration form) -->
-  <div id="registerForm" style="display:none;">
-    <h1>Cloud mode — Get your API key</h1>
-    <p class="subtitle">Register your agent and start storing memories in 30 seconds. No infra to manage.<br>
-    <span style="color: var(--text-faint);">Or skip the form — run <code style="background: rgba(0,0,0,0.06); padding: 2px 6px; border-radius: 3px;">npx @clude/sdk setup</code> and select "Cloud".</span></p>
-
-    <div class="global-error" id="globalError"></div>
-
-    <div class="form-group">
-      <label for="agentName">Agent Name</label>
-      <input type="text" id="agentName" placeholder="my-agent" autocomplete="off" spellcheck="false">
-      <div class="field-error" id="nameError"></div>
-    </div>
-
-    <div class="form-group">
-      <label for="walletAddress">Solana Wallet Address <span style="font-weight: 400; text-transform: none; letter-spacing: 0;">(optional)</span></label>
-      <input type="text" id="walletAddress" placeholder="Your Solana wallet address (optional)" autocomplete="off" spellcheck="false">
-      <div class="field-hint">Scopes memories to your wallet so only you can access them. Public address only — no private key needed. <a href="https://phantom.app" target="_blank">Get a wallet</a></div>
-      <div class="field-error" id="walletError"></div>
-    </div>
-
-    <button class="btn-register" id="submitBtn" onclick="handleRegister()">Get API Key</button>
-  </div>
-
-  <div class="success-panel" id="successPanel">
-    <h1>You're in ✓</h1>
-    <p class="subtitle">Your Cortex API key is ready. Copy it now — this is the only time you'll see it.</p>
-
-    <div class="key-box">
-      <div class="key-label">Your API Key</div>
-      <div class="key-value" id="apiKeyDisplay" onclick="copyKey()"></div>
-      <button class="key-copy" id="keyCopyBtn" onclick="copyKey()">Copy</button>
-    </div>
-    <div class="key-warning">⚠️ Save this now — it won't be shown again.</div>
-
-    <div class="snippet-label">Store your first memory</div>
-    <pre id="storeSnippet"></pre>
-
-    <div class="snippet-label">Recall it back</div>
-    <pre id="recallSnippet"></pre>
-
-    <div style="margin-top: 36px; padding: 20px 24px; background: var(--card-bg); border: 2px solid var(--blue); border-radius: 8px;">
-      <div style="font-weight: 700; font-size: 14px; margin-bottom: 8px;">Next: Install MCP Server</div>
-      <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.7;">Give Claude Desktop, Cursor, or Claude Code persistent memory with one command:</div>
-      <pre style="margin: 0 0 12px; font-size: 12px; padding: 14px 18px;"><button class="snippet-copy" onclick="copyToClipboard('npx @clude/sdk mcp-install', this)">Copy</button>npx @clude/sdk mcp-install</pre>
-      <div style="font-size: 12px; color: var(--text-faint);">Or use the <a href="/setup" style="color: var(--blue); text-decoration: none;">guided setup wizard</a> for step-by-step installation.</div>
-    </div>
-
-    <div style="margin-top: 20px; display: flex; gap: 16px;">
-      <a href="/setup" class="docs-link">Setup wizard →</a>
-      <a href="/docs" class="docs-link">Documentation →</a>
-      <a href="/explore" class="docs-link">Memory explorer →</a>
-    </div>
-  </div>
-</div>
-
-<script>
-  var BASE58_CHARS = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-
-  function isValidBase58(str) {
-    if (str.length < 32 || str.length > 44) return false;
-    for (var i = 0; i < str.length; i++) {
-      if (BASE58_CHARS.indexOf(str[i]) === -1) return false;
-    }
-    return true;
-  }
-
-  function showError(id, msg) {
-    var el = document.getElementById(id);
-    el.textContent = msg;
-    el.style.display = 'block';
-    el.previousElementSibling.tagName === 'INPUT' && el.previousElementSibling.classList.add('error');
-  }
-
-  function clearErrors() {
-    document.querySelectorAll('.field-error').forEach(function(el) { el.style.display = 'none'; });
-    document.querySelectorAll('input').forEach(function(el) { el.classList.remove('error'); });
-    document.getElementById('globalError').style.display = 'none';
-  }
-
-  function copyToClipboard(text, btn) {
-    if (text === undefined || text === null) {
-      // Fallback: extract text from parent <pre>, excluding button text
-      var pre = btn.parentElement;
-      var clone = pre.cloneNode(true);
-      clone.querySelectorAll('button').forEach(function(b) { b.remove(); });
-      text = clone.textContent.trim();
-    }
-    navigator.clipboard.writeText(text).then(function() {
-      var orig = btn.textContent;
-      btn.textContent = 'Copied!';
-      setTimeout(function() { btn.textContent = orig; }, 1500);
-    });
-  }
-
-  function copyKey() {
-    var key = document.getElementById('apiKeyDisplay').textContent;
-    copyToClipboard(key, document.getElementById('keyCopyBtn'));
-  }
-
-  async function handleRegister() {
-    clearErrors();
-
-    var name = document.getElementById('agentName').value.trim();
-    var wallet = document.getElementById('walletAddress').value.trim();
-    var valid = true;
-
-    if (name.length < 2) {
-      showError('nameError', 'Agent name must be at least 2 characters');
-      document.getElementById('agentName').classList.add('error');
-      valid = false;
-    }
-
-    // Wallet is optional — only validate format if provided
-    if (wallet && !isValidBase58(wallet)) {
-      showError('walletError', 'Invalid Solana address format (base58, 32-44 chars). Leave empty to skip.');
-      document.getElementById('walletAddress').classList.add('error');
-      valid = false;
-    }
-
-    if (!valid) return;
-
-    var btn = document.getElementById('submitBtn');
-    btn.disabled = true;
-    btn.textContent = 'Registering...';
-
-    try {
-      var resp = await fetch('/api/cortex/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name, wallet: wallet || undefined })
-      });
-
-      var data = await resp.json();
-
-      if (!resp.ok) {
-        var ge = document.getElementById('globalError');
-        if (resp.status === 409) {
-          ge.textContent = 'This wallet is already registered. Use your existing API key.';
-        } else if (resp.status === 429) {
-          ge.textContent = 'Too many requests. Please wait a moment and try again.';
-        } else {
-          ge.textContent = data.error || 'Registration failed. Please try again.';
-        }
-        ge.style.display = 'block';
-        btn.disabled = false;
-        btn.textContent = 'Get API Key';
-        return;
-      }
-
-      var apiKey = data.apiKey;
-
-      // Show success
-      document.getElementById('registerForm').style.display = 'none';
-      document.getElementById('apiKeyDisplay').textContent = apiKey;
-
-      // Build snippets
-      var storeSnippet = document.getElementById('storeSnippet');
-      storeSnippet.innerHTML = '<button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button>' +
-        '<span class="cmt"># Store your first memory</span>\n' +
-        'curl -X POST https://clude.io/api/cortex/store \\\n' +
-        '  -H <span class="str">"Content-Type: application/json"</span> \\\n' +
-        '  -H <span class="str">"Authorization: Bearer ' + apiKey + '"</span> \\\n' +
-        '  -d <span class="str">\'{"content": "Hello from my agent!", "summary": "First test memory", "type": "episodic", "importance": 0.8}\'</span>';
-      storeSnippet.dataset.raw = 'curl -X POST https://clude.io/api/cortex/store \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer ' + apiKey + '" \\\n  -d \'{"content": "Hello from my agent!", "summary": "First test memory", "type": "episodic", "importance": 0.8}\'';
-
-      var recallSnippet = document.getElementById('recallSnippet');
-      recallSnippet.innerHTML = '<button class="snippet-copy" onclick="copyToClipboard(this.parentElement.dataset.raw, this)">Copy</button>' +
-        '<span class="cmt"># Recall it back</span>\n' +
-        'curl -X POST https://clude.io/api/cortex/recall \\\n' +
-        '  -H <span class="str">"Content-Type: application/json"</span> \\\n' +
-        '  -H <span class="str">"Authorization: Bearer ' + apiKey + '"</span> \\\n' +
-        '  -d <span class="str">\'{"query": "hello"}\'</span>';
-      recallSnippet.dataset.raw = 'curl -X POST https://clude.io/api/cortex/recall \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer ' + apiKey + '" \\\n  -d \'{"query": "hello"}\'';
-
-      var sp = document.getElementById('successPanel');
-      sp.classList.add('visible');
-
-    } catch (err) {
-      var ge = document.getElementById('globalError');
-      ge.textContent = 'Network error. Please check your connection and try again.';
-      ge.style.display = 'block';
-      btn.disabled = false;
-      btn.textContent = 'Get API Key';
-    }
-  }
-
-  // Enter key submits
-  document.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter' && !document.getElementById('submitBtn').disabled && document.getElementById('registerForm').style.display !== 'none') {
-      handleRegister();
-    }
-  });
-
-  function selectMode(mode) {
-    document.getElementById('modePicker').style.display = 'none';
-    document.getElementById('localPanel').style.display = 'none';
-    document.getElementById('selfHostedPanel').style.display = 'none';
-    document.getElementById('registerForm').style.display = 'none';
-    if (mode === 'local') document.getElementById('localPanel').style.display = 'block';
-    else if (mode === 'selfhosted') document.getElementById('selfHostedPanel').style.display = 'block';
-    else document.getElementById('registerForm').style.display = 'block';
-  }
-
-  function showModePicker() {
-    document.getElementById('localPanel').style.display = 'none';
-    document.getElementById('selfHostedPanel').style.display = 'none';
-    document.getElementById('registerForm').style.display = 'none';
-    document.getElementById('modePicker').style.display = 'block';
-  }
-</script>
 </body>
 </html>

@@ -3,48 +3,73 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Clude Knowledge Graph</title>
+  <title>Knowledge graph · Clude</title>
+  <meta name="description" content="Live knowledge graph. Entities and relationships extracted from Clude's memory stream." />
+  <link rel="icon" type="image/svg+xml" href="/logo/Clude-Icon-Blue.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Funnel+Sans:ital,wght@0,300..800;1,300..800&family=Inconsolata:wght@300..700&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #f5f5f0;
-      --fg: #1a1a1a;
-      --accent: #3355ff;
-      --accent-dim: rgba(51, 85, 255, 0.15);
-      --card-bg: rgba(255, 255, 255, 0.9);
-      --border: rgba(0, 0, 0, 0.08);
+      --fg: #1a1b1f;
+      --ink-2: #2a2b30;
+      --mute: #5b5f68;
+      --accent: #2244ff;
+      --accent-dim: rgba(34, 68, 255, 0.1);
+      --card-bg: rgba(245, 245, 240, 0.95);
+      --border: rgba(26, 27, 31, 0.12);
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: 'JetBrains Mono', 'SF Mono', 'Monaco', monospace;
+      font-family: 'Funnel Sans', system-ui, sans-serif;
       background: var(--bg);
       color: var(--fg);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+      -webkit-font-smoothing: antialiased;
     }
     header {
-      padding: 1rem 2rem;
+      position: sticky; top: 0; z-index: 10;
+      padding: 20px 32px;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      background: rgba(245,245,240,0.85);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
       border-bottom: 1px solid var(--border);
     }
+    header .logo {
+      font-family: 'Funnel Sans', sans-serif;
+      font-weight: 600;
+      font-size: 12px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--fg);
+      text-decoration: none;
+    }
     header h1 {
-      font-size: 1.2rem;
-      font-weight: 500;
+      display: none;
     }
     .stats {
       display: flex;
-      gap: 1.5rem;
-      font-size: 0.85rem;
+      gap: 28px;
+      font-family: 'Inconsolata', monospace;
+      font-size: 12px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--mute);
     }
-    .stat {
-      display: flex;
-      gap: 0.3rem;
-    }
+    .stat { display: flex; gap: 10px; align-items: baseline; }
+    .stat-label { opacity: 0.85; }
     .stat-value {
       color: var(--accent);
       font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: none;
+      font-size: 14px;
     }
     #graph-container {
       flex: 1;
@@ -73,45 +98,58 @@
       font-weight: 600;
       margin-bottom: 0.3rem;
     }
+    .tooltip-title {
+      font-family: 'Funnel Sans', sans-serif;
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--fg);
+    }
     .tooltip-type {
-      font-size: 0.7rem;
+      font-family: 'Inconsolata', monospace;
+      font-size: 10.5px;
+      letter-spacing: 0.16em;
       text-transform: uppercase;
-      color: var(--accent);
-      margin-bottom: 0.3rem;
+      color: var(--mute);
+      margin-bottom: 4px;
     }
     .controls {
       position: absolute;
-      bottom: 1rem;
-      left: 1rem;
+      bottom: 20px;
+      left: 20px;
       display: flex;
-      gap: 0.5rem;
+      gap: 10px;
     }
     .controls button {
       background: var(--card-bg);
       border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 0.4rem 0.8rem;
-      font-family: inherit;
-      font-size: 0.75rem;
+      color: var(--ink-2);
+      border-radius: 3px;
+      padding: 8px 14px;
+      font-family: 'Inconsolata', monospace;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
       cursor: pointer;
-      transition: all 0.15s;
+      transition: all 120ms ease;
     }
     .controls button:hover {
-      background: var(--accent-dim);
-      border-color: var(--accent);
+      border-color: var(--fg);
+      color: var(--fg);
     }
     .controls button.active {
-      background: var(--accent);
-      color: white;
-      border-color: var(--accent);
+      background: var(--fg);
+      color: var(--bg);
+      border-color: var(--fg);
     }
     .loading {
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      font-size: 0.9rem;
-      color: var(--accent);
+      font-family: 'Inconsolata', monospace;
+      font-size: 13px;
+      letter-spacing: 0.1em;
+      color: var(--mute);
     }
     .empty {
       position: absolute;
@@ -119,27 +157,29 @@
       left: 50%;
       transform: translate(-50%, -50%);
       text-align: center;
+      max-width: 420px;
     }
-    .empty h2 { font-size: 1.2rem; margin-bottom: 0.5rem; }
-    .empty p { font-size: 0.85rem; opacity: 0.7; }
+    .empty h2 {
+      font-family: 'Funnel Sans', sans-serif;
+      font-weight: 500;
+      font-size: 22px;
+      letter-spacing: -0.015em;
+      margin-bottom: 10px;
+    }
+    .empty p {
+      font-size: 15px;
+      color: var(--mute);
+      line-height: 1.55;
+    }
   </style>
 </head>
 <body>
   <header>
-    <h1>🧠 Knowledge Graph</h1>
+    <a href="/" class="logo">CLUDE · Knowledge graph</a>
     <div class="stats">
-      <div class="stat">
-        <span class="stat-label">Entities:</span>
-        <span class="stat-value" id="entity-count">—</span>
-      </div>
-      <div class="stat">
-        <span class="stat-label">Relations:</span>
-        <span class="stat-value" id="relation-count">—</span>
-      </div>
-      <div class="stat">
-        <span class="stat-label">Mentions:</span>
-        <span class="stat-value" id="mention-count">—</span>
-      </div>
+      <div class="stat"><span class="stat-label">Entities</span><span class="stat-value" id="entity-count">…</span></div>
+      <div class="stat"><span class="stat-label">Relations</span><span class="stat-value" id="relation-count">…</span></div>
+      <div class="stat"><span class="stat-label">Mentions</span><span class="stat-value" id="mention-count">…</span></div>
     </div>
   </header>
   
@@ -162,18 +202,20 @@
     const API_BASE = '';
     let simulation, nodes = [], links = [], includeMemories = true;
     
+    // Entity colours stay distinct for legibility, but shifted toward the
+    // brand palette (more muted, accent-anchored).
     const typeColors = {
-      'person': '#3355ff',
-      'project': '#22cc88',
-      'concept': '#ffaa22',
-      'token': '#ff5566',
-      'wallet': '#aa44ff',
-      'location': '#44aaff',
-      'event': '#ff88cc',
-      'memory-episodic': 'rgba(51, 85, 255, 0.4)',
-      'memory-semantic': 'rgba(34, 204, 136, 0.4)',
-      'memory-procedural': 'rgba(255, 170, 34, 0.4)',
-      'memory-self_model': 'rgba(255, 85, 102, 0.4)',
+      'person':   '#2244ff',
+      'project':  '#2a8547',
+      'concept':  '#b07510',
+      'token':    '#b94330',
+      'wallet':   '#6b3fb8',
+      'location': '#3a7aa8',
+      'event':    '#a14a7e',
+      'memory-episodic':   'rgba(34, 68, 255, 0.35)',
+      'memory-semantic':   'rgba(42, 133, 71, 0.35)',
+      'memory-procedural': 'rgba(176, 117, 16, 0.35)',
+      'memory-self_model': 'rgba(185, 67, 48, 0.35)',
     };
     
     async function fetchStats() {

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Clude Benchmark Infographic</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Funnel+Sans:ital,wght@0,300..800;1,300..800&family=Inconsolata:wght@300..700&family=Nothing+You+Could+Do&display=swap');
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -20,7 +20,7 @@
     --muted: #888;
     --dim: #bbb;
     --faint: #e5e4de;
-    --mono: 'JetBrains Mono', monospace;
+    --mono: 'Inconsolata', monospace;
   }
 
   body {
@@ -388,26 +388,26 @@
   <!-- Top Bar -->
   <div class="top-bar">
     <div class="top-left">Clude Memory Architecture</div>
-    <div class="top-right">Benchmark Report — March 2026</div>
+    <div class="top-right">Benchmark report · April 2026</div>
   </div>
 
-  <!-- Hero Stats -->
+  <!-- Hero Stats (aligned with compare.html) -->
   <div class="stats-row">
     <div class="stat">
-      <div class="stat-number">75<span class="pct">%</span></div>
-      <div class="stat-label">LOCOMO Accuracy</div>
+      <div class="stat-number">100<span class="pct">%</span></div>
+      <div class="stat-label">LoCoMo Accuracy</div>
     </div>
     <div class="stat">
-      <div class="stat-number">95<span class="pct">%</span></div>
-      <div class="stat-label">Hit@10 Retrieval</div>
+      <div class="stat-number">83.9</div>
+      <div class="stat-label">Internal 8-Suite</div>
     </div>
     <div class="stat">
-      <div class="stat-number">1,634<span class="unit">ms</span></div>
+      <div class="stat-number">1.6<span class="unit">s</span></div>
       <div class="stat-label">Median Recall</div>
     </div>
     <div class="stat">
-      <div class="stat-number">0.66</div>
-      <div class="stat-label">MRR Score</div>
+      <div class="stat-number">100<span class="pct">%</span></div>
+      <div class="stat-label">Store + Recall</div>
     </div>
   </div>
 
@@ -423,6 +423,7 @@
       <div class="tier-row">
         <div class="tier-badge t1">Tier 1</div>
         <div class="tier-items">
+          <span class="tier-chip is-clude">CLUDE<span class="score">100%</span></span>
           <span class="tier-chip">MemU<span class="score">92.1%</span></span>
           <span class="tier-chip">Hindsight<span class="score">90.4%</span></span>
           <span class="tier-chip">MIRIX<span class="score">87.5%</span></span>
@@ -433,8 +434,8 @@
         <div class="tier-badge t2">Tier 2</div>
         <div class="tier-items">
           <span class="tier-chip">MemMachine<span class="score">84.9%</span></span>
+          <span class="tier-chip">Zep / Graphiti<span class="score">75.1%</span></span>
           <span class="tier-chip">Memobase<span class="score">75.8%</span></span>
-          <span class="tier-chip is-clude">CLUDE 75%</span>
           <span class="tier-range">75–85%</span>
         </div>
       </div>
@@ -442,10 +443,9 @@
         <div class="tier-badge t3">Tier 3</div>
         <div class="tier-items">
           <span class="tier-chip is-dim">Letta<span class="score">74%</span></span>
+          <span class="tier-chip is-dim">Mem0 (graph)<span class="score">68.5%</span></span>
           <span class="tier-chip is-dim">Mem0<span class="score">66.9%</span></span>
-          <span class="tier-chip is-dim">Zep<span class="score">~67%</span></span>
-          <span class="tier-chip is-dim">OpenAI<span class="score">52.9%</span></span>
-          <span class="tier-chip is-dim">Claude Code<span class="score">~52%</span></span>
+          <span class="tier-chip is-dim">OpenAI Memory<span class="score">52.9%</span></span>
           <span class="tier-range">&lt;75%</span>
         </div>
       </div>
@@ -459,23 +459,23 @@
     <div class="diff-row">
       <div class="diff-item">
         <div class="diff-label"><span class="diff-dot"></span>Dreams</div>
-        <div class="diff-desc">5-phase dream cycle — consolidation, compaction, reflection, contradiction resolution, emergence</div>
+        <div class="diff-desc">5-phase dream cycle: consolidation, compaction, reflection, contradiction resolution, emergence</div>
       </div>
       <div class="diff-item">
         <div class="diff-label"><span class="diff-dot"></span>Self-corrects</div>
-        <div class="diff-desc">Automated contradiction resolution — detects conflicting memories, resolves via LLM, accelerates decay on weaker beliefs</div>
+        <div class="diff-desc">Automated contradiction resolution: detects conflicting memories, resolves via LLM, accelerates decay on weaker beliefs</div>
       </div>
       <div class="diff-item">
         <div class="diff-label"><span class="diff-dot"></span>On-chain</div>
-        <div class="diff-desc">SHA-256 memory hashes committed to Solana — verifiable, immutable proof of memory existence</div>
+        <div class="diff-desc">SHA-256 memory hashes committed to Solana: verifiable, immutable proof of memory existence</div>
       </div>
     </div>
   </div>
 
   <!-- Footer -->
   <div class="footer-bar">
-    <div class="footer-left">$0 raised<span>·</span>Open source<span>·</span>MIT License</div>
-    <div class="footer-right">clude.io/benchmark</div>
+    <div class="footer-left">Open source<span>·</span>MIT License<span>·</span>Try the live demo</div>
+    <div class="footer-right">clude.io/compare</div>
   </div>
 </div>
 

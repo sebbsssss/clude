@@ -3,27 +3,29 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Clude — Pitch</title>
+<title>Clude · Pitch</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Funnel+Sans:ital,wght@0,300..800;1,300..800&family=Inconsolata:wght@300..700&family=Nothing+You+Could+Do&display=swap');
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
-  --bg: #0a0a0c;
-  --cream: #f5f0e8;
-  --accent: #c8b89a;
-  --dim: #5a5750;
-  --glow: #d4c5a9;
-  --red: #c45c4a;
+  /* Brand-aligned dark palette (ink on off-white inverts to off-white on ink) */
+  --bg: #0f1115;            /* slightly softer than pure black */
+  --cream: #f5f5f0;         /* brand off-white */
+  --accent: #7f97ff;        /* brand blue #2244ff lifted for dark-bg contrast */
+  --accent-deep: #2244ff;   /* brand blue when saturation matters (thin lines, CTAs) */
+  --dim: #5b5f68;           /* brand muted grey */
+  --glow: #a4b3ff;          /* accent glow */
+  --red: #c45c4a;           /* kept for data viz contrast */
   --green: #5cab7d;
-  --blue: #5a8fc4;
+  --blue: #7f97ff;
 }
 
 body {
   background: var(--bg);
   color: var(--cream);
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Funnel Sans', sans-serif;
   overflow: hidden;
   width: 1920px;
   height: 1080px;
@@ -90,7 +92,7 @@ body {
   color: var(--cream);
   padding: 8px 16px;
   font-size: 13px;
-  font-family: 'Space Mono', monospace;
+  font-family: 'Inconsolata', monospace;
   cursor: pointer;
   border-radius: 4px;
 }
@@ -100,7 +102,7 @@ body {
   position: fixed;
   top: 34px;
   left: 40px;
-  font-family: 'Space Mono', monospace;
+  font-family: 'Inconsolata', monospace;
   font-size: 14px;
   color: var(--dim);
   z-index: 1001;
@@ -113,7 +115,7 @@ body {
   text-align: center;
 }
 .title-logo {
-  font-family: 'Space Mono', monospace;
+  font-family: 'Inconsolata', monospace;
   font-size: 120px;
   font-weight: 700;
   letter-spacing: -4px;
@@ -123,7 +125,7 @@ body {
   animation: fadeUp 1s ease 0.3s forwards;
 }
 .title-sub {
-  font-family: 'Instrument Serif', serif;
+  font-family: 'Funnel Sans', sans-serif;
   font-style: italic;
   font-size: 28px;
   color: var(--dim);
@@ -138,7 +140,7 @@ body {
   animation: fadeUp 0.6s ease 1.2s forwards;
 }
 .title-by {
-  font-family: 'Space Mono', monospace;
+  font-family: 'Inconsolata', monospace;
   font-size: 14px;
   color: var(--dim);
   letter-spacing: 3px;
@@ -153,14 +155,14 @@ body {
   gap: 50px;
 }
 .section-label {
-  font-family: 'Space Mono', monospace;
+  font-family: 'Inconsolata', monospace;
   font-size: 12px;
   letter-spacing: 4px;
   text-transform: uppercase;
   color: var(--dim);
 }
 .section-title {
-  font-family: 'Instrument Serif', serif;
+  font-family: 'Funnel Sans', sans-serif;
   font-size: 56px;
   color: var(--cream);
   line-height: 1.1;
@@ -196,7 +198,7 @@ body {
   display: block;
 }
 .arch-card h3 {
-  font-family: 'Space Mono', monospace;
+  font-family: 'Inconsolata', monospace;
   font-size: 15px;
   margin-bottom: 8px;
   color: var(--cream);
@@ -207,7 +209,7 @@ body {
   line-height: 1.6;
 }
 .arch-card .decay-rate {
-  font-family: 'Space Mono', monospace;
+  font-family: 'Inconsolata', monospace;
   font-size: 13px;
   color: var(--accent);
   margin-top: 10px;
@@ -231,7 +233,7 @@ body {
   gap: 16px;
 }
 .problem-quote {
-  font-family: 'Instrument Serif', serif;
+  font-family: 'Funnel Sans', sans-serif;
   font-size: 44px;
   line-height: 1.2;
   color: var(--cream);
@@ -266,7 +268,7 @@ body {
   color: var(--green);
 }
 .comparison-label {
-  font-family: 'Space Mono', monospace;
+  font-family: 'Inconsolata', monospace;
   font-size: 11px;
   letter-spacing: 2px;
   text-transform: uppercase;
@@ -306,7 +308,7 @@ body {
 .terminal-dot.g { background: #28c840; }
 .terminal-body {
   padding: 28px;
-  font-family: 'Space Mono', monospace;
+  font-family: 'Inconsolata', monospace;
   font-size: 16px;
   line-height: 2;
   min-height: 260px;
@@ -335,7 +337,7 @@ body {
 }
 .sdk-stat.show { opacity: 1; transition: opacity 0.5s ease; }
 .sdk-stat .num {
-  font-family: 'Space Mono', monospace;
+  font-family: 'Inconsolata', monospace;
   font-size: 48px;
   color: var(--accent);
   font-weight: 700;
@@ -370,7 +372,7 @@ body {
 }
 .pillar.show { opacity: 1; transform: translateY(0); transition: all 0.6s ease; }
 .pillar-num {
-  font-family: 'Space Mono', monospace;
+  font-family: 'Inconsolata', monospace;
   font-size: 72px;
   font-weight: 700;
   color: rgba(200,184,154,0.08);
@@ -379,7 +381,7 @@ body {
   right: 24px;
 }
 .pillar h3 {
-  font-family: 'Instrument Serif', serif;
+  font-family: 'Funnel Sans', sans-serif;
   font-size: 22px;
   margin-bottom: 12px;
   color: var(--cream);
@@ -413,7 +415,7 @@ body {
 }
 .metric.show { opacity: 1; transform: scale(1); transition: all 0.5s ease; }
 .metric .value {
-  font-family: 'Space Mono', monospace;
+  font-family: 'Inconsolata', monospace;
   font-size: 42px;
   font-weight: 700;
   color: var(--accent);
@@ -432,7 +434,7 @@ body {
   justify-content: center;
 }
 .tech-tag {
-  font-family: 'Space Mono', monospace;
+  font-family: 'Inconsolata', monospace;
   font-size: 13px;
   padding: 8px 18px;
   border: 1px solid rgba(255,255,255,0.1);
@@ -465,7 +467,7 @@ body {
 }
 .road-item.show { opacity: 1; transform: translateY(0); transition: all 0.6s ease; }
 .road-phase {
-  font-family: 'Space Mono', monospace;
+  font-family: 'Inconsolata', monospace;
   font-size: 11px;
   letter-spacing: 3px;
   text-transform: uppercase;
@@ -473,7 +475,7 @@ body {
   margin-bottom: 16px;
 }
 .road-item h3 {
-  font-family: 'Instrument Serif', serif;
+  font-family: 'Funnel Sans', sans-serif;
   font-size: 24px;
   margin-bottom: 12px;
 }
@@ -490,7 +492,7 @@ body {
   text-align: center;
 }
 .close-logo {
-  font-family: 'Space Mono', monospace;
+  font-family: 'Inconsolata', monospace;
   font-size: 80px;
   font-weight: 700;
   letter-spacing: -3px;
@@ -498,7 +500,7 @@ body {
   animation: fadeUp 1s ease 0.2s forwards;
 }
 .close-tagline {
-  font-family: 'Instrument Serif', serif;
+  font-family: 'Funnel Sans', sans-serif;
   font-style: italic;
   font-size: 26px;
   color: var(--accent);
@@ -506,7 +508,7 @@ body {
   animation: fadeUp 1s ease 0.6s forwards;
 }
 .close-ca {
-  font-family: 'Space Mono', monospace;
+  font-family: 'Inconsolata', monospace;
   font-size: 14px;
   color: var(--dim);
   padding: 14px 28px;
@@ -519,7 +521,7 @@ body {
 .close-links {
   display: flex;
   gap: 40px;
-  font-family: 'Space Mono', monospace;
+  font-family: 'Inconsolata', monospace;
   font-size: 14px;
   color: var(--dim);
   opacity: 0;
@@ -596,7 +598,7 @@ body {
     <div class="arch-card" data-delay="1600">
       <span class="arch-icon">&#9998;</span>
       <h3>Introspective</h3>
-      <p>Original thoughts. Journal entries from the meditation cycle — self-generated thinking.</p>
+      <p>Original thoughts. Journal entries from the meditation cycle, self-generated thinking.</p>
       <div class="decay-rate">2% daily decay</div>
     </div>
   </div>

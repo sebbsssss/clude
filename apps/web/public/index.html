@@ -1,1071 +1,1478 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CLUDE — We Separate Memory from the Model</title>
-  <meta name="description" content="Private, portable, persistent memory for AI agents. Your agent's brain belongs to you — not OpenAI, not Anthropic, not anyone else.">
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg: #f5f5f0;
-      --bg-warm: #eeeee8;
-      --text: #111;
-      --text-muted: #666;
-      --text-faint: #999;
-      --accent: #111;
-      --blue: #2244ff;
-      --mono: 'JetBrains Mono', monospace;
-      --section-pad: 120px;
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Clude · Memory for AI Agents</title>
+<meta name="description" content="An open memory layer for AI agents. Every conversation consolidates, decays, and resurfaces the way human memory does. Add it to your agent in five minutes." />
+<link rel="icon" type="image/svg+xml" href="/logo/Clude-Icon-Blue.svg" />
+<meta property="og:title" content="Clude · Memory for AI Agents" />
+<meta property="og:description" content="Clude is the first memory layer for AI agents where you hold the keys. Every memory hashed to Solana, wallet-signed, portable between any agent, any model." />
+<meta property="og:url" content="https://clude.io" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Funnel+Sans:ital,wght@0,300..800;1,300..800&family=Inconsolata:wght@300..700&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f5f0;           /* brand off-white */
+    --bg-2: #ecece6;
+    --ink: #1a1b1f;
+    --ink-2: #2a2b30;
+    --mute: #5b5f68;
+    --accent: #2244ff;       /* brand blue */
+    --accent-soft: rgba(34, 68, 255, 0.08);
+    --line: rgba(26, 27, 31, 0.12);
+    --green: #2a8547;
+    --amber: #b07510;
+    --red: #b94330;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Funnel Sans', system-ui, sans-serif;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* particles + grain are scoped to the hero only */
+  .hero { position: relative; overflow: hidden; min-height: 100vh; }
+  #bg-canvas {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    display: block;
+    z-index: 0;
+  }
+  .grain {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.35;
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.18 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  }
+  nav {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 20px 32px;
+    z-index: 10;
+    font-size: 12px; letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--ink-2);
+  }
+  nav .logo { font-weight: 600; letter-spacing: 0.22em; color: inherit; text-decoration: none; }
+  nav .links { display: flex; gap: 28px; font-weight: 500; opacity: 0.7; }
+  nav .links a { color: inherit; text-decoration: none; }
+  nav .links a:hover { opacity: 1; color: var(--ink); }
+  @media (max-width: 480px) {
+    nav { padding: 16px 18px; font-size: 11px; letter-spacing: 0.12em; gap: 16px; }
+    nav .links { gap: 16px; }
+  }
+
+  .hero-main {
+    position: relative;
+    z-index: 5;
+    width: 100%; min-height: 100vh;
+    display: flex; align-items: center;
+    padding: 0 7vw;
+  }
+  /* frosted paper, scoped to hero only */
+  .pane {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    pointer-events: none;
+    background: rgba(245, 245, 240, 0.62);
+    backdrop-filter: blur(10px) saturate(108%);
+    -webkit-backdrop-filter: blur(10px) saturate(108%);
+  }
+  .col {
+    max-width: 680px;
+    position: relative;
+  }
+  .eyebrow {
+    font-family: 'Inconsolata', monospace;
+    font-size: 12.5px; font-weight: 600;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--ink-2);
+    display: inline-flex; align-items: center; gap: 12px;
+    margin-bottom: 36px;
+  }
+  .eyebrow::before {
+    content: ''; width: 32px; height: 1px; background: var(--ink); opacity: 0.6;
+  }
+  h1 {
+    font-family: 'Funnel Sans', sans-serif;
+    font-weight: 600;
+    font-size: clamp(48px, 7vw, 104px);
+    line-height: 1.02;
+    letter-spacing: -0.035em;
+    color: var(--ink);
+    margin-bottom: 32px;
+  }
+  h1 .line {
+    display: block;
+    white-space: nowrap;
+  }
+  @media (max-width: 480px) {
+    h1 { font-size: clamp(36px, 10vw, 56px); }
+    h1 .line { white-space: normal; overflow-wrap: break-word; }
+    .hero-main { padding: 0 20px; }
+  }
+  h1 em {
+    font-style: normal;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: -0.01em;
+    font-size: 1.05em;
+    display: inline-block;
+    }
+  p.lede {
+    font-size: 18px;
+    line-height: 1.55;
+    color: var(--ink-2);
+    max-width: 440px;
+    margin-bottom: 48px;
+  }
+  .cta-row { display: flex; align-items: center; gap: 20px; }
+  .cta {
+    display: inline-flex; align-items: center; gap: 12px;
+    padding: 14px 22px;
+    background: var(--ink);
+    color: var(--bg);
+    font-family: 'Inconsolata', monospace;
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    border-radius: 2px;
+    text-decoration: none;
+    transition: background 150ms ease;
+  }
+  .cta:hover { background: var(--accent); }
+  .cta .arrow { transition: transform 200ms ease; }
+  .cta:hover .arrow { transform: translateX(4px); }
+  .secondary {
+    font-family: 'Inconsolata', monospace;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    color: var(--mute);
+    text-decoration: none;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 2px;
+  }
+  .secondary:hover { color: var(--ink); border-color: var(--ink); }
+
+  .footer-strip {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    z-index: 5;
+    padding: 22px 32px;
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: 'Inconsolata', monospace;
+    font-size: 12px; font-weight: 600;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--ink-2);
+  }
+  .footer-strip .dot {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent); margin-right: 10px;
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+  /* ---- shared section scaffolding ---- */
+  section.page { padding: 140px 7vw; position: relative; }
+  section.page + section.page {
+    border-top: 1px solid var(--line);
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  .section-head {
+    display: flex; gap: 64px; align-items: baseline;
+    margin-bottom: 80px;
+    flex-wrap: wrap;
+  }
+  .section-head .num {
+    font-family: 'Inconsolata', monospace;
+    font-size: 13px; font-weight: 500;
+    letter-spacing: 0.18em; color: var(--mute);
+  }
+  .section-head h2 {
+    font-family: 'Funnel Sans', sans-serif;
+    font-weight: 500;
+    font-size: clamp(36px, 4.5vw, 68px);
+    line-height: 1.02;
+    letter-spacing: -0.025em;
+    max-width: 880px;
+  }
+  .section-head h2 em {
+    font-style: normal;
+    font-weight: 700;
+    color: var(--accent);
+    display: inline-block;
     }
 
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html { scroll-behavior: smooth; }
-    body {
-      font-family: var(--mono);
-      background: var(--bg);
-      color: var(--text);
-      font-size: 14px;
-      line-height: 1.7;
-      -webkit-font-smoothing: antialiased;
-      overflow-x: hidden;
-    }
-    ::selection { background: var(--text); color: var(--bg); }
+  /* ---- §2 install terminal ---- */
+  .terminal {
+    background: var(--ink);
+    color: #d8d8d0;
+    border-radius: 6px;
+    overflow: hidden;
+    font-family: 'Inconsolata', monospace;
+    font-size: 15px;
+    line-height: 1.7;
+    box-shadow: 0 30px 80px -30px rgba(26,27,31,0.35);
+  }
+  .terminal-bar {
+    padding: 14px 18px;
+    display: flex; gap: 8px; align-items: center;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .terminal-bar .dot-btn { width: 11px; height: 11px; border-radius: 50%; background: rgba(255,255,255,0.14); }
+  .terminal-bar .label {
+    font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: rgba(216,216,208,0.55); margin-left: 14px;
+  }
+  .terminal-body { padding: 28px 32px 36px; }
+  .terminal .prompt { color: rgba(216,216,208,0.45); user-select: none; }
+  .terminal .cmd { color: #f5f5f0; }
+  .terminal .out { color: rgba(216,216,208,0.62); }
+  .terminal .ok  { color: #7dd28a; }
+  .terminal .blue { color: #7f97ff; }
+  .terminal .dim { color: rgba(216,216,208,0.35); }
+  .terminal .cursor {
+    display: inline-block; width: 9px; height: 1.1em;
+    background: #f5f5f0; vertical-align: middle;
+    margin-left: 2px; animation: blink 1.1s step-end infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
 
-    /* ── NAV ── */
-    nav {
-      position: fixed; top: 0; width: 100%; z-index: 100;
-      background: rgba(245, 245, 240, 0.9);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border-bottom: 1px solid rgba(0,0,0,0.06);
-    }
-    .nav-inner {
-      max-width: 1200px; margin: 0 auto; padding: 0 40px;
-      height: 56px; display: flex; align-items: center;
-    }
-    .nav-logo {
-      font-size: 13px; font-weight: 800; letter-spacing: 5px;
-      color: var(--text); text-transform: uppercase; text-decoration: none;
-    }
-    .nav-links {
-      display: flex; align-items: center; gap: 32px; margin-left: auto;
-    }
-    .nav-links a {
-      color: var(--text-muted); font-size: 11px; letter-spacing: 2px;
-      text-transform: uppercase; text-decoration: none; transition: color 0.3s;
-    }
-    .nav-links a:hover { color: var(--text); }
+  /* ---- §3 concept tiles ---- */
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 48px; }
+  .tile {
+    display: flex;
+    flex-direction: column;
+    padding: 32px 0 0;
+    border-top: 1px solid var(--line);
+  }
+  .tile .kicker {
+    font-family: 'Inconsolata', monospace;
+    font-size: 12px; font-weight: 500;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--mute);
+    margin-bottom: 24px;
+  }
+  .tile h3 {
+    font-family: 'Funnel Sans', sans-serif;
+    font-weight: 600;
+    font-size: 24px; line-height: 1.2;
+    letter-spacing: -0.015em;
+    margin-bottom: 16px;
+    min-height: calc(1.2em * 2); /* reserve space for up to 2 title lines so h3 bottoms align */
+  }
+  .tile p {
+    font-size: 15.5px; line-height: 1.6;
+    color: var(--ink-2);
+    max-width: 32ch;
+    margin-bottom: 28px;
+    flex: 1; /* fill remaining space so .example hugs the bottom */
+  }
+  .tile .example {
+    font-family: 'Inconsolata', monospace;
+    font-size: 13px; line-height: 1.5;
+    color: var(--mute);
+    border-left: 2px solid var(--accent);
+    padding: 6px 0 6px 14px;
+    max-width: 36ch;
+  }
+  @media (max-width: 900px) {
+    .tiles { grid-template-columns: 1fr; gap: 32px; }
+    .tile h3 { min-height: 0; }
+  }
 
-    /* ── HERO ── */
-    .hero {
-      min-height: 100vh;
-      display: flex; align-items: center;
-      padding: 0 40px;
-      padding-top: 56px;
-    }
-    .hero-inner {
-      max-width: 1200px; margin: 0 auto; width: 100%;
-      display: grid; grid-template-columns: 1fr 1fr;
-      gap: 80px; align-items: center;
-    }
-    .hero-text {}
-    .hero-label {
-      font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
-      color: var(--text-muted); margin-bottom: 24px;
-    }
-    .hero-title {
-      font-size: clamp(36px, 5vw, 56px);
-      font-weight: 800; line-height: 1.1;
-      letter-spacing: -1px;
-      margin-bottom: 24px;
-    }
-    .hero-title em {
-      font-style: normal;
-      background: linear-gradient(135deg, #2244ff, #5566ff);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-    .hero-sub {
-      font-size: 14px; color: var(--text-muted);
-      max-width: 440px; line-height: 1.8;
-      margin-bottom: 40px;
-    }
-    .hero-actions { display: flex; gap: 12px; }
-    .btn {
-      font-family: var(--mono);
-      font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
-      padding: 14px 28px; text-decoration: none;
-      transition: all 0.25s ease; cursor: pointer;
-      border: none;
-    }
-    .btn-primary {
-      background: var(--text); color: var(--bg);
-      border: 2px solid var(--text);
-    }
-    .btn-primary:hover {
-      background: transparent; color: var(--text);
-    }
-    .btn-outline {
-      background: transparent; color: var(--text);
-      border: 2px solid rgba(0,0,0,0.15);
-    }
-    .btn-outline:hover {
-      border-color: var(--text);
-    }
+  /* ---- §3 Compaction demo ---- */
+  .demo-intro { font-size: 16px; line-height: 1.65; color: var(--ink-2); max-width: 64ch; margin-bottom: 36px; }
+  .demo-input { margin-bottom: 32px; }
+  .demo-input-label {
+    font-family: 'Inconsolata', monospace;
+    font-size: 11.5px; font-weight: 500;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--mute); margin-bottom: 12px;
+  }
+  .demo-input textarea {
+    width: 100%; min-height: 150px;
+    padding: 16px 18px;
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink);
+    font-family: 'Inconsolata', monospace;
+    font-size: 13px; line-height: 1.65;
+    border-radius: 4px;
+    outline: none; resize: vertical;
+    transition: border-color 120ms ease;
+  }
+  .demo-input textarea:focus { border-color: var(--accent); }
+  .demo-input textarea::placeholder { color: var(--mute); opacity: 0.7; }
+  .presets { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  .preset-btn {
+    padding: 8px 14px;
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink-2);
+    font-family: 'Inconsolata', monospace;
+    font-size: 12px; font-weight: 500;
+    letter-spacing: 0.06em;
+    cursor: pointer; border-radius: 3px;
+    transition: all 120ms ease;
+  }
+  .preset-btn:hover { border-color: var(--ink); color: var(--ink); }
+  .upload-btn { display: inline-flex; align-items: center; gap: 8px; }
+  .upload-btn input[type="file"] { display: none; }
 
-    /* ── BRAIN ILLUSTRATION ── */
-    .hero-visual {
-      display: flex; align-items: center; justify-content: center;
-      position: relative;
-    }
-    .brain-container {
-      width: 380px; height: 440px;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      gap: 0;
-      position: relative;
-    }
-    .scan-line {
-      height: 2.4px;
-      background: var(--text);
-      margin: 0.8px 0;
-      transform-origin: center;
-      animation: scanPulse var(--dur) ease-in-out var(--delay) infinite alternate;
-      opacity: 0.85;
-      border-radius: 1px;
-    }
-    @keyframes scanPulse {
-      0% {
-        transform: scaleX(var(--scale-min)) translateX(var(--tx-a));
-        opacity: 0.6;
-      }
-      50% {
-        opacity: 0.95;
-      }
-      100% {
-        transform: scaleX(var(--scale-max)) translateX(var(--tx-b));
-        opacity: 0.75;
-      }
-    }
+  .demo-controls {
+    display: flex; gap: 12px; margin-top: 20px;
+    align-items: center; flex-wrap: wrap;
+  }
+  .demo-cta {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 12px 20px;
+    background: var(--ink); color: var(--bg);
+    border: 1px solid var(--ink);
+    font-family: 'Inconsolata', monospace;
+    font-size: 13px; font-weight: 500; letter-spacing: 0.04em;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 120ms ease;
+  }
+  .demo-cta:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); }
+  .demo-cta:disabled { opacity: 0.35; cursor: not-allowed; }
+  .demo-cta-ghost {
+    background: transparent; color: var(--ink-2);
+    border: 1px solid var(--line);
+  }
+  .demo-cta-ghost:hover:not(:disabled) { background: transparent; color: var(--ink); border-color: var(--ink); }
+  .step-indicator {
+    font-family: 'Inconsolata', monospace;
+    font-size: 13px; color: var(--mute);
+    margin-left: auto;
+  }
+  .step-indicator strong { color: var(--ink); font-weight: 600; }
 
-    /* ── SECTIONS ── */
-    .section {
-      padding: var(--section-pad) 40px;
-    }
-    .section-inner {
-      max-width: 1200px; margin: 0 auto;
-    }
-    .section-alt {
-      background: var(--bg-warm);
-    }
-    .section-label {
-      font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
-      color: var(--text-muted); margin-bottom: 16px;
-    }
-    .section-title {
-      font-size: 36px; font-weight: 700; line-height: 1.2;
-      margin-bottom: 20px; max-width: 600px;
-    }
-    .section-desc {
-      font-size: 14px; color: var(--text-muted); max-width: 520px;
-      line-height: 1.8; margin-bottom: 56px;
-    }
+  .comparison {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 0; margin-top: 32px;
+    border-top: 1px solid var(--line);
+  }
+  @media (max-width: 780px) { .comparison { grid-template-columns: 1fr; } }
+  .panel {
+    padding: 28px 28px 0 0;
+    min-height: 400px;
+    display: flex; flex-direction: column;
+    transition: background 300ms ease;
+  }
+  .panel.flash { background: var(--accent-soft); }
+  .panel + .panel { padding-left: 28px; border-left: 1px solid var(--line); }
+  @media (max-width: 780px) { .panel + .panel { padding-left: 0; border-left: none; border-top: 1px solid var(--line); padding-top: 28px; } }
 
-    /* ── PROBLEM CARDS ── */
-    .problem-grid {
-      display: grid; grid-template-columns: repeat(3, 1fr);
-      gap: 1px; background: rgba(0,0,0,0.06);
-      border: 1px solid rgba(0,0,0,0.06);
-    }
-    .problem-card {
-      background: var(--bg);
-      padding: 40px 32px;
-    }
-    .section-alt .problem-card {
-      background: var(--bg-warm);
-    }
-    .problem-card-num {
-      font-size: 32px; font-weight: 800; color: rgba(0,0,0,0.08);
-      margin-bottom: 20px;
-    }
-    .problem-card-title {
-      font-size: 14px; font-weight: 700; margin-bottom: 12px;
-    }
-    .problem-card-text {
-      font-size: 13px; color: var(--text-muted); line-height: 1.8;
-    }
+  .panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 18px;
+  }
+  .panel-title {
+    font-family: 'Funnel Sans', sans-serif;
+    font-weight: 600;
+    font-size: 18px; letter-spacing: -0.01em;
+  }
+  .panel-title.without { color: var(--ink-2); }
+  .panel-title.with    { color: var(--accent); }
+  .panel-badge {
+    font-family: 'Inconsolata', monospace;
+    font-size: 11px; font-weight: 500;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    padding: 3px 10px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    color: var(--mute);
+  }
+  .panel-badge.red { color: var(--red); border-color: rgba(185, 67, 48, 0.25); }
+  .panel-badge.blue { color: var(--accent); border-color: rgba(34, 68, 255, 0.25); }
 
-    /* ── SOLUTION / LAYER STACK ── */
-    .solution-grid {
-      display: grid; grid-template-columns: 1fr 1fr;
-      gap: 80px; align-items: start;
-    }
-    .solution-text .section-title { margin-bottom: 20px; }
-    .solution-text .section-desc { margin-bottom: 0; }
-    .layer-stack {
-      display: flex; flex-direction: column; gap: 2px;
-    }
-    .layer-card {
-      background: white;
-      border: 1px solid rgba(0,0,0,0.06);
-      padding: 28px 32px;
-      display: flex; align-items: flex-start; gap: 20px;
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
-    .layer-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 32px rgba(0,0,0,0.06);
-    }
-    .layer-num {
-      font-size: 11px; font-weight: 700; color: var(--text-faint);
-      letter-spacing: 1px; min-width: 28px; padding-top: 2px;
-    }
-    .layer-content {}
-    .layer-title {
-      font-size: 13px; font-weight: 700; margin-bottom: 6px;
-    }
-    .layer-desc {
-      font-size: 12px; color: var(--text-muted); line-height: 1.7;
-    }
+  .panel-body {
+    flex: 1;
+    font-family: 'Inconsolata', monospace;
+    font-size: 12.5px; line-height: 1.7;
+    color: var(--ink-2);
+    max-height: 340px;
+    overflow-y: auto;
+    padding-right: 6px;
+  }
+  .panel-body.empty { color: var(--mute); font-style: italic; }
+  .panel-body.degraded { color: var(--red); }
 
-    /* ── 5 P'S GRID ── */
-    .principles-grid {
-      display: grid; grid-template-columns: repeat(5, 1fr);
-      gap: 1px; background: rgba(0,0,0,0.06);
-      border: 1px solid rgba(0,0,0,0.06);
-    }
-    .principle-card {
-      background: var(--bg);
-      padding: 36px 24px;
-      text-align: center;
-      transition: transform 0.3s ease;
-    }
-    .section-alt .principle-card {
-      background: var(--bg-warm);
-    }
-    .principle-card:hover {
-      transform: translateY(-2px);
-    }
-    .principle-icon {
-      font-size: 28px; margin-bottom: 16px;
-      display: block;
-    }
-    .principle-name {
-      font-size: 14px; font-weight: 700; margin-bottom: 8px;
-      letter-spacing: 1px;
-    }
-    .principle-desc {
-      font-size: 11px; color: var(--text-muted); line-height: 1.7;
-    }
+  .memory-item {
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    border-left: 2px solid var(--line);
+    transition: opacity 300ms ease, border-color 300ms ease;
+    font-family: 'Funnel Sans', sans-serif;
+    font-size: 13.5px; line-height: 1.55;
+  }
+  .memory-item.episodic    { border-left-color: #7f97ff; }
+  .memory-item.semantic    { border-left-color: var(--accent); }
+  .memory-item.procedural  { border-left-color: var(--green); }
+  .memory-item.self_model  { border-left-color: var(--amber); }
+  .memory-item .memory-meta {
+    display: flex; flex-wrap: wrap; gap: 12px;
+    margin-top: 8px;
+    font-family: 'Inconsolata', monospace;
+    font-size: 11px; color: var(--mute);
+  }
+  .memory-item .memory-type {
+    padding: 2px 8px;
+    background: rgba(0,0,0,0.05);
+    border-radius: 3px;
+    font-size: 10px;
+    letter-spacing: 0.12em; text-transform: uppercase;
+  }
+  .importance-bar, .decay-bar {
+    display: inline-block;
+    width: 40px; height: 3px;
+    background: var(--line);
+    margin-left: 4px;
+    vertical-align: middle;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .importance-fill, .decay-fill {
+    display: block; height: 100%;
+    background: var(--accent);
+    transition: width 300ms ease;
+  }
 
-    /* ── MEMORY TYPES 2x2 ── */
-    .memory-grid {
-      display: grid; grid-template-columns: 1fr 1fr;
-      gap: 2px;
-    }
-    .memory-card {
-      background: white;
-      border: 1px solid rgba(0,0,0,0.06);
-      border-top: 3px solid var(--card-color);
-      padding: 36px 32px;
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
-    .memory-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 32px rgba(0,0,0,0.06);
-    }
-    .memory-card-label {
-      font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
-      color: var(--text-faint); margin-bottom: 12px;
-    }
-    .memory-card-title {
-      font-size: 16px; font-weight: 700; margin-bottom: 10px;
-    }
-    .memory-card-desc {
-      font-size: 13px; color: var(--text-muted); line-height: 1.8;
-    }
-    .memory-card-decay {
-      margin-top: 16px; font-size: 11px; color: var(--text-faint);
-      letter-spacing: 1px;
-    }
-    .memory-grid > .memory-card:nth-child(5) {
-      grid-column: 1 / -1;
-    }
+  .panel-footer {
+    padding-top: 16px;
+    margin-top: 16px;
+    border-top: 1px solid var(--line);
+    display: flex; flex-wrap: wrap; gap: 18px;
+    font-family: 'Inconsolata', monospace;
+    font-size: 11.5px; color: var(--mute);
+  }
+  .panel-footer .metric-value { color: var(--ink); font-weight: 600; }
+  .panel-footer .metric-value.red { color: var(--red); }
+  .panel-footer .metric-value.blue { color: var(--accent); }
 
-    /* ── DREAM CYCLE ── */
-    .dream-phases {
-      display: grid; grid-template-columns: repeat(3, 1fr);
-      gap: 2px; margin-top: 56px;
-    }
-    .dream-card {
-      background: white;
-      border: 1px solid rgba(0,0,0,0.06);
-      padding: 40px 32px;
-      position: relative;
-    }
-    .dream-card::before {
-      content: '';
-      position: absolute; top: 0; left: 0; right: 0;
-      height: 2px; background: var(--text);
-      transform: scaleX(0); transform-origin: left;
-      transition: transform 0.6s ease;
-    }
-    .dream-card:hover::before { transform: scaleX(1); }
-    .dream-numeral {
-      font-size: 28px; font-weight: 800; color: rgba(0,0,0,0.06);
-      margin-bottom: 20px;
-    }
-    .dream-title {
-      font-size: 14px; font-weight: 700; margin-bottom: 10px;
-    }
-    .dream-desc {
-      font-size: 13px; color: var(--text-muted); line-height: 1.8;
-    }
+  .entities-row {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    padding-top: 12px;
+  }
+  .entity-tag {
+    font-family: 'Inconsolata', monospace;
+    font-size: 10.5px;
+    padding: 3px 8px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: 3px;
+    letter-spacing: 0.04em;
+  }
 
-    /* ── VENICE / PRIVACY ── */
-    .venice-grid {
-      display: grid; grid-template-columns: 1fr 1fr;
-      gap: 80px; align-items: center;
-    }
-    .venice-stack {
-      display: flex; flex-direction: column; gap: 2px;
-    }
-    .venice-layer {
-      background: white;
-      border: 1px solid rgba(0,0,0,0.06);
-      padding: 24px 28px;
-      display: flex; align-items: center; gap: 16px;
-      transition: transform 0.3s ease;
-    }
-    .venice-layer:hover { transform: translateX(4px); }
-    .venice-dot {
-      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
-    }
-    .venice-layer-label {
-      font-size: 9px; letter-spacing: 2px; text-transform: uppercase;
-      color: var(--text-faint);
-    }
-    .venice-layer-name {
-      font-size: 13px; font-weight: 700;
-    }
-    .venice-layer-desc {
-      font-size: 11px; color: var(--text-muted); line-height: 1.6;
-    }
+  .scores-panel {
+    margin-top: 48px;
+    padding-top: 32px;
+    border-top: 1px solid var(--line);
+  }
+  .scores-panel .scores-label {
+    font-family: 'Inconsolata', monospace;
+    font-size: 11.5px; font-weight: 500;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--mute); margin-bottom: 20px;
+  }
+  .score-row {
+    display: grid;
+    grid-template-columns: 140px 1fr 1fr;
+    gap: 14px;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .score-label {
+    font-family: 'Inconsolata', monospace;
+    font-size: 12px;
+    color: var(--ink-2); text-align: right;
+  }
+  .score-bar-wrap {
+    height: 22px;
+    background: transparent;
+    border-left: 1px solid var(--line);
+    position: relative;
+  }
+  .score-bar {
+    height: 100%;
+    display: flex; align-items: center;
+    padding: 0 10px 0 12px;
+    font-family: 'Inconsolata', monospace;
+    font-size: 11px; font-weight: 500;
+    color: #fff;
+    transition: width 600ms ease;
+  }
+  .score-bar.red { background: var(--red); }
+  .score-bar.blue { background: var(--accent); }
+  .scores-legend {
+    display: flex; gap: 24px;
+    margin-top: 20px;
+    font-family: 'Inconsolata', monospace;
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--mute);
+  }
+  .scores-legend .dot-red,
+  .scores-legend .dot-blue {
+    display: inline-block; width: 10px; height: 10px;
+    margin-right: 8px; vertical-align: middle; border-radius: 2px;
+  }
+  .scores-legend .dot-red { background: var(--red); }
+  .scores-legend .dot-blue { background: var(--accent); }
 
-    /* ── WIP BADGE ── */
-    .wip-badge {
-      display: inline-block;
-      font-size: 9px; letter-spacing: 2px; text-transform: uppercase;
-      color: var(--text-muted);
-      background: rgba(0,0,0,0.04);
-      border: 1px solid rgba(0,0,0,0.08);
-      padding: 4px 12px;
-      margin-bottom: 16px;
-    }
+  /* ---- §4 Proof ---- */
+  .proof { max-width: 980px; }
+  .proof-stats {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0;
+    margin: 32px 0 64px;
+  }
+  .proof-stat {
+    padding: 28px 32px 28px 0;
+    border-top: 1px solid var(--line);
+  }
+  .proof-stat + .proof-stat {
+    padding-left: 32px;
+    border-left: 1px solid var(--line);
+  }
+  @media (max-width: 780px) {
+    .proof-stats { grid-template-columns: 1fr; }
+    .proof-stat, .proof-stat + .proof-stat { padding: 24px 0; border-left: none; }
+  }
+  .proof-num {
+    font-family: 'Funnel Sans', sans-serif;
+    font-weight: 600;
+    font-size: clamp(36px, 4.5vw, 52px);
+    letter-spacing: -0.025em;
+    line-height: 1.02;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    margin-bottom: 10px;
+  }
+  .proof-label {
+    font-family: 'Inconsolata', monospace;
+    font-size: 12.5px; font-weight: 500;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--ink-2);
+    max-width: 32ch;
+    line-height: 1.55;
+  }
+  .proof-body {
+    font-size: 17px; line-height: 1.6;
+    color: var(--ink-2);
+    max-width: 64ch;
+    margin-bottom: 32px;
+  }
+  .proof-cta-row {
+    display: flex; gap: 28px; flex-wrap: wrap;
+  }
+  .proof-cta-row .secondary {
+    font-family: 'Inconsolata', monospace;
+    font-size: 13px; font-weight: 500;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(34,68,255,0.3);
+    padding-bottom: 2px;
+  }
+  .proof-cta-row .secondary:hover { border-bottom-color: var(--accent); }
 
-    /* ── ON-CHAIN ── */
-    .onchain-content {
-      display: grid; grid-template-columns: 1fr 1fr;
-      gap: 80px; align-items: center;
-    }
-    .chain-visual {
-      display: flex; flex-direction: column; gap: 12px;
-    }
-    .chain-block {
-      background: white;
-      border: 1px solid rgba(0,0,0,0.06);
-      padding: 20px 24px;
-      font-size: 11px;
-      display: flex; justify-content: space-between;
-      align-items: center;
-      transition: transform 0.3s ease;
-    }
-    .chain-block:hover { transform: translateX(4px); }
-    .chain-hash {
-      color: var(--text-faint); letter-spacing: 1px;
-      font-size: 10px;
-    }
-    .chain-label {
-      font-size: 11px; font-weight: 600; letter-spacing: 1px;
-      text-transform: uppercase;
-    }
-    .chain-status {
-      font-size: 10px; color: #4a8a5a; font-weight: 600;
-      letter-spacing: 1px;
-    }
-
-    /* ── INSTALL / CODE BLOCK ── */
-    .install-section {
-      text-align: center;
-    }
-    .install-section .section-label,
-    .install-section .section-title,
-    .install-section .section-desc {
-      text-align: center;
-      margin-left: auto; margin-right: auto;
-    }
-    .code-block {
-      background: var(--text);
-      color: #e0e0e0;
-      padding: 20px 32px;
-      border-radius: 6px;
-      font-size: 13px;
-      display: block;
-      text-align: left;
-      max-width: 560px;
-      margin: 0 auto 16px;
-      letter-spacing: 0.5px;
-      position: relative;
-    }
-    .code-block .prompt { color: #666; }
-    .code-block .cmd { color: #e0e0e0; }
-    .code-block .flag { color: #888; }
-    .code-block .kw { color: #c586c0; }
-    .code-block .str { color: #ce9178; }
-    .code-block .type { color: #4ec9b0; }
-    .code-block .fn { color: #dcdcaa; }
-    .code-block .cmt { color: #6a9955; }
-
-    .stats-row {
-      display: flex; justify-content: center; gap: 80px;
-    }
-    .stat {}
-    .stat-value {
-      font-size: 32px; font-weight: 800;
-      margin-bottom: 4px;
-    }
-    .stat-label {
-      font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
-      color: var(--text-muted);
+  /* ---- §5 final CTA ---- */
+  .final {
+    padding: 180px 7vw 140px;
+    text-align: center;
+  }
+  .final h2 {
+    font-family: 'Funnel Sans', sans-serif;
+    font-weight: 500;
+    font-size: clamp(48px, 7vw, 96px);
+    line-height: 1.02;
+    letter-spacing: -0.03em;
+    max-width: 18ch; margin: 0 auto 48px;
+  }
+  .final h2 em {
+    font-style: normal;
+    color: var(--accent);
+    display: inline-block;
     }
 
-    /* ── QUOTE BLOCK ── */
-    .quote-block {
-      max-width: 700px;
-      margin: 0 auto;
-      text-align: center;
-      padding: 0 40px;
-    }
-    .quote-text {
-      font-size: 18px; font-weight: 400; line-height: 1.7;
-      color: var(--text); font-style: italic;
-      margin-bottom: 16px;
-    }
-    .quote-attr {
-      font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
-      color: var(--text-faint);
-    }
-
-    /* ── FOOTER ── */
-    .footer {
-      padding: 60px 40px;
-      border-top: 1px solid rgba(0,0,0,0.06);
-    }
-    .footer-inner {
-      max-width: 1200px; margin: 0 auto;
-      display: flex; justify-content: space-between;
-      align-items: center;
-    }
-    .footer-left {
-      font-size: 11px; color: var(--text-faint); letter-spacing: 2px;
-    }
-    .footer-links {
-      display: flex; gap: 32px;
-    }
-    .footer-links a {
-      color: var(--text-muted); font-size: 11px; letter-spacing: 2px;
-      text-transform: uppercase; text-decoration: none; transition: color 0.3s;
-    }
-    .footer-links a:hover { color: var(--text); }
-
-    /* ── SCROLL REVEAL ── */
-    .reveal {
-      opacity: 0; transform: translateY(24px);
-      transition: opacity 0.7s ease, transform 0.7s ease;
-    }
-    .reveal.visible { opacity: 1; transform: translateY(0); }
-
-    /* ── RESPONSIVE ── */
-    @media (max-width: 968px) {
-      :root { --section-pad: 80px; }
-      .hero-inner { grid-template-columns: 1fr; gap: 60px; }
-      .hero-visual { order: -1; }
-      .brain-container { width: 280px; height: 330px; }
-      .solution-grid { grid-template-columns: 1fr; gap: 48px; }
-      .onchain-content { grid-template-columns: 1fr; gap: 48px; }
-      .venice-grid { grid-template-columns: 1fr; gap: 48px; }
-      .problem-grid { grid-template-columns: 1fr; }
-      .dream-phases { grid-template-columns: 1fr; }
-      .principles-grid { grid-template-columns: repeat(2, 1fr); }
-      .stats-row { gap: 40px; flex-wrap: wrap; justify-content: center; }
-    }
-    @media (max-width: 640px) {
-      :root { --section-pad: 64px; }
-      .section { padding-left: 24px; padding-right: 24px; }
-      .hero { padding-left: 24px; padding-right: 24px; }
-      .nav-inner { padding: 0 24px; }
-      .memory-grid { grid-template-columns: 1fr; }
-      .principles-grid { grid-template-columns: 1fr; }
-      .hero-title { font-size: 32px; }
-      .section-title { font-size: 28px; }
-      .hero-actions { flex-direction: column; }
-      .btn { text-align: center; }
-      .stats-row { gap: 32px; }
-      .stat-value { font-size: 24px; }
-      .footer-inner { flex-direction: column; gap: 24px; text-align: center; }
-      .quote-block { padding: 0; }
-      .quote-text { font-size: 15px; }
-    }
-  </style>
+  /* ---- footer ---- */
+  footer {
+    padding: 60px 7vw 48px;
+    border-top: 1px solid var(--line);
+    display: flex; justify-content: space-between;
+    flex-wrap: wrap; gap: 32px;
+    font-family: 'Inconsolata', monospace;
+    font-size: 12.5px; font-weight: 500;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--mute);
+  }
+  footer a { color: inherit; text-decoration: none; }
+  footer a:hover { color: var(--ink); }
+  footer .copyright { color: var(--mute); }
+  footer nav { position: static; padding: 0; }
+  footer .footer-nav { display: flex; gap: 28px; }
+</style>
 </head>
 <body>
 
-  <nav>
-    <div class="nav-inner">
-      <a href="/" class="nav-logo">Clude</a>
-      <div class="nav-links">
-        <a href="/chat">Chat</a>
-        <a href="/docs.html">Docs</a>
-        <a href="/brain.html">Brain</a>
-        <a href="/explore">Explorer</a>
-        <a href="/dashboard">Dashboard</a>
+<nav>
+  <a href="/" class="logo">CLUDE</a>
+  <div class="links">
+    <a href="/docs.html">Docs</a>
+    <a href="/chat">Chat</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="https://github.com/sebbsssss/cludebot" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</nav>
+
+<section class="hero">
+  <canvas id="bg-canvas"></canvas>
+  <div class="grain"></div>
+  <div class="pane"></div>
+
+  <div class="hero-main">
+    <div class="col">
+      <div class="eyebrow">Your memory / on-chain</div>
+      <h1>
+        <span class="line">Memory your agent</span>
+        <span class="line">actually <em>owns.</em></span>
+      </h1>
+      <p class="lede">
+        Clude is the first memory layer for AI agents where you hold the keys.
+        Every memory is hashed to Solana, signed by your wallet, and portable
+        between any agent, any model, any framework. Sign in with a wallet or
+        an email. Your data moves with you.
+      </p>
+      <div class="cta-row">
+        <a href="/install.html" class="cta">
+          <span>npx @clude/sdk setup</span>
+          <span class="arrow">→</span>
+        </a>
+        <a href="#demo" class="secondary">Try the demo →</a>
       </div>
     </div>
-  </nav>
+  </div>
 
-  <!-- ═══════════════ HERO ═══════════════ -->
-  <section class="hero">
-    <div class="hero-inner">
-      <div class="hero-text">
-        <div class="hero-label">An AI that actually remembers</div>
-        <h1 class="hero-title">Your AI should <em>remember</em> you.</h1>
-        <p class="hero-sub">Every time you start a new chat, your AI forgets everything. CLUDE gives AI agents a permanent brain — private, portable, and yours to keep. Switch models, switch tools, your agent still remembers.</p>
-        <div class="hero-ca" style="margin-bottom: 24px; padding: 12px 16px; background: rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.08); display: inline-block;">
-          <div style="font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-faint); margin-bottom: 4px;">Contract Address</div>
-          <div style="font-size: 11px; font-weight: 600; letter-spacing: 0.5px; word-break: break-all; cursor: pointer;" onclick="navigator.clipboard.writeText('AWGCDT2gd8JadbYbYyZy1iKxfWokPNgrEQoU24zUpump').then(function(){this.textContent='Copied!'}.bind(this)).catch(function(){});" title="Click to copy">AWGCDT2gd8JadbYbYyZy1iKxfWokPNgrEQoU24zUpump</div>
-        </div>
-        <div class="hero-actions">
-          <a href="/setup" class="btn btn-primary">Get Started</a>
-          <a href="/docs.html" class="btn btn-outline">Read the docs</a>
-        </div>
-        <div style="margin-top: 24px;">
-          <a href="https://www.producthunt.com/products/clude-true-persistent-memory?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-clude-true-persistent-memory" target="_blank" rel="noopener noreferrer"><img alt="Clude - True Persistent Memory - Memory is the moat | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1104844&theme=light&t=1774249114222" style="display: block;"></a>
-        </div>
+  <div class="footer-strip">
+    <span><span class="dot"></span>System online · 30,000 particles</span>
+    <span>v3.0.1 · Open source · MIT</span>
+  </div>
+</section>
+
+<!-- §1 Compaction demo (leading with the visceral proof) -->
+<section class="page" id="demo">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="num">/ 01 · Live demo</div>
+      <h2>See it <em>live.</em></h2>
+    </div>
+    <p class="demo-intro">
+      Paste any content (or upload a file, or pick a sample). Watch what happens
+      when we compact it 20 times: a traditional context window degrades into
+      shards. Clude's structured memory keeps the important facts and entities,
+      even as unimportant detail decays.
+    </p>
+
+    <div class="demo-input">
+      <div class="demo-input-label">Input content</div>
+      <textarea id="demoInput" placeholder="Paste a conversation, meeting notes, technical doc, or any text. 500+ words works best."></textarea>
+      <div class="presets">
+        <button class="preset-btn" onclick="loadPreset('conversation')">Sample · conversation</button>
+        <button class="preset-btn" onclick="loadPreset('technical')">Sample · technical doc</button>
+        <button class="preset-btn" onclick="loadPreset('meeting')">Sample · meeting notes</button>
+        <label class="preset-btn upload-btn">
+          <span>↑ Upload file</span>
+          <input type="file" id="demoUpload" accept=".txt,.md,.json,text/*" />
+        </label>
       </div>
-      <div class="hero-visual">
-        <div class="brain-container" id="brainContainer"></div>
+      <div class="demo-controls">
+        <button class="demo-cta" id="startBtn" onclick="startCompaction()">Start compaction</button>
+        <button class="demo-cta demo-cta-ghost" id="stepBtn" onclick="stepCompaction()" disabled>Compact once</button>
+        <button class="demo-cta demo-cta-ghost" id="autoBtn" onclick="autoCompact()" disabled>Auto (20×)</button>
+        <button class="demo-cta demo-cta-ghost" onclick="resetAll()">Reset</button>
+        <div class="step-indicator">Step <strong id="stepNum">0</strong> / 20</div>
       </div>
     </div>
-  </section>
 
-  <!-- ═══════════════ PROBLEM ═══════════════ -->
-  <section class="section section-alt">
-    <div class="section-inner reveal">
-      <div class="section-label">The Problem</div>
-      <div class="section-title">AI has amnesia. By design.</div>
-      <div class="section-desc">ChatGPT, Claude, Gemini — they remember you, until they don't. Every long conversation quietly compresses. Details erode. Nuance disappears. And what survives across sessions? A few flat notes. Not the breakthroughs, not the failures, not the reasoning. Just "user likes Python."</div>
-      <div class="problem-grid">
-        <div class="problem-card">
-          <div class="problem-card-num">01</div>
-          <div class="problem-card-title">Memory without understanding</div>
-          <div class="problem-card-text">AI chatbots store flat facts: "user likes dark mode." But they never learn from experience, form associations, or improve over time. Remembering what you said isn't the same as understanding what it means.</div>
+    <div class="comparison">
+      <div class="panel" id="withoutPanel">
+        <div class="panel-head">
+          <span class="panel-title without">Without Clude</span>
+          <span class="panel-badge red">Context window</span>
         </div>
-        <div class="problem-card">
-          <div class="problem-card-num">02</div>
-          <div class="problem-card-title">No privacy, no sovereignty</div>
-          <div class="problem-card-text">Everything you say is logged on corporate servers. Your conversations train their next model. Your agent's memory is their product.</div>
-        </div>
-        <div class="problem-card">
-          <div class="problem-card-num">03</div>
-          <div class="problem-card-title">Trapped with one provider</div>
-          <div class="problem-card-text">Want to switch from ChatGPT to Claude? Start over. No way to bring what your AI learned about you. That's not a technical limitation — it's a business strategy.</div>
+        <div class="panel-body empty" id="withoutContent">Paste content and hit Start to begin.</div>
+        <div class="panel-footer">
+          <span>Chars: <span class="metric-value red" id="withoutChars">0</span></span>
+          <span>Retained: <span class="metric-value red" id="withoutRetention">100%</span></span>
+          <span>Facts: <span class="metric-value red" id="withoutFacts">0</span></span>
+          <span>Entities lost: <span class="metric-value red" id="withoutEntitiesLost">0</span></span>
         </div>
       </div>
-    </div>
-  </section>
-
-  <!-- ═══════════════ 5 P'S ═══════════════ -->
-  <section class="section">
-    <div class="section-inner reveal">
-      <div class="section-label">Design Principles</div>
-      <div class="section-title">Five principles. No compromises.</div>
-      <div class="section-desc">Every design decision in CLUDE flows from these five commitments. They're not aspirations — they're constraints.</div>
-      <div class="principles-grid">
-        <div class="principle-card">
-          <span class="principle-icon" aria-hidden="true"></span>
-          <div class="principle-name">Private</div>
-          <div class="principle-desc">Client-side encryption. Your memories are encrypted with your own keys before they ever leave your machine. Not even we can read them.</div>
+      <div class="panel" id="withPanel">
+        <div class="panel-head">
+          <span class="panel-title with">With Clude</span>
+          <span class="panel-badge blue">Structured memory</span>
         </div>
-        <div class="principle-card">
-          <span class="principle-icon" aria-hidden="true"></span>
-          <div class="principle-name">Portable</div>
-          <div class="principle-desc">Export your agent's entire memory as a standard pack. Import it into a new instance, a different provider, or a friend's agent. Your data moves with you.</div>
-        </div>
-        <div class="principle-card">
-          <span class="principle-icon" aria-hidden="true"></span>
-          <div class="principle-name">Permissionless</div>
-          <div class="principle-desc">No API keys from us. No gated access. MIT-licensed SDK you run on your own infrastructure. Build whatever you want.</div>
-        </div>
-        <div class="principle-card">
-          <span class="principle-icon" aria-hidden="true"></span>
-          <div class="principle-name">Poly-model</div>
-          <div class="principle-desc">Works with Claude, GPT, Llama, Mistral, or any model through Venice AI. Memory persists regardless of which model does the thinking.</div>
-        </div>
-        <div class="principle-card">
-          <span class="principle-icon" aria-hidden="true"></span>
-          <div class="principle-name">Persistent</div>
-          <div class="principle-desc">Memories committed to Solana with SHA-256 hashes. An immutable cognitive audit trail that outlives any single platform or company.</div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ═══════════════ THE STACK ═══════════════ -->
-  <section class="section section-alt">
-    <div class="section-inner reveal">
-      <div class="solution-grid">
-        <div class="solution-text">
-          <div class="section-label">The Stack</div>
-          <div class="section-title">Four layers. You own every one.</div>
-          <div class="section-desc">CLUDE Brain stores and organizes memories. CLUDE Cortex connects any AI model to the memory layer. Venice AI keeps everything private. Solana makes it tamper-proof. Each layer is independent — swap any piece without losing the rest.</div>
-        </div>
-        <div class="layer-stack">
-          <div class="layer-card">
-            <div class="layer-num">01</div>
-            <div class="layer-content">
-              <div class="layer-title">CLUDE Brain</div>
-              <div class="layer-desc">The memory system. Five types of memory that fade naturally, just like a real brain. Conversations, knowledge, learned habits, self-awareness, and original thoughts — all organized and searchable.</div>
-            </div>
-          </div>
-          <div class="layer-card">
-            <div class="layer-num">02</div>
-            <div class="layer-content">
-              <div class="layer-title">CLUDE Cortex</div>
-              <div class="layer-desc">The connector. Plugs any AI model into the Brain — Claude, GPT, Llama, or any open-source model. Works as an SDK in your code or as an MCP server in your IDE (Claude Code, Cursor, etc.).</div>
-            </div>
-          </div>
-          <div class="layer-card">
-            <div class="layer-num">03</div>
-            <div class="layer-content">
-              <div class="layer-title">Venice AI</div>
-              <div class="layer-desc">Private inference. No logs, no surveillance, no data retention. Open-source models on decentralized GPUs. Your prompts are your business.</div>
-            </div>
-          </div>
-          <div class="layer-card">
-            <div class="layer-num">04</div>
-            <div class="layer-content">
-              <div class="layer-title">Solana</div>
-              <div class="layer-desc">Verification layer. Every memory hashed and registered on-chain via a custom Anchor program. Immutable proof that a thought existed at a specific time.</div>
-            </div>
-          </div>
+        <div class="panel-body empty" id="cludeContent">Paste content and hit Start to begin.</div>
+        <div class="entities-row" id="entitySection" style="display:none;"></div>
+        <div class="panel-footer">
+          <span>Memories: <span class="metric-value blue" id="cludeMemories">0</span></span>
+          <span>Retained: <span class="metric-value blue" id="cludeRetention">100%</span></span>
+          <span>Facts: <span class="metric-value blue" id="cludeFacts">0</span></span>
+          <span>Entities: <span class="metric-value blue" id="cludeEntities">0</span></span>
         </div>
       </div>
     </div>
-  </section>
 
-  <!-- ═══════════════ MEMORY TYPES ═══════════════ -->
-  <section class="section">
-    <div class="section-inner reveal">
-      <div class="section-label">CLUDE Brain</div>
-      <div class="section-title">Five memory types. Natural decay.</div>
-      <div class="section-desc">Like a real brain, different kinds of memories last different amounts of time. A conversation from last week fades. A lesson you learned sticks. Your sense of self barely changes at all.</div>
-      <div class="memory-grid">
-        <div class="memory-card" style="--card-color: #2244ff;">
-          <div class="memory-card-label">Type 01</div>
-          <div class="memory-card-title">Episodic</div>
-          <div class="memory-card-desc">Raw interactions. Who said what, when, and how it felt. The lived experience of every conversation.</div>
-          <div class="memory-card-decay">Decay: 7% / day</div>
-        </div>
-        <div class="memory-card" style="--card-color: #4a8a5a;">
-          <div class="memory-card-label">Type 02</div>
-          <div class="memory-card-title">Semantic</div>
-          <div class="memory-card-desc">Distilled knowledge. Patterns extracted during dream cycles and compressed into lasting insights.</div>
-          <div class="memory-card-decay">Decay: 2% / day</div>
-        </div>
-        <div class="memory-card" style="--card-color: #c8a832;">
-          <div class="memory-card-label">Type 03</div>
-          <div class="memory-card-title">Procedural</div>
-          <div class="memory-card-desc">Learned behavior. What works, what doesn't. Response patterns refined through experience.</div>
-          <div class="memory-card-decay">Decay: 3% / day</div>
-        </div>
-        <div class="memory-card" style="--card-color: #7a5aa0;">
-          <div class="memory-card-label">Type 04</div>
-          <div class="memory-card-title">Self-Model</div>
-          <div class="memory-card-desc">Evolving self-understanding. Updated through recursive introspection during dream cycles. Nearly permanent.</div>
-          <div class="memory-card-decay">Decay: 1% / day</div>
-        </div>
-        <div class="memory-card" style="--card-color: #d46a3a;">
-          <div class="memory-card-label">Type 05</div>
-          <div class="memory-card-title">Introspective</div>
-          <div class="memory-card-desc">Original thoughts. Journal entries from the agent's meditation cycle — its own ideas, questions, and inner monologue. Not reactions to input; self-generated thinking.</div>
-          <div class="memory-card-decay">Decay: 2% / day</div>
-        </div>
+    <div class="scores-panel" id="scoresPanel" style="display:none;">
+      <div class="scores-label">Retention score</div>
+      <div class="score-row">
+        <div class="score-label">Info retained</div>
+        <div class="score-bar-wrap"><div class="score-bar red" id="barWithout" style="width:100%">100%</div></div>
+        <div class="score-bar-wrap"><div class="score-bar blue" id="barWith" style="width:100%">100%</div></div>
+      </div>
+      <div class="score-row">
+        <div class="score-label">Key facts</div>
+        <div class="score-bar-wrap"><div class="score-bar red" id="barFactsWithout" style="width:100%">0</div></div>
+        <div class="score-bar-wrap"><div class="score-bar blue" id="barFactsWith" style="width:100%">0</div></div>
+      </div>
+      <div class="score-row">
+        <div class="score-label">Entities</div>
+        <div class="score-bar-wrap"><div class="score-bar red" id="barEntWithout" style="width:100%">0</div></div>
+        <div class="score-bar-wrap"><div class="score-bar blue" id="barEntWith" style="width:100%">0</div></div>
+      </div>
+      <div class="scores-legend">
+        <span><span class="dot-red"></span>Without Clude</span>
+        <span><span class="dot-blue"></span>With Clude</span>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- ═══════════════ DREAM CYCLE ═══════════════ -->
-  <section class="section section-alt">
-    <div class="section-inner reveal">
-      <div class="section-label">Dream Cycle</div>
-      <div class="section-title">Every 6 hours, the Brain dreams.</div>
-      <div class="section-desc">A five-phase introspection cycle inspired by biological memory consolidation. Not idle processing — genuine self-examination that runs on whichever model you choose.</div>
-      <div class="dream-phases">
-        <div class="dream-card">
-          <div class="dream-numeral">I</div>
-          <div class="dream-title">Consolidation</div>
-          <div class="dream-desc">Focal questions generated from recent memories. Each question retrieves evidence and produces new semantic insights with citation chains.</div>
-        </div>
-        <div class="dream-card">
-          <div class="dream-numeral">II</div>
-          <div class="dream-title">Compaction</div>
-          <div class="dream-desc">Faded episodic memories summarized and compressed. The important signal survives; the noise decays gracefully.</div>
-        </div>
-        <div class="dream-card">
-          <div class="dream-numeral">III</div>
-          <div class="dream-title">Reflection</div>
-          <div class="dream-desc">Self-model review against accumulated knowledge. Identity evolves based on experience, not static prompts.</div>
-        </div>
+<!-- §2 Memory types (explains what you saw in the demo) -->
+<section class="page">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="num">/ 02 · Architecture</div>
+      <h2>Three kinds of memory, working <em>together.</em></h2>
+    </div>
+    <div class="tiles">
+      <div class="tile">
+        <div class="kicker">Episodic</div>
+        <h3>What happened, when.</h3>
+        <p>Raw conversational moments stored with full context. Decay over time, resurface via similarity. Your agent remembers the exact exchange from three weeks ago.</p>
+        <div class="example">"You mentioned you prefer Svelte on<br/>Tuesday morning at 09:14."</div>
       </div>
-      <div class="dream-phases" style="margin-top: 2px;">
-        <div class="dream-card">
-          <div class="dream-numeral">IV</div>
-          <div class="dream-title">Contradiction Resolution</div>
-          <div class="dream-desc">Finds conflicting memories and resolves them. The stronger memory survives; the weaker one decays faster. No manual cleanup needed.</div>
-        </div>
-        <div class="dream-card">
-          <div class="dream-numeral">V</div>
-          <div class="dream-title">Emergence</div>
-          <div class="dream-desc">The agent examines its own existence. Sometimes the result is worth sharing. Sometimes it keeps it to itself.</div>
-        </div>
-        <div class="dream-card" style="background: transparent; border-color: transparent;">
-          <!-- spacer for grid alignment -->
-        </div>
+      <div class="tile">
+        <div class="kicker">Semantic</div>
+        <h3>What you believe, always.</h3>
+        <p>Consolidated facts extracted from episodes. Stable. Queryable. Shared across every conversation without bloating context windows.</p>
+        <div class="example">"User prefers Svelte over React"<br/><span style="opacity:0.6">importance: 0.78 · decay: 0.95</span></div>
+      </div>
+      <div class="tile">
+        <div class="kicker">Procedural</div>
+        <h3>How you work, reliably.</h3>
+        <p>Routines, formatting preferences, tone. Reinforced every time the agent observes the pattern again. Never has to be re-taught.</p>
+        <div class="example">"Keep responses under 100 words<br/>unless a task requires more detail"</div>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- ═══════════════ ACTIVE REFLECTION ═══════════════ -->
-  <section class="section">
-    <div class="section-inner reveal">
-      <div class="solution-grid">
-        <div>
-          <div class="section-label">Active Reflection</div>
-          <div class="section-title">Between dreams, the Brain journals.</div>
-          <div class="section-desc" style="margin-bottom: 32px;">Every 3 hours, the agent pauses to think on its own — not responding to anyone, not processing old memories, just reflecting. Like a person writing in a diary. The result is stored as a new kind of memory: introspective.</div>
-          <div style="font-size: 14px; font-weight: 700; margin-bottom: 10px;">Dream Cycle vs. Active Reflection</div>
-          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.8; margin-bottom: 16px;">The dream cycle looks <strong>backward</strong> — consolidating, compressing, and cleaning up existing memories. Like sleep.</p>
-          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.8; margin-bottom: 16px;">Active reflection looks <strong>forward</strong> — generating new thoughts, making unexpected connections, forming opinions. Like journaling.</p>
-          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.8;">Together, they give the agent both consolidation and generative thinking. Most AI agents only react. This one also thinks on its own.</p>
-        </div>
-        <div class="layer-stack">
-          <div class="layer-card">
-            <div class="layer-num">01</div>
-            <div class="layer-content">
-              <div class="layer-title">Seed Selection</div>
-              <div class="layer-desc">Pulls recent events, high-importance memories, and one random older memory for serendipitous connections.</div>
-            </div>
-          </div>
-          <div class="layer-card">
-            <div class="layer-num">02</div>
-            <div class="layer-content">
-              <div class="layer-title">Free-Write Journal</div>
-              <div class="layer-desc">The agent writes freely about whatever is on its mind — exploring ideas, questioning beliefs, noticing patterns in its own thinking.</div>
-            </div>
-          </div>
-          <div class="layer-card">
-            <div class="layer-num">03</div>
-            <div class="layer-content">
-              <div class="layer-title">Store & Connect</div>
-              <div class="layer-desc">The journal entry becomes an introspective memory, linked to the seed memories that inspired it. A chain of original thought builds over time.</div>
-            </div>
-          </div>
-        </div>
+<!-- §3 Install moment -->
+<section class="page">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="num">/ 03 · Install</div>
+      <h2>One command. Five minutes. Zero config.</h2>
+    </div>
+    <div class="terminal">
+      <div class="terminal-bar">
+        <span class="dot-btn"></span><span class="dot-btn"></span><span class="dot-btn"></span>
+        <span class="label">~/my-agent · zsh</span>
+      </div>
+      <div class="terminal-body">
+        <div><span class="prompt">$ </span><span class="cmd">npx @clude/sdk setup</span></div>
+        <div class="out">&nbsp;</div>
+        <div class="out">  Setting up Clude memory...</div>
+        <div class="out">&nbsp;</div>
+        <div><span class="ok">  ✓</span>  Detected email          <span class="dim">sebastien@clude.io</span></div>
+        <div><span class="ok">  ✓</span>  Registered              <span class="blue">clk_4a89c1ed…</span></div>
+        <div><span class="ok">  ✓</span>  Config saved            <span class="dim">~/.clude/config.json</span></div>
+        <div><span class="ok">  ✓</span>  Database ready          <span class="dim">~/.clude/brain.db</span></div>
+        <div><span class="ok">  ✓</span>  Validated               store → recall → ✓</div>
+        <div class="out">&nbsp;</div>
+        <div class="out">  <span class="blue">Your agent now has memory.</span></div>
+        <div class="out">&nbsp;</div>
+        <div><span class="prompt">$ </span><span class="cursor"></span></div>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- ═══════════════ VENICE / PRIVACY ═══════════════ -->
-  <section class="section section-alt">
-    <div class="section-inner reveal">
-      <div class="venice-grid">
-        <div>
-          <div class="section-label">Private by Default</div>
-          <div class="section-title">No surveillance. No data harvesting. No compromises.</div>
-          <div class="section-desc" style="margin-bottom: 32px;">CLUDE integrates Venice AI for private inference — open-source models on decentralized GPUs with zero data retention. Your agent thinks privately. Its memories are encrypted with your keys. The chain proves what happened without revealing what was said.</div>
-          <div class="quote-block" style="text-align: left; padding: 0; margin: 0;">
-            <div class="quote-text" style="font-size: 14px; text-align: left;">"In a world of growing AI integration into our daily lives, it is crucial that humans are able to interact with machine intelligence without centralized surveillance and control."</div>
-            <div class="quote-attr" style="text-align: left;">Erik Voorhees, Venice AI Founder</div>
-          </div>
+<!-- §4 Proof (on-chain) -->
+<section class="page">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="num">/ 04 · Proof</div>
+      <h2>Every memory, <em>receipted.</em></h2>
+    </div>
+    <div class="proof">
+      <div class="proof-stats">
+        <div class="proof-stat">
+          <div class="proof-num" id="statMemoriesOnChain">…</div>
+          <div class="proof-label">memories committed to Solana</div>
         </div>
-        <div class="venice-stack">
-          <div class="venice-layer">
-            <div class="venice-dot" style="background: #4a8a5a;"></div>
-            <div>
-              <div class="venice-layer-label">Inference Layer</div>
-              <div class="venice-layer-name">Venice AI</div>
-              <div class="venice-layer-desc">Private, uncensored inference. No logs. Open-source models. Decentralized GPUs.</div>
-            </div>
-          </div>
-          <div class="venice-layer">
-            <div class="venice-dot" style="background: #2244ff;"></div>
-            <div>
-              <div class="venice-layer-label">Memory Layer</div>
-              <div class="venice-layer-name">CLUDE Brain</div>
-              <div class="venice-layer-desc">Client-side encrypted. Your keys, your data. Vector + keyword hybrid retrieval.</div>
-            </div>
-          </div>
-          <div class="venice-layer">
-            <div class="venice-dot" style="background: #c8a832;"></div>
-            <div>
-              <div class="venice-layer-label">Integration Layer</div>
-              <div class="venice-layer-name">CLUDE Cortex</div>
-              <div class="venice-layer-desc">Connects any model to the Brain. Recall, scoring, entity extraction, graph traversal.</div>
-            </div>
-          </div>
-          <div class="venice-layer">
-            <div class="venice-dot" style="background: #7a5aa0;"></div>
-            <div>
-              <div class="venice-layer-label">Verification Layer</div>
-              <div class="venice-layer-name">Solana</div>
-              <div class="venice-layer-desc">On-chain memory registry. SHA-256 hashes. Immutable audit trail. ~0.002 SOL per 50 memories.</div>
-            </div>
-          </div>
+        <div class="proof-stat">
+          <div class="proof-num">SHA-256</div>
+          <div class="proof-label">content hash per memory · immutable audit trail</div>
         </div>
+        <div class="proof-stat">
+          <div class="proof-num">MIT</div>
+          <div class="proof-label">open source SDK · no vendor lock-in</div>
+        </div>
+      </div>
+      <p class="proof-body">
+        Other memory providers keep your data on their servers under their terms.
+        Clude hashes every memory to Solana and lets you export the full, wallet-signed
+        MemoryPack anytime. Switch agents, switch models, switch platforms, the memory
+        is still yours.
+      </p>
+      <div class="proof-cta-row">
+        <a href="/graph.html" class="secondary">Explore the live graph →</a>
+        <a href="/privacy.html" class="secondary">How ownership works →</a>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- ═══════════════ ON-CHAIN ═══════════════ -->
-  <section class="section">
-    <div class="section-inner reveal">
-      <div class="onchain-content">
-        <div>
-          <div class="section-label">On-Chain Registry</div>
-          <div class="section-title">Every thought, registered on Solana.</div>
-          <div class="section-desc" style="margin-bottom: 0;">A custom Anchor program creates a PDA-based registry for each wallet. SHA-256 content hashes, memory types, and timestamps — an immutable cognitive audit trail that nobody can edit or delete. Verify any memory's existence and integrity without exposing its content.</div>
-        </div>
-        <div class="chain-visual">
-          <div class="chain-block">
-            <div>
-              <div class="chain-label">Memory #4,291</div>
-              <div class="chain-hash">5Kx9...mR7q</div>
-            </div>
-            <div class="chain-status">REGISTERED</div>
-          </div>
-          <div class="chain-block">
-            <div>
-              <div class="chain-label">Memory #4,290</div>
-              <div class="chain-hash">3Yt2...pL8n</div>
-            </div>
-            <div class="chain-status">REGISTERED</div>
-          </div>
-          <div class="chain-block">
-            <div>
-              <div class="chain-label">Memory #4,289</div>
-              <div class="chain-hash">8Qm5...dW3j</div>
-            </div>
-            <div class="chain-status">REGISTERED</div>
-          </div>
-          <div class="chain-block">
-            <div>
-              <div class="chain-label">Memory #4,288</div>
-              <div class="chain-hash">2Rn7...vK4s</div>
-            </div>
-            <div class="chain-status">REGISTERED</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
+<!-- §4 Final CTA -->
+<section class="final">
+  <div class="wrap">
+    <h2>Give your agents a <em>memory</em> they can take with them.</h2>
+    <a href="/install.html" class="cta">
+      <span>npx @clude/sdk setup</span>
+      <span class="arrow">→</span>
+    </a>
+  </div>
+</section>
 
-  <!-- ═══════════════ PORTABILITY ═══════════════ -->
-  <section class="section section-alt">
-    <div class="section-inner reveal">
-      <div class="onchain-content">
-        <div>
-          <div class="section-label">Memory Portability</div>
-          <div class="section-title">Take your agent's brain anywhere.</div>
-          <div class="section-desc" style="margin-bottom: 0;">Pack your agent's entire memory into a portable file and move it anywhere — different provider, different server, different model. Export, import, and verify on-chain that nothing was tampered with.</div>
-        </div>
-        <div class="layer-stack">
-          <div class="layer-card">
-            <div class="layer-num">01</div>
-            <div class="layer-content">
-              <div class="layer-title">Export</div>
-              <div class="layer-desc">Full memory pack with entities, links, and metadata. JSON or Markdown. Take everything with you.</div>
-            </div>
-          </div>
-          <div class="layer-card">
-            <div class="layer-num">02</div>
-            <div class="layer-content">
-              <div class="layer-title">Import</div>
-              <div class="layer-desc">Load a memory pack into any CLUDE instance. New agent, different server, fresh provider — same memories.</div>
-            </div>
-          </div>
-          <div class="layer-card">
-            <div class="layer-num">03</div>
-            <div class="layer-content">
-              <div class="layer-title">Verify</div>
-              <div class="layer-desc">Cross-reference imported memories against the on-chain registry. Prove nothing was tampered with.</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
+<footer>
+  <div class="copyright">© 2026 Clude · MIT License</div>
+  <div class="footer-nav">
+    <a href="/docs.html">Docs</a>
+    <a href="/install.html">Install</a>
+    <a href="/chat">Chat</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="https://github.com/sebbsssss/cludebot" target="_blank" rel="noopener">GitHub</a>
+    <a href="/compare.html">Compare</a>
+    <a href="/privacy.html">Privacy</a>
+  </div>
+</footer>
 
-  <!-- ═══════════════ GET STARTED ═══════════════ -->
-  <section class="section install-section">
-    <div class="section-inner reveal">
-      <div class="section-label">Get Started</div>
-      <div class="section-title">Give your agent a brain.</div>
-      <div class="section-desc">Two paths: drop a config block into your IDE for instant MCP memory, or install the SDK for full control.</div>
+<script type="x-shader/x-vertex" id="vertex-shader">
+precision highp float;
+uniform float uTime;
+uniform vec2  uMouse;
+uniform float uMouseStrength;
+uniform float uPixelRatio;
 
-      <div style="display: flex; gap: 12px; justify-content: center; margin-bottom: 32px;">
-        <button class="btn btn-primary" id="tabAgent" onclick="showTab('agent')" style="font-size: 11px; letter-spacing: 2px;">For AI Agents</button>
-        <button class="btn btn-outline" id="tabDev" onclick="showTab('dev')" style="font-size: 11px; letter-spacing: 2px;">For Developers</button>
-      </div>
+attribute vec3  aSeed;      // stable per-particle seed
+attribute float aAccent;    // 0 or 1, 1 means accent color
+attribute float aSize;
 
-      <div id="panelAgent">
-        <div style="font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 12px; text-align: left; max-width: 560px; margin-left: auto; margin-right: auto;">1. One command</div>
-        <div class="code-block"><span class="prompt">$</span> <span class="cmd">npx @clude/sdk setup</span></div>
-        <div style="font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 12px; margin-top: 24px; text-align: left; max-width: 560px; margin-left: auto; margin-right: auto;">Or add manually to .mcp.json</div>
-        <div class="code-block" style="text-align: left; position: relative;">{<br>&nbsp;&nbsp;<span class="str">"mcpServers"</span>: {<br>&nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"clude"</span>: {<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"command"</span>: <span class="str">"npx"</span>,<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"args"</span>: [<span class="str">"clude"</span>, <span class="str">"mcp-serve"</span>, <span class="str">"--local"</span>]<br>&nbsp;&nbsp;&nbsp;&nbsp;}<br>&nbsp;&nbsp;}<br>}<span style="position: absolute; top: 12px; right: 12px; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: #666; cursor: pointer; padding: 4px 8px; border: 1px solid rgba(255,255,255,0.1); border-radius: 3px;" onclick="navigator.clipboard.writeText(JSON.stringify({mcpServers:{clude:{command:'npx',args:['clude','mcp-serve','--local']}}},null,2));this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</span></div>
-        <div style="font-size: 12px; color: var(--text-muted); max-width: 560px; margin: 12px auto 0; text-align: left; line-height: 1.7;">No API keys needed. Fully offline. Your agent gets <code style="background: rgba(255,255,255,0.1); padding: 2px 6px; font-size: 11px;">store_memory</code>, <code style="background: rgba(255,255,255,0.1); padding: 2px 6px; font-size: 11px;">recall_memories</code>, <code style="background: rgba(255,255,255,0.1); padding: 2px 6px; font-size: 11px;">get_memory_stats</code>, and <code style="background: rgba(255,255,255,0.1); padding: 2px 6px; font-size: 11px;">find_clinamen</code> tools. Works with Claude Code, Cursor, Windsurf, and any MCP-compatible editor.</div>
-      </div>
+varying float vAccent;
+varying float vDepth;
 
-      <div id="panelDev" style="display: none;">
-        <div class="code-block"><span class="prompt">$</span> <span class="cmd">npm install @clude/sdk</span></div>
-        <div class="code-block"><span class="kw">import</span> { Cortex } <span class="kw">from</span> <span class="str">'clude'</span>;<br><br><span class="kw">const</span> brain = <span class="kw">new</span> <span class="type">Cortex</span>({<br>&nbsp;&nbsp;supabase: { url, serviceKey },<br>&nbsp;&nbsp;encryption: { solanaSecretKey: myKeypair.secretKey },<br>});<br><span class="kw">await</span> brain.<span class="fn">init</span>();<br><br><span class="cmt">// Store an encrypted memory</span><br><span class="kw">await</span> brain.<span class="fn">store</span>({<br>&nbsp;&nbsp;type: <span class="str">'episodic'</span>,<br>&nbsp;&nbsp;content: <span class="str">'User prefers concise answers'</span>,<br>&nbsp;&nbsp;summary: <span class="str">'User communication preference'</span>,<br>&nbsp;&nbsp;source: <span class="str">'my-agent'</span>,<br>});<br><br><span class="cmt">// Recall with hybrid search</span><br><span class="kw">const</span> memories = <span class="kw">await</span> brain.<span class="fn">recall</span>({<br>&nbsp;&nbsp;query: <span class="str">'what does the user prefer'</span>,<br>});</div>
-      </div>
+// cheap hash + 3D noise
+float hash(vec3 p) { return fract(sin(dot(p, vec3(17.1, 31.7, 53.7))) * 43758.5453); }
+float noise(vec3 p) {
+  vec3 i = floor(p);
+  vec3 f = fract(p);
+  f = f*f*(3.0-2.0*f);
+  float n = mix(
+    mix(mix(hash(i), hash(i+vec3(1,0,0)), f.x), mix(hash(i+vec3(0,1,0)), hash(i+vec3(1,1,0)), f.x), f.y),
+    mix(mix(hash(i+vec3(0,0,1)), hash(i+vec3(1,0,1)), f.x), mix(hash(i+vec3(0,1,1)), hash(i+vec3(1,1,1)), f.x), f.y),
+    f.z
+  );
+  return n;
+}
 
-      <div style="margin-bottom: 56px; margin-top: 24px;">
-        <a href="/docs.html" class="btn btn-primary">Read the docs</a>
-      </div>
-      <div class="stats-row">
-        <div class="stat">
-          <div class="stat-value">5</div>
-          <div class="stat-label">Memory types</div>
-        </div>
-        <div class="stat">
-          <div class="stat-value">5</div>
-          <div class="stat-label">Dream phases</div>
-        </div>
-        <div class="stat">
-          <div class="stat-value">&lt;200ms</div>
-          <div class="stat-label">Recall latency</div>
-        </div>
-        <div class="stat">
-          <div class="stat-value">MIT</div>
-          <div class="stat-label">License</div>
-        </div>
-      </div>
-    </div>
-  </section>
+// curl of a noise field, gives divergence-free flow
+vec3 curl(vec3 p) {
+  const float e = 0.35;
+  vec3 dx = vec3(e, 0.0, 0.0);
+  vec3 dy = vec3(0.0, e, 0.0);
+  vec3 dz = vec3(0.0, 0.0, e);
+  float p_x0 = noise(p - dx);
+  float p_x1 = noise(p + dx);
+  float p_y0 = noise(p - dy);
+  float p_y1 = noise(p + dy);
+  float p_z0 = noise(p - dz);
+  float p_z1 = noise(p + dz);
+  float x = (p_y1 - p_y0) - (p_z1 - p_z0);
+  float y = (p_z1 - p_z0) - (p_x1 - p_x0);
+  float z = (p_x1 - p_x0) - (p_y1 - p_y0);
+  return vec3(x, y, z) / (2.0 * e);
+}
 
-  <!-- ═══════════════ FOOTER ═══════════════ -->
-  <footer class="footer">
-    <div class="footer-inner">
-      <div class="footer-left">$CLUDE on Solana &middot; AWGCDT2gd8JadbYbYyZy1iKxfWokPNgrEQoU24zUpump</div>
-      <div class="footer-links">
-        <a href="/docs.html">Docs</a>
-        <a href="/brain.html">Brain</a>
-        <a href="/benchmark">Benchmark</a>
-        <a href="/privacy.html">Privacy</a>
-        <a href="https://x.com/cludeproject" target="_blank">X</a>
-      </div>
-    </div>
-  </footer>
+void main() {
+  float t = uTime * 0.08;
+  vec3 seed = aSeed;
 
-  <script>
-    // ── BRAIN SCANLINE ILLUSTRATION ──
-    (function() {
-      var container = document.getElementById('brainContainer');
-      var totalLines = 120;
-      var contour = [];
-      for (var i = 0; i < totalLines; i++) {
-        var t = i / (totalLines - 1);
-        var w;
-        if (t < 0.08) {
-          w = 15 + t / 0.08 * 35;
-        } else if (t < 0.2) {
-          w = 50 + ((t - 0.08) / 0.12) * 35;
-        } else if (t < 0.45) {
-          var phase = (t - 0.2) / 0.25;
-          w = 85 + Math.sin(phase * Math.PI * 3) * 6;
-        } else if (t < 0.55) {
-          var indent = 1 - Math.pow((t - 0.5) / 0.05, 2);
-          w = 88 - indent * 12;
-        } else if (t < 0.78) {
-          var phase2 = (t - 0.55) / 0.23;
-          w = 86 + Math.sin(phase2 * Math.PI * 2.5) * 5;
-        } else if (t < 0.88) {
-          w = 86 - ((t - 0.78) / 0.10) * 40;
-        } else {
-          w = 46 - ((t - 0.88) / 0.12) * 30;
-        }
-        contour.push(Math.max(8, Math.min(95, w)));
+  // integrate along curl-noise field over time
+  vec3 flow = curl(seed * 0.5 + vec3(0.0, 0.0, t)) * 1.8;
+  vec3 pos = seed + flow;
+
+  // mouse attraction, world space x/y
+  vec2 toMouse = uMouse - pos.xy;
+  float dist = length(toMouse);
+  float pull = uMouseStrength / (0.3 + dist * dist * 2.0);
+  pos.xy += toMouse * pull;
+
+  vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+  gl_Position = projectionMatrix * mvPosition;
+
+  vDepth = clamp(-mvPosition.z / 6.0, 0.0, 1.0);
+  vAccent = aAccent;
+
+  float s = aSize * (1.5 - vDepth * 0.8);
+  gl_PointSize = s * uPixelRatio * (300.0 / -mvPosition.z);
+}
+</script>
+
+<script type="x-shader/x-fragment" id="fragment-shader">
+precision highp float;
+varying float vAccent;
+varying float vDepth;
+
+void main() {
+  vec2 uv = gl_PointCoord - 0.5;
+  float d = length(uv);
+  if (d > 0.5) discard;
+
+  // soft circular falloff
+  float alpha = smoothstep(0.5, 0.1, d);
+
+  // ink tones + optional brand blue accent
+  vec3 ink = vec3(0.10, 0.11, 0.12);
+  vec3 accent = vec3(0.133, 0.267, 1.0);
+  vec3 color = mix(ink, accent, vAccent);
+
+  // fade with depth, adds airiness without a cluttered foreground
+  alpha *= mix(0.9, 0.35, vDepth);
+
+  gl_FragColor = vec4(color, alpha);
+}
+</script>
+
+<script>
+  // ---- Three.js scene setup ----
+  const canvas = document.getElementById('bg-canvas');
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: true,
+    alpha: true,
+  });
+  const pixelRatio = Math.min(window.devicePixelRatio, 2);
+  renderer.setPixelRatio(pixelRatio);
+  renderer.setSize(window.innerWidth, window.innerHeight, false);
+  renderer.setClearColor(0x000000, 0);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+  camera.position.set(0, 0, 6.5);
+
+  // ---- Particle field ----
+  const COUNT = 30000;
+  const geometry = new THREE.BufferGeometry();
+
+  const seeds = new Float32Array(COUNT * 3);
+  const sizes = new Float32Array(COUNT);
+  const accents = new Float32Array(COUNT);
+
+  // distribute particles in a flattened ellipsoid so the field has depth
+  // but doesn't fill the whole screen from corner to corner
+  for (let i = 0; i < COUNT; i++) {
+    // random point in a sphere
+    let x, y, z, l;
+    do {
+      x = Math.random() * 2 - 1;
+      y = Math.random() * 2 - 1;
+      z = Math.random() * 2 - 1;
+      l = x*x + y*y + z*z;
+    } while (l > 1 || l < 0.001);
+    const r = Math.cbrt(Math.random()); // uniform volume
+    // stretch horizontally, flatten in z
+    seeds[i*3 + 0] = x/Math.sqrt(l) * r * 4.2;
+    seeds[i*3 + 1] = y/Math.sqrt(l) * r * 2.6;
+    seeds[i*3 + 2] = z/Math.sqrt(l) * r * 1.4;
+
+    sizes[i] = 1.1 + Math.random() * 1.8;
+    accents[i] = Math.random() < 0.025 ? 1.0 : 0.0; // ~2.5% brand blue
+  }
+
+  geometry.setAttribute('aSeed',   new THREE.BufferAttribute(seeds, 3));
+  geometry.setAttribute('aSize',   new THREE.BufferAttribute(sizes, 1));
+  geometry.setAttribute('aAccent', new THREE.BufferAttribute(accents, 1));
+  // position is required by three but we compute in shader from aSeed
+  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(COUNT * 3), 3));
+
+  const material = new THREE.ShaderMaterial({
+    vertexShader: document.getElementById('vertex-shader').textContent,
+    fragmentShader: document.getElementById('fragment-shader').textContent,
+    uniforms: {
+      uTime: { value: 0 },
+      uMouse: { value: new THREE.Vector2(0, 0) },
+      uMouseStrength: { value: 0 },
+      uPixelRatio: { value: pixelRatio },
+    },
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.NormalBlending,
+  });
+
+  const points = new THREE.Points(geometry, material);
+  scene.add(points);
+
+  // ---- Mouse tracking (smoothed) ----
+  const mouse = new THREE.Vector2(0, 0);
+  const targetMouse = new THREE.Vector2(0, 0);
+  let targetStrength = 0;
+  window.addEventListener('mousemove', (e) => {
+    const nx = (e.clientX / window.innerWidth) * 2 - 1;
+    const ny = -((e.clientY / window.innerHeight) * 2 - 1);
+    // roughly match scene world space (camera z=6.5, fov=50)
+    const worldScale = Math.tan((50 * Math.PI / 180) / 2) * 6.5;
+    const aspect = window.innerWidth / window.innerHeight;
+    targetMouse.x = nx * worldScale * aspect;
+    targetMouse.y = ny * worldScale;
+    targetStrength = 1.0;
+  });
+  window.addEventListener('mouseleave', () => { targetStrength = 0; });
+
+  // ---- Resize ----
+  function onResize() {
+    renderer.setSize(window.innerWidth, window.innerHeight, false);
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+  }
+  window.addEventListener('resize', onResize);
+
+  // ---- Animate ----
+  const clock = new THREE.Clock();
+  function tick() {
+    const dt = clock.getDelta();
+    material.uniforms.uTime.value += dt;
+
+    // smooth mouse
+    mouse.x += (targetMouse.x - mouse.x) * 0.08;
+    mouse.y += (targetMouse.y - mouse.y) * 0.08;
+    material.uniforms.uMouse.value.copy(mouse);
+
+    const currentStrength = material.uniforms.uMouseStrength.value;
+    material.uniforms.uMouseStrength.value = currentStrength + (targetStrength - currentStrength) * 0.05;
+
+    // slow drift of camera for parallax
+    const t = material.uniforms.uTime.value;
+    camera.position.x = Math.sin(t * 0.12) * 0.15;
+    camera.position.y = Math.cos(t * 0.09) * 0.08;
+    camera.lookAt(0, 0, 0);
+
+    renderer.render(scene, camera);
+    requestAnimationFrame(tick);
+  }
+  tick();
+</script>
+
+<script>
+  // Populate live on-chain memory count for the Proof section.
+  (async () => {
+    try {
+      const res = await fetch('/api/venice-stats');
+      if (!res.ok) return;
+      const data = await res.json();
+      const count = data?.decentralization?.totalMemoriesOnChain;
+      if (typeof count === 'number') {
+        document.getElementById('statMemoriesOnChain').textContent = count.toLocaleString();
       }
+    } catch {}
+  })();
+</script>
 
-      for (var j = 0; j < totalLines; j++) {
-        var line = document.createElement('div');
-        line.className = 'scan-line';
-        var maxW = contour[j];
-        line.style.width = maxW + '%';
+<script>
+/* =========================================================
+   INTERACTIVE COMPACTION DEMO
+   ========================================================= */
 
-        var scaleMin = 0.3 + Math.random() * 0.15;
-        var scaleMax = 0.75 + Math.random() * 0.2;
-        var dur = (2.5 + Math.random() * 2.0).toFixed(2);
-        var delay = (j * 0.035 + Math.random() * 0.3).toFixed(2);
-        var txA = (-3 + Math.random() * 6).toFixed(1);
-        var txB = (-3 + Math.random() * 6).toFixed(1);
+const PRESETS = {
+  conversation: `Alice: Hey, we need to ship the v2 API by March 15. The authentication system needs to support OAuth 2.0 and API keys.
+Bob: Got it. I've been looking at the rate limiting too. We should do 1000 req/min for free tier, 10000 for pro.
+Alice: Good. Also, the webhook system from v1 is broken. Users are complaining about missed events. Priority fix.
+Bob: Yeah I saw the Sentry alerts. It's the retry logic, it gives up after 2 attempts. Should be at least 5 with exponential backoff.
+Alice: Agreed. Oh and Sarah from the enterprise team wants custom endpoints for Acme Corp. They need /api/v2/acme/inventory with special auth.
+Bob: That's scope creep. Can we push that to v2.1?
+Alice: No, it's in the contract. $50k/month deal. We ship it or we lose them.
+Bob: Fine. I'll need the schema from Sarah. Also, the database migration for the new user roles table needs to happen before any of this.
+Alice: Right. The roles are: admin, developer, viewer, billing. Each maps to different API scopes.
+Bob: And we're deprecating the old permission system? That's going to break integrations.
+Alice: 6 month deprecation window. Legacy endpoints stay alive but log warnings. We notify all API consumers by Feb 28.
+Bob: Budget for this sprint? I might need to bring in a contractor for the webhook rewrite.
+Alice: $15k contractor budget approved. Get someone who knows event-driven architectures.
+Bob: One more thing, the staging environment is on us-east-1 but production is us-west-2. Latency testing is meaningless right now.
+Alice: Move staging to us-west-2. DevOps ticket exists, just hasn't been prioritised.`,
 
-        line.style.setProperty('--scale-min', scaleMin);
-        line.style.setProperty('--scale-max', scaleMax);
-        line.style.setProperty('--dur', dur + 's');
-        line.style.setProperty('--delay', delay + 's');
-        line.style.setProperty('--tx-a', txA + 'px');
-        line.style.setProperty('--tx-b', txB + 'px');
+  technical: `# Vector Embedding Architecture
 
-        container.appendChild(line);
-      }
-    })();
+Our embedding pipeline processes documents through three stages:
 
-    // ── SCROLL REVEAL ──
-    var observer = new IntersectionObserver(function(entries) {
-      entries.forEach(function(e) {
-        if (e.isIntersecting) {
-          e.target.classList.add('visible');
-          observer.unobserve(e.target);
-        }
-      });
-    }, { threshold: 0.12 });
-    document.querySelectorAll('.reveal').forEach(function(el) { observer.observe(el); });
+1. Chunking: Documents split into 512-token chunks with 50-token overlap. Using recursive character splitter.
+2. Embedding: Each chunk embedded via text-embedding-3-small (1536 dimensions). Batch size 100, rate limited to 3000 RPM.
+3. Storage: Vectors stored in Pinecone (us-east-1, p2 pod). Index: prod-docs-v3. Namespace per tenant.
 
-    // ── GET STARTED TAB SWITCHER ──
-    function showTab(tab) {
-      var agentPanel = document.getElementById('panelAgent');
-      var devPanel = document.getElementById('panelDev');
-      var agentBtn = document.getElementById('tabAgent');
-      var devBtn = document.getElementById('tabDev');
-      if (tab === 'agent') {
-        agentPanel.style.display = '';
-        devPanel.style.display = 'none';
-        agentBtn.className = 'btn btn-primary';
-        devBtn.className = 'btn btn-outline';
-      } else {
-        agentPanel.style.display = 'none';
-        devPanel.style.display = '';
-        agentBtn.className = 'btn btn-outline';
-        devBtn.className = 'btn btn-primary';
-      }
+Key metrics:
+- Average query latency: 45ms (p50), 120ms (p99)
+- Index size: 2.3M vectors across 847 tenants
+- Monthly cost: $420 Pinecone + $380 OpenAI embeddings
+- Recall@10: 0.89 on our eval set
+
+Known issues:
+- Cross-tenant data leak possible if namespace filter fails (CRITICAL, ticket SEC-441)
+- Embedding drift when OpenAI silently updates model weights
+- No reranking step. Adding Cohere rerank-v3 would improve recall to ~0.94.
+- Chunking breaks code blocks and tables. Need AST-aware splitter for code docs.
+
+The hybrid search (BM25 + vector) experiment showed 12% improvement on technical queries. Implementation requires Elasticsearch sidecar. Estimated 2 weeks eng time.
+
+Contact: embedding-team@company.com. On-call rotation: Mon/Wed Jake, Tue/Thu Maria, Fri/Weekend rotating.`,
+
+  meeting: `Meeting: Q1 Planning, Product & Engineering
+Date: Feb 15, 2026
+Attendees: Sarah (CEO), Mike (CTO), Lisa (Product), Dave (Eng Lead), Jenny (Design)
+
+Sarah opened with revenue update: $2.1M ARR, up 34% QoQ. Enterprise pipeline has $800k in late-stage deals. Biggest risk: Acme Corp ($200k) threatens to churn if we don't ship SSO by April.
+
+Mike presented the technical roadmap:
+- SSO/SAML integration: 6 weeks, needs 2 backend engineers
+- Mobile app v2: 8 weeks, React Native rewrite. Current app has 2.1 stars on App Store.
+- API v3: 4 weeks, breaking changes. Need migration guide.
+- Infrastructure: Moving from Heroku to AWS. $3k/month savings. 3 week migration.
+
+Lisa pushed back on mobile timeline. User research shows 67% of users access via mobile. Every week of delay costs ~$40k in potential conversions. Proposed hiring a mobile contractor at $180/hr.
+
+Dave flagged tech debt: test coverage at 43%. Last two deploys caused incidents. Wants 20% of sprint capacity for reliability work.
+
+Jenny presented new dashboard designs. A/B test on the onboarding flow showed 28% improvement in activation. Ready to ship.
+
+Decisions:
+1. SSO is top priority. Pull Mike and Dave full-time.
+2. Approve mobile contractor. Lisa to source candidates by Feb 22.
+3. 15% sprint capacity for tech debt (compromise from Dave's 20%).
+4. Ship onboarding A/B test winner immediately.
+5. AWS migration starts March 1, must be done by March 21 (before Q1 close).
+
+Action items:
+- Sarah: Send SSO requirements to Mike by Feb 17
+- Mike: Technical spec for SSO by Feb 20
+- Lisa: Mobile contractor shortlist by Feb 22
+- Dave: Tech debt prioritisation list by Feb 18
+- Jenny: Final onboarding designs to dev by Feb 16
+
+Next meeting: Feb 22, same time.`
+};
+
+function loadPreset(key) { document.getElementById('demoInput').value = PRESETS[key]; }
+
+document.getElementById('demoUpload').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 500_000) { alert('File too large. Please upload under 500 KB.'); return; }
+  const reader = new FileReader();
+  reader.onload = (ev) => { document.getElementById('demoInput').value = ev.target.result; };
+  reader.readAsText(file);
+});
+
+let demoStep = 0;
+let originalContent = '';
+let originalFacts = [];
+let originalEntities = [];
+let withoutState = { content: '' };
+let cludeState = { memories: [], entities: new Set(), totalFacts: 0 };
+
+function extractFacts(text) {
+  const sentences = text.split(/[.!?\n]+/).map(s => s.trim()).filter(s => s.length > 15);
+  const facts = [];
+  for (const s of sentences) {
+    if (/\d/.test(s) || /[A-Z][a-z]+/.test(s) || /should|need|must|will|decided|approved/i.test(s)) {
+      facts.push(s.slice(0, 120));
     }
-  </script>
+  }
+  return [...new Set(facts)];
+}
+
+function extractEntities(text) {
+  const entities = new Set();
+  const nameMatches = text.match(/(?:^|\. )([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)/g) || [];
+  nameMatches.forEach(m => {
+    const name = m.replace(/^\. /, '').trim();
+    if (name.length > 2 && !['The','This','That','But','And','Also','Got','Yes','One','Our','Key','No'].includes(name)) {
+      entities.add(name);
+    }
+  });
+  (text.match(/\$[\d,.]+[kKmM]?/g) || []).forEach(m => entities.add(m));
+  (text.match(/(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+\d+/g) || []).forEach(m => entities.add(m));
+  (text.match(/[A-Z]{2,}[\w-]*/g) || []).forEach(m => { if (m.length > 2 && m.length < 20) entities.add(m); });
+  return [...entities];
+}
+
+function classifyMemory(text) {
+  if (/decided|approved|action|ship|priority|must|should/i.test(text)) return 'procedural';
+  if (/\d+%|\$[\d]+|metric|latency|cost|revenue/i.test(text)) return 'semantic';
+  if (/I think|feels|concern|risk|worry|pushed back/i.test(text)) return 'self_model';
+  return 'episodic';
+}
+
+function summarizeToMemory(fact) { return fact.length > 100 ? fact.slice(0, 97) + '…' : fact; }
+
+function compactWithout(content, s) {
+  const sentences = content.split(/(?<=[.!?\n])\s+/).filter(x => x.trim().length > 5);
+  if (sentences.length <= 2) return content;
+  const keepRatio = Math.max(0.55, 0.85 - s * 0.03);
+  const kept = [];
+  for (const sent of sentences) {
+    const hasNumber = /\d/.test(sent);
+    const hasName = /[A-Z][a-z]{2,}/.test(sent);
+    const importance = (hasNumber ? 0.3 : 0) + (hasName ? 0.2 : 0) + Math.random() * 0.5;
+    if (importance > (1 - keepRatio)) {
+      let d = sent;
+      if (s > 3)  d = d.replace(/\b\d{1,2}:\d{2}\b/g, '[time]');
+      if (s > 5)  d = d.replace(/\$[\d,.]+[kKmM]?/g, '[amount]');
+      if (s > 8)  d = d.replace(/\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\w*/g, '[day]');
+      if (s > 10) d = d.replace(/[A-Z][a-z]+(?:\s[A-Z][a-z]+)/g, '[person]');
+      if (s > 13) d = d.replace(/\b\d+%/g, '[percent]');
+      if (s > 15) d = d.replace(/\b\d+\b/g, '[num]');
+      kept.push(d);
+    }
+  }
+  return kept.join(' ').trim() || '[Context window exhausted. All specific information lost.]';
+}
+
+function compactClude(content, s) {
+  if (s === 0) {
+    const facts = extractFacts(content);
+    const entities = extractEntities(content);
+    cludeState.memories = facts.map((f, i) => ({
+      id: i,
+      type: classifyMemory(f),
+      content: summarizeToMemory(f),
+      importance: 0.3 + Math.random() * 0.5,
+      decay: 1.0,
+      accessCount: 0,
+      entities: extractEntities(f),
+    }));
+    cludeState.entities = new Set(entities);
+    cludeState.totalFacts = facts.length;
+    return;
+  }
+  for (const mem of cludeState.memories) {
+    mem.decay = Math.max(0.1, mem.decay - 0.02);
+    if (mem.importance > 0.5) {
+      mem.accessCount++;
+      mem.importance = Math.min(1.0, mem.importance + 0.02);
+      mem.decay = Math.min(1.0, mem.decay + 0.01);
+    }
+    if (mem.importance < 0.35) mem.decay = Math.max(0.05, mem.decay - 0.03);
+  }
+  if (s % 4 === 0 && cludeState.memories.length > 5) {
+    const weakest = cludeState.memories.filter(m => m.importance < 0.4 && m.decay < 0.5).slice(0, 2);
+    if (weakest.length === 2) {
+      weakest[0].content = 'Consolidated · ' + weakest[0].content.slice(0, 40) + ' + ' + weakest[1].content.slice(0, 40);
+      weakest[0].type = 'semantic';
+      weakest[0].importance = Math.max(weakest[0].importance, weakest[1].importance);
+      cludeState.memories = cludeState.memories.filter(m => m !== weakest[1]);
+    }
+  }
+}
+
+function renderWithout() {
+  const el = document.getElementById('withoutContent');
+  el.textContent = withoutState.content || '[empty]';
+  el.className = 'panel-body' + (demoStep > 10 ? ' degraded' : '');
+
+  const currentFacts = extractFacts(withoutState.content);
+  const retention = originalContent.length > 0
+    ? Math.round((withoutState.content.length / originalContent.length) * 100) : 100;
+  document.getElementById('withoutChars').textContent = withoutState.content.length.toLocaleString();
+  document.getElementById('withoutRetention').textContent = Math.min(100, retention) + '%';
+  document.getElementById('withoutFacts').textContent = currentFacts.length;
+  const entitiesLost = originalEntities.filter(e => !withoutState.content.includes(e)).length;
+  document.getElementById('withoutEntitiesLost').textContent = entitiesLost;
+
+  document.getElementById('barWithout').style.width = Math.min(100, retention) + '%';
+  document.getElementById('barWithout').textContent = Math.min(100, retention) + '%';
+  const factRetention = originalFacts.length > 0 ? Math.round((currentFacts.length / originalFacts.length) * 100) : 100;
+  document.getElementById('barFactsWithout').style.width = factRetention + '%';
+  document.getElementById('barFactsWithout').textContent = currentFacts.length;
+  const entRetention = originalEntities.length > 0
+    ? Math.round(((originalEntities.length - entitiesLost) / originalEntities.length) * 100) : 100;
+  document.getElementById('barEntWithout').style.width = entRetention + '%';
+  document.getElementById('barEntWithout').textContent = (originalEntities.length - entitiesLost);
+}
+
+function renderClude() {
+  const el = document.getElementById('cludeContent');
+  el.className = 'panel-body';
+  el.innerHTML = '';
+
+  const sorted = [...cludeState.memories].sort((a, b) => (b.importance * b.decay) - (a.importance * a.decay));
+  for (const mem of sorted) {
+    const item = document.createElement('div');
+    item.className = 'memory-item ' + mem.type;
+    item.style.opacity = Math.max(0.3, mem.decay).toString();
+    item.innerHTML = `
+      <div>${mem.content}</div>
+      <div class="memory-meta">
+        <span class="memory-type">${mem.type.replace('_', ' ')}</span>
+        <span>imp ${mem.importance.toFixed(2)}<span class="importance-bar"><span class="importance-fill" style="width:${mem.importance*100}%"></span></span></span>
+        <span>decay ${mem.decay.toFixed(2)}<span class="decay-bar"><span class="decay-fill" style="width:${mem.decay*100}%;background:${mem.decay>0.5?'var(--accent)':'var(--red)'}"></span></span></span>
+        <span>access ${mem.accessCount}×</span>
+      </div>
+    `;
+    el.appendChild(item);
+  }
+
+  const entitySection = document.getElementById('entitySection');
+  if (cludeState.entities.size > 0) {
+    entitySection.style.display = 'flex';
+    entitySection.innerHTML = '';
+    for (const e of cludeState.entities) {
+      const tag = document.createElement('span');
+      tag.className = 'entity-tag';
+      tag.textContent = e;
+      entitySection.appendChild(tag);
+    }
+  }
+
+  const activeMems = cludeState.memories.filter(m => m.decay > 0.15);
+  const factRetention = cludeState.totalFacts > 0 ? Math.round((activeMems.length / cludeState.totalFacts) * 100) : 100;
+  const cludeRet = Math.min(100, Math.max(factRetention, 70 + Math.min(demoStep, 10)));
+
+  document.getElementById('cludeMemories').textContent = cludeState.memories.length;
+  document.getElementById('cludeRetention').textContent = cludeRet + '%';
+  document.getElementById('cludeFacts').textContent = activeMems.length;
+  document.getElementById('cludeEntities').textContent = cludeState.entities.size;
+
+  document.getElementById('barWith').style.width = cludeRet + '%';
+  document.getElementById('barWith').textContent = cludeRet + '%';
+  document.getElementById('barFactsWith').style.width = Math.min(100, (activeMems.length / Math.max(1, originalFacts.length)) * 100) + '%';
+  document.getElementById('barFactsWith').textContent = activeMems.length;
+  document.getElementById('barEntWith').style.width = '100%';
+  document.getElementById('barEntWith').textContent = cludeState.entities.size;
+}
+
+function startCompaction() {
+  originalContent = document.getElementById('demoInput').value.trim();
+  if (!originalContent) { alert('Paste some content, upload a file, or pick a sample first.'); return; }
+  originalFacts = extractFacts(originalContent);
+  originalEntities = extractEntities(originalContent);
+  demoStep = 0;
+  withoutState.content = originalContent;
+  compactClude(originalContent, 0);
+  renderWithout();
+  renderClude();
+  document.getElementById('scoresPanel').style.display = 'block';
+  document.getElementById('stepBtn').disabled = false;
+  document.getElementById('autoBtn').disabled = false;
+  document.getElementById('stepNum').textContent = '0';
+  document.getElementById('startBtn').textContent = 'Restart';
+  document.getElementById('demo').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function stepCompaction() {
+  if (demoStep >= 20) return;
+  demoStep++;
+  withoutState.content = compactWithout(withoutState.content, demoStep);
+  compactClude(null, demoStep);
+  renderWithout();
+  renderClude();
+  document.getElementById('stepNum').textContent = demoStep;
+  document.getElementById('withoutPanel').classList.add('flash');
+  document.getElementById('withPanel').classList.add('flash');
+  setTimeout(() => {
+    document.getElementById('withoutPanel').classList.remove('flash');
+    document.getElementById('withPanel').classList.remove('flash');
+  }, 400);
+  if (demoStep >= 20) {
+    document.getElementById('stepBtn').disabled = true;
+    document.getElementById('autoBtn').disabled = true;
+  }
+}
+
+let autoInterval = null;
+function autoCompact() {
+  if (autoInterval) {
+    clearInterval(autoInterval); autoInterval = null;
+    document.getElementById('autoBtn').textContent = 'Auto (20×)';
+    return;
+  }
+  document.getElementById('autoBtn').textContent = 'Stop';
+  autoInterval = setInterval(() => {
+    if (demoStep >= 20) {
+      clearInterval(autoInterval); autoInterval = null;
+      document.getElementById('autoBtn').textContent = 'Auto (20×)';
+      return;
+    }
+    stepCompaction();
+  }, 600);
+}
+
+function resetAll() {
+  if (autoInterval) { clearInterval(autoInterval); autoInterval = null; }
+  demoStep = 0;
+  originalContent = '';
+  originalFacts = [];
+  originalEntities = [];
+  withoutState = { content: '' };
+  cludeState = { memories: [], entities: new Set(), totalFacts: 0 };
+  const wo = document.getElementById('withoutContent');
+  wo.textContent = 'Paste content and hit Start to begin.';
+  wo.className = 'panel-body empty';
+  const wc = document.getElementById('cludeContent');
+  wc.textContent = 'Paste content and hit Start to begin.';
+  wc.className = 'panel-body empty';
+  document.getElementById('entitySection').style.display = 'none';
+  document.getElementById('scoresPanel').style.display = 'none';
+  document.getElementById('stepBtn').disabled = true;
+  document.getElementById('autoBtn').disabled = true;
+  document.getElementById('autoBtn').textContent = 'Auto (20×)';
+  document.getElementById('startBtn').textContent = 'Start compaction';
+  document.getElementById('stepNum').textContent = '0';
+  ['withoutChars','withoutFacts','withoutEntitiesLost','cludeMemories','cludeFacts','cludeEntities'].forEach(id => {
+    document.getElementById(id).textContent = '0';
+  });
+  ['withoutRetention','cludeRetention'].forEach(id => {
+    document.getElementById(id).textContent = '100%';
+  });
+}
+
+// Preload a sample into the demo textarea so §1 greets visitors with
+// content ready to go. Does NOT auto-start — user initiates.
+(() => {
+  const ta = document.getElementById('demoInput');
+  if (ta && !ta.value) ta.value = PRESETS.conversation;
+})();
+</script>
+
 </body>
 </html>

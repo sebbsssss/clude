@@ -16,14 +16,6 @@ export function staticRoutes(): Router {
 
   // ── Pretty URL aliases for static HTML pages ─────────────────────
 
-  router.get('/campaign.html', (_req: Request, res: Response) => {
-    res.redirect('/10days');
-  });
-  router.get('/10days', (req: Request, _res: Response, next: express.NextFunction) => {
-    req.url = '/campaign.html';
-    next();
-  });
-
   router.get('/venice', (req: Request, _res: Response, next: express.NextFunction) => {
     req.url = '/privacy.html';
     next();

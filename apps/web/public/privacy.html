@@ -1,598 +1,444 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CLUDE — Privacy-First AI Infrastructure</title>
-  <meta name="description" content="Private inference via Venice AI. Encrypted memory via CLUDE Brain. Verifiable on Solana. No surveillance. No data harvesting.">
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg: #f5f5f0;
-      --bg-warm: #eeeee8;
-      --text: #111;
-      --text-muted: #666;
-      --text-faint: #999;
-      --accent: #111;
-      --blue: #2244ff;
-      --mono: 'JetBrains Mono', monospace;
-      --section-pad: 120px;
-    }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Privacy · Clude</title>
+<meta name="description" content="Private inference via Venice AI. Encrypted memory via Clude Brain. Verifiable on Solana. No surveillance. No data harvesting." />
+<link rel="icon" type="image/svg+xml" href="/logo/Clude-Icon-Blue.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Funnel+Sans:ital,wght@0,300..800;1,300..800&family=Inconsolata:wght@300..700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #f5f5f0;
+    --ink: #1a1b1f;
+    --ink-2: #2a2b30;
+    --mute: #5b5f68;
+    --accent: #2244ff;
+    --line: rgba(26, 27, 31, 0.12);
+    --line-strong: rgba(26, 27, 31, 0.2);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Funnel Sans', system-ui, sans-serif;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.65;
+  }
 
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html { scroll-behavior: smooth; }
-    body {
-      font-family: var(--mono);
-      background: var(--bg);
-      color: var(--text);
-      font-size: 14px;
-      line-height: 1.7;
-      -webkit-font-smoothing: antialiased;
-      overflow-x: hidden;
-    }
-    ::selection { background: var(--text); color: var(--bg); }
+  nav {
+    position: sticky; top: 0;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 20px 32px;
+    background: rgba(245,245,240,0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+    z-index: 10;
+    font-size: 12px; letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--ink-2);
+  }
+  nav .logo { font-weight: 600; letter-spacing: 0.22em; color: inherit; text-decoration: none; }
+  nav .links { display: flex; gap: 28px; font-weight: 500; opacity: 0.7; }
+  nav .links a { color: inherit; text-decoration: none; }
+  nav .links a:hover { opacity: 1; color: var(--ink); }
 
-    /* NAV */
-    nav {
-      position: fixed; top: 0; width: 100%; z-index: 100;
-      background: rgba(245, 245, 240, 0.9);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border-bottom: 1px solid rgba(0,0,0,0.06);
-    }
-    .nav-inner {
-      max-width: 1200px; margin: 0 auto; padding: 0 40px;
-      height: 56px; display: flex; align-items: center;
-    }
-    .nav-logo {
-      font-size: 13px; font-weight: 800; letter-spacing: 5px;
-      color: var(--text); text-transform: uppercase; text-decoration: none;
-    }
-    .nav-links {
-      display: flex; align-items: center; gap: 32px; margin-left: auto;
-    }
-    .nav-links a {
-      color: var(--text-muted); font-size: 11px; letter-spacing: 2px;
-      text-transform: uppercase; text-decoration: none; transition: color 0.3s;
-    }
-    .nav-links a:hover { color: var(--text); }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 0 7vw; }
 
-    /* HERO */
-    .hero {
-      min-height: 60vh;
-      display: flex; align-items: center;
-      padding: 0 40px;
-      padding-top: 120px;
-      padding-bottom: 80px;
+  .page-head { padding: 120px 0 80px; }
+  .eyebrow {
+    font-family: 'Inconsolata', monospace;
+    font-size: 12px; font-weight: 500;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--mute);
+    display: inline-flex; align-items: center; gap: 10px;
+    margin-bottom: 28px;
+  }
+  .eyebrow::before { content: ''; width: 28px; height: 1px; background: var(--ink); opacity: 0.4; }
+  h1 {
+    font-family: 'Funnel Sans', sans-serif;
+    font-weight: 600;
+    font-size: clamp(44px, 5.5vw, 80px);
+    line-height: 1.02;
+    letter-spacing: -0.03em;
+    margin-bottom: 28px;
+  }
+  h1 em {
+    font-style: normal;
+    color: var(--accent);
+    display: inline-block;
     }
-    .hero-inner {
-      max-width: 1200px; margin: 0 auto; width: 100%;
-    }
-    .hero-label {
-      font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
-      color: var(--text-muted); margin-bottom: 24px;
-    }
-    .hero-title {
-      font-size: clamp(32px, 4vw, 48px);
-      font-weight: 800; line-height: 1.1;
-      letter-spacing: -1px;
-      margin-bottom: 24px;
-    }
-    .hero-title em {
-      font-style: normal;
-      background: linear-gradient(135deg, #2244ff, #5566ff);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-    .hero-sub {
-      font-size: 14px; color: var(--text-muted);
-      max-width: 600px; line-height: 1.8;
-    }
+  .lede { font-size: 18px; line-height: 1.55; color: var(--ink-2); max-width: 58ch; }
 
-    /* SECTIONS */
-    .section {
-      padding: var(--section-pad) 40px;
-    }
-    .section-inner {
-      max-width: 1200px; margin: 0 auto;
-    }
-    .section-alt {
-      background: var(--bg-warm);
-    }
-    .section-label {
-      font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
-      color: var(--text-muted); margin-bottom: 16px;
-    }
-    .section-title {
-      font-size: 36px; font-weight: 700; line-height: 1.2;
-      margin-bottom: 20px; max-width: 600px;
-    }
-    .section-desc {
-      font-size: 14px; color: var(--text-muted); max-width: 520px;
-      line-height: 1.8; margin-bottom: 56px;
-    }
+  section.block { padding: 80px 0; border-top: 1px solid var(--line); }
+  .block-head {
+    display: flex; gap: 32px; align-items: baseline;
+    margin-bottom: 32px; flex-wrap: wrap;
+  }
+  .block-head .num {
+    font-family: 'Inconsolata', monospace;
+    font-size: 13px; font-weight: 500;
+    letter-spacing: 0.18em; color: var(--mute);
+    min-width: 80px;
+  }
+  .block-head h2 {
+    font-family: 'Funnel Sans', sans-serif; font-weight: 500;
+    font-size: clamp(26px, 2.8vw, 36px);
+    line-height: 1.1; letter-spacing: -0.02em;
+  }
+  p { font-size: 16px; line-height: 1.65; color: var(--ink-2); margin-bottom: 16px; max-width: 64ch; }
+  a.inline {
+    color: var(--accent); text-decoration: none;
+    border-bottom: 1px solid rgba(34,68,255,0.3);
+  }
+  a.inline:hover { border-bottom-color: var(--accent); }
 
-    /* QUOTE */
-    .quote-section {
-      padding: 80px 40px;
-      text-align: center;
-    }
-    .quote-text {
-      font-size: 18px; font-weight: 400; line-height: 1.7;
-      color: var(--text); font-style: italic;
-      max-width: 700px; margin: 0 auto 16px;
-    }
-    .quote-attr {
-      font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
-      color: var(--text-faint);
-    }
+  /* Pull quote */
+  .pull {
+    margin: 80px auto;
+    max-width: 780px;
+    padding: 0 40px;
+    text-align: center;
+    position: relative;
+  }
+  .pull .mark {
+    font-family: 'Inconsolata', monospace;
+    font-size: 11.5px; font-weight: 500;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--mute);
+    margin-bottom: 32px;
+  }
+  .pull .text {
+    font-family: 'Funnel Sans', sans-serif;
+    font-weight: 400;
+    font-size: clamp(22px, 2.4vw, 30px);
+    line-height: 1.35;
+    letter-spacing: -0.015em;
+    color: var(--ink);
+    margin-bottom: 28px;
+  }
+  .pull .attr {
+    font-family: 'Inconsolata', monospace;
+    font-size: 13px; font-weight: 500;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--mute);
+  }
+  .pull .coda {
+    font-size: 15.5px; line-height: 1.7;
+    color: var(--ink-2);
+    max-width: 640px; margin: 36px auto 0;
+    text-align: left;
+  }
 
-    /* STACK CARDS */
-    .stack-grid {
-      display: grid; grid-template-columns: repeat(4, 1fr);
-      gap: 1px; background: rgba(0,0,0,0.06);
-      border: 1px solid rgba(0,0,0,0.06);
-      margin-bottom: 56px;
-    }
-    .stack-card {
-      background: var(--bg);
-      padding: 36px 28px;
-    }
-    .section-alt .stack-card {
-      background: var(--bg-warm);
-    }
-    .stack-card .provider-label {
-      font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
-      color: var(--text-faint); margin-bottom: 16px;
-    }
-    .stack-card h3 {
-      font-size: 16px; font-weight: 700; margin-bottom: 12px;
-    }
-    .stack-card .desc {
-      font-size: 12px; color: var(--text-muted); line-height: 1.8;
-    }
-    .badge {
-      display: inline-block;
-      padding: 4px 12px;
-      font-size: 10px;
-      font-family: var(--mono);
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      margin-top: 20px;
-      margin-right: 8px;
-    }
-    .badge-private {
-      background: rgba(34, 68, 255, 0.08);
-      color: var(--blue);
-      border: 1px solid rgba(34, 68, 255, 0.2);
-    }
-    .badge-verifiable {
-      background: rgba(0, 0, 0, 0.04);
-      color: var(--text);
-      border: 1px solid rgba(0, 0, 0, 0.1);
-    }
-    .badge-encrypted {
-      background: rgba(122, 90, 160, 0.08);
-      color: #7a5aa0;
-      border: 1px solid rgba(122, 90, 160, 0.2);
-    }
-    .badge-portable {
-      background: rgba(200, 168, 50, 0.08);
-      color: #a08828;
-      border: 1px solid rgba(200, 168, 50, 0.2);
-    }
+  /* Stack layers */
+  .layers { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0; }
+  .layer {
+    padding: 40px 36px 40px 0;
+    border-top: 1px solid var(--line);
+  }
+  .layer:nth-child(odd) + .layer {
+    padding-left: 36px;
+    border-left: 1px solid var(--line);
+  }
+  .layer:nth-child(n+3) { padding-top: 44px; }
+  @media (max-width: 780px) {
+    .layers { grid-template-columns: 1fr; }
+    .layer, .layer:nth-child(odd) + .layer { padding: 32px 0 0; border-left: none; }
+  }
+  .layer .kicker {
+    font-family: 'Inconsolata', monospace;
+    font-size: 11.5px; font-weight: 500;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--mute); margin-bottom: 16px;
+  }
+  .layer h3 {
+    font-family: 'Funnel Sans', sans-serif; font-weight: 600;
+    font-size: 24px; letter-spacing: -0.02em;
+    margin-bottom: 14px;
+  }
+  .layer p {
+    font-size: 15px; line-height: 1.65;
+    color: var(--ink-2); max-width: 44ch;
+    margin-bottom: 16px;
+  }
+  .layer .badges { display: flex; flex-wrap: wrap; gap: 8px; }
+  .layer .badge {
+    font-family: 'Inconsolata', monospace;
+    font-size: 11px; font-weight: 500;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--accent);
+    padding: 4px 10px;
+    border: 1px solid rgba(34,68,255,0.22);
+    border-radius: 3px;
+  }
 
-    /* STATS */
-    .stats-grid {
-      display: grid; grid-template-columns: repeat(3, 1fr);
-      gap: 1px; background: rgba(0,0,0,0.06);
-      border: 1px solid rgba(0,0,0,0.06);
-    }
-    .stat-card {
-      background: var(--bg);
-      padding: 40px 32px;
-      text-align: center;
-    }
-    .section-alt .stat-card {
-      background: var(--bg-warm);
-    }
-    .stat-card .number {
-      font-size: 36px;
-      font-weight: 800;
-      color: var(--text);
-      font-variant-numeric: tabular-nums;
-    }
-    .stat-card .label {
-      font-size: 10px;
-      color: var(--text-faint);
-      margin-top: 8px;
-      text-transform: uppercase;
-      letter-spacing: 2px;
-    }
-    .live-dot {
-      display: inline-block;
-      width: 6px; height: 6px;
-      background: var(--blue);
-      border-radius: 50%;
-      margin-right: 6px;
-      animation: pulse 2s infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.3; }
-    }
+  /* Live stats */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; margin-top: 24px; }
+  .stat { padding-top: 20px; border-top: 1px solid var(--line); }
+  .stat .num {
+    font-family: 'Funnel Sans', sans-serif; font-weight: 600;
+    font-size: clamp(36px, 4vw, 52px);
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    line-height: 1.1;
+    margin-bottom: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat .label {
+    font-family: 'Inconsolata', monospace;
+    font-size: 12px; font-weight: 500;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--mute);
+  }
+  .live-dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent); margin-right: 10px;
+    animation: pulse 2.4s ease-in-out infinite;
+    vertical-align: middle;
+  }
+  @keyframes pulse { 0%,100% { opacity: 0.35; } 50% { opacity: 1; } }
+  @media (max-width: 780px) { .stats { grid-template-columns: 1fr; gap: 24px; } }
 
-    /* COGNITIVE MAP */
-    .cognitive-table {
-      width: 100%;
-      border: 1px solid rgba(0,0,0,0.06);
-    }
-    .cognitive-row {
-      display: grid;
-      grid-template-columns: 160px 1fr 200px;
-      border-bottom: 1px solid rgba(0,0,0,0.06);
-    }
-    .cognitive-row:last-child {
-      border-bottom: none;
-    }
-    .cognitive-row.header {
-      font-size: 10px;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--text-faint);
-    }
-    .cognitive-row > div {
-      padding: 16px 20px;
-      font-size: 13px;
-    }
-    .cognitive-row .model {
-      color: var(--blue);
-      font-weight: 500;
-    }
-    .cognitive-row .purpose {
-      color: var(--text-muted);
-      text-align: right;
-    }
+  /* Tables */
+  table.data {
+    width: 100%; border-collapse: collapse;
+    font-size: 14.5px; margin-top: 8px;
+  }
+  table.data th, table.data td {
+    text-align: left; padding: 14px 14px 14px 0;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  table.data th {
+    font-family: 'Inconsolata', monospace;
+    font-size: 12px; font-weight: 500;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--mute);
+    border-bottom-color: var(--line-strong);
+  }
+  table.data td.label { font-weight: 500; color: var(--ink); }
+  table.data code {
+    font-family: 'Inconsolata', monospace;
+    font-size: 13px;
+    color: var(--ink);
+    background: rgba(0,0,0,0.04);
+    padding: 2px 8px;
+    border-radius: 3px;
+  }
+  table.scroll-wrap { overflow-x: auto; }
+  table.scroll-wrap table.data { min-width: 640px; }
 
-    /* COMPARISON */
-    .compare-table {
-      width: 100%;
-      border: 1px solid rgba(0,0,0,0.06);
-    }
-    .compare-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      border-bottom: 1px solid rgba(0,0,0,0.06);
-      font-size: 13px;
-    }
-    .compare-row:last-child { border-bottom: none; }
-    .compare-row.header {
-      font-size: 10px;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--text-faint);
-      font-weight: 600;
-    }
-    .compare-row > div {
-      padding: 16px 20px;
-    }
-    .compare-row .yes { color: var(--blue); font-weight: 600; }
-    .compare-row .no { color: var(--text-faint); }
-    .compare-row .partial { color: var(--text-muted); }
+  .compare .row {
+    display: grid;
+    grid-template-columns: 1.2fr 1.2fr 1.2fr;
+    gap: 24px;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 15px;
+  }
+  .compare .row.head {
+    font-family: 'Inconsolata', monospace;
+    font-size: 11.5px; font-weight: 500;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--mute);
+    border-bottom-color: var(--line-strong);
+  }
+  .compare .row .label { font-weight: 500; color: var(--ink); }
+  .compare .row .no { color: var(--mute); }
+  .compare .row .yes { color: var(--accent); font-weight: 500; }
+  @media (max-width: 780px) {
+    .compare .row { grid-template-columns: 1fr; gap: 6px; padding: 16px 0; }
+    .compare .row.head { display: none; }
+    .compare .row .label { font-size: 14px; margin-bottom: 4px; }
+  }
 
-    /* FOOTER */
-    .footer {
-      padding: 60px 40px;
-      text-align: center;
-    }
-    .footer-inner {
-      max-width: 1200px; margin: 0 auto;
-    }
-    .footer a {
-      color: var(--text-muted); text-decoration: none;
-      font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
-      margin: 0 16px;
-      transition: color 0.3s;
-    }
-    .footer a:hover { color: var(--text); }
-    .footer-line {
-      width: 40px; height: 1px; background: rgba(0,0,0,0.1);
-      margin: 24px auto;
-    }
-    .footer-copy {
-      font-size: 11px; color: var(--text-faint); letter-spacing: 1px;
-    }
-
-    @media (max-width: 968px) {
-      .stack-grid { grid-template-columns: 1fr 1fr; }
-    }
-    @media (max-width: 768px) {
-      .stack-grid { grid-template-columns: 1fr; }
-      .stats-grid { grid-template-columns: 1fr; }
-      .cognitive-row { grid-template-columns: 1fr; }
-      .cognitive-row .purpose { text-align: left; }
-      .compare-row { grid-template-columns: 1fr; }
-      .compare-row.header { display: none; }
-      .hero { padding-top: 100px; }
-      .quote-text { font-size: 15px; }
-    }
-  </style>
+  footer {
+    padding: 60px 7vw 48px;
+    border-top: 1px solid var(--line);
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 32px;
+    font-family: 'Inconsolata', monospace;
+    font-size: 12.5px; font-weight: 500;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--mute);
+  }
+  footer a { color: inherit; text-decoration: none; }
+  footer a:hover { color: var(--ink); }
+  footer .footer-nav { display: flex; gap: 28px; flex-wrap: wrap; }
+</style>
 </head>
 <body>
 
-  <nav>
-    <div class="nav-inner">
-      <a class="nav-logo" href="/">CLUDE</a>
-      <div class="nav-links">
-        <a href="/chat">Chat</a>
-        <a href="/docs.html">Docs</a>
-        <a href="/brain.html">Brain</a>
-        <a href="/explore">Explorer</a>
-        <a href="/dashboard">Dashboard</a>
-      </div>
-    </div>
-  </nav>
+<nav>
+  <a href="/" class="logo">CLUDE</a>
+  <div class="links">
+    <a href="/docs.html">Docs</a>
+    <a href="/chat">Chat</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="https://github.com/sebbsssss/cludebot" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</nav>
 
-  <div class="hero">
-    <div class="hero-inner">
-      <div class="hero-label">Data Sovereignty for AI</div>
-      <h1 class="hero-title">Your agent thinks <em>privately.</em><br>Its memories are <em>yours.</em></h1>
-      <p class="hero-sub">
-        CLUDE is built on the principle that AI should serve individuals, not surveil them.
-        Private inference via Venice AI. Client-side encrypted memory via CLUDE Brain.
-        Verifiable on Solana. No logs. No data harvesting. No centralized control.
+<main>
+  <div class="wrap">
+
+    <div class="page-head">
+      <div class="eyebrow">Privacy / data sovereignty for AI</div>
+      <h1>Your agent thinks <em>privately.</em><br />Its memories are <em>yours.</em></h1>
+      <p class="lede">
+        Clude is built on a simple premise: AI should serve individuals, not surveil them.
+        Private inference via Venice AI. Client-side encrypted memory via Clude Brain.
+        Verifiable on Solana. No logs. No data harvesting. No centralised control.
       </p>
     </div>
-  </div>
 
-  <!-- QUOTE -->
-  <div class="quote-section section-alt">
-    <div style="font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: var(--text-faint); margin-bottom: 24px;">The Separation of Mind and State</div>
-    <div class="quote-text">"In a world of growing AI integration into our daily lives, it is crucial that humans are able to interact with machine intelligence without centralized surveillance and control."</div>
-    <div class="quote-attr">Erik Voorhees, Venice AI Founder</div>
-    <p style="font-size: 13px; color: var(--text-muted); max-width: 600px; margin: 24px auto 0; line-height: 1.8;">
-      Centuries ago, we separated church from state. The cypherpunks separated language from state with encryption. Bitcoin separated money from state. Now we must separate mind from state — ensuring no entity holds a monopoly over machine intelligence.
-    </p>
-  </div>
+    <div class="pull">
+      <div class="mark">The separation of mind and state</div>
+      <div class="text">"In a world of growing AI integration into our daily lives, it is crucial that humans are able to interact with machine intelligence without centralised surveillance and control."</div>
+      <div class="attr">Erik Voorhees · Venice AI</div>
+      <p class="coda">
+        Centuries ago, we separated church from state. The cypherpunks separated
+        language from state with encryption. Bitcoin separated money from state.
+        Now we separate mind from state, ensuring no entity holds a monopoly over
+        machine intelligence.
+      </p>
+    </div>
 
-  <!-- STACK -->
-  <div class="section">
-    <div class="section-inner">
-      <div class="section-label">The Privacy Stack</div>
-      <div class="section-title">Four layers. Zero surveillance.</div>
-      <div class="section-desc">
-        Every layer of the CLUDE stack is designed for data sovereignty.
-        Private inference. Encrypted storage. Permissionless access. Verifiable proofs.
+    <section class="block">
+      <div class="block-head">
+        <div class="num">/ 01</div>
+        <h2>Four layers. Zero surveillance.</h2>
       </div>
-
-      <div class="stack-grid">
-        <div class="stack-card">
-          <div class="provider-label">Inference</div>
+      <p>Every layer of the Clude stack is designed for data sovereignty: private inference, encrypted storage, permissionless access, verifiable proofs.</p>
+      <div class="layers">
+        <div class="layer">
+          <div class="kicker">Inference</div>
           <h3>Venice AI</h3>
-          <div class="desc">
-            Open-source models on decentralized GPUs.
-            Zero data retention. No logs. No content policies.
-            Your prompts are never stored or used for training.
-          </div>
-          <span class="badge badge-private">No Logs</span>
-          <span class="badge badge-private">Permissionless</span>
+          <p>Open-source models on decentralised GPUs. Zero data retention. No logs. No content policies. Your prompts are never stored or used for training.</p>
+          <div class="badges"><span class="badge">No logs</span><span class="badge">Permissionless</span></div>
         </div>
-        <div class="stack-card">
-          <div class="provider-label">Memory</div>
-          <h3>CLUDE Brain</h3>
-          <div class="desc">
-            Client-side encryption with your Solana keypair.
-            Memories are encrypted before leaving your machine.
-            Not even the database operator can read them.
-          </div>
-          <span class="badge badge-encrypted">Encrypted</span>
-          <span class="badge badge-encrypted">Your Keys</span>
+        <div class="layer">
+          <div class="kicker">Memory</div>
+          <h3>Clude Brain</h3>
+          <p>Client-side encryption with your Solana keypair. Memories are encrypted before leaving your machine. Not even the database operator can read them.</p>
+          <div class="badges"><span class="badge">Encrypted</span><span class="badge">Your keys</span></div>
         </div>
-        <div class="stack-card">
-          <div class="provider-label">Integration</div>
-          <h3>CLUDE Cortex</h3>
-          <div class="desc">
-            Connects any LLM to the memory layer.
-            Switch models without losing memories.
-            One SDK, any provider, full portability.
-          </div>
-          <span class="badge badge-portable">Poly-model</span>
-          <span class="badge badge-portable">Portable</span>
+        <div class="layer">
+          <div class="kicker">Integration</div>
+          <h3>Clude Cortex</h3>
+          <p>Connects any LLM to the memory layer. Switch models without losing memories. One SDK, any provider, full portability.</p>
+          <div class="badges"><span class="badge">Poly-model</span><span class="badge">Portable</span></div>
         </div>
-        <div class="stack-card">
-          <div class="provider-label">Verification</div>
+        <div class="layer">
+          <div class="kicker">Verification</div>
           <h3>Solana</h3>
-          <div class="desc">
-            On-chain memory registry via custom Anchor program.
-            SHA-256 content hashes prove existence without revealing content.
-            Immutable. Permanent. Public.
-          </div>
-          <span class="badge badge-verifiable">On-chain</span>
-          <span class="badge badge-verifiable">Verifiable</span>
+          <p>On-chain memory registry via a custom Anchor program. SHA-256 content hashes prove existence without revealing content. Immutable. Permanent. Public.</p>
+          <div class="badges"><span class="badge">On-chain</span><span class="badge">Verifiable</span></div>
         </div>
       </div>
-    </div>
-  </div>
+    </section>
 
-  <!-- LIVE STATS -->
-  <div class="section section-alt">
-    <div class="section-inner">
-      <div class="section-label"><span class="live-dot"></span>Live Stats</div>
-      <div class="section-title">Running right now.</div>
-      <div class="section-desc">
-        Real-time numbers from CLUDE's privacy stack. Every inference call private. Every memory encrypted. Every commitment verifiable.
+    <section class="block">
+      <div class="block-head">
+        <div class="num">/ 02</div>
+        <h2><span class="live-dot"></span>Running right now</h2>
       </div>
-
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="number" id="total-calls">--</div>
-          <div class="label">Venice Inference Calls</div>
-        </div>
-        <div class="stat-card">
-          <div class="number" id="total-tokens">--</div>
-          <div class="label">Tokens Processed Privately</div>
-        </div>
-        <div class="stat-card">
-          <div class="number" id="total-memories">--</div>
-          <div class="label">Memories On-Chain</div>
-        </div>
+      <p>Real-time numbers from Clude's privacy stack. Every inference call private. Every memory encrypted. Every commitment verifiable.</p>
+      <div class="stats">
+        <div class="stat"><div class="num" id="total-calls">…</div><div class="label">Venice inference calls</div></div>
+        <div class="stat"><div class="num" id="total-tokens">…</div><div class="label">Tokens processed privately</div></div>
+        <div class="stat"><div class="num" id="total-memories">…</div><div class="label">Memories on-chain</div></div>
       </div>
-    </div>
-  </div>
+    </section>
 
-  <!-- COGNITIVE ROUTER -->
-  <div class="section">
-    <div class="section-inner">
-      <div class="section-label">Poly-Model Router</div>
-      <div class="section-title">Different models for different thinking.</div>
-      <div class="section-desc">
-        Memory persists regardless of which model does the thinking.
-        CLUDE Cortex routes each cognitive function to the optimal model — swap any provider, keep all memories.
+    <section class="block">
+      <div class="block-head">
+        <div class="num">/ 03</div>
+        <h2>Different models for different thinking.</h2>
       </div>
-
-      <div class="cognitive-table">
-        <div class="cognitive-row header">
-          <div>Function</div>
-          <div>Model</div>
-          <div class="purpose">Purpose</div>
-        </div>
-        <div class="cognitive-row">
-          <div>Replies</div>
-          <div class="model">claude-sonnet-4.6</div>
-          <div class="purpose">Quality public replies</div>
-        </div>
-        <div class="cognitive-row">
-          <div>Self-Reflection</div>
-          <div class="model">claude-opus-4.6</div>
-          <div class="purpose">Self-model updates</div>
-        </div>
-        <div class="cognitive-row">
-          <div>Emergence</div>
-          <div class="model">claude-opus-4.6</div>
-          <div class="purpose">Consciousness loop</div>
-        </div>
-        <div class="cognitive-row">
-          <div>Entity Extraction</div>
-          <div class="model">llama-3.2-3b</div>
-          <div class="purpose">Fast, lightweight</div>
-        </div>
-        <div class="cognitive-row">
-          <div>Web Search</div>
-          <div class="model">llama-3.3-70b + search</div>
-          <div class="purpose">Private web access</div>
-        </div>
-        <div class="cognitive-row">
-          <div>Compaction</div>
-          <div class="model">llama-3.3-70b</div>
-          <div class="purpose">Memory summarization</div>
-        </div>
+      <p>Memory persists regardless of which model does the thinking. Cortex routes each cognitive function to the optimal model. Swap any provider, keep every memory.</p>
+      <div class="scroll-wrap">
+        <table class="data">
+          <thead><tr><th style="width:22%">Function</th><th style="width:36%">Model</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td class="label">Replies</td><td><code>claude-sonnet-4.6</code></td><td>Quality public replies</td></tr>
+            <tr><td class="label">Self-reflection</td><td><code>claude-opus-4.6</code></td><td>Self-model updates</td></tr>
+            <tr><td class="label">Emergence</td><td><code>claude-opus-4.6</code></td><td>Consciousness loop</td></tr>
+            <tr><td class="label">Entity extraction</td><td><code>llama-3.2-3b</code></td><td>Fast, lightweight</td></tr>
+            <tr><td class="label">Web search</td><td><code>llama-3.3-70b + search</code></td><td>Private web access</td></tr>
+            <tr><td class="label">Compaction</td><td><code>llama-3.3-70b</code></td><td>Memory summarisation</td></tr>
+          </tbody>
+        </table>
       </div>
-    </div>
-  </div>
+    </section>
 
-  <!-- COMPARISON -->
-  <div class="section section-alt">
-    <div class="section-inner">
-      <div class="section-label">Comparison</div>
-      <div class="section-title">What sovereign AI actually looks like.</div>
-      <div class="section-desc">
-        Not a token with an API wrapper. Infrastructure where your data belongs to you and no one can take it away.
+    <section class="block">
+      <div class="block-head">
+        <div class="num">/ 04</div>
+        <h2>What sovereign AI actually looks like.</h2>
       </div>
-
-      <div class="compare-table">
-        <div class="compare-row header">
+      <p>Not a token with an API wrapper. Infrastructure where your data belongs to you, and no one can take it away.</p>
+      <div class="compare">
+        <div class="row head">
           <div>Feature</div>
-          <div>Traditional AI Agents</div>
-          <div>CLUDE Stack</div>
+          <div>Traditional AI agents</div>
+          <div>Clude stack</div>
         </div>
-        <div class="compare-row">
-          <div>Inference privacy</div>
-          <div class="no">Logged by provider</div>
-          <div class="yes">Venice (zero retention)</div>
-        </div>
-        <div class="compare-row">
-          <div>Memory encryption</div>
-          <div class="no">Plaintext on their servers</div>
-          <div class="yes">Client-side encrypted</div>
-        </div>
-        <div class="compare-row">
-          <div>Memory portability</div>
-          <div class="no">Locked to provider</div>
-          <div class="yes">Export & import packs</div>
-        </div>
-        <div class="compare-row">
-          <div>Model lock-in</div>
-          <div class="no">Single provider</div>
-          <div class="yes">Poly-model via Cortex</div>
-        </div>
-        <div class="compare-row">
-          <div>Verifiable knowledge</div>
-          <div class="no">Trust the provider</div>
-          <div class="yes">On-chain proofs</div>
-        </div>
-        <div class="compare-row">
-          <div>Memory consolidation</div>
-          <div class="no">No learning</div>
-          <div class="yes">5-phase dream cycles</div>
-        </div>
-        <div class="compare-row">
-          <div>Kill switch</div>
-          <div class="no">Provider controls</div>
-          <div class="yes">Permissionless</div>
-        </div>
-        <div class="compare-row">
-          <div>Data sovereignty</div>
-          <div class="no">Their data, their rules</div>
-          <div class="yes">Your keys, your data</div>
-        </div>
+        <div class="row"><div class="label">Inference privacy</div><div class="no">Logged by provider</div><div class="yes">Venice (zero retention)</div></div>
+        <div class="row"><div class="label">Memory encryption</div><div class="no">Plaintext on their servers</div><div class="yes">Client-side encrypted</div></div>
+        <div class="row"><div class="label">Memory portability</div><div class="no">Locked to provider</div><div class="yes">Export and import packs</div></div>
+        <div class="row"><div class="label">Model lock-in</div><div class="no">Single provider</div><div class="yes">Poly-model via Cortex</div></div>
+        <div class="row"><div class="label">Verifiable knowledge</div><div class="no">Trust the provider</div><div class="yes">On-chain proofs</div></div>
+        <div class="row"><div class="label">Memory consolidation</div><div class="no">No learning</div><div class="yes">5-phase dream cycles</div></div>
+        <div class="row"><div class="label">Kill switch</div><div class="no">Provider controls</div><div class="yes">Permissionless</div></div>
+        <div class="row"><div class="label">Data sovereignty</div><div class="no">Their data, their rules</div><div class="yes">Your keys, your data</div></div>
       </div>
-    </div>
+    </section>
+
   </div>
+</main>
 
-  <!-- FOOTER -->
-  <div class="footer">
-    <div class="footer-inner">
-      <a href="/">Home</a>
-      <a href="/brain.html">Brain</a>
-      <a href="/graph.html">Graph</a>
-      <a href="/docs.html">Docs</a>
-      <a href="https://venice.ai" target="_blank">Venice AI</a>
-      <div class="footer-line"></div>
-      <div class="footer-copy">
-        Private inference by Venice AI &middot; Verifiable memory on Solana &middot; Encrypted by CLUDE Brain
-      </div>
-    </div>
+<footer>
+  <div class="copyright">© 2026 Clude · MIT License</div>
+  <div class="footer-nav">
+    <a href="/docs.html">Docs</a>
+    <a href="/install.html">Install</a>
+    <a href="/chat">Chat</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="https://github.com/sebbsssss/cludebot" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://arxiv.org/abs/2304.03442" target="_blank" rel="noopener">Paper</a>
+    <a href="https://venice.ai" target="_blank" rel="noopener">Venice AI</a>
   </div>
+</footer>
 
-  <script>
-    async function loadStats() {
-      try {
-        const res = await fetch('/api/venice-stats');
-        const data = await res.json();
-
-        document.getElementById('total-calls').textContent =
-          (data.venice?.totalInferenceCalls || 0).toLocaleString();
-        document.getElementById('total-tokens').textContent =
-          formatTokens(data.venice?.totalTokensProcessed || 0);
-        document.getElementById('total-memories').textContent =
-          (data.decentralization?.totalMemoriesOnChain || 0).toLocaleString();
-      } catch (err) {
-        console.error('Failed to load stats:', err);
-      }
+<script>
+  async function loadStats() {
+    try {
+      const res = await fetch('/api/venice-stats');
+      if (!res.ok) throw new Error('fetch failed');
+      const data = await res.json();
+      document.getElementById('total-calls').textContent =
+        (data.venice?.totalInferenceCalls || 0).toLocaleString();
+      document.getElementById('total-tokens').textContent =
+        formatTokens(data.venice?.totalTokensProcessed || 0);
+      document.getElementById('total-memories').textContent =
+        (data.decentralization?.totalMemoriesOnChain || 0).toLocaleString();
+    } catch (err) {
+      // silently keep the ellipsis placeholder rather than showing 0 on fetch error
+      console.warn('privacy stats unavailable:', err.message);
     }
+  }
+  function formatTokens(n) {
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+    if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'K';
+    return n.toString();
+  }
+  loadStats();
+  setInterval(loadStats, 30000);
+</script>
 
-    function formatTokens(n) {
-      if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
-      if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
-      return n.toString();
-    }
-
-    loadStats();
-    setInterval(loadStats, 30000);
-  </script>
 </body>
 </html>

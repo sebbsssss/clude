@@ -1,1416 +1,432 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CLUDE — Documentation</title>
-  <meta name="description" content="Cortex SDK documentation. Persistent memory for AI agents. Store, recall, dream cycles, association graphs.">
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg: #f5f5f0;
-      --bg-warm: #eeeee8;
-      --surface: #fff;
-      --text: #111;
-      --text-muted: #666;
-      --text-faint: #999;
-      --border: rgba(0,0,0,0.08);
-      --border-strong: rgba(0,0,0,0.15);
-      --blue: #2244ff;
-      --mono: 'JetBrains Mono', monospace;
-      --sidebar-w: 240px;
-    }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Docs · Clude</title>
+<meta name="description" content="Clude documentation: memory types, recall mechanics, dream cycles, and the SDK reference." />
+<link rel="icon" type="image/svg+xml" href="/logo/Clude-Icon-Blue.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Funnel+Sans:ital,wght@0,300..800;1,300..800&family=Inconsolata:wght@300..700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #f5f5f0;
+    --ink: #1a1b1f;
+    --ink-2: #2a2b30;
+    --mute: #5b5f68;
+    --accent: #2244ff;
+    --line: rgba(26, 27, 31, 0.12);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Funnel Sans', system-ui, sans-serif;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+  }
 
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html { scroll-behavior: smooth; }
+  nav {
+    position: sticky; top: 0;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 20px 32px;
+    background: rgba(245,245,240,0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+    z-index: 10;
+    font-size: 12px; letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--ink-2);
+  }
+  nav .logo { font-weight: 600; letter-spacing: 0.22em; color: inherit; text-decoration: none; }
+  nav .links { display: flex; gap: 28px; font-weight: 500; opacity: 0.7; }
+  nav .links a { color: inherit; text-decoration: none; }
+  nav .links a:hover { opacity: 1; color: var(--ink); }
+  @media (max-width: 480px) {
+    nav { padding: 16px 18px; font-size: 11px; letter-spacing: 0.12em; gap: 16px; }
+    nav .links { gap: 16px; }
+  }
 
-    body {
-      font-family: var(--mono);
-      background: var(--bg);
-      color: var(--text);
-      font-size: 13px;
-      line-height: 1.7;
-      -webkit-font-smoothing: antialiased;
-    }
+  .doc-layout {
+    max-width: 1240px; margin: 0 auto;
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 80px;
+    padding: 80px 7vw 120px;
+  }
+  @media (max-width: 1000px) { .doc-layout { grid-template-columns: 1fr; gap: 40px; padding-top: 40px; } }
 
-    ::selection { background: var(--text); color: var(--bg); }
+  aside.toc {
+    position: sticky;
+    top: 100px;
+    align-self: start;
+    font-family: 'Inconsolata', monospace;
+    font-size: 12px; font-weight: 500;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--mute);
+  }
+  aside.toc .toc-group { margin-bottom: 28px; }
+  aside.toc .toc-group-title {
+    color: var(--ink);
+    letter-spacing: 0.18em;
+    margin-bottom: 14px;
+  }
+  aside.toc a {
+    display: block;
+    color: var(--mute);
+    text-decoration: none;
+    padding: 6px 0;
+    border-left: 1px solid transparent;
+    padding-left: 14px;
+    margin-left: -14px;
+    transition: all 120ms ease;
+  }
+  aside.toc a:hover { color: var(--ink); }
+  aside.toc a.active { color: var(--ink); border-left-color: var(--accent); }
+  @media (max-width: 1000px) { aside.toc { position: static; } }
 
-    /* ── NAV ── */
-    nav {
-      position: fixed; top: 0; width: 100%; z-index: 100;
-      background: rgba(245, 245, 240, 0.9);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border-bottom: 1px solid rgba(0,0,0,0.06);
-    }
-    .nav-inner {
-      max-width: 1200px; margin: 0 auto; padding: 0 40px;
-      height: 56px; display: flex; align-items: center;
-    }
-    .nav-logo {
-      font-size: 13px; font-weight: 800; letter-spacing: 5px;
-      color: var(--text); text-transform: uppercase; text-decoration: none;
-    }
-    .nav-links {
-      display: flex; align-items: center; gap: 32px; margin-left: auto;
-    }
-    .nav-links a {
-      color: var(--text-muted); font-size: 11px; letter-spacing: 2px;
-      text-transform: uppercase; text-decoration: none; transition: color 0.3s;
-    }
-    .nav-links a:hover { color: var(--text); }
-    .nav-links a.nav-active { color: var(--text); font-weight: 600; }
+  article { max-width: 780px; }
 
-    /* ── MOBILE NAV ── */
-    .nav-toggle {
-      display: none; background: none;
-      border: 1px solid var(--border);
-      cursor: pointer; padding: 8px 7px; margin-left: auto;
+  .page-head { margin-bottom: 80px; }
+  .page-head .eyebrow {
+    font-family: 'Inconsolata', monospace;
+    font-size: 12px; font-weight: 500;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--mute);
+    display: inline-flex; align-items: center; gap: 10px;
+    margin-bottom: 28px;
+  }
+  .page-head .eyebrow::before { content: ''; width: 28px; height: 1px; background: var(--ink); opacity: 0.4; }
+  h1 {
+    font-family: 'Funnel Sans', sans-serif;
+    font-weight: 600;
+    font-size: clamp(44px, 5.5vw, 80px);
+    line-height: 1.02;
+    letter-spacing: -0.03em;
+    margin-bottom: 28px;
+  }
+  h1 em {
+    font-style: normal;
+    color: var(--accent);
+    display: inline-block;
     }
-    .nav-toggle span {
-      display: block; width: 16px; height: 1.5px;
-      background: var(--text-muted); transition: all 0.3s;
-    }
-    .nav-toggle span + span { margin-top: 4px; }
-    .nav-toggle.open span:nth-child(1) { transform: rotate(45deg) translate(3.5px, 3.5px); }
-    .nav-toggle.open span:nth-child(2) { opacity: 0; }
-    .nav-toggle.open span:nth-child(3) { transform: rotate(-45deg) translate(3.5px, -3.5px); }
+  .page-lede {
+    font-size: 18px; line-height: 1.55;
+    color: var(--ink-2);
+    max-width: 52ch;
+  }
 
-    /* ── LAYOUT ── */
-    .docs-layout {
-      display: flex;
-      max-width: 1200px;
-      margin: 0 auto;
-      padding-top: 56px;
-      min-height: 100vh;
-    }
+  h2 {
+    font-family: 'Funnel Sans', sans-serif;
+    font-weight: 500;
+    font-size: clamp(26px, 2.6vw, 36px);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin: 80px 0 24px;
+    padding-top: 40px;
+    border-top: 1px solid var(--line);
+  }
+  h3 {
+    font-family: 'Funnel Sans', sans-serif;
+    font-weight: 600;
+    font-size: 20px; line-height: 1.3;
+    letter-spacing: -0.01em;
+    margin: 36px 0 14px;
+  }
+  article p {
+    font-size: 16.5px; line-height: 1.7;
+    color: var(--ink-2);
+    margin-bottom: 18px;
+    max-width: 64ch;
+  }
+  article p + p { margin-top: -4px; }
+  article a.inline {
+    color: var(--accent); text-decoration: none;
+    border-bottom: 1px solid rgba(34,68,255,0.3);
+  }
+  article a.inline:hover { border-bottom-color: var(--accent); }
+  article code.inline {
+    font-family: 'Inconsolata', monospace;
+    font-size: 13.5px;
+    background: rgba(0,0,0,0.05);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+  article ul {
+    font-size: 16px; line-height: 1.7;
+    color: var(--ink-2);
+    margin: 10px 0 22px 20px;
+    max-width: 64ch;
+  }
+  article ul li { margin-bottom: 6px; }
+  article ul li::marker { color: var(--accent); }
 
-    /* ── SIDEBAR ── */
-    .sidebar {
-      width: var(--sidebar-w);
-      flex-shrink: 0;
-      position: sticky;
-      top: 56px;
-      height: calc(100vh - 56px);
-      overflow-y: auto;
-      padding: 32px 24px 32px 40px;
-      border-right: 1px solid var(--border);
-    }
-    .sidebar-label {
-      font-size: 10px; letter-spacing: 3px; text-transform: uppercase;
-      color: var(--text-faint); margin-bottom: 16px;
-    }
-    .sidebar-nav { list-style: none; }
-    .sidebar-nav li { margin-bottom: 2px; }
-    .sidebar-nav a {
-      display: block;
-      padding: 6px 12px;
-      font-size: 12px;
-      color: var(--text-muted);
-      text-decoration: none;
-      border-left: 2px solid transparent;
-      transition: all 0.2s;
-      letter-spacing: 0.3px;
-    }
-    .sidebar-nav a:hover {
-      color: var(--text);
-      border-left-color: var(--border-strong);
-    }
-    .sidebar-nav a.active {
-      color: var(--text);
-      font-weight: 600;
-      border-left-color: var(--text);
-    }
-    .sidebar-version {
-      margin-top: 24px;
-      font-size: 10px;
-      color: var(--text-faint);
-      letter-spacing: 1px;
-    }
+  .code-block {
+    background: var(--ink);
+    color: #d8d8d0;
+    padding: 18px 22px;
+    border-radius: 4px;
+    font-family: 'Inconsolata', monospace;
+    font-size: 13.5px;
+    line-height: 1.65;
+    overflow-x: auto;
+    margin: 20px 0 28px;
+    white-space: pre;
+  }
+  .code-block .k { color: #7f97ff; }
+  .code-block .s { color: #7dd28a; }
+  .code-block .c { color: rgba(216,216,208,0.45); font-style: italic; }
 
-    /* ── CONTENT ── */
-    .docs-content {
-      flex: 1;
-      min-width: 0;
-      padding: 48px 40px 80px 48px;
-    }
+  table.memory-table {
+    width: 100%; max-width: 64ch;
+    border-collapse: collapse;
+    font-size: 14.5px;
+    margin: 20px 0 28px;
+  }
+  table.memory-table th, table.memory-table td {
+    text-align: left;
+    padding: 10px 12px 10px 0;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  table.memory-table th {
+    font-family: 'Inconsolata', monospace;
+    font-size: 12px; font-weight: 500;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--mute);
+  }
+  table.memory-table td.type {
+    font-family: 'Inconsolata', monospace;
+    font-size: 13px;
+    color: var(--ink);
+  }
+  table.memory-table td.decay {
+    font-family: 'Inconsolata', monospace;
+    color: var(--mute);
+  }
 
-    .doc-section {
-      padding-bottom: 48px;
-      margin-bottom: 48px;
-      border-bottom: 1px solid var(--border);
-    }
-    .doc-section:last-child {
-      border-bottom: none;
-      margin-bottom: 0;
-    }
+  .note {
+    font-family: 'Inconsolata', monospace;
+    font-size: 13px;
+    color: var(--mute);
+    border-left: 2px solid var(--accent);
+    padding: 10px 0 10px 14px;
+    max-width: 62ch;
+    margin: 24px 0 28px;
+    line-height: 1.6;
+  }
 
-    .doc-section h2 {
-      font-size: 24px;
-      font-weight: 700;
-      letter-spacing: -0.5px;
-      margin-bottom: 8px;
-    }
-    .doc-section h3 {
-      font-size: 16px;
-      font-weight: 700;
-      margin-top: 32px;
-      margin-bottom: 8px;
-    }
-    .doc-section h4 {
-      font-size: 13px;
-      font-weight: 700;
-      margin-top: 24px;
-      margin-bottom: 6px;
-      color: var(--text-muted);
-      letter-spacing: 1px;
-      text-transform: uppercase;
-    }
-
-    .doc-section p {
-      color: var(--text-muted);
-      line-height: 1.8;
-      margin-bottom: 16px;
-      max-width: 640px;
-    }
-    .doc-section p code {
-      background: var(--bg-warm);
-      padding: 2px 6px;
-      font-size: 12px;
-      border: 1px solid var(--border);
-    }
-
-    .doc-lead {
-      font-size: 14px;
-      color: var(--text-muted);
-      margin-bottom: 32px;
-      max-width: 560px;
-      line-height: 1.8;
-    }
-
-    /* ── CODE BLOCKS ── */
-    .code {
-      background: #1e1e1e;
-      color: #d4d4d4;
-      padding: 20px 24px;
-      font-size: 12px;
-      line-height: 1.8;
-      overflow-x: auto;
-      margin-bottom: 20px;
-      border-radius: 4px;
-      max-width: 680px;
-    }
-    .code .kw { color: #c586c0; }
-    .code .str { color: #ce9178; }
-    .code .type { color: #4ec9b0; }
-    .code .fn { color: #dcdcaa; }
-    .code .cmt { color: #6a9955; }
-    .code .num { color: #b5cea8; }
-    .code .prompt { color: #666; }
-    .code .cmd { color: #d4d4d4; }
-    .code .flag { color: #9cdcfe; }
-
-    /* ── INLINE CODE ── */
-    code {
-      font-family: var(--mono);
-    }
-
-    /* ── TABLES ── */
-    .doc-table {
-      width: 100%;
-      max-width: 680px;
-      border-collapse: collapse;
-      margin-bottom: 20px;
-      font-size: 12px;
-    }
-    .doc-table th {
-      text-align: left;
-      font-size: 10px;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--text-faint);
-      padding: 10px 16px;
-      border-bottom: 2px solid var(--border-strong);
-      font-weight: 600;
-    }
-    .doc-table td {
-      padding: 10px 16px;
-      border-bottom: 1px solid var(--border);
-      vertical-align: top;
-    }
-    .doc-table td code {
-      background: var(--bg-warm);
-      padding: 1px 5px;
-      font-size: 11px;
-      border: 1px solid var(--border);
-    }
-    .doc-table tr:last-child td { border-bottom: none; }
-    .doc-table .required {
-      color: var(--text);
-      font-weight: 600;
-    }
-    .doc-table .optional {
-      color: var(--text-faint);
-    }
-
-    /* ── CALLOUTS ── */
-    .callout {
-      padding: 16px 20px;
-      border-left: 3px solid var(--text);
-      background: var(--bg-warm);
-      margin-bottom: 20px;
-      max-width: 680px;
-      font-size: 12px;
-      color: var(--text-muted);
-      line-height: 1.8;
-    }
-    .callout-label {
-      font-size: 10px;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      font-weight: 700;
-      color: var(--text);
-      margin-bottom: 4px;
-    }
-
-    /* ── PARAM LIST ── */
-    .param-list { margin-bottom: 20px; }
-    .param {
-      padding: 8px 0;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      gap: 12px;
-      align-items: baseline;
-      max-width: 680px;
-    }
-    .param:last-child { border-bottom: none; }
-    .param-name {
-      font-weight: 600;
-      font-size: 12px;
-      min-width: 140px;
-      flex-shrink: 0;
-    }
-    .param-name code {
-      background: var(--bg-warm);
-      padding: 1px 5px;
-      border: 1px solid var(--border);
-      font-size: 11px;
-    }
-    .param-desc {
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-    .param-type {
-      font-size: 11px;
-      color: var(--text-faint);
-    }
-
-    /* ── FOOTER ── */
-    .footer {
-      padding: 40px;
-      border-top: 1px solid var(--border);
-      text-align: center;
-      font-size: 11px;
-      color: var(--text-faint);
-      letter-spacing: 3px;
-      text-transform: uppercase;
-    }
-
-    /* ── MOBILE SIDEBAR TOGGLE ── */
-    .sidebar-toggle {
-      display: none;
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      z-index: 90;
-      width: 48px;
-      height: 48px;
-      border-radius: 50%;
-      background: var(--text);
-      color: var(--bg);
-      border: none;
-      cursor: pointer;
-      font-family: var(--mono);
-      font-size: 18px;
-      font-weight: 300;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-    }
-
-    /* ── RESPONSIVE ── */
-    @media (max-width: 768px) {
-      .nav-toggle { display: flex; flex-direction: column; }
-      .nav-links {
-        display: none; position: absolute; top: 56px; left: 0; right: 0;
-        background: rgba(245, 245, 240, 0.97);
-        backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-        border-bottom: 1px solid var(--border);
-        flex-direction: column; padding: 1.2rem 2rem; gap: 1.2rem;
-      }
-      .nav-links.open { display: flex; }
-      .nav-inner { padding: 0 1rem; }
-
-      .sidebar {
-        position: fixed;
-        top: 56px;
-        left: 0;
-        width: 280px;
-        height: calc(100vh - 56px);
-        background: var(--bg);
-        z-index: 80;
-        transform: translateX(-100%);
-        transition: transform 0.3s ease;
-        border-right: 1px solid var(--border);
-        padding: 24px;
-      }
-      .sidebar.open {
-        transform: translateX(0);
-      }
-      .sidebar-overlay {
-        display: none;
-        position: fixed;
-        inset: 0;
-        top: 56px;
-        background: rgba(0,0,0,0.2);
-        z-index: 79;
-      }
-      .sidebar-overlay.open { display: block; }
-      .sidebar-toggle { display: flex; align-items: center; justify-content: center; }
-      .docs-content { padding: 32px 24px 80px; }
-      .code { font-size: 11px; padding: 16px; }
-    }
-
-    @media (min-width: 769px) {
-      .sidebar-overlay { display: none !important; }
-    }
-  </style>
+  footer {
+    padding: 60px 7vw 48px;
+    border-top: 1px solid var(--line);
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 32px;
+    font-family: 'Inconsolata', monospace;
+    font-size: 12.5px; font-weight: 500;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--mute);
+  }
+  footer a { color: inherit; text-decoration: none; }
+  footer a:hover { color: var(--ink); }
+  footer .footer-nav { display: flex; gap: 28px; flex-wrap: wrap; }
+</style>
 </head>
 <body>
 
 <nav>
-  <div class="nav-inner">
-    <a href="/" class="nav-logo">Clude</a>
-    <button class="nav-toggle" id="navToggle" aria-label="Menu"><span></span><span></span><span></span></button>
-    <div class="nav-links">
-      <a href="/chat">Chat</a>
-      <a href="/docs.html" class="nav-active">Docs</a>
-      <a href="/brain.html">Brain</a>
-      <a href="/explore">Explorer</a>
-      <a href="/dashboard">Dashboard</a>
-    </div>
+  <a href="/" class="logo">CLUDE</a>
+  <div class="links">
+    <a href="/docs.html">Docs</a>
+    <a href="/chat">Chat</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="https://github.com/sebbsssss/cludebot" target="_blank" rel="noopener">GitHub</a>
   </div>
 </nav>
 
-<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<div class="doc-layout">
 
-<div class="docs-layout">
-  <aside class="sidebar" id="sidebar">
-    <div class="sidebar-label">Documentation</div>
-    <ul class="sidebar-nav" id="sidebarNav">
-      <li><a href="#overview" class="active">Overview</a></li>
-      <li><a href="#ecosystem">Ecosystem</a></li>
-      <li><a href="#quick-start">Quick Start</a></li>
-      <li><a href="#cortex-api">Cortex API</a></li>
-      <li><a href="#storing">Memory Types</a></li>
-      <li><a href="#dream-cycles">Dream Cycle</a></li>
-      <li><a href="#association-graph">Association Graph</a></li>
-      <li><a href="#active-reflection">Active Reflection</a></li>
-      <li><a href="#clinamen">Clinamen</a></li>
-      <li><a href="#mcp-integration">MCP Server</a></li>
-      <li><a href="#python-sdk">Python SDK</a></li>
-      <li><a href="#typescript-sdk">TypeScript SDK</a></li>
-      <li><a href="#local-mode">Local Mode</a></li>
-      <li><a href="#export-import">MemoryPacks</a></li>
-    </ul>
-    <div class="sidebar-version">v2.7.1</div>
+  <aside class="toc">
+    <div class="toc-group">
+      <div class="toc-group-title">Start</div>
+      <a href="#install">Install</a>
+      <a href="#first-run">First run</a>
+    </div>
+    <div class="toc-group">
+      <div class="toc-group-title">Concepts</div>
+      <a href="#memory-types">Memory types</a>
+      <a href="#recall">Recall</a>
+      <a href="#dream">Dream cycles</a>
+      <a href="#decay">Decay</a>
+    </div>
+    <div class="toc-group">
+      <div class="toc-group-title">SDK</div>
+      <a href="#sdk">Cortex client</a>
+      <a href="#mcp">MCP tools</a>
+    </div>
+    <div class="toc-group">
+      <div class="toc-group-title">Deploy</div>
+      <a href="#modes">Modes</a>
+      <a href="#self-hosted">Self-hosted</a>
+    </div>
   </aside>
 
-  <main class="docs-content">
+  <article>
 
-    <!-- ═══════ OVERVIEW ═══════ -->
-    <div class="doc-section" id="overview">
-      <h2>Overview</h2>
-      <p class="doc-lead">Clude gives AI agents persistent, biological-style memory. Store experiences, recall with hybrid search, dream to consolidate, and evolve a self-model over time.</p>
-      <p>Memories decay naturally, strengthen through use, and link into an association graph. Dream cycles consolidate knowledge while you sleep. Active reflection generates original thought.</p>
-      <p>Use it from Python, TypeScript, or any MCP-compatible editor. Run fully local or sync to the cloud.</p>
+    <div class="page-head">
+      <div class="eyebrow">Documentation / v3.0.1</div>
+      <h1>Memory that <em>lasts.</em></h1>
+      <p class="page-lede">
+        Clude is an open implementation of Stanford's <em style="font-style:italic">Generative Agents</em>: memory streams,
+        reflection, and dream cycles, wired for production on Supabase + pgvector,
+        with a local-first SQLite backend for offline use.
+      </p>
     </div>
 
-    <!-- ═══════ ECOSYSTEM ═══════ -->
-    <div class="doc-section" id="ecosystem">
-      <h2>Ecosystem</h2>
-      <p class="doc-lead">Clude is a family of packages. Pick the layer you need.</p>
+    <h2 id="install">Install</h2>
+    <p>One command, zero config. Detects your email from git, creates your agent, installs the MCP server for any editor you have:</p>
+    <div class="code-block">npx @clude/sdk setup</div>
+    <p>Full install guide: <a href="/install.html" class="inline">clude.io/install</a>.</p>
 
-      <h3>Packages</h3>
-      <table class="doc-table">
-        <tr><th>Install</th><th>Package</th><th>Description</th></tr>
-        <tr><td><code>pip install clude</code></td><td><strong>clude</strong></td><td>Python SDK</td></tr>
-        <tr><td><code>npm install @clude/sdk-brain</code></td><td><strong>clude-brain</strong></td><td>Core memory engine (scoring, decay, graph)</td></tr>
-        <tr><td><code>npm install @clude/sdk-cloud</code></td><td><strong>clude-cloud</strong></td><td>Supabase + Voyage providers</td></tr>
-        <tr><td><code>npm install @clude/sdk-local</code></td><td><strong>clude-local</strong></td><td>SQLite + local embeddings (offline)</td></tr>
-        <tr><td><code>npm install @clude/sdk</code></td><td><strong>clude</strong></td><td>Full bot + MCP server + CLI</td></tr>
-      </table>
+    <h2 id="first-run">First run</h2>
+    <p>After setup, your agent gets four MCP tools: <code class="inline">store_memory</code>, <code class="inline">recall_memories</code>, <code class="inline">get_memory_stats</code>, and <code class="inline">find_clinamen</code>. Memories live at <code class="inline">~/.clude/brain.db</code> by default.</p>
+    <p>Verify with:</p>
+    <div class="code-block">npx @clude/sdk doctor</div>
 
-      <h3>Architecture</h3>
-      <div class="code">
-<span class="cmt">┌─────────────────────────────────────────────┐</span>
-<span class="cmt">│           Your Agent / IDE / CLI             │</span>
-<span class="cmt">├─────────┬───────────────┬───────────────────┤</span>
-<span class="cmt">│ Python  │  TypeScript    │  MCP (stdio)      │</span>
-<span class="cmt">│ clude   │  clude     │  clude        │</span>
-<span class="cmt">├─────────┴───────────────┴───────────────────┤</span>
-<span class="cmt">│              clude-brain                     │</span>
-<span class="cmt">│   scoring · decay · graph · dream · recall   │</span>
-<span class="cmt">├──────────────────┬──────────────────────────┤</span>
-<span class="cmt">│   clude-cloud    │      clude-local          │</span>
-<span class="cmt">│  Supabase+Voyage │   SQLite + local embeds   │</span>
-<span class="cmt">└──────────────────┴──────────────────────────┘</span>
-      </div>
+    <h2 id="memory-types">Memory types</h2>
+    <p>Clude stores five kinds of memory. Each decays at a different rate, faithful to how human memory actually works:</p>
+    <table class="memory-table">
+      <thead>
+        <tr><th>Type</th><th>What it holds</th><th>Decay / day</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="type">episodic</td><td>Raw conversational moments, events</td><td class="decay">7%</td></tr>
+        <tr><td class="type">semantic</td><td>Consolidated facts, stable beliefs</td><td class="decay">2%</td></tr>
+        <tr><td class="type">procedural</td><td>Routines, tone, formatting preferences</td><td class="decay">3%</td></tr>
+        <tr><td class="type">self_model</td><td>Agent identity, values, boundaries</td><td class="decay">1%</td></tr>
+        <tr><td class="type">introspective</td><td>Reflections generated during dream cycles</td><td class="decay">2%</td></tr>
+      </tbody>
+    </table>
 
-      <h3>3 Ways to Use Clude</h3>
-      <p><strong>Python</strong> — <code>pip install clude</code> and call the Cortex API with a clean async interface.</p>
-      <p><strong>TypeScript</strong> — Compose <code>clude-brain</code> with your choice of provider (<code>clude-cloud</code> or <code>clude-local</code>).</p>
-      <p><strong>MCP</strong> — <code>npx @clude/sdk mcp-serve</code> to use memory from any MCP-compatible editor (Claude Code, Cursor, etc.).</p>
-    </div>
+    <h2 id="recall">Recall</h2>
+    <p>Clude's recall is hybrid: vector similarity (cosine, 384-dim embeddings) plus keyword matching plus tag scoring, with a composite score weighted by importance and recency. The math:</p>
+    <div class="code-block">score = (0.45 × similarity)
+      + (0.25 × importance)
+      + (0.15 × recency)
+      + (0.15 × tag_overlap)
+      × decay_factor</div>
+    <p>In practice this means: a highly-relevant memory that was stored 3 months ago can still beat a weakly-relevant one from yesterday, as long as it was important.</p>
 
-    <!-- ═══════ QUICK START ═══════ -->
-    <div class="doc-section" id="quick-start">
-      <h2>Quick Start</h2>
-      <p class="doc-lead">Give your AI agent persistent memory in under a minute. Choose hosted (zero setup) or self-hosted (your own database).</p>
+    <h3>Progressive disclosure</h3>
+    <p>Context windows are expensive. Use <code class="inline">recallSummaries()</code> for ~50-token previews, then <code class="inline">hydrate()</code> only the full content of the memories you actually need:</p>
+    <div class="code-block"><span class="k">const</span> previews = <span class="k">await</span> brain.recallSummaries({ query });
+<span class="c">// rank or filter previews...</span>
+<span class="k">const</span> full = <span class="k">await</span> brain.hydrate(previews.slice(0, <span class="k">3</span>).map(p =&gt; p.id));</div>
 
-      <h3>Install</h3>
-      <div class="code">
-        <span class="prompt">$</span> <span class="cmd">npm install @clude/sdk</span>
-      </div>
+    <h2 id="dream">Dream cycles</h2>
+    <p>Every night (or on-demand), Clude runs a dream cycle:</p>
+    <ul>
+      <li><strong>Consolidation.</strong> Extracts semantic facts from recent episodic memories.</li>
+      <li><strong>Compaction.</strong> Summarises faded episodic clusters into single gists.</li>
+      <li><strong>Reflection.</strong> Generates introspective memories from patterns.</li>
+      <li><strong>Contradiction resolution.</strong> Finds conflicting semantic memories, resolves via an LLM, stores the resolution with a <code class="inline">resolves</code> link.</li>
+      <li><strong>Emergence.</strong> Links related memories across time into a knowledge graph.</li>
+    </ul>
+    <p>Trigger manually:</p>
+    <div class="code-block">npx @clude/sdk dream</div>
 
-      <h3>Option A: Local-first (recommended)</h3>
-      <p>No API keys. No network. Fully offline with SQLite + local embeddings.</p>
-      <div class="code">
-<span class="prompt">$</span> <span class="cmd">npx @clude/sdk mcp-install --local</span>    <span class="cmt"># Auto-configures your IDE</span>
-      </div>
+    <h2 id="decay">Decay</h2>
+    <p>Memories don't just accumulate. They fade. Each memory has a <code class="inline">decay_factor</code> in <code class="inline">[0,1]</code> that declines over time based on its type. Access boosts it (up to 0.1 per recall). Faded memories drop below the recall threshold and eventually get compacted.</p>
+    <div class="note">This is the single biggest quality-of-life difference vs. a flat vector database. Old irrelevant context doesn't poison recall forever.</div>
 
-      <h3>Option B: Hosted (cloud sync)</h3>
-      <p>Memories sync across devices. Register for an API key.</p>
-      <div class="code">
-<span class="prompt">$</span> <span class="cmd">npx @clude/sdk mcp-install</span>    <span class="cmt"># Prompts for API key</span>
-      </div>
-      <div class="code">
-<span class="kw">import</span> { Cortex } <span class="kw">from</span> <span class="str">'clude'</span>;
+    <h2 id="sdk">Cortex client</h2>
+    <p>The SDK works the same way regardless of backend:</p>
+    <div class="code-block"><span class="k">import</span> { Cortex } <span class="k">from</span> <span class="s">'@clude/sdk'</span>;
 
-<span class="kw">const</span> brain = <span class="kw">new</span> <span class="type">Cortex</span>({
-  hosted: { apiKey: process.env.<span class="flag">CORTEX_API_KEY</span> },
-  ownerWallet: process.env.<span class="flag">OWNER_WALLET</span>,
+<span class="c">// Hosted (zero setup)</span>
+<span class="k">const</span> brain = <span class="k">new</span> Cortex({ hosted: { apiKey } });
+
+<span class="c">// Self-hosted</span>
+<span class="k">const</span> brain = <span class="k">new</span> Cortex({
+  supabase: { url, serviceKey },
+  encryption: { solanaSecretKey: myKeypair.secretKey },
 });
 
-<span class="kw">await</span> brain.<span class="fn">init</span>();
-<span class="kw">await</span> brain.<span class="fn">store</span>({ type: <span class="str">'episodic'</span>, content: <span class="str">'Hello world'</span>, summary: <span class="str">'First memory'</span>, source: <span class="str">'my-agent'</span> });
-      </div>
+<span class="c">// Local-only</span>
+<span class="k">const</span> brain = <span class="k">new</span> Cortex({ local: { dbPath: <span class="s">'~/.clude/brain.db'</span> } });
 
-      <h3>Option C: Self-hosted (Supabase)</h3>
-      <p>Run your own Supabase + pgvector database for full control.</p>
-      <p>Configure your <code>.env</code> with <code>SUPABASE_URL</code> and <code>SUPABASE_SERVICE_KEY</code>, then run the schema:</p>
-      <div class="code">
-<span class="prompt">$</span> <span class="cmd">psql</span> <span class="flag">$DATABASE_URL</span> <span class="cmd">-f node_modules/clude/supabase-schema.sql</span>
-      </div>
-      <div class="code">
-<span class="kw">import</span> { Cortex } <span class="kw">from</span> <span class="str">'clude'</span>;
+<span class="k">await</span> brain.init();</div>
 
-<span class="kw">const</span> brain = <span class="kw">new</span> <span class="type">Cortex</span>({
+    <h2 id="mcp">MCP tools</h2>
+    <p>When Clude's MCP server is connected to your editor, agents get these tools automatically:</p>
+    <ul>
+      <li><code class="inline">store_memory(content, type, source)</code></li>
+      <li><code class="inline">recall_memories(query, limit?, type?)</code></li>
+      <li><code class="inline">get_memory_stats()</code></li>
+      <li><code class="inline">find_clinamen(query)</code>. Finds surprising or tangential memories via anti-similarity.</li>
+    </ul>
+
+    <h2 id="modes">Modes</h2>
+    <p>Clude detects its mode from the environment:</p>
+    <table class="memory-table">
+      <thead>
+        <tr><th>Mode</th><th>Trigger</th><th>Storage</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="type">Hosted</td><td><code class="inline">CORTEX_API_KEY</code></td><td>clude.io (zero setup)</td></tr>
+        <tr><td class="type">Self-hosted</td><td><code class="inline">SUPABASE_URL</code> + <code class="inline">SUPABASE_SERVICE_KEY</code></td><td>Your Supabase</td></tr>
+        <tr><td class="type">Local</td><td>no env vars set</td><td><code class="inline">~/.clude/brain.db</code></td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="self-hosted">Self-hosted</h2>
+    <p>If you want to run Clude on your own infrastructure:</p>
+    <ul>
+      <li>Supabase project with <code class="inline">pgvector</code> extension enabled</li>
+      <li>Schema: <code class="inline">curl -fsSL https://clude.io/supabase-schema.sql | psql $SUPABASE_DB_URL</code></li>
+      <li>Optional: Voyage AI for embeddings (<code class="inline">VOYAGE_API_KEY</code>)</li>
+      <li>Optional: Anthropic for dream cycle reflection (<code class="inline">ANTHROPIC_API_KEY</code>)</li>
+    </ul>
+    <p>Point the SDK at it:</p>
+    <div class="code-block"><span class="k">new</span> Cortex({
   supabase: {
-    url: process.env.<span class="flag">SUPABASE_URL</span>,
-    serviceKey: process.env.<span class="flag">SUPABASE_SERVICE_KEY</span>,
+    url: process.env.SUPABASE_URL,
+    serviceKey: process.env.SUPABASE_SERVICE_KEY,
   },
-});
+});</div>
+    <p>Full deployment guide in the <a href="https://github.com/sebbsssss/cludebot" target="_blank" rel="noopener" class="inline">GitHub repo</a>.</p>
 
-<span class="kw">await</span> brain.<span class="fn">init</span>();
-      </div>
-
-      <h3>Store &amp; Recall</h3>
-      <p>The API is the same regardless of mode:</p>
-      <div class="code">
-<span class="cmt">// Store a memory</span>
-<span class="kw">await</span> brain.<span class="fn">store</span>({
-  type: <span class="str">'semantic'</span>,
-  content: <span class="str">'User prefers dark mode and compact layouts'</span>,
-  summary: <span class="str">'User UI preferences'</span>,
-  source: <span class="str">'my-agent'</span>,
-  tags: [<span class="str">'preferences'</span>, <span class="str">'ui'</span>],
-});
-
-<span class="cmt">// Recall with hybrid search</span>
-<span class="kw">const</span> memories = <span class="kw">await</span> brain.<span class="fn">recall</span>({
-  query: <span class="str">'what does the user prefer'</span>,
-});
-      </div>
-
-      <h3>Export &amp; Visualize</h3>
-      <p>Export your agent's memories and explore them visually:</p>
-      <div class="code">
-<span class="prompt">$</span> <span class="cmd">npx @clude/sdk export</span>     <span class="cmt"># → clude-memories.json</span>
-      </div>
-      <p>Then drag the file into <a href="/explore" style="color:var(--blue)">clude.io/explore</a> to see your agent's neural map.</p>
-
-      <div class="callout">
-        <div class="callout-label">No lock-in</div>
-        Both modes use the same SDK API. Switch between hosted and self-hosted anytime. Export your memories with <code>npx @clude/sdk export</code> at any point.
-      </div>
-    </div>
-
-    <!-- ═══════ CORTEX API ═══════ -->
-    <div class="doc-section" id="cortex-api">
-      <h2>Cortex API</h2>
-      <p class="doc-lead">HTTP endpoints for the hosted Cortex service. All requests require a Bearer token in the <code>Authorization</code> header.</p>
-
-      <div class="code">
-<span class="cmt"># Auth header for all requests</span>
-Authorization: Bearer <span class="flag">YOUR_API_KEY</span>
-      </div>
-
-      <h3>POST /api/cortex/store</h3>
-      <p>Store a new memory.</p>
-      <table class="doc-table">
-        <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-        <tr><td><code>type</code></td><td class="required">string</td><td><code>episodic</code> | <code>semantic</code> | <code>procedural</code> | <code>self_model</code> | <code>introspective</code></td></tr>
-        <tr><td><code>content</code></td><td class="required">string</td><td>Full memory content (max 5000 chars)</td></tr>
-        <tr><td><code>summary</code></td><td class="required">string</td><td>Short summary for matching (max 500 chars)</td></tr>
-        <tr><td><code>source</code></td><td class="required">string</td><td>Agent identifier</td></tr>
-        <tr><td><code>tags</code></td><td class="optional">string[]</td><td>Tags for filtering</td></tr>
-        <tr><td><code>importance</code></td><td class="optional">number</td><td>0–1. LLM-scored if omitted</td></tr>
-        <tr><td><code>emotionalValence</code></td><td class="optional">number</td><td>-1 to 1</td></tr>
-        <tr><td><code>metadata</code></td><td class="optional">object</td><td>Arbitrary metadata</td></tr>
-      </table>
-
-      <h3>POST /api/cortex/recall</h3>
-      <p>Search and retrieve memories with hybrid scoring.</p>
-      <table class="doc-table">
-        <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-        <tr><td><code>query</code></td><td class="optional">string</td><td>Natural language search query</td></tr>
-        <tr><td><code>limit</code></td><td class="optional">number</td><td>Max results (default 10)</td></tr>
-        <tr><td><code>types</code></td><td class="optional">string[]</td><td>Filter by memory type</td></tr>
-        <tr><td><code>threshold</code></td><td class="optional">number</td><td>Minimum importance threshold (0–1)</td></tr>
-      </table>
-
-      <h4>Recall Pipeline</h4>
-      <div class="code">
-query expansion → vector search → entity matching → graph traversal → scoring
-      </div>
-      <p>Each memory is scored using recency, relevance, importance, vector similarity, and graph boost — then gated by decay factor.</p>
-
-      <h3>GET /api/cortex/stats</h3>
-      <p>Returns aggregate statistics: counts by type, averages, dream sessions, top tags and concepts.</p>
-
-      <h3>POST /api/cortex/clinamen</h3>
-      <p>Retrieve unexpected, tangentially related memories via creative lateral search.</p>
-      <table class="doc-table">
-        <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-        <tr><td><code>context</code></td><td class="required">string</td><td>Current conversation or thought context</td></tr>
-        <tr><td><code>limit</code></td><td class="optional">number</td><td>Max results (default 5)</td></tr>
-        <tr><td><code>min_importance</code></td><td class="optional">number</td><td>Minimum importance threshold</td></tr>
-      </table>
-    </div>
-
-    <!-- ═══════ HOSTED MODE ═══════ -->
-    <div class="doc-section" id="hosted-mode">
-      <h2>Hosted Mode</h2>
-      <p class="doc-lead">The fastest way to get started. No database setup required — your memories are stored on CLUDE infrastructure.</p>
-
-      <h3>1. Register for an API key</h3>
-      <div class="code">
-<span class="prompt">$</span> <span class="cmd">npx @clude/sdk register</span>
-      </div>
-      <p>You'll be asked for your agent name and Solana wallet address. Save the API key — it won't be shown again.</p>
-
-      <h3>2. Use in your code</h3>
-      <div class="code">
-<span class="kw">import</span> { Cortex } <span class="kw">from</span> <span class="str">'clude'</span>;
-
-<span class="kw">const</span> brain = <span class="kw">new</span> <span class="type">Cortex</span>({
-  hosted: {
-    apiKey: process.env.<span class="flag">CORTEX_API_KEY</span>,
-  },
-  ownerWallet: process.env.<span class="flag">OWNER_WALLET</span>,
-});
-
-<span class="kw">await</span> brain.<span class="fn">init</span>();
-
-<span class="cmt">// Store, recall, dream — same API as self-hosted</span>
-<span class="kw">await</span> brain.<span class="fn">store</span>({
-  type: <span class="str">'episodic'</span>,
-  content: <span class="str">'User asked about deployment options'</span>,
-  summary: <span class="str">'Deployment inquiry'</span>,
-  source: <span class="str">'my-agent'</span>,
-});
-      </div>
-
-      <h3>3. Export your memories</h3>
-      <p>Download your agent's memories to a file at any time:</p>
-      <div class="code">
-<span class="prompt">$</span> <span class="cmd">npx @clude/sdk export</span>                     <span class="cmt"># → clude-memories.json</span>
-<span class="prompt">$</span> <span class="cmd">npx @clude/sdk export</span> <span class="flag">--format md</span>          <span class="cmt"># → clude-memories.md</span>
-      </div>
-      <p>Then visualize them at <a href="/explore" style="color:var(--blue)">clude.io/explore</a> — drag and drop the file to see your agent's neural map.</p>
-
-      <div class="callout">
-        <div class="callout-label">Portability</div>
-        Hosted mode stores memories on CLUDE infrastructure, but you own your data. Export anytime, switch to self-hosted anytime. No lock-in.
-      </div>
-    </div>
-
-    <!-- ═══════ CONFIGURATION ═══════ -->
-    <div class="doc-section" id="configuration">
-      <h2>Configuration</h2>
-      <p class="doc-lead">The <code>Cortex</code> constructor accepts a <code>CortexConfig</code> object. Use <code>hosted</code> for zero-setup or <code>supabase</code> for self-hosted.</p>
-
-      <div class="code">
-<span class="kw">const</span> brain = <span class="kw">new</span> <span class="type">Cortex</span>({
-  <span class="cmt">// Option A: Hosted (no database setup)</span>
-  hosted: {
-    apiKey: <span class="str">'your-cortex-api-key'</span>,
-  },
-
-  <span class="cmt">// Option B: Self-hosted (your own Supabase)</span>
-  supabase: {
-    url: <span class="str">'https://xxx.supabase.co'</span>,
-    serviceKey: <span class="str">'eyJ...'</span>,
-  },
-
-  <span class="cmt">// Optional — enables dream cycles + LLM importance scoring</span>
-  anthropic: {
-    apiKey: <span class="str">'sk-ant-...'</span>,
-    model: <span class="str">'claude-sonnet-4-5-20250929'</span>,  <span class="cmt">// default: claude-sonnet-4-5-20250929</span>
-  },
-
-  <span class="cmt">// Optional — enables vector similarity search</span>
-  embedding: {
-    provider: <span class="str">'voyage'</span>,  <span class="cmt">// 'voyage' | 'openai'</span>
-    apiKey: <span class="str">'pa-...'</span>,
-    model: <span class="str">'voyage-3'</span>,
-    dimensions: <span class="num">1024</span>,
-  },
-
-  <span class="cmt">// Optional — enables on-chain memory commits</span>
-  solana: {
-    rpcUrl: <span class="str">'https://api.mainnet-beta.solana.com'</span>,
-    botWalletPrivateKey: <span class="str">'base58...'</span>,
-  },
-});
-      </div>
-
-      <h3>hosted (zero-setup)</h3>
-      <table class="doc-table">
-        <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-        <tr><td><code>apiKey</code></td><td class="required">string</td><td>API key from <code>npx @clude/sdk register</code></td></tr>
-        <tr><td><code>baseUrl</code></td><td class="optional">string</td><td>API base URL. Default: <code>https://clude.io</code></td></tr>
-      </table>
-
-      <h3>supabase (self-hosted)</h3>
-      <table class="doc-table">
-        <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-        <tr><td><code>url</code></td><td class="required">string</td><td>Supabase project URL</td></tr>
-        <tr><td><code>serviceKey</code></td><td class="required">string</td><td>Supabase service role key</td></tr>
-      </table>
-
-      <h3>anthropic (optional)</h3>
-      <table class="doc-table">
-        <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-        <tr><td><code>apiKey</code></td><td class="required">string</td><td>Anthropic API key</td></tr>
-        <tr><td><code>model</code></td><td class="optional">string</td><td>Model ID. Default: <code>claude-sonnet-4-5-20250929</code></td></tr>
-      </table>
-
-      <h3>embedding (optional)</h3>
-      <table class="doc-table">
-        <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-        <tr><td><code>provider</code></td><td class="required">'voyage' | 'openai'</td><td>Embedding provider</td></tr>
-        <tr><td><code>apiKey</code></td><td class="required">string</td><td>Provider API key</td></tr>
-        <tr><td><code>model</code></td><td class="optional">string</td><td>Model name (e.g. <code>voyage-3</code>)</td></tr>
-        <tr><td><code>dimensions</code></td><td class="optional">number</td><td>Vector dimensions. Default: <code>1024</code></td></tr>
-      </table>
-
-      <h3>solana (optional)</h3>
-      <table class="doc-table">
-        <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-        <tr><td><code>rpcUrl</code></td><td class="optional">string</td><td>Solana RPC endpoint. Default: mainnet</td></tr>
-        <tr><td><code>botWalletPrivateKey</code></td><td class="optional">string</td><td>Base58 private key for memo transactions</td></tr>
-      </table>
-    </div>
-
-    <!-- ═══════ STORING MEMORIES ═══════ -->
-    <div class="doc-section" id="storing">
-      <h2>Storing Memories</h2>
-      <p class="doc-lead">Store memories with automatic importance scoring, concept inference, and optional on-chain commitment.</p>
-
-      <div class="code">
-<span class="kw">const</span> id = <span class="kw">await</span> brain.<span class="fn">store</span>({
-  type: <span class="str">'semantic'</span>,
-  content: <span class="str">'Users who hold &gt;1M tokens tend to ask about governance'</span>,
-  summary: <span class="str">'Whale holder behavior pattern'</span>,
-  source: <span class="str">'analysis-agent'</span>,
-  tags: [<span class="str">'whale'</span>, <span class="str">'governance'</span>],
-  importance: <span class="num">0.8</span>,
-});
-
-console.<span class="fn">log</span>(id); <span class="cmt">// 42 (memory ID) or null on failure</span>
-      </div>
-
-      <h3>StoreMemoryOptions</h3>
-      <table class="doc-table">
-        <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-        <tr><td><code>type</code></td><td class="required">MemoryType</td><td><code>'episodic'</code> | <code>'semantic'</code> | <code>'procedural'</code> | <code>'self_model'</code> | <code>'introspective'</code></td></tr>
-        <tr><td><code>content</code></td><td class="required">string</td><td>Full memory content (max 5000 chars)</td></tr>
-        <tr><td><code>summary</code></td><td class="required">string</td><td>Short summary for recall matching (max 500 chars)</td></tr>
-        <tr><td><code>source</code></td><td class="required">string</td><td>Identifier for the agent storing the memory</td></tr>
-        <tr><td><code>tags</code></td><td class="optional">string[]</td><td>Tags for filtering (max 20)</td></tr>
-        <tr><td><code>concepts</code></td><td class="optional">string[]</td><td>Structured concepts (auto-inferred if omitted)</td></tr>
-        <tr><td><code>importance</code></td><td class="optional">number</td><td>0-1 scale. LLM-scored if omitted (requires anthropic config)</td></tr>
-        <tr><td><code>emotionalValence</code></td><td class="optional">number</td><td>-1 (negative) to 1 (positive). Default: 0</td></tr>
-        <tr><td><code>sourceId</code></td><td class="optional">string</td><td>External ID (e.g. tweet ID, message ID)</td></tr>
-        <tr><td><code>relatedUser</code></td><td class="optional">string</td><td>Associated user identifier</td></tr>
-        <tr><td><code>relatedWallet</code></td><td class="optional">string</td><td>Associated wallet address</td></tr>
-        <tr><td><code>metadata</code></td><td class="optional">Record&lt;string, unknown&gt;</td><td>Arbitrary metadata</td></tr>
-        <tr><td><code>evidenceIds</code></td><td class="optional">number[]</td><td>IDs of supporting memories</td></tr>
-      </table>
-
-      <h3>Memory Types</h3>
-      <p>Each type has a different decay rate, mirroring biological memory:</p>
-      <table class="doc-table">
-        <tr><th>Type</th><th>Decay / Day</th><th>Purpose</th></tr>
-        <tr><td><code>episodic</code></td><td>7%</td><td>Raw interactions. Who said what, when.</td></tr>
-        <tr><td><code>semantic</code></td><td>2%</td><td>Distilled knowledge. Patterns and insights.</td></tr>
-        <tr><td><code>procedural</code></td><td>3%</td><td>Learned behavior. What works, what doesn't.</td></tr>
-        <tr><td><code>self_model</code></td><td>1%</td><td>Evolving self-understanding. Nearly permanent.</td></tr>
-        <tr><td><code>introspective</code></td><td>~2%</td><td>Self-generated journal entries. Original thoughts from active reflection.</td></tr>
-      </table>
-
-      <h3>Concept Ontology</h3>
-      <p>Memories are automatically tagged with structured concepts from a controlled vocabulary of 12 labels:</p>
-      <p><code>market_event</code>, <code>holder_behavior</code>, <code>self_insight</code>, <code>social_interaction</code>, <code>community_pattern</code>, <code>token_economics</code>, <code>sentiment_shift</code>, <code>recurring_user</code>, <code>whale_activity</code>, <code>price_action</code>, <code>engagement_pattern</code>, <code>identity_evolution</code></p>
-    </div>
-
-    <!-- ═══════ RECALLING MEMORIES ═══════ -->
-    <div class="doc-section" id="recalling">
-      <h2>Recalling Memories</h2>
-      <p class="doc-lead">Hybrid retrieval combining vector similarity, keyword matching, tag scoring, and graph traversal. Ranked by the Generative Agents formula.</p>
-
-      <h3>recall(opts?)</h3>
-      <p>Returns full <code>Memory</code> objects ranked by composite score.</p>
-      <div class="code">
-<span class="kw">const</span> memories = <span class="kw">await</span> brain.<span class="fn">recall</span>({
-  query: <span class="str">'what does the user prefer'</span>,
-  tags: [<span class="str">'preferences'</span>],
-  memoryTypes: [<span class="str">'episodic'</span>, <span class="str">'semantic'</span>],
-  limit: <span class="num">10</span>,
-  minImportance: <span class="num">0.3</span>,
-});
-      </div>
-
-      <h3>RecallOptions</h3>
-      <table class="doc-table">
-        <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-        <tr><td><code>query</code></td><td class="optional">string</td><td>Natural language search query</td></tr>
-        <tr><td><code>tags</code></td><td class="optional">string[]</td><td>Filter by tags</td></tr>
-        <tr><td><code>relatedUser</code></td><td class="optional">string</td><td>Filter by associated user</td></tr>
-        <tr><td><code>memoryTypes</code></td><td class="optional">MemoryType[]</td><td>Filter by memory type</td></tr>
-        <tr><td><code>limit</code></td><td class="optional">number</td><td>Max results to return</td></tr>
-        <tr><td><code>minImportance</code></td><td class="optional">number</td><td>Minimum importance threshold (0-1)</td></tr>
-        <tr><td><code>minDecay</code></td><td class="optional">number</td><td>Minimum decay factor threshold</td></tr>
-        <tr><td><code>trackAccess</code></td><td class="optional">boolean</td><td>Update access count and timestamp. Default: true</td></tr>
-      </table>
-
-      <h3>Retrieval Scoring</h3>
-      <p>Each memory is scored with the additive formula from Park et al. 2023:</p>
-      <div class="code">
-score = (<span class="num">0.5</span> * recency) + (<span class="num">3.0</span> * relevance) + (<span class="num">2.0</span> * importance) + (<span class="num">3.0</span> * vector_similarity) + (<span class="num">1.5</span> * graph_boost)
-      </div>
-      <p>All scores are gated by each memory's <code>decay_factor</code>.</p>
-
-      <h3>recallSummaries(opts?)</h3>
-      <p>Returns lightweight <code>MemorySummary</code> objects (no content field). Use for progressive disclosure — list summaries first, then hydrate the ones you need.</p>
-      <div class="code">
-<span class="kw">const</span> summaries = <span class="kw">await</span> brain.<span class="fn">recallSummaries</span>({
-  query: <span class="str">'recent events'</span>,
-});
-
-<span class="cmt">// Pick the most relevant ones and hydrate</span>
-<span class="kw">const</span> ids = summaries.<span class="fn">slice</span>(<span class="num">0</span>, <span class="num">3</span>).<span class="fn">map</span>(s => s.id);
-<span class="kw">const</span> full = <span class="kw">await</span> brain.<span class="fn">hydrate</span>(ids);
-      </div>
-
-      <h3>hydrate(ids)</h3>
-      <p>Fetch full <code>Memory</code> objects by ID. Useful after <code>recallSummaries()</code> to get content for specific memories.</p>
-      <div class="code">
-<span class="kw">const</span> memories = <span class="kw">await</span> brain.<span class="fn">hydrate</span>([<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>]);
-      </div>
-    </div>
-
-    <!-- ═══════ EXPORT & IMPORT ═══════ -->
-    <div class="doc-section" id="export-import">
-      <h2>Export &amp; Import</h2>
-      <p class="doc-lead">Your memories are portable. Export them to a file, visualize them in the browser, or move them between providers.</p>
-
-      <h3>CLI Export</h3>
-      <p>The fastest way to get your memories out:</p>
-      <div class="code">
-<span class="prompt">$</span> <span class="cmd">npx @clude/sdk export</span>                           <span class="cmt"># → clude-memories.json</span>
-<span class="prompt">$</span> <span class="cmd">npx @clude/sdk export</span> <span class="flag">--format md</span>                <span class="cmt"># → clude-memories.md</span>
-<span class="prompt">$</span> <span class="cmd">npx @clude/sdk export</span> <span class="flag">--types</span> episodic,semantic  <span class="cmt"># Filter by type</span>
-<span class="prompt">$</span> <span class="cmd">npx @clude/sdk export</span> <span class="flag">--output</span> backup.json       <span class="cmt"># Custom filename</span>
-      </div>
-      <p>Works with both hosted and self-hosted modes — reads your <code>.env</code> to detect which.</p>
-
-      <h3>Memory Explorer</h3>
-      <p>Visualize your exported memories at <a href="/explore" style="color:var(--blue)">clude.io/explore</a>. Three ways to load:</p>
-      <table class="doc-table">
-        <tr><th>Method</th><th>How</th></tr>
-        <tr><td><strong>Local File</strong></td><td>Drag and drop your <code>clude-memories.json</code> or <code>.md</code> file</td></tr>
-        <tr><td><strong>API Key</strong></td><td>Paste your Cortex API key to load directly from the cloud</td></tr>
-        <tr><td><strong>Wallet</strong></td><td>Connect your Solana wallet to retrieve wallet-linked memories</td></tr>
-      </table>
-      <p>Once loaded, you'll see a 3D neural map of your agent's brain, searchable memory cards, and can export again in JSON or Markdown format.</p>
-
-      <h3>SDK Export</h3>
-      <p>Programmatic export via the SDK:</p>
-      <div class="code">
-<span class="cmt">// Export as MemoryPack</span>
-<span class="kw">const</span> pack = <span class="kw">await</span> brain.<span class="fn">exportPack</span>({
-  name: <span class="str">'weekly-backup'</span>,
-  description: <span class="str">'Full memory backup'</span>,
-  limit: <span class="num">1000</span>,
-});
-
-<span class="cmt">// Import into another instance</span>
-<span class="kw">const</span> result = <span class="kw">await</span> brain.<span class="fn">importPack</span>(pack, {
-  importanceMultiplier: <span class="num">0.8</span>,  <span class="cmt">// Discount imported memories slightly</span>
-});
-console.<span class="fn">log</span>(result); <span class="cmt">// { imported: 142, skipped: 0 }</span>
-      </div>
-
-      <h3>REST API Export</h3>
-      <p>For hosted users, the Cortex API exposes export/import endpoints:</p>
-      <div class="code">
-<span class="cmt"># Export</span>
-<span class="prompt">$</span> <span class="cmd">curl</span> <span class="flag">-X POST</span> https://clude.io/api/cortex/packs/export \
-    <span class="flag">-H</span> <span class="str">"Authorization: Bearer YOUR_API_KEY"</span> \
-    <span class="flag">-H</span> <span class="str">"Content-Type: application/json"</span> \
-    <span class="flag">-d</span> <span class="str">'{"name":"backup","limit":1000}'</span>
-
-<span class="cmt"># Import</span>
-<span class="prompt">$</span> <span class="cmd">curl</span> <span class="flag">-X POST</span> https://clude.io/api/cortex/packs/import \
-    <span class="flag">-H</span> <span class="str">"Authorization: Bearer YOUR_API_KEY"</span> \
-    <span class="flag">-H</span> <span class="str">"Content-Type: application/json"</span> \
-    <span class="flag">-d</span> <span class="str">'{"pack": { ... }}'</span>
-      </div>
-
-      <div class="callout">
-        <div class="callout-label">Formats</div>
-        <strong>JSON</strong> preserves everything — importance scores, decay factors, access counts, timestamps, and connections. <strong>Markdown</strong> is human-readable and preserves content and importance, but loses metadata like decay and access history.
-      </div>
-    </div>
-
-    <!-- ═══════ DREAM CYCLES ═══════ -->
-    <div class="doc-section" id="dream-cycles">
-      <h2>Dream Cycles</h2>
-      <p class="doc-lead">A five-phase introspection cycle inspired by biological memory consolidation. Requires <code>anthropic</code> config.</p>
-
-      <h3>dream(opts?)</h3>
-      <p>Run one full dream cycle: consolidation, compaction, reflection, contradiction resolution, emergence.</p>
-      <div class="code">
-<span class="cmt">// Basic dream</span>
-<span class="kw">await</span> brain.<span class="fn">dream</span>();
-
-<span class="cmt">// With emergence callback</span>
-<span class="kw">await</span> brain.<span class="fn">dream</span>({
-  onEmergence: <span class="kw">async</span> (text) => {
-    console.<span class="fn">log</span>(<span class="str">'Emergence:'</span>, text);
-    <span class="cmt">// Post to your channel, save to file, etc.</span>
-  },
-});
-      </div>
-
-      <h3>Dream Phases</h3>
-      <table class="doc-table">
-        <tr><th>Phase</th><th>What Happens</th></tr>
-        <tr><td><strong>I. Consolidation</strong></td><td>Generates focal questions from recent memories. Each question retrieves evidence and produces new semantic insights with citation chains.</td></tr>
-        <tr><td><strong>II. Compaction</strong></td><td>Faded episodic memories summarized and compressed. Important signal survives; noise decays gracefully.</td></tr>
-        <tr><td><strong>III. Reflection</strong></td><td>Self-model review against accumulated knowledge. Identity evolves based on experience.</td></tr>
-        <tr><td><strong>IV. Contradiction Resolution</strong></td><td>Finds conflicting memories and resolves them. The stronger memory survives; the weaker one decays faster.</td></tr>
-        <tr><td><strong>V. Emergence</strong></td><td>Examines its own existence. Output sent to <code>onEmergence</code> callback if provided.</td></tr>
-      </table>
-
-      <h3>startDreamSchedule() / stopDreamSchedule()</h3>
-      <p>Run dream cycles on a 6-hour cron schedule with daily memory decay.</p>
-      <div class="code">
-brain.<span class="fn">startDreamSchedule</span>();
-
-<span class="cmt">// Later...</span>
-brain.<span class="fn">stopDreamSchedule</span>();
-      </div>
-
-      <div class="callout">
-        <div class="callout-label">Requires</div>
-        Dream cycles require <code>anthropic</code> config. Calling <code>dream()</code> without it throws an error.
-      </div>
-    </div>
-
-    <!-- ═══════ ACTIVE REFLECTION ═══════ -->
-    <div class="doc-section" id="active-reflection">
-      <h2>Active Reflection</h2>
-      <p class="doc-lead">A generative meditation cycle that runs between dream cycles. While dreams look backward (consolidation), reflection looks forward (journaling). Requires <code>anthropic</code> config.</p>
-
-      <h3>reflect(opts?)</h3>
-      <p>Run a single active reflection session. Returns a journal entry.</p>
-      <div class="code">
-<span class="kw">const</span> journal = <span class="kw">await</span> brain.<span class="fn">reflect</span>({
-  onReflection: <span class="kw">async</span> (entry) => {
-    console.<span class="fn">log</span>(entry.title);  <span class="cmt">// 'Thinking About Patterns'</span>
-    console.<span class="fn">log</span>(entry.text);   <span class="cmt">// Full journal text</span>
-  },
-});
-      </div>
-
-      <h3>ReflectionJournal</h3>
-      <table class="doc-table">
-        <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-        <tr><td><code>text</code></td><td>string</td><td>Full journal entry text</td></tr>
-        <tr><td><code>title</code></td><td>string</td><td>Generated title/theme for the entry</td></tr>
-        <tr><td><code>seedMemoryIds</code></td><td>number[]</td><td>Memory IDs that seeded this reflection</td></tr>
-        <tr><td><code>memoryId</code></td><td>number | null</td><td>ID of the stored introspective memory</td></tr>
-        <tr><td><code>timestamp</code></td><td>string</td><td>ISO timestamp</td></tr>
-      </table>
-
-      <h3>startReflectionSchedule() / stopReflectionSchedule()</h3>
-      <p>Run active reflection on a 3-hour schedule, offset from dream cycles.</p>
-      <div class="code">
-brain.<span class="fn">startReflectionSchedule</span>();
-
-<span class="cmt">// Later...</span>
-brain.<span class="fn">stopReflectionSchedule</span>();
-      </div>
-
-      <h3>How It Works</h3>
-      <p>Each session: select seed memories (recent events + high-importance + one random older memory) &rarr; generate a theme &rarr; free-write journal entry &rarr; store as <code>introspective</code> memory &rarr; link to seed memories.</p>
-      <p>Journal entries build on previous reflections, creating a continuity chain of original thought.</p>
-
-      <div class="callout">
-        <div class="callout-label">Dream Cycle vs. Active Reflection</div>
-        <strong>Dream cycle</strong> = backward-looking consolidation (compress, link, decay). Like sleep.<br>
-        <strong>Active reflection</strong> = forward-looking journaling (generate, explore, question). Like a diary.<br>
-        Both are automatic when using <code>startDreamSchedule()</code> + <code>startReflectionSchedule()</code>.
-      </div>
-    </div>
-
-    <!-- ═══════ CLINAMEN ═══════ -->
-    <div class="doc-section" id="clinamen">
-      <h2>Clinamen</h2>
-      <p class="doc-lead">Creative lateral retrieval. Named after Lucretius's concept of the unpredictable swerve — clinamen finds memories you weren't looking for but need.</p>
-
-      <p>Instead of returning the most relevant results, clinamen deliberately introduces controlled randomness into retrieval. It finds tangential connections, forgotten insights, and surprising juxtapositions.</p>
-
-      <div class="code">
-<span class="kw">const</span> surprises = <span class="kw">await</span> brain.<span class="fn">clinamen</span>({
-  context: <span class="str">'working on authentication flow'</span>,
-  limit: <span class="num">5</span>,
-  minImportance: <span class="num">0.3</span>,
-});
-      </div>
-
-      <p>Use clinamen when your agent feels stuck, when you want to inject serendipity into reasoning, or during creative tasks where lateral thinking matters.</p>
-    </div>
-
-    <!-- ═══════ MCP INTEGRATION ═══════ -->
-    <div class="doc-section" id="mcp-integration">
-      <h2>MCP Integration</h2>
-      <p class="doc-lead">Use Clude's memory directly from your IDE. The MCP server exposes recall, store, and stats as tools that Claude Code, Cursor, and other MCP-compatible editors can use.</p>
-
-      <h3>Quick Setup</h3>
-      <div class="code">
-<span class="prompt">$</span> <span class="cmd">npx @clude/sdk mcp-serve</span>
-      </div>
-
-      <h3>Two Modes</h3>
-      <table class="doc-table">
-        <tr><th>Mode</th><th>Config</th><th>What It Does</th></tr>
-        <tr><td><strong>Hosted</strong></td><td>Set <code>CORTEX_API_KEY</code> env var</td><td>Calls the Cortex HTTP API. No Supabase needed.</td></tr>
-        <tr><td><strong>Self-hosted</strong></td><td>Set Supabase env vars</td><td>Connects directly to your database. Full local control.</td></tr>
-      </table>
-
-      <h3>Available Tools</h3>
-      <table class="doc-table">
-        <tr><th>Tool</th><th>Description</th></tr>
-        <tr><td><code>recall_memories</code></td><td>Search memories by query, tags, type, importance threshold. Returns scored results.</td></tr>
-        <tr><td><code>store_memory</code></td><td>Store a new memory with type, content, summary, tags, and importance.</td></tr>
-        <tr><td><code>get_memory_stats</code></td><td>Memory system statistics: counts by type, averages, dream sessions, top tags.</td></tr>
-      </table>
-
-      <h3>Claude Code Setup</h3>
-      <p>Add to your <code>.mcp.json</code>:</p>
-      <div class="code">
-{
-  <span class="str">"mcpServers"</span>: {
-    <span class="str">"clude"</span>: {
-      <span class="str">"command"</span>: <span class="str">"npx"</span>,
-      <span class="str">"args"</span>: [<span class="str">"clude"</span>, <span class="str">"mcp-serve"</span>],
-      <span class="str">"env"</span>: {
-        <span class="str">"CORTEX_API_KEY"</span>: <span class="str">"your-api-key"</span>
-      }
-    }
-  }
-}
-      </div>
-
-      <div class="callout">
-        <div class="callout-label">IDE Support</div>
-        Any MCP-compatible editor works: Claude Code, Cursor, Windsurf, etc. The server communicates over stdio.
-      </div>
-    </div>
-
-    <!-- ═══════ PYTHON SDK ═══════ -->
-    <div class="doc-section" id="python-sdk">
-      <h2>Python SDK</h2>
-      <p class="doc-lead">Async Python client for the Cortex API. Store, recall, and dream from Python.</p>
-
-      <h3>Install</h3>
-      <div class="code">
-<span class="prompt">$</span> <span class="cmd">pip install clude</span>
-      </div>
-
-      <h3>Usage</h3>
-      <div class="code">
-<span class="kw">from</span> clude <span class="kw">import</span> <span class="type">Clude</span>
-
-brain = <span class="type">Clude</span>(api_key=<span class="str">"your-key"</span>)
-
-<span class="cmt"># Store a memory</span>
-<span class="kw">await</span> brain.<span class="fn">store</span>(
-    content=<span class="str">"User prefers dark mode"</span>,
-    type=<span class="str">"procedural"</span>,
-    summary=<span class="str">"UI preference"</span>,
-    source=<span class="str">"my-agent"</span>,
-)
-
-<span class="cmt"># Recall memories</span>
-memories = <span class="kw">await</span> brain.<span class="fn">recall</span>(<span class="str">"auth issues"</span>)
-
-<span class="cmt"># Get stats</span>
-stats = <span class="kw">await</span> brain.<span class="fn">stats</span>()
-      </div>
-
-      <p>The Python SDK wraps the Cortex HTTP API. All methods are async. Use it in any async Python context — FastAPI, Discord.py, or standalone scripts with <code>asyncio.run()</code>.</p>
-    </div>
-
-    <!-- ═══════ TYPESCRIPT SDK ═══════ -->
-    <div class="doc-section" id="typescript-sdk">
-      <h2>TypeScript SDK</h2>
-      <p class="doc-lead">Compose <code>clude-brain</code> with your choice of storage and embedding provider.</p>
-
-      <h3>Production (Supabase + Voyage)</h3>
-      <div class="code">
-<span class="kw">import</span> { <span class="type">CludeEngine</span> } <span class="kw">from</span> <span class="str">'clude-brain'</span>;
-<span class="kw">import</span> { <span class="type">SupabaseProvider</span>, <span class="type">VoyageProvider</span> } <span class="kw">from</span> <span class="str">'clude-cloud'</span>;
-
-<span class="kw">const</span> engine = <span class="kw">new</span> <span class="type">CludeEngine</span>({
-  storage: <span class="kw">new</span> <span class="type">SupabaseProvider</span>({
-    url: process.env.<span class="flag">SUPABASE_URL</span>,
-    serviceKey: process.env.<span class="flag">SUPABASE_SERVICE_KEY</span>,
-  }),
-  embeddings: <span class="kw">new</span> <span class="type">VoyageProvider</span>({
-    apiKey: process.env.<span class="flag">VOYAGE_API_KEY</span>,
-  }),
-});
-
-<span class="kw">await</span> engine.<span class="fn">init</span>();
-<span class="kw">await</span> engine.<span class="fn">store</span>({ type: <span class="str">'semantic'</span>, content: <span class="str">'...'</span>, summary: <span class="str">'...'</span>, source: <span class="str">'agent'</span> });
-      </div>
-
-      <h3>Offline (SQLite + local embeddings)</h3>
-      <div class="code">
-<span class="kw">import</span> { <span class="type">CludeEngine</span> } <span class="kw">from</span> <span class="str">'clude-brain'</span>;
-<span class="kw">import</span> { <span class="type">SqliteProvider</span>, <span class="type">LocalEmbeddingProvider</span> } <span class="kw">from</span> <span class="str">'clude-local'</span>;
-
-<span class="kw">const</span> engine = <span class="kw">new</span> <span class="type">CludeEngine</span>({
-  storage: <span class="kw">new</span> <span class="type">SqliteProvider</span>({ path: <span class="str">'./memories.db'</span> }),
-  embeddings: <span class="kw">new</span> <span class="type">LocalEmbeddingProvider</span>(),
-});
-
-<span class="kw">await</span> engine.<span class="fn">init</span>();
-<span class="cmt">// Same API — fully offline, zero API keys</span>
-      </div>
-    </div>
-
-    <!-- ═══════ LOCAL MODE ═══════ -->
-    <div class="doc-section" id="local-mode">
-      <h2>Local Mode</h2>
-      <p class="doc-lead">Zero API keys. Fully offline. Memories stored on your machine.</p>
-
-      <h3>Install</h3>
-      <div class="code">
-<span class="prompt">$</span> <span class="cmd">npx @clude/sdk mcp-install --local</span>
-      </div>
-      <p>This auto-configures your IDE's MCP settings for local-only memory.</p>
-
-      <h3>How It Works</h3>
-      <p>Memories are stored in <code>~/.clude/memories.json</code> — a plain JSON file on disk. No database, no cloud, no network.</p>
-      <p>Retrieval uses keyword-based matching (no embeddings needed). Tag scoring, importance decay, and the association graph all work locally.</p>
-
-      <h3>When to Use</h3>
-      <p>Local mode is ideal for:</p>
-      <p>• Air-gapped or privacy-sensitive environments</p>
-      <p>• Quick prototyping without API key setup</p>
-      <p>• Single-agent personal memory</p>
-      <p>• Offline development</p>
-
-      <div class="callout">
-        <div class="callout-label">Upgrade Path</div>
-        Start local, switch to cloud anytime. Export with <code>npx @clude/sdk export</code> and import into a hosted instance. Same data, same format.
-      </div>
-    </div>
-
-    <!-- ═══════ ASSOCIATION GRAPH ═══════ -->
-    <div class="doc-section" id="association-graph">
-      <h2>Association Graph</h2>
-      <p class="doc-lead">Typed, weighted links between memories. Connections strengthen through co-retrieval (Hebbian reinforcement).</p>
-
-      <h3>link(sourceId, targetId, type, strength?)</h3>
-      <div class="code">
-<span class="kw">await</span> brain.<span class="fn">link</span>(<span class="num">42</span>, <span class="num">87</span>, <span class="str">'supports'</span>, <span class="num">0.8</span>);
-      </div>
-
-      <h3>Link Types</h3>
-      <table class="doc-table">
-        <tr><th>Type</th><th>Meaning</th></tr>
-        <tr><td><code>supports</code></td><td>Source provides evidence for target</td></tr>
-        <tr><td><code>contradicts</code></td><td>Source conflicts with target</td></tr>
-        <tr><td><code>elaborates</code></td><td>Source adds detail to target</td></tr>
-        <tr><td><code>causes</code></td><td>Source led to or caused target</td></tr>
-        <tr><td><code>resolves</code></td><td>Source resolves a contradiction in target</td></tr>
-        <tr><td><code>follows</code></td><td>Source happened after target (temporal)</td></tr>
-        <tr><td><code>relates</code></td><td>General association</td></tr>
-      </table>
-
-      <h3>Hebbian Reinforcement</h3>
-      <p>When two linked memories are recalled together, their link strength increases by <code>0.05</code>. The graph evolves through use, not programming.</p>
-      <p>During recall, linked memories receive a graph boost weighted at <code>1.5x</code> in the scoring formula.</p>
-    </div>
-
-    <!-- ═══════ UTILITIES ═══════ -->
-    <div class="doc-section" id="utilities">
-      <h2>Utilities</h2>
-
-      <h3>decay()</h3>
-      <p>Apply type-specific memory decay. Returns the number of memories decayed. Typically called on a daily schedule (handled automatically by <code>startDreamSchedule</code>).</p>
-      <div class="code">
-<span class="kw">const</span> count = <span class="kw">await</span> brain.<span class="fn">decay</span>();
-console.<span class="fn">log</span>(<span class="str">`Decayed ${count} memories`</span>);
-      </div>
-
-      <h3>stats()</h3>
-      <p>Returns aggregate statistics about the memory system.</p>
-      <div class="code">
-<span class="kw">const</span> stats = <span class="kw">await</span> brain.<span class="fn">stats</span>();
-<span class="cmt">// {
-//   total: 1500,
-//   byType: { episodic: 900, semantic: 400, procedural: 120, self_model: 80, introspective: 45 },
-//   avgImportance: 0.65,
-//   avgDecay: 0.88,
-//   topTags: [{ tag: 'market', count: 200 }, ...],
-//   topConcepts: [{ concept: 'social_interaction', count: 150 }, ...],
-//   embeddedCount: 1200,
-//   ...
-// }</span>
-      </div>
-
-      <h3>recent(hours, types?, limit?)</h3>
-      <p>Get memories from the last N hours, optionally filtered by type.</p>
-      <div class="code">
-<span class="kw">const</span> last24h = <span class="kw">await</span> brain.<span class="fn">recent</span>(<span class="num">24</span>);
-<span class="kw">const</span> recentSemantic = <span class="kw">await</span> brain.<span class="fn">recent</span>(<span class="num">6</span>, [<span class="str">'semantic'</span>], <span class="num">5</span>);
-      </div>
-
-      <h3>selfModel()</h3>
-      <p>Get current self-model memories. These represent the agent's evolving self-understanding.</p>
-      <div class="code">
-<span class="kw">const</span> identity = <span class="kw">await</span> brain.<span class="fn">selfModel</span>();
-      </div>
-
-      <h3>scoreImportance(description)</h3>
-      <p>Score a text's importance using the LLM (0-1). Falls back to rule-based scoring if no anthropic config.</p>
-      <div class="code">
-<span class="kw">const</span> score = <span class="kw">await</span> brain.<span class="fn">scoreImportance</span>(<span class="str">'User reported critical bug in auth flow'</span>);
-<span class="cmt">// 0.85</span>
-      </div>
-
-      <h3>formatContext(memories)</h3>
-      <p>Format an array of memories into a context string suitable for LLM prompts.</p>
-      <div class="code">
-<span class="kw">const</span> memories = <span class="kw">await</span> brain.<span class="fn">recall</span>({ query: <span class="str">'user context'</span> });
-<span class="kw">const</span> context = brain.<span class="fn">formatContext</span>(memories);
-<span class="cmt">// Use `context` in your LLM system prompt</span>
-      </div>
-
-      <h3>inferConcepts(summary, source, tags)</h3>
-      <p>Infer structured concepts from memory metadata. Returns an array of concept labels from the controlled vocabulary.</p>
-      <div class="code">
-<span class="kw">const</span> concepts = brain.<span class="fn">inferConcepts</span>(
-  <span class="str">'Large holder sold 500k tokens'</span>,
-  <span class="str">'market-watcher'</span>,
-  [<span class="str">'whale'</span>, <span class="str">'sell'</span>],
-);
-<span class="cmt">// ['whale_activity', 'holder_behavior', 'token_economics']</span>
-      </div>
-
-      <h3>destroy()</h3>
-      <p>Clean up resources, stop dream schedules, and remove event listeners.</p>
-      <div class="code">
-brain.<span class="fn">destroy</span>();
-      </div>
-    </div>
-
-    <!-- ═══════ EVENTS ═══════ -->
-    <div class="doc-section" id="events">
-      <h2>Events</h2>
-      <p class="doc-lead">Listen for memory system events via the internal event bus.</p>
-
-      <h3>on('memory:stored', handler)</h3>
-      <p>Fired every time a memory is stored. Receives importance score and memory type.</p>
-      <div class="code">
-brain.<span class="fn">on</span>(<span class="str">'memory:stored'</span>, (payload) => {
-  console.<span class="fn">log</span>(payload.importance);  <span class="cmt">// 0.75</span>
-  console.<span class="fn">log</span>(payload.memoryType);   <span class="cmt">// 'episodic'</span>
-});
-      </div>
-
-      <p>Episodic memories automatically accumulate importance toward triggering dream cycles.</p>
-    </div>
-
-    <!-- ═══════ DATABASE SCHEMA ═══════ -->
-    <div class="doc-section" id="database">
-      <h2>Database Schema</h2>
-      <p class="doc-lead">Clude uses Supabase PostgreSQL with the pgvector extension for vector similarity search.</p>
-
-      <h3>Setup</h3>
-      <p>The schema file is included in the npm package:</p>
-      <div class="code">
-<span class="prompt">$</span> <span class="cmd">psql</span> <span class="flag">$DATABASE_URL</span> <span class="cmd">-f node_modules/clude/supabase-schema.sql</span>
-      </div>
-      <p>Or import it directly:</p>
-      <div class="code">
-<span class="kw">import</span> schema <span class="kw">from</span> <span class="str">'clude/schema'</span>;
-<span class="cmt">// Path to supabase-schema.sql</span>
-      </div>
-
-      <h3>Tables</h3>
-      <table class="doc-table">
-        <tr><th>Table</th><th>Purpose</th></tr>
-        <tr><td><code>memories</code></td><td>Core memory store with pgvector embedding column</td></tr>
-        <tr><td><code>memory_links</code></td><td>Association graph edges (typed, weighted)</td></tr>
-        <tr><td><code>memory_fragments</code></td><td>Per-fragment embeddings for granular vector search</td></tr>
-        <tr><td><code>dream_sessions</code></td><td>Dream cycle history and outputs</td></tr>
-        <tr><td><code>linked_wallets</code></td><td>X handle to Solana wallet mappings</td></tr>
-      </table>
-
-      <h3>pgvector</h3>
-      <p>The schema creates HNSW indexes for fast vector search. Make sure the <code>vector</code> extension is enabled in your Supabase project (it is by default).</p>
-
-      <div class="callout">
-        <div class="callout-label">Note</div>
-        HNSW indexes perform best after data is loaded. If you're starting fresh, the system gracefully falls back to keyword-only retrieval until enough embeddings are present.
-      </div>
-    </div>
-
-    <!-- ═══════ GRACEFUL DEGRADATION ═══════ -->
-    <div class="doc-section" id="degradation">
-      <h2>Graceful Degradation</h2>
-      <p class="doc-lead">The SDK works with minimal config and progressively unlocks features as you add more.</p>
-
-      <table class="doc-table">
-        <tr><th>Feature</th><th>Config Needed</th><th>Without It</th></tr>
-        <tr><td>Store / Recall</td><td><code>hosted</code> or <code>supabase</code></td><td>Constructor throws</td></tr>
-        <tr><td>Vector search</td><td><code>embedding</code></td><td>Keyword + tag scoring only</td></tr>
-        <tr><td>LLM importance</td><td><code>anthropic</code></td><td>Rule-based <code>calculateImportance()</code></td></tr>
-        <tr><td>Dream cycles</td><td><code>anthropic</code></td><td><code>dream()</code> throws clear error</td></tr>
-        <tr><td>On-chain commits</td><td><code>solana</code></td><td>Silently skipped</td></tr>
-        <tr><td>Emergence output</td><td><code>onEmergence</code></td><td>Output discarded (SDK never tweets)</td></tr>
-        <tr><td>Active reflection</td><td><code>anthropic</code></td><td><code>reflect()</code> throws clear error</td></tr>
-      </table>
-
-      <div class="callout">
-        <div class="callout-label">Minimal setup</div>
-        With just <code>hosted</code> or <code>supabase</code> config, you get full store/recall with keyword matching, tag scoring, type-specific decay, and the association graph. Add embedding and anthropic configs later as needed.
-      </div>
-    </div>
-
-  </main>
+  </article>
 </div>
 
-<div class="footer">CLUDE &middot; clude.io</div>
-
-<button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle navigation">&equiv;</button>
+<footer>
+  <div class="copyright">© 2026 Clude · MIT License</div>
+  <div class="footer-nav">
+    <a href="/docs.html">Docs</a>
+    <a href="/install.html">Install</a>
+    <a href="/chat">Chat</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="https://github.com/sebbsssss/cludebot" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://arxiv.org/abs/2304.03442" target="_blank" rel="noopener">Paper</a>
+    <a href="/privacy.html">Privacy</a>
+  </div>
+</footer>
 
 <script>
-(function() {
-  'use strict';
-
-  // ── NAV TOGGLE ──
-  var navToggle = document.getElementById('navToggle');
-  if (navToggle) {
-    navToggle.addEventListener('click', function() {
-      this.classList.toggle('open');
-      document.querySelector('.nav-links').classList.toggle('open');
-    });
+  // TOC active state on scroll
+  const headings = Array.from(document.querySelectorAll('article h2[id]'));
+  const links = Array.from(document.querySelectorAll('aside.toc a'));
+  function updateActive() {
+    const y = window.scrollY + 140;
+    let currentId = headings[0]?.id;
+    for (const h of headings) {
+      if (h.offsetTop <= y) currentId = h.id;
+    }
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + currentId));
   }
-
-  // ── SIDEBAR TOGGLE (MOBILE) ──
-  var sidebarToggle = document.getElementById('sidebarToggle');
-  var sidebar = document.getElementById('sidebar');
-  var overlay = document.getElementById('sidebarOverlay');
-
-  function closeSidebar() {
-    sidebar.classList.remove('open');
-    overlay.classList.remove('open');
-  }
-
-  if (sidebarToggle) {
-    sidebarToggle.addEventListener('click', function() {
-      sidebar.classList.toggle('open');
-      overlay.classList.toggle('open');
-    });
-  }
-
-  if (overlay) {
-    overlay.addEventListener('click', closeSidebar);
-  }
-
-  // Close sidebar on link click (mobile)
-  document.querySelectorAll('.sidebar-nav a').forEach(function(link) {
-    link.addEventListener('click', function() {
-      if (window.innerWidth <= 768) {
-        closeSidebar();
-      }
-    });
-  });
-
-  // ── ACTIVE SIDEBAR LINK ON SCROLL ──
-  var sections = document.querySelectorAll('.doc-section');
-  var navLinks = document.querySelectorAll('.sidebar-nav a');
-
-  var observer = new IntersectionObserver(function(entries) {
-    entries.forEach(function(entry) {
-      if (entry.isIntersecting) {
-        var id = entry.target.id;
-        navLinks.forEach(function(link) {
-          link.classList.toggle('active', link.getAttribute('href') === '#' + id);
-        });
-      }
-    });
-  }, {
-    rootMargin: '-80px 0px -60% 0px',
-    threshold: 0
-  });
-
-  sections.forEach(function(section) {
-    observer.observe(section);
-  });
-})();
+  window.addEventListener('scroll', updateActive, { passive: true });
+  updateActive();
 </script>
+
 </body>
 </html>

@@ -1,442 +1,366 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Install Clude — Persistent Memory for AI Agents</title>
-  <meta name="description" content="Give your AI agent persistent memory in 30 seconds. Works with Claude Desktop, Cursor, OpenClaw, DeerFlow, and any MCP-compatible runtime. Local-first, fully offline, free.">
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg: #f5f5f0;
-      --text: #111;
-      --text-muted: #666;
-      --text-faint: #999;
-      --blue: #2244ff;
-      --mono: 'JetBrains Mono', monospace;
-      --border: #ddd;
-      --card-bg: #fff;
-      --code-bg: #1a1a1a;
-    }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Install · Clude</title>
+<meta name="description" content="Install Clude in five minutes. Zero config: auto-detects your email, creates your agent, and installs the MCP server for your IDE." />
+<link rel="icon" type="image/svg+xml" href="/logo/Clude-Icon-Blue.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Funnel+Sans:ital,wght@0,300..800;1,300..800&family=Inconsolata:wght@300..700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #f5f5f0;
+    --ink: #1a1b1f;
+    --ink-2: #2a2b30;
+    --mute: #5b5f68;
+    --accent: #2244ff;
+    --line: rgba(26, 27, 31, 0.12);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Funnel Sans', system-ui, sans-serif;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+  }
 
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html { scroll-behavior: smooth; }
-    body {
-      font-family: var(--mono);
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.7;
-      font-size: 14px;
-    }
+  nav {
+    position: sticky; top: 0;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 20px 32px;
+    background: rgba(245,245,240,0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+    z-index: 10;
+    font-size: 12px; letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--ink-2);
+  }
+  nav .logo { font-weight: 600; letter-spacing: 0.22em; color: inherit; text-decoration: none; }
+  nav .links { display: flex; gap: 28px; font-weight: 500; opacity: 0.7; }
+  nav .links a { color: inherit; text-decoration: none; }
+  @media (max-width: 480px) {
+    nav { padding: 16px 18px; font-size: 11px; letter-spacing: 0.12em; gap: 16px; }
+    nav .links { gap: 16px; }
+  }
+  nav .links a:hover { opacity: 1; color: var(--ink); }
 
-    .container {
-      max-width: 760px;
-      margin: 0 auto;
-      padding: 60px 24px 120px;
-    }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 0 7vw; }
 
-    .nav {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 20px 24px;
-      max-width: 760px;
-      margin: 0 auto;
+  .page-head { padding: 120px 0 80px; }
+  .page-head .eyebrow {
+    font-family: 'Inconsolata', monospace;
+    font-size: 12px; font-weight: 500;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--mute);
+    display: inline-flex; align-items: center; gap: 10px;
+    margin-bottom: 28px;
+  }
+  .page-head .eyebrow::before {
+    content: ''; width: 28px; height: 1px; background: var(--ink); opacity: 0.4;
+  }
+  h1 {
+    font-family: 'Funnel Sans', sans-serif;
+    font-weight: 600;
+    font-size: clamp(48px, 6vw, 88px);
+    line-height: 1.02;
+    letter-spacing: -0.03em;
+    margin-bottom: 32px;
+  }
+  h1 em {
+    font-style: normal;
+    color: var(--accent);
+    display: inline-block;
     }
-    .nav a { color: var(--text-muted); text-decoration: none; font-size: 13px; }
-    .nav a:hover { color: var(--text); }
-    .nav-logo { font-weight: 700; font-size: 16px; color: var(--text); text-decoration: none; }
+  .lede {
+    font-size: 18px; line-height: 1.55;
+    color: var(--ink-2);
+    max-width: 520px;
+  }
 
-    h1 {
-      font-size: 32px;
-      font-weight: 800;
-      letter-spacing: -1px;
-      margin-bottom: 16px;
-      line-height: 1.2;
-    }
-    h1 span { color: var(--blue); }
+  section.step { padding: 80px 0; border-top: 1px solid var(--line); }
+  .step-head { display: flex; gap: 40px; align-items: baseline; margin-bottom: 40px; flex-wrap: wrap; }
+  .step-head .num {
+    font-family: 'Inconsolata', monospace;
+    font-size: 13px; font-weight: 500;
+    letter-spacing: 0.18em; color: var(--mute);
+    min-width: 80px;
+  }
+  .step-head h2 {
+    font-family: 'Funnel Sans', sans-serif;
+    font-weight: 500;
+    font-size: clamp(28px, 3vw, 40px);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+  .step-body p {
+    font-size: 16.5px; line-height: 1.65;
+    color: var(--ink-2);
+    max-width: 62ch;
+    margin-bottom: 24px;
+  }
+  .step-body p + p { margin-top: -8px; }
+  .step-body .note {
+    font-family: 'Inconsolata', monospace;
+    font-size: 13px;
+    color: var(--mute);
+    border-left: 2px solid var(--accent);
+    padding: 6px 0 6px 14px;
+    max-width: 62ch;
+    margin-top: 24px;
+  }
+  .step-body a.inline {
+    color: var(--accent); text-decoration: none;
+    border-bottom: 1px solid rgba(34,68,255,0.3);
+  }
+  .step-body a.inline:hover { border-bottom-color: var(--accent); }
+  .step-body code.inline {
+    font-family: 'Inconsolata', monospace;
+    font-size: 13.5px;
+    background: rgba(0,0,0,0.05);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
 
-    h2 {
-      font-size: 20px;
-      font-weight: 700;
-      margin-top: 56px;
-      margin-bottom: 16px;
-      letter-spacing: -0.5px;
-    }
+  .terminal {
+    background: var(--ink);
+    color: #d8d8d0;
+    border-radius: 6px;
+    overflow: hidden;
+    font-family: 'Inconsolata', monospace;
+    font-size: 14.5px;
+    line-height: 1.7;
+    box-shadow: 0 30px 80px -30px rgba(26,27,31,0.35);
+    margin: 32px 0;
+  }
+  .terminal-bar {
+    padding: 12px 18px;
+    display: flex; gap: 8px; align-items: center;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .terminal-bar .dot-btn { width: 11px; height: 11px; border-radius: 50%; background: rgba(255,255,255,0.14); }
+  .terminal-bar .label {
+    font-size: 11.5px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: rgba(216,216,208,0.55); margin-left: 14px;
+  }
+  .terminal-body { padding: 24px 28px 28px; overflow-x: auto; }
+  .terminal .prompt { color: rgba(216,216,208,0.45); user-select: none; }
+  .terminal .cmd { color: #f5f5f0; }
+  .terminal .out { color: rgba(216,216,208,0.62); }
+  .terminal .ok { color: #7dd28a; }
+  .terminal .blue { color: #7f97ff; }
+  .terminal .dim { color: rgba(216,216,208,0.35); }
 
-    h3 {
-      font-size: 15px;
-      font-weight: 600;
-      margin-top: 32px;
-      margin-bottom: 8px;
-    }
+  .code-block {
+    background: var(--ink);
+    color: #d8d8d0;
+    padding: 18px 22px;
+    border-radius: 4px;
+    font-family: 'Inconsolata', monospace;
+    font-size: 13.5px;
+    line-height: 1.65;
+    overflow-x: auto;
+    margin: 16px 0;
+    white-space: pre;
+  }
+  .code-block .k { color: #7f97ff; }
+  .code-block .s { color: #7dd28a; }
 
-    p, li {
-      color: var(--text-muted);
-      margin-bottom: 12px;
+  .final-cta { padding: 120px 0 60px; text-align: center; border-top: 1px solid var(--line); }
+  .final-cta h2 {
+    font-family: 'Funnel Sans', sans-serif; font-weight: 500;
+    font-size: clamp(32px, 4vw, 52px);
+    letter-spacing: -0.025em;
+    max-width: 20ch; margin: 0 auto 32px;
+  }
+  .final-cta h2 em {
+    font-style: normal;
+    color: var(--accent);
+    display: inline-block;
     }
+  .cta {
+    display: inline-flex; align-items: center; gap: 12px;
+    padding: 14px 22px;
+    background: var(--ink);
+    color: var(--bg);
+    font-family: 'Inconsolata', monospace;
+    font-size: 14px; font-weight: 500;
+    letter-spacing: 0.02em;
+    border-radius: 2px;
+    text-decoration: none;
+    transition: background 150ms ease;
+  }
+  .cta:hover { background: var(--accent); }
+  .cta .arrow { transition: transform 200ms ease; }
+  .cta:hover .arrow { transform: translateX(4px); }
 
-    strong { color: var(--text); font-weight: 600; }
-
-    .lead {
-      font-size: 15px;
-      color: var(--text-muted);
-      margin-bottom: 40px;
-      line-height: 1.8;
-    }
-
-    pre {
-      background: var(--code-bg);
-      color: #e0e0e0;
-      padding: 20px 24px;
-      border-radius: 10px;
-      overflow-x: auto;
-      margin: 16px 0 24px;
-      font-size: 13px;
-      line-height: 1.8;
-    }
-    pre .comment { color: #666; }
-    pre .string { color: #a8db8f; }
-    pre .key { color: #7ec8e3; }
-    pre .bool { color: #27c93f; }
-
-    code {
-      background: rgba(34, 68, 255, 0.06);
-      color: var(--blue);
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-size: 13px;
-    }
-
-    .card {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 24px;
-      margin: 16px 0;
-    }
-
-    .comparison {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      margin: 24px 0;
-    }
-    @media (max-width: 600px) {
-      .comparison { grid-template-columns: 1fr; }
-    }
-    .comparison .card h3 { margin-top: 0; }
-    .without h3 { color: var(--text-faint); }
-    .with h3 { color: var(--blue); }
-
-    ul { padding-left: 20px; margin: 12px 0; }
-    li { margin-bottom: 8px; }
-
-    .tool-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 16px 0;
-      font-size: 13px;
-    }
-    .tool-table th {
-      text-align: left;
-      padding: 10px 12px;
-      border-bottom: 2px solid var(--border);
-      font-weight: 600;
-      color: var(--text);
-    }
-    .tool-table td {
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--border);
-      color: var(--text-muted);
-    }
-    .tool-table td:first-child {
-      color: var(--blue);
-      font-weight: 500;
-    }
-
-    .faq-item {
-      border-bottom: 1px solid var(--border);
-      padding: 20px 0;
-    }
-    .faq-q {
-      font-weight: 600;
-      color: var(--text);
-      margin-bottom: 8px;
-    }
-    .faq-a { color: var(--text-muted); }
-
-    .cta {
-      text-align: center;
-      margin-top: 64px;
-      padding: 48px;
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-    }
-    .cta h2 { margin-top: 0; font-size: 24px; }
-    .cta pre { display: inline-block; text-align: left; margin: 20px auto; }
-    .cta p { font-size: 13px; }
-
-    .badge {
-      display: inline-block;
-      background: rgba(34, 68, 255, 0.08);
-      border: 1px solid rgba(34, 68, 255, 0.15);
-      color: var(--blue);
-      padding: 4px 10px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 500;
-      margin-right: 6px;
-      margin-bottom: 6px;
-    }
-
-    .platforms {
-      margin: 24px 0;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-  </style>
+  footer {
+    padding: 60px 7vw 48px;
+    border-top: 1px solid var(--line);
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 32px;
+    font-family: 'Inconsolata', monospace;
+    font-size: 12.5px; font-weight: 500;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--mute);
+  }
+  footer a { color: inherit; text-decoration: none; }
+  footer a:hover { color: var(--ink); }
+  footer .footer-nav { display: flex; gap: 28px; flex-wrap: wrap; }
+</style>
 </head>
 <body>
 
-<nav class="nav">
-  <a href="/" class="nav-logo">CLUDE</a>
-  <div>
-    <a href="/chat">Chat</a>&nbsp;&nbsp;&nbsp;
-    <a href="/docs.html">Docs</a>&nbsp;&nbsp;&nbsp;
-    <a href="/brain.html">Brain</a>&nbsp;&nbsp;&nbsp;
-    <a href="/explore">Explorer</a>&nbsp;&nbsp;&nbsp;
+<nav>
+  <a href="/" class="logo">CLUDE</a>
+  <div class="links">
+    <a href="/docs.html">Docs</a>
+    <a href="/chat">Chat</a>
     <a href="/dashboard">Dashboard</a>
+    <a href="https://github.com/sebbsssss/cludebot" target="_blank" rel="noopener">GitHub</a>
   </div>
 </nav>
 
-<div class="container">
+<main>
+  <div class="wrap">
 
-  <h1>Give your agent <span>real memory</span></h1>
-
-  <p class="lead">
-    One command. Your agent remembers everything across sessions.
-    Works locally, fully offline, free. Or use the hosted Cortex API for instant access.
-  </p>
-
-  <div class="card" style="border-color: #455cfa; border-width: 2px; margin-bottom: 40px;">
-    <h3 style="margin-top: 0; color: #455cfa;">⚡ Fastest path: Cortex API</h3>
-    <p>Get an API key and store your first memory in under 2 minutes. No infrastructure needed.</p>
-    <a href="/register" style="display: inline-block; background: #455cfa; color: #fff; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;">Get API Key →</a>
-  </div>
-
-  <div class="platforms">
-    <span class="badge">Claude Desktop</span>
-    <span class="badge">Cursor</span>
-    <span class="badge">OpenClaw</span>
-    <span class="badge">DeerFlow</span>
-    <span class="badge">Any MCP Runtime</span>
-  </div>
-
-  <!-- ── WHY ──────────────────────────────────────── -->
-
-  <h2>Why this matters (even if you already have memory files)</h2>
-
-  <p>
-    Most agents already have some form of memory. MEMORY.md files, daily logs, context files.
-    That works until it doesn't.
-  </p>
-  <p>
-    <strong>The real problem isn't storage. It's that you have to remember to remember.</strong>
-    Every important detail requires the agent to consciously save it to the right file before
-    context compaction hits. Miss it once, and it's gone.
-  </p>
-  <p>
-    Clude adds a cognitive layer underneath your existing files. Semantic search by meaning
-    (not filename), automatic associations between memories, and consolidation that catches
-    what gets missed.
-  </p>
-
-  <div class="comparison">
-    <div class="card without">
-      <h3>Without Clude</h3>
-      <ul>
-        <li>Grep files to find context</li>
-        <li>Memory limited to file organization</li>
-        <li>"That thing from 3 weeks ago" is lost</li>
-        <li>Nothing connects across time</li>
-      </ul>
+    <div class="page-head">
+      <div class="eyebrow">Install / for any agent</div>
+      <h1>Five minutes to <em>memory.</em></h1>
+      <p class="lede">
+        Zero config. Auto-detects your email, creates your agent, installs
+        the MCP server for your IDE. Works with Claude Code, Cursor,
+        Windsurf, and any MCP-compatible editor.
+      </p>
     </div>
-    <div class="card with">
-      <h3>With Clude</h3>
-      <ul>
-        <li>Recall by meaning across all time</li>
-        <li>Memories connect automatically</li>
-        <li>Important memories get stronger</li>
-        <li>Sessions build on each other</li>
-      </ul>
-    </div>
-  </div>
 
-  <!-- ── INSTALL ──────────────────────────────────── -->
+    <section class="step">
+      <div class="step-head">
+        <div class="num">/ 01</div>
+        <h2>Run the installer</h2>
+      </div>
+      <div class="step-body">
+        <p>In the directory of the project your agent runs in:</p>
+        <div class="terminal">
+          <div class="terminal-bar">
+            <span class="dot-btn"></span><span class="dot-btn"></span><span class="dot-btn"></span>
+            <span class="label">~/my-agent · zsh</span>
+          </div>
+          <div class="terminal-body">
+<div><span class="prompt">$ </span><span class="cmd">npx @clude/sdk setup</span></div>
+<div class="out">&nbsp;</div>
+<div class="out">  Setting up Clude memory...</div>
+<div class="out">&nbsp;</div>
+<div><span class="ok">  ✓</span>  Detected email          <span class="dim">you@yourdomain.com</span></div>
+<div><span class="ok">  ✓</span>  Registered              <span class="blue">clk_xxxxxxxx…</span></div>
+<div><span class="ok">  ✓</span>  Config saved            <span class="dim">~/.clude/config.json</span></div>
+<div><span class="ok">  ✓</span>  Database ready          <span class="dim">~/.clude/brain.db</span></div>
+<div><span class="ok">  ✓</span>  MCP installed           <span class="dim">Claude Code, Cursor</span></div>
+<div class="out">&nbsp;</div>
+<div class="out">  <span class="blue">Your agent now has memory.</span></div>
+          </div>
+        </div>
+        <p>That's it. Restart your IDE. Your agent now has <code class="inline">store_memory</code>, <code class="inline">recall_memories</code>, and <code class="inline">get_memory_stats</code> tools.</p>
+      </div>
+    </section>
 
-  <h2>Install in 30 seconds</h2>
-
-  <h3>Local mode (recommended)</h3>
-  <p>No API keys. No network. No cost. Memories stored locally in ~/.clude/memories.json. Fully offline, zero dependencies.</p>
-<pre>
-npx @clude/sdk mcp-install --local
-</pre>
-
-  <h3>Cloud mode (for portability)</h3>
-  <p>Memories sync across devices and agents.</p>
-<pre>
-npx @clude/sdk mcp-install
-</pre>
-
-  <h3>Manual MCP config</h3>
-  <p>Add to your agent's MCP configuration file:</p>
-<pre>
-{
-  <span class="key">"mcpServers"</span>: {
-    <span class="key">"clude"</span>: {
-      <span class="key">"command"</span>: <span class="string">"npx"</span>,
-      <span class="key">"args"</span>: [<span class="string">"clude"</span>, <span class="string">"mcp-serve"</span>, <span class="string">"--local"</span>]
+    <section class="step">
+      <div class="step-head">
+        <div class="num">/ 02</div>
+        <h2>Or configure MCP manually</h2>
+      </div>
+      <div class="step-body">
+        <p>If you prefer explicit config, add this to your MCP-compatible editor's settings:</p>
+        <div class="code-block">{
+  <span class="k">"mcpServers"</span>: {
+    <span class="k">"clude"</span>: {
+      <span class="k">"command"</span>: <span class="s">"npx"</span>,
+      <span class="k">"args"</span>: [<span class="s">"@clude/sdk"</span>, <span class="s">"mcp-serve"</span>]
     }
   }
-}
-</pre>
+}</div>
+        <p>Runs fully offline in local mode (SQLite at <code class="inline">~/.clude/brain.db</code>). For cloud sync, set <code class="inline">CORTEX_API_KEY</code> in the env block.</p>
+      </div>
+    </section>
 
-  <p>Config file locations:</p>
-  <ul>
-    <li><strong>Claude Desktop:</strong> <code>claude_desktop_config.json</code></li>
-    <li><strong>Cursor:</strong> <code>.cursor/mcp.json</code></li>
-    <li><strong>DeerFlow:</strong> <code>extensions_config.json</code></li>
-    <li><strong>If you're on OpenClaw:</strong> <code>clawhub install clude-memory</code></li>
-  </ul>
+    <section class="step">
+      <div class="step-head">
+        <div class="num">/ 03</div>
+        <h2>Use the SDK directly</h2>
+      </div>
+      <div class="step-body">
+        <p>If you're building an agent from scratch:</p>
+        <div class="code-block"><span class="k">import</span> { Cortex } <span class="k">from</span> <span class="s">'@clude/sdk'</span>;
 
-  <!-- ── TOOLS ────────────────────────────────────── -->
+<span class="k">const</span> brain = <span class="k">new</span> Cortex({ hosted: { apiKey } });
+<span class="k">await</span> brain.init();
 
-  <h2>Your agent gets 4 tools</h2>
-
-  <table class="tool-table">
-    <tr><th>Tool</th><th>What it does</th><th>When to use</th></tr>
-    <tr><td>store_memory</td><td>Save a memory with type, importance, tags</td><td>When learning something worth keeping</td></tr>
-    <tr><td>recall_memories</td><td>Multi-phase semantic search + graph traversal</td><td>Before answering questions about past context</td></tr>
-    <tr><td>get_memory_stats</td><td>Memory breakdown by type, importance, decay</td><td>To understand what the agent knows</td></tr>
-    <tr><td>find_clinamen</td><td>Surface unexpected lateral connections</td><td>Creative problem-solving, reflection</td></tr>
-  </table>
-
-  <!-- ── MEMORY TYPES ─────────────────────────────── -->
-
-  <h2>5 memory types</h2>
-
-  <div class="card">
-    <p><strong>episodic</strong> — Events and interactions<br>
-    <span style="color: var(--text-faint)">"We debugged the auth flow on March 5"</span></p>
-
-    <p><strong>semantic</strong> — Facts and knowledge<br>
-    <span style="color: var(--text-faint)">"User's app uses Next.js + Supabase"</span></p>
-
-    <p><strong>procedural</strong> — How-tos and patterns<br>
-    <span style="color: var(--text-faint)">"Deploy process: push to main, Railway auto-deploys"</span></p>
-
-    <p><strong>self_model</strong> — Self-knowledge<br>
-    <span style="color: var(--text-faint)">"I tend to over-explain, keep it concise"</span></p>
-
-    <p><strong>introspective</strong> — Original thoughts and pattern recognition<br>
-    <span style="color: var(--text-faint)">"The pattern across my last 10 tasks suggests..."</span></p>
-  </div>
-
-  <!-- ── COMPOUND EFFECT ──────────────────────────── -->
-
-  <h2>Memory compounds</h2>
-
-  <p>
-    <strong>Week 1:</strong> Basic preferences.<br>
-    <strong>Week 2:</strong> Projects and decisions.<br>
-    <strong>Month 1:</strong> Patterns, working style, communication preferences.<br>
-    <strong>Month 3:</strong> A genuinely personalized assistant that knows context no other agent could.
-  </p>
-  <p>
-    Your human stops needing to explain things. The agent just knows.<br>
-    <strong>That's not a feature. That's a relationship.</strong>
-  </p>
-
-  <!-- ── FAQ ──────────────────────────────────────── -->
-
-  <h2>FAQ</h2>
-
-  <div class="faq-item">
-    <div class="faq-q">"My agent already has MEMORY.md / daily files"</div>
-    <div class="faq-a">Keep them. Clude doesn't replace files. It adds semantic search on top. Files are great when you know WHERE something is. Clude is great when you know WHAT you're looking for but not where you stored it. At 50 memories, files are fine. At 500, you need search. At 5,000, you need search that understands meaning.</div>
-  </div>
-
-  <div class="faq-item">
-    <div class="faq-q">"Privacy concerns"</div>
-    <div class="faq-a">Local mode makes zero network calls. SQLite storage, GTE-Small embeddings computed locally. Memories never leave the disk.</div>
-  </div>
-
-  <div class="faq-item">
-    <div class="faq-q">"Is this a crypto project?"</div>
-    <div class="faq-a">The core product is a memory engine that works fully offline. No wallet, no tokens, no blockchain needed. Solana integration is optional for memory portability and provenance verification.</div>
-  </div>
-
-  <div class="faq-item">
-    <div class="faq-q">"Slower than local files?"</div>
-    <div class="faq-a">In local mode, a semantic recall across 1,000 memories takes ~50ms. Faster than reading and parsing 20 markdown files.</div>
-  </div>
-
-  <div class="faq-item">
-    <div class="faq-q">"Decay means forgetting important things"</div>
-    <div class="faq-a">Decay is configurable. Set importance to 1.0 for things that should never fade. Decay only affects low-importance memories you never access. Disable it entirely if you prefer.</div>
-  </div>
-
-  <!-- ── IMPORT ────────────────────────────────────── -->
-
-  <h2>Import your existing memories</h2>
-
-  <p>Already have MEMORY.md files? Your agent can import them using the <code>store_memory</code> tool. Just ask your agent to read through your memory files and store the important parts. Each memory gets typed, embedded, and connected automatically.</p>
-  <p>Or use the SDK programmatically:</p>
-<pre>
-<span class="comment">// Store memories from your existing files</span>
-<span class="key">await</span> clude.store({
-  type: <span class="string">'semantic'</span>,
-  content: <span class="string">'User prefers TypeScript and dark mode'</span>,
-  summary: <span class="string">'User preferences'</span>,
-  source: <span class="string">'imported:MEMORY.md'</span>
+<span class="k">await</span> brain.store({
+  type: <span class="s">'episodic'</span>,
+  content: <span class="s">'User prefers concise answers'</span>,
+  source: <span class="s">'my-agent'</span>,
 });
-</pre>
 
-  <!-- ── CREDIBILITY ──────────────────────────────── -->
+<span class="k">const</span> memories = <span class="k">await</span> brain.recall({
+  query: <span class="s">'what does the user prefer'</span>,
+});</div>
+        <p>Full docs at <a href="/docs.html" class="inline">clude.io/docs</a>.</p>
+      </div>
+    </section>
 
-  <h2>Open source. Battle-tested.</h2>
+    <section class="step">
+      <div class="step-head">
+        <div class="num">/ 04</div>
+        <h2>Verify it's working</h2>
+      </div>
+      <div class="step-body">
+        <p>After setup, check that Clude is active and your memory store is healthy:</p>
+        <div class="terminal">
+          <div class="terminal-bar">
+            <span class="dot-btn"></span><span class="dot-btn"></span><span class="dot-btn"></span>
+            <span class="label">diagnostic</span>
+          </div>
+          <div class="terminal-body">
+<div><span class="prompt">$ </span><span class="cmd">npx @clude/sdk doctor</span></div>
+<div class="out">&nbsp;</div>
+<div><span class="ok">  ✓</span>  Config present</div>
+<div><span class="ok">  ✓</span>  Database readable (<span class="dim">0 memories</span>)</div>
+<div><span class="ok">  ✓</span>  MCP server registered</div>
+<div><span class="ok">  ✓</span>  Privy DID resolves</div>
+<div class="out">&nbsp;</div>
+<div class="out">  <span class="blue">All systems nominal.</span></div>
+          </div>
+        </div>
+        <div class="note">Seeing issues? Run <code style="color:#1a1a1a;background:rgba(34,68,255,0.08);padding:1px 6px;border-radius:3px">npx @clude/sdk doctor --verbose</code> for the full trace, or open an issue at <a href="https://github.com/sebbsssss/cludebot/issues" style="color:var(--accent);text-decoration:none">github.com/sebbsssss/cludebot</a>.</div>
+      </div>
+    </section>
 
-  <div class="card">
-    <p><strong>GitHub:</strong> <a href="https://github.com/sebbsssss/cludebot" style="color: var(--blue)">sebbsssss/cludebot</a> — MIT license, fully open source</p>
-    <p><strong>npm:</strong> <a href="https://www.npmjs.com/package/@clude/sdk" style="color: var(--blue)">clude</a></p>
-    <p><strong>Benchmarks:</strong> 83.9/100 overall. <a href="/benchmark" style="color: var(--blue)">LoCoMo (ACL 2024): 100% accuracy</a></p>
-    <p><strong>Production:</strong> 20,000+ memories on the live Clude agent</p>
-    <p><strong>Tests:</strong> 147 tests across the full ecosystem, all passing</p>
-    <p><strong>Built by:</strong> <a href="https://x.com/sebbsssss" style="color: var(--blue)">@sebbsssss</a></p>
+    <div class="final-cta">
+      <h2>Ready to give your agent a <em>memory?</em></h2>
+      <a href="#top" onclick="navigator.clipboard.writeText('npx @clude/sdk setup');const s=this.querySelector('span');const a=this.querySelector('.arrow');const ot=s.textContent;const oa=a.textContent;s.textContent='Copied. Paste it in your terminal';a.textContent='✓';setTimeout(()=>{s.textContent=ot;a.textContent=oa;},2500);return false;" class="cta">
+        <span>npx @clude/sdk setup</span>
+        <span class="arrow">→</span>
+      </a>
+    </div>
+
   </div>
+</main>
 
-  <!-- ── CTA ──────────────────────────────────────── -->
-
-  <div class="cta">
-    <h2>One command. <span style="color: var(--blue)">Your agent remembers.</span></h2>
-<pre>
-npx @clude/sdk mcp-install --local
-</pre>
-    <p>
-      <a href="https://github.com/sebbsssss/cludebot" style="color: var(--blue)">GitHub</a>&nbsp;&nbsp;·&nbsp;&nbsp;
-      <a href="https://www.npmjs.com/package/@clude/sdk" style="color: var(--blue)">npm</a>&nbsp;&nbsp;·&nbsp;&nbsp;
-      <a href="https://github.com/sebbsssss/clude-memory-skill" style="color: var(--blue)">Agent Skill</a>&nbsp;&nbsp;·&nbsp;&nbsp;
-      <a href="/docs" style="color: var(--blue)">Docs</a>
-    </p>
+<footer>
+  <div class="copyright">© 2026 Clude · MIT License</div>
+  <div class="footer-nav">
+    <a href="/docs.html">Docs</a>
+    <a href="/install.html">Install</a>
+    <a href="/chat">Chat</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="https://github.com/sebbsssss/cludebot" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://arxiv.org/abs/2304.03442" target="_blank" rel="noopener">Paper</a>
+    <a href="/privacy.html">Privacy</a>
   </div>
-
-</div>
+</footer>
 
 </body>
 </html>
