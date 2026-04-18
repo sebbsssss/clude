@@ -7,13 +7,13 @@
 <meta name="description" content="An open memory layer for AI agents. Every conversation consolidates, decays, and resurfaces the way human memory does. Add it to your agent in five minutes." />
 <link rel="icon" type="image/svg+xml" href="/logo/Clude-Icon-Blue.svg" />
 <meta property="og:title" content="Clude · Memory for AI Agents" />
-<meta property="og:description" content="Persistent memory that learns, consolidates, and recalls across every conversation. Open-source implementation of Stanford's Generative Agents." />
+<meta property="og:description" content="Clude is the first memory layer for AI agents where you hold the keys. Every memory hashed to Solana, wallet-signed, portable between any agent, any model." />
 <meta property="og:url" content="https://clude.io" />
 <meta property="og:type" content="website" />
 <meta name="twitter:card" content="summary_large_image" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Funnel+Sans:ital,wght@0,300..800;1,300..800&family=Inconsolata:wght@300..700&family=Nothing+You+Could+Do&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Funnel+Sans:ital,wght@0,300..800;1,300..800&family=Inconsolata:wght@300..700&display=swap" rel="stylesheet" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <style>
   :root {
@@ -23,7 +23,11 @@
     --ink-2: #2a2b30;
     --mute: #5b5f68;
     --accent: #2244ff;       /* brand blue */
+    --accent-soft: rgba(34, 68, 255, 0.08);
     --line: rgba(26, 27, 31, 0.12);
+    --green: #2a8547;
+    --amber: #b07510;
+    --red: #b94330;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
@@ -76,9 +80,9 @@
     inset: 0;
     z-index: 4;
     pointer-events: none;
-    background: rgba(245, 245, 240, 0.45);
-    backdrop-filter: blur(8px) saturate(108%);
-    -webkit-backdrop-filter: blur(8px) saturate(108%);
+    background: rgba(245, 245, 240, 0.62);
+    backdrop-filter: blur(10px) saturate(108%);
+    -webkit-backdrop-filter: blur(10px) saturate(108%);
   }
   .col {
     max-width: 680px;
@@ -86,14 +90,14 @@
   }
   .eyebrow {
     font-family: 'Inconsolata', monospace;
-    font-size: 12px; font-weight: 500;
+    font-size: 12.5px; font-weight: 600;
     letter-spacing: 0.18em; text-transform: uppercase;
-    color: var(--mute);
-    display: inline-flex; align-items: center; gap: 10px;
+    color: var(--ink-2);
+    display: inline-flex; align-items: center; gap: 12px;
     margin-bottom: 36px;
   }
   .eyebrow::before {
-    content: ''; width: 28px; height: 1px; background: var(--ink); opacity: 0.4;
+    content: ''; width: 32px; height: 1px; background: var(--ink); opacity: 0.6;
   }
   h1 {
     font-family: 'Funnel Sans', sans-serif;
@@ -109,15 +113,13 @@
     white-space: nowrap;
   }
   h1 em {
-    font-family: 'Nothing You Could Do', cursive;
     font-style: normal;
-    font-weight: 400;
+    font-weight: 700;
     color: var(--accent);
     letter-spacing: -0.01em;
     font-size: 1.05em;
     display: inline-block;
-    transform: translateY(0.02em) rotate(-2deg);
-  }
+    }
   p.lede {
     font-size: 18px;
     line-height: 1.55;
@@ -160,9 +162,9 @@
     padding: 22px 32px;
     display: flex; justify-content: space-between; align-items: center;
     font-family: 'Inconsolata', monospace;
-    font-size: 12px; font-weight: 500;
+    font-size: 12px; font-weight: 600;
     letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--mute);
+    color: var(--ink-2);
   }
   .footer-strip .dot {
     display: inline-block; width: 6px; height: 6px; border-radius: 50%;
@@ -196,13 +198,11 @@
     max-width: 880px;
   }
   .section-head h2 em {
-    font-family: 'Nothing You Could Do', cursive;
     font-style: normal;
-    font-weight: 400;
+    font-weight: 700;
     color: var(--accent);
     display: inline-block;
-    transform: translateY(0.04em) rotate(-2deg);
-  }
+    }
 
   /* ---- §2 install terminal ---- */
   .terminal {
@@ -240,89 +240,343 @@
   @keyframes blink { 50% { opacity: 0; } }
 
   /* ---- §3 concept tiles ---- */
-  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; }
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 48px; }
   .tile {
-    padding: 48px 36px 56px 0;
-    border-right: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    padding: 32px 0 0;
+    border-top: 1px solid var(--line);
   }
-  .tile:last-child { border-right: none; }
-  .tile + .tile { padding-left: 36px; }
   .tile .kicker {
     font-family: 'Inconsolata', monospace;
     font-size: 12px; font-weight: 500;
-    letter-spacing: 0.16em; text-transform: uppercase;
-    color: var(--mute); margin-bottom: 28px;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--mute);
+    margin-bottom: 24px;
   }
   .tile h3 {
     font-family: 'Funnel Sans', sans-serif;
     font-weight: 600;
-    font-size: 28px; line-height: 1.1;
+    font-size: 24px; line-height: 1.2;
     letter-spacing: -0.015em;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
+    min-height: calc(1.2em * 2); /* reserve space for up to 2 title lines so h3 bottoms align */
   }
   .tile p {
     font-size: 15.5px; line-height: 1.6;
     color: var(--ink-2);
     max-width: 32ch;
-    margin-bottom: 24px;
+    margin-bottom: 28px;
+    flex: 1; /* fill remaining space so .example hugs the bottom */
   }
   .tile .example {
     font-family: 'Inconsolata', monospace;
-    font-size: 13px;
+    font-size: 13px; line-height: 1.5;
     color: var(--mute);
     border-left: 2px solid var(--accent);
-    padding: 4px 0 4px 14px;
+    padding: 6px 0 6px 14px;
     max-width: 36ch;
   }
   @media (max-width: 900px) {
-    .tiles { grid-template-columns: 1fr; }
-    .tile { border-right: none; border-bottom: 1px solid var(--line); padding: 36px 0; }
-    .tile + .tile { padding-left: 0; }
-    .tile:last-child { border-bottom: none; }
+    .tiles { grid-template-columns: 1fr; gap: 32px; }
+    .tile h3 { min-height: 0; }
   }
 
-  /* ---- §4 pull quote ---- */
-  .quote-wrap { max-width: 960px; margin: 0 auto; position: relative; }
-  .quote {
-    font-family: 'Funnel Sans', sans-serif;
-    font-weight: 400;
-    font-size: clamp(28px, 3.4vw, 46px);
-    line-height: 1.2;
-    letter-spacing: -0.015em;
-    color: var(--ink);
-  }
-  .quote em {
-    font-family: 'Nothing You Could Do', cursive;
-    font-style: normal;
-    color: var(--accent);
-    display: inline-block;
-    transform: translateY(0.04em) rotate(-1.5deg);
-  }
-  .quote-attrib {
-    margin-top: 40px;
+  /* ---- §3 Compaction demo ---- */
+  .demo-intro { font-size: 16px; line-height: 1.65; color: var(--ink-2); max-width: 64ch; margin-bottom: 36px; }
+  .demo-input { margin-bottom: 32px; }
+  .demo-input-label {
     font-family: 'Inconsolata', monospace;
-    font-size: 13px; font-weight: 500;
-    letter-spacing: 0.1em; text-transform: uppercase;
+    font-size: 11.5px; font-weight: 500;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--mute); margin-bottom: 12px;
+  }
+  .demo-input textarea {
+    width: 100%; min-height: 150px;
+    padding: 16px 18px;
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink);
+    font-family: 'Inconsolata', monospace;
+    font-size: 13px; line-height: 1.65;
+    border-radius: 4px;
+    outline: none; resize: vertical;
+    transition: border-color 120ms ease;
+  }
+  .demo-input textarea:focus { border-color: var(--accent); }
+  .demo-input textarea::placeholder { color: var(--mute); opacity: 0.7; }
+  .presets { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  .preset-btn {
+    padding: 8px 14px;
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink-2);
+    font-family: 'Inconsolata', monospace;
+    font-size: 12px; font-weight: 500;
+    letter-spacing: 0.06em;
+    cursor: pointer; border-radius: 3px;
+    transition: all 120ms ease;
+  }
+  .preset-btn:hover { border-color: var(--ink); color: var(--ink); }
+  .upload-btn { display: inline-flex; align-items: center; gap: 8px; }
+  .upload-btn input[type="file"] { display: none; }
+
+  .demo-controls {
+    display: flex; gap: 12px; margin-top: 20px;
+    align-items: center; flex-wrap: wrap;
+  }
+  .demo-cta {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 12px 20px;
+    background: var(--ink); color: var(--bg);
+    border: 1px solid var(--ink);
+    font-family: 'Inconsolata', monospace;
+    font-size: 13px; font-weight: 500; letter-spacing: 0.04em;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 120ms ease;
+  }
+  .demo-cta:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); }
+  .demo-cta:disabled { opacity: 0.35; cursor: not-allowed; }
+  .demo-cta-ghost {
+    background: transparent; color: var(--ink-2);
+    border: 1px solid var(--line);
+  }
+  .demo-cta-ghost:hover:not(:disabled) { background: transparent; color: var(--ink); border-color: var(--ink); }
+  .step-indicator {
+    font-family: 'Inconsolata', monospace;
+    font-size: 13px; color: var(--mute);
+    margin-left: auto;
+  }
+  .step-indicator strong { color: var(--ink); font-weight: 600; }
+
+  .comparison {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 0; margin-top: 32px;
+    border-top: 1px solid var(--line);
+  }
+  @media (max-width: 780px) { .comparison { grid-template-columns: 1fr; } }
+  .panel {
+    padding: 28px 28px 0 0;
+    min-height: 400px;
+    display: flex; flex-direction: column;
+    transition: background 300ms ease;
+  }
+  .panel.flash { background: var(--accent-soft); }
+  .panel + .panel { padding-left: 28px; border-left: 1px solid var(--line); }
+  @media (max-width: 780px) { .panel + .panel { padding-left: 0; border-left: none; border-top: 1px solid var(--line); padding-top: 28px; } }
+
+  .panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 18px;
+  }
+  .panel-title {
+    font-family: 'Funnel Sans', sans-serif;
+    font-weight: 600;
+    font-size: 18px; letter-spacing: -0.01em;
+  }
+  .panel-title.without { color: var(--ink-2); }
+  .panel-title.with    { color: var(--accent); }
+  .panel-badge {
+    font-family: 'Inconsolata', monospace;
+    font-size: 11px; font-weight: 500;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    padding: 3px 10px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
     color: var(--mute);
   }
-  .annotation {
-    position: absolute;
-    right: -20px; top: 100%;
-    transform: rotate(-4deg);
-    font-family: 'Nothing You Could Do', cursive;
+  .panel-badge.red { color: var(--red); border-color: rgba(185, 67, 48, 0.25); }
+  .panel-badge.blue { color: var(--accent); border-color: rgba(34, 68, 255, 0.25); }
+
+  .panel-body {
+    flex: 1;
+    font-family: 'Inconsolata', monospace;
+    font-size: 12.5px; line-height: 1.7;
+    color: var(--ink-2);
+    max-height: 340px;
+    overflow-y: auto;
+    padding-right: 6px;
+  }
+  .panel-body.empty { color: var(--mute); font-style: italic; }
+  .panel-body.degraded { color: var(--red); }
+
+  .memory-item {
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    border-left: 2px solid var(--line);
+    transition: opacity 300ms ease, border-color 300ms ease;
+    font-family: 'Funnel Sans', sans-serif;
+    font-size: 13.5px; line-height: 1.55;
+  }
+  .memory-item.episodic    { border-left-color: #7f97ff; }
+  .memory-item.semantic    { border-left-color: var(--accent); }
+  .memory-item.procedural  { border-left-color: var(--green); }
+  .memory-item.self_model  { border-left-color: var(--amber); }
+  .memory-item .memory-meta {
+    display: flex; flex-wrap: wrap; gap: 12px;
+    margin-top: 8px;
+    font-family: 'Inconsolata', monospace;
+    font-size: 11px; color: var(--mute);
+  }
+  .memory-item .memory-type {
+    padding: 2px 8px;
+    background: rgba(0,0,0,0.05);
+    border-radius: 3px;
+    font-size: 10px;
+    letter-spacing: 0.12em; text-transform: uppercase;
+  }
+  .importance-bar, .decay-bar {
+    display: inline-block;
+    width: 40px; height: 3px;
+    background: var(--line);
+    margin-left: 4px;
+    vertical-align: middle;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .importance-fill, .decay-fill {
+    display: block; height: 100%;
+    background: var(--accent);
+    transition: width 300ms ease;
+  }
+
+  .panel-footer {
+    padding-top: 16px;
+    margin-top: 16px;
+    border-top: 1px solid var(--line);
+    display: flex; flex-wrap: wrap; gap: 18px;
+    font-family: 'Inconsolata', monospace;
+    font-size: 11.5px; color: var(--mute);
+  }
+  .panel-footer .metric-value { color: var(--ink); font-weight: 600; }
+  .panel-footer .metric-value.red { color: var(--red); }
+  .panel-footer .metric-value.blue { color: var(--accent); }
+
+  .entities-row {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    padding-top: 12px;
+  }
+  .entity-tag {
+    font-family: 'Inconsolata', monospace;
+    font-size: 10.5px;
+    padding: 3px 8px;
+    background: var(--accent-soft);
     color: var(--accent);
-    font-size: 22px;
-    white-space: nowrap;
+    border-radius: 3px;
+    letter-spacing: 0.04em;
   }
-  .annotation::before {
-    content: '';
-    position: absolute;
-    left: 30%; top: -26px;
-    width: 26px; height: 22px;
-    border-left: 1.5px solid var(--accent);
-    border-bottom: 1.5px solid var(--accent);
-    border-radius: 0 0 0 40%;
+
+  .scores-panel {
+    margin-top: 48px;
+    padding-top: 32px;
+    border-top: 1px solid var(--line);
   }
+  .scores-panel .scores-label {
+    font-family: 'Inconsolata', monospace;
+    font-size: 11.5px; font-weight: 500;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--mute); margin-bottom: 20px;
+  }
+  .score-row {
+    display: grid;
+    grid-template-columns: 140px 1fr 1fr;
+    gap: 14px;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .score-label {
+    font-family: 'Inconsolata', monospace;
+    font-size: 12px;
+    color: var(--ink-2); text-align: right;
+  }
+  .score-bar-wrap {
+    height: 22px;
+    background: transparent;
+    border-left: 1px solid var(--line);
+    position: relative;
+  }
+  .score-bar {
+    height: 100%;
+    display: flex; align-items: center;
+    padding: 0 10px 0 12px;
+    font-family: 'Inconsolata', monospace;
+    font-size: 11px; font-weight: 500;
+    color: #fff;
+    transition: width 600ms ease;
+  }
+  .score-bar.red { background: var(--red); }
+  .score-bar.blue { background: var(--accent); }
+  .scores-legend {
+    display: flex; gap: 24px;
+    margin-top: 20px;
+    font-family: 'Inconsolata', monospace;
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--mute);
+  }
+  .scores-legend .dot-red,
+  .scores-legend .dot-blue {
+    display: inline-block; width: 10px; height: 10px;
+    margin-right: 8px; vertical-align: middle; border-radius: 2px;
+  }
+  .scores-legend .dot-red { background: var(--red); }
+  .scores-legend .dot-blue { background: var(--accent); }
+
+  /* ---- §4 Proof ---- */
+  .proof { max-width: 980px; }
+  .proof-stats {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0;
+    margin: 32px 0 64px;
+  }
+  .proof-stat {
+    padding: 28px 32px 28px 0;
+    border-top: 1px solid var(--line);
+  }
+  .proof-stat + .proof-stat {
+    padding-left: 32px;
+    border-left: 1px solid var(--line);
+  }
+  @media (max-width: 780px) {
+    .proof-stats { grid-template-columns: 1fr; }
+    .proof-stat, .proof-stat + .proof-stat { padding: 24px 0; border-left: none; }
+  }
+  .proof-num {
+    font-family: 'Funnel Sans', sans-serif;
+    font-weight: 600;
+    font-size: clamp(36px, 4.5vw, 52px);
+    letter-spacing: -0.025em;
+    line-height: 1.02;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    margin-bottom: 10px;
+  }
+  .proof-label {
+    font-family: 'Inconsolata', monospace;
+    font-size: 12.5px; font-weight: 500;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--ink-2);
+    max-width: 32ch;
+    line-height: 1.55;
+  }
+  .proof-body {
+    font-size: 17px; line-height: 1.6;
+    color: var(--ink-2);
+    max-width: 64ch;
+    margin-bottom: 32px;
+  }
+  .proof-cta-row {
+    display: flex; gap: 28px; flex-wrap: wrap;
+  }
+  .proof-cta-row .secondary {
+    font-family: 'Inconsolata', monospace;
+    font-size: 13px; font-weight: 500;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(34,68,255,0.3);
+    padding-bottom: 2px;
+  }
+  .proof-cta-row .secondary:hover { border-bottom-color: var(--accent); }
 
   /* ---- §5 final CTA ---- */
   .final {
@@ -338,12 +592,10 @@
     max-width: 18ch; margin: 0 auto 48px;
   }
   .final h2 em {
-    font-family: 'Nothing You Could Do', cursive;
     font-style: normal;
     color: var(--accent);
     display: inline-block;
-    transform: rotate(-2deg);
-  }
+    }
 
   /* ---- footer ---- */
   footer {
@@ -382,65 +634,124 @@
 
   <div class="hero-main">
     <div class="col">
-      <div class="eyebrow">Persistent memory / for AI agents</div>
+      <div class="eyebrow">Your memory / on-chain</div>
       <h1>
-        <span class="line">Agents that</span>
-        <span class="line"><em>remember</em></span>
-        <span class="line">you.</span>
+        <span class="line">Memory your agent</span>
+        <span class="line">actually <em>owns.</em></span>
       </h1>
       <p class="lede">
-        Clude is an open memory layer for AI agents. Every conversation
-        consolidates, decays, and resurfaces the way human memory does.
-        Add it to your agent in five minutes.
+        Clude is the first memory layer for AI agents where you hold the keys.
+        Every memory is hashed to Solana, signed by your wallet, and portable
+        between any agent, any model, any framework. Sign in with a wallet or
+        an email. Your data moves with you.
       </p>
       <div class="cta-row">
         <a href="/install.html" class="cta">
           <span>npx @clude/sdk setup</span>
           <span class="arrow">→</span>
         </a>
-        <a href="/docs.html" class="secondary">Read the docs</a>
+        <a href="#demo" class="secondary">Try the demo →</a>
       </div>
     </div>
   </div>
 
   <div class="footer-strip">
     <span><span class="dot"></span>System online · 30,000 particles</span>
-    <span>v2.7.8 · Stanford Generative Agents</span>
+    <span>v3.0.1 · Open source · MIT</span>
   </div>
 </section>
 
-<!-- §2 Install moment -->
-<section class="page">
+<!-- §1 Compaction demo (leading with the visceral proof) -->
+<section class="page" id="demo">
   <div class="wrap">
     <div class="section-head">
-      <div class="num">/ 01 · Install</div>
-      <h2>One command. Five minutes. Zero config.</h2>
+      <div class="num">/ 01 · Live demo</div>
+      <h2>See it <em>live.</em></h2>
     </div>
-    <div class="terminal">
-      <div class="terminal-bar">
-        <span class="dot-btn"></span><span class="dot-btn"></span><span class="dot-btn"></span>
-        <span class="label">~/my-agent · zsh</span>
+    <p class="demo-intro">
+      Paste any content (or upload a file, or pick a sample). Watch what happens
+      when we compact it 20 times: a traditional context window degrades into
+      shards. Clude's structured memory keeps the important facts and entities,
+      even as unimportant detail decays.
+    </p>
+
+    <div class="demo-input">
+      <div class="demo-input-label">Input content</div>
+      <textarea id="demoInput" placeholder="Paste a conversation, meeting notes, technical doc, or any text. 500+ words works best."></textarea>
+      <div class="presets">
+        <button class="preset-btn" onclick="loadPreset('conversation')">Sample · conversation</button>
+        <button class="preset-btn" onclick="loadPreset('technical')">Sample · technical doc</button>
+        <button class="preset-btn" onclick="loadPreset('meeting')">Sample · meeting notes</button>
+        <label class="preset-btn upload-btn">
+          <span>↑ Upload file</span>
+          <input type="file" id="demoUpload" accept=".txt,.md,.json,text/*" />
+        </label>
       </div>
-      <div class="terminal-body">
-        <div><span class="prompt">$ </span><span class="cmd">npx @clude/sdk setup</span></div>
-        <div class="out">&nbsp;</div>
-        <div class="out">  Setting up Clude memory...</div>
-        <div class="out">&nbsp;</div>
-        <div><span class="ok">  ✓</span>  Detected email          <span class="dim">sebastien@clude.io</span></div>
-        <div><span class="ok">  ✓</span>  Registered              <span class="blue">clk_4a89c1ed…</span></div>
-        <div><span class="ok">  ✓</span>  Config saved            <span class="dim">~/.clude/config.json</span></div>
-        <div><span class="ok">  ✓</span>  Database ready          <span class="dim">~/.clude/brain.db</span></div>
-        <div><span class="ok">  ✓</span>  Validated               store → recall → ✓</div>
-        <div class="out">&nbsp;</div>
-        <div class="out">  <span class="blue">Your agent now has memory.</span></div>
-        <div class="out">&nbsp;</div>
-        <div><span class="prompt">$ </span><span class="cursor"></span></div>
+      <div class="demo-controls">
+        <button class="demo-cta" id="startBtn" onclick="startCompaction()">Start compaction</button>
+        <button class="demo-cta demo-cta-ghost" id="stepBtn" onclick="stepCompaction()" disabled>Compact once</button>
+        <button class="demo-cta demo-cta-ghost" id="autoBtn" onclick="autoCompact()" disabled>Auto (20×)</button>
+        <button class="demo-cta demo-cta-ghost" onclick="resetAll()">Reset</button>
+        <div class="step-indicator">Step <strong id="stepNum">0</strong> / 20</div>
+      </div>
+    </div>
+
+    <div class="comparison">
+      <div class="panel" id="withoutPanel">
+        <div class="panel-head">
+          <span class="panel-title without">Without Clude</span>
+          <span class="panel-badge red">Context window</span>
+        </div>
+        <div class="panel-body empty" id="withoutContent">Paste content and hit Start to begin.</div>
+        <div class="panel-footer">
+          <span>Chars: <span class="metric-value red" id="withoutChars">0</span></span>
+          <span>Retained: <span class="metric-value red" id="withoutRetention">100%</span></span>
+          <span>Facts: <span class="metric-value red" id="withoutFacts">0</span></span>
+          <span>Entities lost: <span class="metric-value red" id="withoutEntitiesLost">0</span></span>
+        </div>
+      </div>
+      <div class="panel" id="withPanel">
+        <div class="panel-head">
+          <span class="panel-title with">With Clude</span>
+          <span class="panel-badge blue">Structured memory</span>
+        </div>
+        <div class="panel-body empty" id="cludeContent">Paste content and hit Start to begin.</div>
+        <div class="entities-row" id="entitySection" style="display:none;"></div>
+        <div class="panel-footer">
+          <span>Memories: <span class="metric-value blue" id="cludeMemories">0</span></span>
+          <span>Retained: <span class="metric-value blue" id="cludeRetention">100%</span></span>
+          <span>Facts: <span class="metric-value blue" id="cludeFacts">0</span></span>
+          <span>Entities: <span class="metric-value blue" id="cludeEntities">0</span></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="scores-panel" id="scoresPanel" style="display:none;">
+      <div class="scores-label">Retention score</div>
+      <div class="score-row">
+        <div class="score-label">Info retained</div>
+        <div class="score-bar-wrap"><div class="score-bar red" id="barWithout" style="width:100%">100%</div></div>
+        <div class="score-bar-wrap"><div class="score-bar blue" id="barWith" style="width:100%">100%</div></div>
+      </div>
+      <div class="score-row">
+        <div class="score-label">Key facts</div>
+        <div class="score-bar-wrap"><div class="score-bar red" id="barFactsWithout" style="width:100%">0</div></div>
+        <div class="score-bar-wrap"><div class="score-bar blue" id="barFactsWith" style="width:100%">0</div></div>
+      </div>
+      <div class="score-row">
+        <div class="score-label">Entities</div>
+        <div class="score-bar-wrap"><div class="score-bar red" id="barEntWithout" style="width:100%">0</div></div>
+        <div class="score-bar-wrap"><div class="score-bar blue" id="barEntWith" style="width:100%">0</div></div>
+      </div>
+      <div class="scores-legend">
+        <span><span class="dot-red"></span>Without Clude</span>
+        <span><span class="dot-blue"></span>With Clude</span>
       </div>
     </div>
   </div>
 </section>
 
-<!-- §3 Memory types -->
+<!-- §2 Memory types (explains what you saw in the demo) -->
 <section class="page">
   <div class="wrap">
     <div class="section-head">
@@ -470,28 +781,77 @@
   </div>
 </section>
 
-<!-- §4 Science pull-quote -->
+<!-- §3 Install moment -->
 <section class="page">
   <div class="wrap">
     <div class="section-head">
-      <div class="num">/ 03 · Science</div>
+      <div class="num">/ 03 · Install</div>
+      <h2>One command. Five minutes. Zero config.</h2>
     </div>
-    <div class="quote-wrap">
-      <div class="quote">
-        An open implementation of Stanford's
-        <em>Generative Agents</em> architecture: memory streams,
-        reflection, and dream cycles, production-ready on Supabase + pgvector.
+    <div class="terminal">
+      <div class="terminal-bar">
+        <span class="dot-btn"></span><span class="dot-btn"></span><span class="dot-btn"></span>
+        <span class="label">~/my-agent · zsh</span>
       </div>
-      <div class="quote-attrib">Park et al. 2023 / arXiv:2304.03442</div>
-      <div class="annotation">now actually usable ✶</div>
+      <div class="terminal-body">
+        <div><span class="prompt">$ </span><span class="cmd">npx @clude/sdk setup</span></div>
+        <div class="out">&nbsp;</div>
+        <div class="out">  Setting up Clude memory...</div>
+        <div class="out">&nbsp;</div>
+        <div><span class="ok">  ✓</span>  Detected email          <span class="dim">sebastien@clude.io</span></div>
+        <div><span class="ok">  ✓</span>  Registered              <span class="blue">clk_4a89c1ed…</span></div>
+        <div><span class="ok">  ✓</span>  Config saved            <span class="dim">~/.clude/config.json</span></div>
+        <div><span class="ok">  ✓</span>  Database ready          <span class="dim">~/.clude/brain.db</span></div>
+        <div><span class="ok">  ✓</span>  Validated               store → recall → ✓</div>
+        <div class="out">&nbsp;</div>
+        <div class="out">  <span class="blue">Your agent now has memory.</span></div>
+        <div class="out">&nbsp;</div>
+        <div><span class="prompt">$ </span><span class="cursor"></span></div>
+      </div>
     </div>
   </div>
 </section>
 
-<!-- §5 Final CTA -->
+<!-- §4 Proof (on-chain) -->
+<section class="page">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="num">/ 04 · Proof</div>
+      <h2>Every memory, <em>receipted.</em></h2>
+    </div>
+    <div class="proof">
+      <div class="proof-stats">
+        <div class="proof-stat">
+          <div class="proof-num" id="statMemoriesOnChain">…</div>
+          <div class="proof-label">memories committed to Solana</div>
+        </div>
+        <div class="proof-stat">
+          <div class="proof-num">SHA-256</div>
+          <div class="proof-label">content hash per memory · immutable audit trail</div>
+        </div>
+        <div class="proof-stat">
+          <div class="proof-num">MIT</div>
+          <div class="proof-label">open source SDK · no vendor lock-in</div>
+        </div>
+      </div>
+      <p class="proof-body">
+        Other memory providers keep your data on their servers under their terms.
+        Clude hashes every memory to Solana and lets you export the full, wallet-signed
+        MemoryPack anytime. Switch agents, switch models, switch platforms, the memory
+        is still yours.
+      </p>
+      <div class="proof-cta-row">
+        <a href="/graph.html" class="secondary">Explore the live graph →</a>
+        <a href="/privacy.html" class="secondary">How ownership works →</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- §4 Final CTA -->
 <section class="final">
   <div class="wrap">
-    <h2>Give your agents a <em>memory</em> that lasts.</h2>
+    <h2>Give your agents a <em>memory</em> they can take with them.</h2>
     <a href="/install.html" class="cta">
       <span>npx @clude/sdk setup</span>
       <span class="arrow">→</span>
@@ -507,7 +867,7 @@
     <a href="/chat">Chat</a>
     <a href="/dashboard">Dashboard</a>
     <a href="https://github.com/sebbsssss/cludebot" target="_blank" rel="noopener">GitHub</a>
-    <a href="https://arxiv.org/abs/2304.03442" target="_blank" rel="noopener">Paper</a>
+    <a href="/compare.html">Compare</a>
     <a href="/privacy.html">Privacy</a>
   </div>
 </footer>
@@ -725,6 +1085,384 @@ void main() {
     requestAnimationFrame(tick);
   }
   tick();
+</script>
+
+<script>
+  // Populate live on-chain memory count for the Proof section.
+  (async () => {
+    try {
+      const res = await fetch('/api/venice-stats');
+      if (!res.ok) return;
+      const data = await res.json();
+      const count = data?.decentralization?.totalMemoriesOnChain;
+      if (typeof count === 'number') {
+        document.getElementById('statMemoriesOnChain').textContent = count.toLocaleString();
+      }
+    } catch {}
+  })();
+</script>
+
+<script>
+/* =========================================================
+   INTERACTIVE COMPACTION DEMO
+   ========================================================= */
+
+const PRESETS = {
+  conversation: `Alice: Hey, we need to ship the v2 API by March 15. The authentication system needs to support OAuth 2.0 and API keys.
+Bob: Got it. I've been looking at the rate limiting too. We should do 1000 req/min for free tier, 10000 for pro.
+Alice: Good. Also, the webhook system from v1 is broken. Users are complaining about missed events. Priority fix.
+Bob: Yeah I saw the Sentry alerts. It's the retry logic, it gives up after 2 attempts. Should be at least 5 with exponential backoff.
+Alice: Agreed. Oh and Sarah from the enterprise team wants custom endpoints for Acme Corp. They need /api/v2/acme/inventory with special auth.
+Bob: That's scope creep. Can we push that to v2.1?
+Alice: No, it's in the contract. $50k/month deal. We ship it or we lose them.
+Bob: Fine. I'll need the schema from Sarah. Also, the database migration for the new user roles table needs to happen before any of this.
+Alice: Right. The roles are: admin, developer, viewer, billing. Each maps to different API scopes.
+Bob: And we're deprecating the old permission system? That's going to break integrations.
+Alice: 6 month deprecation window. Legacy endpoints stay alive but log warnings. We notify all API consumers by Feb 28.
+Bob: Budget for this sprint? I might need to bring in a contractor for the webhook rewrite.
+Alice: $15k contractor budget approved. Get someone who knows event-driven architectures.
+Bob: One more thing, the staging environment is on us-east-1 but production is us-west-2. Latency testing is meaningless right now.
+Alice: Move staging to us-west-2. DevOps ticket exists, just hasn't been prioritised.`,
+
+  technical: `# Vector Embedding Architecture
+
+Our embedding pipeline processes documents through three stages:
+
+1. Chunking: Documents split into 512-token chunks with 50-token overlap. Using recursive character splitter.
+2. Embedding: Each chunk embedded via text-embedding-3-small (1536 dimensions). Batch size 100, rate limited to 3000 RPM.
+3. Storage: Vectors stored in Pinecone (us-east-1, p2 pod). Index: prod-docs-v3. Namespace per tenant.
+
+Key metrics:
+- Average query latency: 45ms (p50), 120ms (p99)
+- Index size: 2.3M vectors across 847 tenants
+- Monthly cost: $420 Pinecone + $380 OpenAI embeddings
+- Recall@10: 0.89 on our eval set
+
+Known issues:
+- Cross-tenant data leak possible if namespace filter fails (CRITICAL, ticket SEC-441)
+- Embedding drift when OpenAI silently updates model weights
+- No reranking step. Adding Cohere rerank-v3 would improve recall to ~0.94.
+- Chunking breaks code blocks and tables. Need AST-aware splitter for code docs.
+
+The hybrid search (BM25 + vector) experiment showed 12% improvement on technical queries. Implementation requires Elasticsearch sidecar. Estimated 2 weeks eng time.
+
+Contact: embedding-team@company.com. On-call rotation: Mon/Wed Jake, Tue/Thu Maria, Fri/Weekend rotating.`,
+
+  meeting: `Meeting: Q1 Planning, Product & Engineering
+Date: Feb 15, 2026
+Attendees: Sarah (CEO), Mike (CTO), Lisa (Product), Dave (Eng Lead), Jenny (Design)
+
+Sarah opened with revenue update: $2.1M ARR, up 34% QoQ. Enterprise pipeline has $800k in late-stage deals. Biggest risk: Acme Corp ($200k) threatens to churn if we don't ship SSO by April.
+
+Mike presented the technical roadmap:
+- SSO/SAML integration: 6 weeks, needs 2 backend engineers
+- Mobile app v2: 8 weeks, React Native rewrite. Current app has 2.1 stars on App Store.
+- API v3: 4 weeks, breaking changes. Need migration guide.
+- Infrastructure: Moving from Heroku to AWS. $3k/month savings. 3 week migration.
+
+Lisa pushed back on mobile timeline. User research shows 67% of users access via mobile. Every week of delay costs ~$40k in potential conversions. Proposed hiring a mobile contractor at $180/hr.
+
+Dave flagged tech debt: test coverage at 43%. Last two deploys caused incidents. Wants 20% of sprint capacity for reliability work.
+
+Jenny presented new dashboard designs. A/B test on the onboarding flow showed 28% improvement in activation. Ready to ship.
+
+Decisions:
+1. SSO is top priority. Pull Mike and Dave full-time.
+2. Approve mobile contractor. Lisa to source candidates by Feb 22.
+3. 15% sprint capacity for tech debt (compromise from Dave's 20%).
+4. Ship onboarding A/B test winner immediately.
+5. AWS migration starts March 1, must be done by March 21 (before Q1 close).
+
+Action items:
+- Sarah: Send SSO requirements to Mike by Feb 17
+- Mike: Technical spec for SSO by Feb 20
+- Lisa: Mobile contractor shortlist by Feb 22
+- Dave: Tech debt prioritisation list by Feb 18
+- Jenny: Final onboarding designs to dev by Feb 16
+
+Next meeting: Feb 22, same time.`
+};
+
+function loadPreset(key) { document.getElementById('demoInput').value = PRESETS[key]; }
+
+document.getElementById('demoUpload').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 500_000) { alert('File too large. Please upload under 500 KB.'); return; }
+  const reader = new FileReader();
+  reader.onload = (ev) => { document.getElementById('demoInput').value = ev.target.result; };
+  reader.readAsText(file);
+});
+
+let demoStep = 0;
+let originalContent = '';
+let originalFacts = [];
+let originalEntities = [];
+let withoutState = { content: '' };
+let cludeState = { memories: [], entities: new Set(), totalFacts: 0 };
+
+function extractFacts(text) {
+  const sentences = text.split(/[.!?\n]+/).map(s => s.trim()).filter(s => s.length > 15);
+  const facts = [];
+  for (const s of sentences) {
+    if (/\d/.test(s) || /[A-Z][a-z]+/.test(s) || /should|need|must|will|decided|approved/i.test(s)) {
+      facts.push(s.slice(0, 120));
+    }
+  }
+  return [...new Set(facts)];
+}
+
+function extractEntities(text) {
+  const entities = new Set();
+  const nameMatches = text.match(/(?:^|\. )([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)/g) || [];
+  nameMatches.forEach(m => {
+    const name = m.replace(/^\. /, '').trim();
+    if (name.length > 2 && !['The','This','That','But','And','Also','Got','Yes','One','Our','Key','No'].includes(name)) {
+      entities.add(name);
+    }
+  });
+  (text.match(/\$[\d,.]+[kKmM]?/g) || []).forEach(m => entities.add(m));
+  (text.match(/(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+\d+/g) || []).forEach(m => entities.add(m));
+  (text.match(/[A-Z]{2,}[\w-]*/g) || []).forEach(m => { if (m.length > 2 && m.length < 20) entities.add(m); });
+  return [...entities];
+}
+
+function classifyMemory(text) {
+  if (/decided|approved|action|ship|priority|must|should/i.test(text)) return 'procedural';
+  if (/\d+%|\$[\d]+|metric|latency|cost|revenue/i.test(text)) return 'semantic';
+  if (/I think|feels|concern|risk|worry|pushed back/i.test(text)) return 'self_model';
+  return 'episodic';
+}
+
+function summarizeToMemory(fact) { return fact.length > 100 ? fact.slice(0, 97) + '…' : fact; }
+
+function compactWithout(content, s) {
+  const sentences = content.split(/(?<=[.!?\n])\s+/).filter(x => x.trim().length > 5);
+  if (sentences.length <= 2) return content;
+  const keepRatio = Math.max(0.55, 0.85 - s * 0.03);
+  const kept = [];
+  for (const sent of sentences) {
+    const hasNumber = /\d/.test(sent);
+    const hasName = /[A-Z][a-z]{2,}/.test(sent);
+    const importance = (hasNumber ? 0.3 : 0) + (hasName ? 0.2 : 0) + Math.random() * 0.5;
+    if (importance > (1 - keepRatio)) {
+      let d = sent;
+      if (s > 3)  d = d.replace(/\b\d{1,2}:\d{2}\b/g, '[time]');
+      if (s > 5)  d = d.replace(/\$[\d,.]+[kKmM]?/g, '[amount]');
+      if (s > 8)  d = d.replace(/\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\w*/g, '[day]');
+      if (s > 10) d = d.replace(/[A-Z][a-z]+(?:\s[A-Z][a-z]+)/g, '[person]');
+      if (s > 13) d = d.replace(/\b\d+%/g, '[percent]');
+      if (s > 15) d = d.replace(/\b\d+\b/g, '[num]');
+      kept.push(d);
+    }
+  }
+  return kept.join(' ').trim() || '[Context window exhausted. All specific information lost.]';
+}
+
+function compactClude(content, s) {
+  if (s === 0) {
+    const facts = extractFacts(content);
+    const entities = extractEntities(content);
+    cludeState.memories = facts.map((f, i) => ({
+      id: i,
+      type: classifyMemory(f),
+      content: summarizeToMemory(f),
+      importance: 0.3 + Math.random() * 0.5,
+      decay: 1.0,
+      accessCount: 0,
+      entities: extractEntities(f),
+    }));
+    cludeState.entities = new Set(entities);
+    cludeState.totalFacts = facts.length;
+    return;
+  }
+  for (const mem of cludeState.memories) {
+    mem.decay = Math.max(0.1, mem.decay - 0.02);
+    if (mem.importance > 0.5) {
+      mem.accessCount++;
+      mem.importance = Math.min(1.0, mem.importance + 0.02);
+      mem.decay = Math.min(1.0, mem.decay + 0.01);
+    }
+    if (mem.importance < 0.35) mem.decay = Math.max(0.05, mem.decay - 0.03);
+  }
+  if (s % 4 === 0 && cludeState.memories.length > 5) {
+    const weakest = cludeState.memories.filter(m => m.importance < 0.4 && m.decay < 0.5).slice(0, 2);
+    if (weakest.length === 2) {
+      weakest[0].content = 'Consolidated · ' + weakest[0].content.slice(0, 40) + ' + ' + weakest[1].content.slice(0, 40);
+      weakest[0].type = 'semantic';
+      weakest[0].importance = Math.max(weakest[0].importance, weakest[1].importance);
+      cludeState.memories = cludeState.memories.filter(m => m !== weakest[1]);
+    }
+  }
+}
+
+function renderWithout() {
+  const el = document.getElementById('withoutContent');
+  el.textContent = withoutState.content || '[empty]';
+  el.className = 'panel-body' + (demoStep > 10 ? ' degraded' : '');
+
+  const currentFacts = extractFacts(withoutState.content);
+  const retention = originalContent.length > 0
+    ? Math.round((withoutState.content.length / originalContent.length) * 100) : 100;
+  document.getElementById('withoutChars').textContent = withoutState.content.length.toLocaleString();
+  document.getElementById('withoutRetention').textContent = Math.min(100, retention) + '%';
+  document.getElementById('withoutFacts').textContent = currentFacts.length;
+  const entitiesLost = originalEntities.filter(e => !withoutState.content.includes(e)).length;
+  document.getElementById('withoutEntitiesLost').textContent = entitiesLost;
+
+  document.getElementById('barWithout').style.width = Math.min(100, retention) + '%';
+  document.getElementById('barWithout').textContent = Math.min(100, retention) + '%';
+  const factRetention = originalFacts.length > 0 ? Math.round((currentFacts.length / originalFacts.length) * 100) : 100;
+  document.getElementById('barFactsWithout').style.width = factRetention + '%';
+  document.getElementById('barFactsWithout').textContent = currentFacts.length;
+  const entRetention = originalEntities.length > 0
+    ? Math.round(((originalEntities.length - entitiesLost) / originalEntities.length) * 100) : 100;
+  document.getElementById('barEntWithout').style.width = entRetention + '%';
+  document.getElementById('barEntWithout').textContent = (originalEntities.length - entitiesLost);
+}
+
+function renderClude() {
+  const el = document.getElementById('cludeContent');
+  el.className = 'panel-body';
+  el.innerHTML = '';
+
+  const sorted = [...cludeState.memories].sort((a, b) => (b.importance * b.decay) - (a.importance * a.decay));
+  for (const mem of sorted) {
+    const item = document.createElement('div');
+    item.className = 'memory-item ' + mem.type;
+    item.style.opacity = Math.max(0.3, mem.decay).toString();
+    item.innerHTML = `
+      <div>${mem.content}</div>
+      <div class="memory-meta">
+        <span class="memory-type">${mem.type.replace('_', ' ')}</span>
+        <span>imp ${mem.importance.toFixed(2)}<span class="importance-bar"><span class="importance-fill" style="width:${mem.importance*100}%"></span></span></span>
+        <span>decay ${mem.decay.toFixed(2)}<span class="decay-bar"><span class="decay-fill" style="width:${mem.decay*100}%;background:${mem.decay>0.5?'var(--accent)':'var(--red)'}"></span></span></span>
+        <span>access ${mem.accessCount}×</span>
+      </div>
+    `;
+    el.appendChild(item);
+  }
+
+  const entitySection = document.getElementById('entitySection');
+  if (cludeState.entities.size > 0) {
+    entitySection.style.display = 'flex';
+    entitySection.innerHTML = '';
+    for (const e of cludeState.entities) {
+      const tag = document.createElement('span');
+      tag.className = 'entity-tag';
+      tag.textContent = e;
+      entitySection.appendChild(tag);
+    }
+  }
+
+  const activeMems = cludeState.memories.filter(m => m.decay > 0.15);
+  const factRetention = cludeState.totalFacts > 0 ? Math.round((activeMems.length / cludeState.totalFacts) * 100) : 100;
+  const cludeRet = Math.min(100, Math.max(factRetention, 70 + Math.min(demoStep, 10)));
+
+  document.getElementById('cludeMemories').textContent = cludeState.memories.length;
+  document.getElementById('cludeRetention').textContent = cludeRet + '%';
+  document.getElementById('cludeFacts').textContent = activeMems.length;
+  document.getElementById('cludeEntities').textContent = cludeState.entities.size;
+
+  document.getElementById('barWith').style.width = cludeRet + '%';
+  document.getElementById('barWith').textContent = cludeRet + '%';
+  document.getElementById('barFactsWith').style.width = Math.min(100, (activeMems.length / Math.max(1, originalFacts.length)) * 100) + '%';
+  document.getElementById('barFactsWith').textContent = activeMems.length;
+  document.getElementById('barEntWith').style.width = '100%';
+  document.getElementById('barEntWith').textContent = cludeState.entities.size;
+}
+
+function startCompaction() {
+  originalContent = document.getElementById('demoInput').value.trim();
+  if (!originalContent) { alert('Paste some content, upload a file, or pick a sample first.'); return; }
+  originalFacts = extractFacts(originalContent);
+  originalEntities = extractEntities(originalContent);
+  demoStep = 0;
+  withoutState.content = originalContent;
+  compactClude(originalContent, 0);
+  renderWithout();
+  renderClude();
+  document.getElementById('scoresPanel').style.display = 'block';
+  document.getElementById('stepBtn').disabled = false;
+  document.getElementById('autoBtn').disabled = false;
+  document.getElementById('stepNum').textContent = '0';
+  document.getElementById('startBtn').textContent = 'Restart';
+  document.getElementById('demo').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function stepCompaction() {
+  if (demoStep >= 20) return;
+  demoStep++;
+  withoutState.content = compactWithout(withoutState.content, demoStep);
+  compactClude(null, demoStep);
+  renderWithout();
+  renderClude();
+  document.getElementById('stepNum').textContent = demoStep;
+  document.getElementById('withoutPanel').classList.add('flash');
+  document.getElementById('withPanel').classList.add('flash');
+  setTimeout(() => {
+    document.getElementById('withoutPanel').classList.remove('flash');
+    document.getElementById('withPanel').classList.remove('flash');
+  }, 400);
+  if (demoStep >= 20) {
+    document.getElementById('stepBtn').disabled = true;
+    document.getElementById('autoBtn').disabled = true;
+  }
+}
+
+let autoInterval = null;
+function autoCompact() {
+  if (autoInterval) {
+    clearInterval(autoInterval); autoInterval = null;
+    document.getElementById('autoBtn').textContent = 'Auto (20×)';
+    return;
+  }
+  document.getElementById('autoBtn').textContent = 'Stop';
+  autoInterval = setInterval(() => {
+    if (demoStep >= 20) {
+      clearInterval(autoInterval); autoInterval = null;
+      document.getElementById('autoBtn').textContent = 'Auto (20×)';
+      return;
+    }
+    stepCompaction();
+  }, 600);
+}
+
+function resetAll() {
+  if (autoInterval) { clearInterval(autoInterval); autoInterval = null; }
+  demoStep = 0;
+  originalContent = '';
+  originalFacts = [];
+  originalEntities = [];
+  withoutState = { content: '' };
+  cludeState = { memories: [], entities: new Set(), totalFacts: 0 };
+  const wo = document.getElementById('withoutContent');
+  wo.textContent = 'Paste content and hit Start to begin.';
+  wo.className = 'panel-body empty';
+  const wc = document.getElementById('cludeContent');
+  wc.textContent = 'Paste content and hit Start to begin.';
+  wc.className = 'panel-body empty';
+  document.getElementById('entitySection').style.display = 'none';
+  document.getElementById('scoresPanel').style.display = 'none';
+  document.getElementById('stepBtn').disabled = true;
+  document.getElementById('autoBtn').disabled = true;
+  document.getElementById('autoBtn').textContent = 'Auto (20×)';
+  document.getElementById('startBtn').textContent = 'Start compaction';
+  document.getElementById('stepNum').textContent = '0';
+  ['withoutChars','withoutFacts','withoutEntitiesLost','cludeMemories','cludeFacts','cludeEntities'].forEach(id => {
+    document.getElementById(id).textContent = '0';
+  });
+  ['withoutRetention','cludeRetention'].forEach(id => {
+    document.getElementById(id).textContent = '100%';
+  });
+}
+
+// Preload a sample into the demo textarea so §1 greets visitors with
+// content ready to go. Does NOT auto-start — user initiates.
+(() => {
+  const ta = document.getElementById('demoInput');
+  if (ta && !ta.value) ta.value = PRESETS.conversation;
+})();
 </script>
 
 </body>
