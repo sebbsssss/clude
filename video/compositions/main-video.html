@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #000;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      MainVideo composition
+      Resolution: 1920x1080
+      Duration: 120 seconds (2 minutes) @ 30fps
+      Status: placeholder — scene content TBD
+    -->
+    <div
+      id="root"
+      data-composition-id="main-video"
+      data-start="0"
+      data-duration="120"
+      data-width="1920"
+      data-height="1080"
+    >
+      <div
+        id="tagline"
+        class="clip"
+        data-start="0"
+        data-duration="120"
+        data-track-index="1"
+        style="
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 1920px;
+          height: 1080px;
+          font-family: system-ui, -apple-system, sans-serif;
+          font-size: 72px;
+          font-weight: 600;
+          color: #ffffff;
+          letter-spacing: -0.02em;
+        "
+      >
+        Clude — verifiable memory for AI
+      </div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      tl.from("#tagline", { opacity: 0, y: 20, duration: 1.5, ease: "power2.out" }, 0);
+      window.__timelines["main-video"] = tl;
+    </script>
+  </body>
+</html>

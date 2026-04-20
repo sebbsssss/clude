@@ -1,16 +1,18 @@
 {
-  "name": "clude-hackathon-video",
+  "name": "clude-video",
+  "version": "1.0.0",
+  "description": "Hackathon submission video — Hyperframes HTML-first compositions",
   "private": true,
   "scripts": {
-    "dev": "remotion studio src/index.ts",
-    "render:main": "remotion render src/index.ts MainVideo out/main.mp4 --codec=h264 --crf=18",
-    "render:hero": "remotion render src/index.ts HeroCut out/hero.mp4 --codec=h264 --crf=18"
+    "preview": "hyperframes preview .",
+    "preview:main": "hyperframes preview compositions/main-video.html",
+    "preview:hero": "hyperframes preview compositions/hero-cut.html",
+    "render:main": "hyperframes render compositions/main-video.html -o out/main.mp4",
+    "render:hero": "hyperframes render compositions/hero-cut.html -o out/hero.mp4",
+    "lint": "hyperframes lint",
+    "doctor": "hyperframes doctor"
   },
   "dependencies": {
-    "@remotion/cli": "4.0.439",
-    "@remotion/renderer": "4.0.439",
-    "remotion": "4.0.439",
-    "react": "^18.3.0",
-    "react-dom": "^18.3.0"
+    "hyperframes": "^0.4.11"
   }
 }
