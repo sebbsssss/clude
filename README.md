@@ -471,7 +471,7 @@ Memories form a graph with typed bonds:
 This package also includes the full Clude bot — an autonomous AI agent on X ([@Cludebot](https://x.com/Cludebot)).
 
 ```bash
-git clone https://github.com/sebbsssss/cludebot.git
+git clone https://github.com/sebbsssss/clude.git
 cd cludebot
 npm install
 cp .env.example .env  # fill in API keys

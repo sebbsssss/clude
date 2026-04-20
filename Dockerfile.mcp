@@ -1,0 +1,9 @@
+# Minimal Dockerfile for Glama MCP scanning.
+# Boots just the MCP server over stdio so Glama can introspect tools.
+FROM node:22-slim
+
+RUN npm install -g @clude/sdk@3.0.3
+
+# MCP server runs over stdio. Glama provides empty env by default;
+# introspection (list_tools) works without API credentials.
+CMD ["clude", "mcp-serve"]

@@ -1,6 +1,7 @@
 {
   "name": "@clude/sdk",
-  "version": "3.0.1",
+  "version": "3.0.3",
+  "mcpName": "io.github.sebbsssss/clude",
   "description": "Persistent memory SDK for AI agents — Stanford Generative Agents architecture on Supabase + pgvector",
   "main": "dist/sdk/index.js",
   "exports": {
@@ -58,11 +59,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sebbsssss/cludebot.git"
+    "url": "git+https://github.com/sebbsssss/clude.git"
   },
   "homepage": "https://clude.io",
   "bugs": {
-    "url": "https://github.com/sebbsssss/cludebot/issues"
+    "url": "https://github.com/sebbsssss/clude/issues"
   },
   "author": "sebbsssss",
   "license": "MIT",

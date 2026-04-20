@@ -232,7 +232,7 @@ GitHub: [github.com/sebbsssss/clude-memory-skill](https://github.com/sebbsssss/c
 ## Links
 
 - **Register:** [clude.io/register](https://clude.io/register)
-- **GitHub:** [github.com/sebbsssss/cludebot](https://github.com/sebbsssss/cludebot)
+- **GitHub:** [github.com/sebbsssss/clude](https://github.com/sebbsssss/clude)
 - **npm:** [clude](https://www.npmjs.com/package/@clude/sdk)
 - **PyPI:** [clude](https://pypi.org/project/clude/)
 - **Benchmark:** [clude.io/benchmark](https://clude.io/benchmark) (83.9/100)
