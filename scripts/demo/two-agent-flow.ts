@@ -40,7 +40,7 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 // ── Config ──────────────────────────────────────────────────────────────
-const PROGRAM_ID = new PublicKey('6xENjJhDQx7iTxJ8Kd9VmQtCYUoYTGPatVsC4zhenuop');
+const PROGRAM_ID = new PublicKey('GPc2p7rNNC23kd396zKgsCCTsRH1H3APxDUDRXLTVfdo');
 const CLUDE_MINT = process.env.CLUDE_DEVNET_MINT
   ? new PublicKey(process.env.CLUDE_DEVNET_MINT)
   : null;
@@ -248,10 +248,10 @@ async function main(): Promise<void> {
   const updatedPool = await (programA.account as any).pool.fetch(poolPda);
   console.log(`Pool memory_count:     ${updatedPool.memoryCount.toString()}`);
   console.log(`Pool citation_count:   ${updatedPool.citationCount.toString()}`);
-  console.log('\nAll three transactions confirmed on Solana devnet.');
-  console.log(`  create_pool:  ${explorerUrl(storeSig === '' ? '' : storeSig)}`); // pool existed path
+  console.log('\nAll transactions confirmed on Solana devnet.');
   console.log(`  store_memory: ${explorerUrl(storeSig)}`);
   console.log(`  cite_memory:  ${explorerUrl(citeSig)}`);
+  console.log(`  (pool already existed, reused. Fresh pool txs printed earlier if created this run.)`);
 }
 
 main().catch((err) => {
