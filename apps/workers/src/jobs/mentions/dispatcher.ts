@@ -23,24 +23,30 @@ import { checkInput, getCASpoofResponse, getTokenDeployResponse } from '@clude/s
 import { webSearch, isWebSearchEnabled } from '@clude/shared/core/web-search';
 import { checkRateLimit } from '@clude/shared/utils/rate-limit';
 import { getDb } from '@clude/shared/core/database';
+import { safetyGate } from './safety-gate';
 
 const log = createChildLogger('dispatcher');
 
 // ── Rate limits ──────────────────────────────────────────────────────
-// Per-user: max 3 replies to the same user per hour (avoid spammy convos)
-const USER_REPLY_LIMIT = 3;
+// Per-user: max 2 replies to the same user per hour (avoid spammy convos).
+// Tightened from 3 after past ban incidents — 2 is still enough for a
+// natural follow-up question but makes sustained back-and-forth impossible.
+const USER_REPLY_LIMIT = 2;
 const USER_REPLY_WINDOW_MIN = 60;
-// Global: max 30 replies per hour (well under X free-tier limits)
-const GLOBAL_REPLY_LIMIT = 30;
+// Global: max 15 replies per hour. Combined with the 50/day cap and
+// 90-second inter-reply floor in safety-gate, this puts us comfortably
+// below any X automation heuristic.
+const GLOBAL_REPLY_LIMIT = 15;
 const GLOBAL_REPLY_WINDOW_MIN = 60;
-// Max mentions to process per poll cycle (prevent backlog floods)
-export const MAX_PER_CYCLE = 8;
+// Max mentions to process per poll cycle. Lower than before — preferring
+// to drop tweets on the floor over bursting through a backlog.
+export const MAX_PER_CYCLE = 4;
 
 // ── Bot loop protection ─────────────────────────────────────────────
 // Max replies CludeBot will send in a single conversation thread
-const MAX_REPLIES_PER_CONVERSATION = 3;
+const MAX_REPLIES_PER_CONVERSATION = 2;
 // Max replies to the same user in the same conversation
-const MAX_REPLIES_PER_USER_PER_CONVERSATION = 2;
+const MAX_REPLIES_PER_USER_PER_CONVERSATION = 1;
 
 // Tweets/conversations to ignore completely (even if Clude is tagged).
 // Add tweet IDs or conversation IDs here to block engagement.
@@ -71,6 +77,17 @@ export async function dispatchMention(tweet: TweetV2): Promise<void> {
   const claimed = await claimForProcessing(tweetId, { conversationId, authorId });
   if (!claimed) {
     log.debug({ tweetId }, 'Tweet already claimed by another process');
+    return;
+  }
+
+  // ── Hard safety gate ──
+  // Bot-tangle prevention, kill switch, daily cap, inter-reply pacing.
+  // These run BEFORE the softer per-user / per-conversation rate limits.
+  const authorHandle = authorId ? getUsernameOrId(authorId) : undefined;
+  const gate = await safetyGate(tweet, authorHandle);
+  if (!gate.allow) {
+    log.warn({ tweetId, authorId, reason: gate.reason }, 'Safety gate blocked reply');
+    await mark(gate.markAs);
     return;
   }
 
