@@ -1831,7 +1831,7 @@ async function main() {
     console.log(`  Resumed: ${resumedResults.length} questions already evaluated`);
   }
 
-  const checkpointPath = join(CACHE_DIR, `checkpoint_${opts.variant}${opts.runId ? '_' + opts.runId : ''}.json`);
+  const checkpointPath = join(CACHE_DIR, `checkpoint_${opts.variant}${opts.runId ? '_' + opts.runId : ''}_v2.json`);
 
   const evalStart = process.hrtime.bigint();
   const evalBatchSize = hasEmbeddings ? 2 : 4;
@@ -2176,7 +2176,7 @@ async function main() {
     results: allResults,
   };
 
-  const resultsPath = join(CACHE_DIR, `results_${opts.variant}.json`);
+  const resultsPath = join(CACHE_DIR, `results_${opts.variant}_v2.json`);
   mkdirSync(CACHE_DIR, { recursive: true });
   writeFileSync(resultsPath, JSON.stringify(resultsPayload, null, 2));
   console.log(`Results saved to ${resultsPath}`);
