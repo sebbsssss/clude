@@ -3,7 +3,7 @@ import { useChat as useAIChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { useAuthContext } from './AuthContext';
 import { api } from '../lib/api';
-import type { CludeChatMessage, ChatMessageMetadata, SettledMessage, StreamingState, MessageCost, GreetingMeta } from '../lib/types';
+import type { CludeChatMessage, ChatMessageMetadata, SettledMessage, StreamingState, MessageCost, GreetingMeta, AssistantExtraPart } from '../lib/types';
 import type { Message } from '../lib/types';
 
 // Re-export types that consumers need
@@ -250,6 +250,32 @@ export function useChat() {
       .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
       .map(p => p.text)
       .join('');
+
+    // Extract tool-call parts into our own AssistantExtraPart shape so MessageBubble
+    // can render custom UI for them (e.g. the "save preference?" card).
+    // AI SDK v6 names these as `tool-<toolName>`; the suggestSavePreference tool
+    // resolves server-side via execute() so the `output-available` state always
+    // contains `{ kind: 'suggestion', summary, key, value }`.
+    const extraParts: AssistantExtraPart[] = [];
+    for (const p of m.parts as any[]) {
+      if (p?.type === 'tool-suggestSavePreference') {
+        const out = p.output;
+        const input = p.input;
+        const summary = out?.summary ?? input?.summary;
+        const key = out?.key ?? input?.key;
+        const value = out?.value ?? input?.value;
+        if (summary && key && value) {
+          extraParts.push({
+            type: 'suggest-preference',
+            toolCallId: p.toolCallId,
+            summary,
+            key,
+            value,
+          });
+        }
+      }
+    }
+
     return {
       kind: 'settled' as const,
       id: m.id,
@@ -264,6 +290,7 @@ export function useChat() {
       receipt: meta?.receipt,
       isGreeting: meta?.isGreeting,
       greetingMeta: meta?.greetingMeta,
+      extraParts: extraParts.length > 0 ? extraParts : undefined,
     };
   });
 

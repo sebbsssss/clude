@@ -19,7 +19,8 @@ import { config } from '@clude/shared/config';
 import { detectTemporalConstraints, matchMemoriesTemporal } from '@clude/brain/experimental/temporal-bonds';
 import { generateQueryEmbedding, isEmbeddingEnabled } from '@clude/shared/core/embeddings';
 import { isOpenRouterEnabled, getOpenRouterConfig, OPENROUTER_MODELS } from '@clude/shared/core/openrouter-client';
-import { streamText, smoothStream } from 'ai';
+import { streamText, smoothStream, tool, jsonSchema, stepCountIs } from 'ai';
+import { fetchActivePersistentMemories } from './persistent-memory.routes.js';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
@@ -130,7 +131,7 @@ interface ChatRequest extends Request {
 
 // ---- Auth middleware ---- //
 
-async function chatAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function chatAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers['authorization'];
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Missing Authorization: Bearer <token> header' });
@@ -211,12 +212,14 @@ function fitToTokenBudget(
   memories: any[],
   modelId: string,
   totalMemoryCount: number,
+  persistentMemories: any[] = [],
 ): { messagesArray: Array<{ role: string; content: string }>; trimmedMemories: any[] } {
   const maxOutputTokens = (CHAT_MODELS.find(m => m.id === modelId)?.tier === 'pro') ? 16384 : 8192;
   const budget = config.chat.maxContextTokens - maxOutputTokens;
 
-  // System prompt without memories (base cost)
-  const basePrompt = buildSystemPrompt([], { totalMemoryCount });
+  // System prompt without memories (base cost) — persistent memories included because
+  // they're always injected and must fit.
+  const basePrompt = buildSystemPrompt([], { totalMemoryCount, persistentMemories });
   const basePromptTokens = estimateTokens(basePrompt);
 
   // Budget available for history + memory context
@@ -251,8 +254,8 @@ function fitToTokenBudget(
     trimmedMemories.push(mem);
   }
 
-  // 3. Build final system prompt with fitted memories
-  const finalPrompt = buildSystemPrompt(trimmedMemories, { totalMemoryCount });
+  // 3. Build final system prompt with fitted memories + persistent preferences
+  const finalPrompt = buildSystemPrompt(trimmedMemories, { totalMemoryCount, persistentMemories });
 
   const messagesArray: Array<{ role: string; content: string }> = [
     { role: 'system', content: finalPrompt },
@@ -262,12 +265,19 @@ function fitToTokenBudget(
   return { messagesArray, trimmedMemories };
 }
 
-function buildSystemPrompt(memories: any[], opts?: { totalMemoryCount?: number; isGreeting?: boolean }): string {
+function buildSystemPrompt(memories: any[], opts?: { totalMemoryCount?: number; isGreeting?: boolean; persistentMemories?: any[] }): string {
   const currentDate = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
   const semantic = memories.filter(m => m.memory_type === 'semantic');
   const procedural = memories.filter(m => m.memory_type === 'procedural');
   const selfModel = memories.filter(m => m.memory_type === 'self_model');
   const episodic = memories.filter(m => m.memory_type === 'episodic' || m.memory_type === 'introspective');
+
+  // Persistent preferences: always-on user instructions. Rendered in a distinct
+  // XML block at the top so the model treats them as rules, not recall context.
+  const persistent = (opts?.persistentMemories || []).filter(m => m && m.summary);
+  const persistentBlock = persistent.length > 0
+    ? `\n\n<persistent_preferences>\nThe user has set these as permanent preferences. Follow them in every response:\n${persistent.map(m => `- ${m.summary}`).join('\n')}\n</persistent_preferences>`
+    : '';
 
   const sections: string[] = [];
 
@@ -298,7 +308,7 @@ function buildSystemPrompt(memories: any[], opts?: { totalMemoryCount?: number; 
 
   if (opts?.isGreeting) {
     return `You are Clude — an AI with persistent, long-term memory. You remember everything users tell you across conversations.
-Today's date is ${currentDate}.
+Today's date is ${currentDate}.${persistentBlock}
 
 This user just signed in. Greet them warmly and personally. If you have their memories, give a brief recap of what you remember about them and what they were last working on. Be conversational, not robotic. Don't list memories mechanically — weave them into a natural greeting. Keep it to 2-3 sentences.
 
@@ -306,11 +316,13 @@ Never mention infrastructure providers or technical details about how you work. 
   }
 
   return `You are Clude — an AI with persistent, long-term memory. You remember everything users tell you across conversations.
-Today's date is ${currentDate}.
+Today's date is ${currentDate}.${persistentBlock}
 
 Use your memories naturally in conversation. Don't say "according to my records" or "I recall from my database" — just reference what you know like a person would. If a user asks about their memories, you can describe what you remember.
 
-Never mention infrastructure providers or technical details about how you work. Never tell users to check any external service. You ARE the memory system.${memoryContext}`;
+Never mention infrastructure providers or technical details about how you work. Never tell users to check any external service. You ARE the memory system.
+
+If the user expresses a LASTING preference (phrases like "always", "from now on", "remember", "never", "stop doing X", or a rule about tone/language/persona), call the \`suggestSavePreference\` tool with a concise summary so the UI can show a save card. Do NOT call it for one-off requests or questions. Do NOT call it if a matching preference is already in <persistent_preferences>.${memoryContext}`;
 }
 
 function resolveOpenRouterModel(modelId: string): string | null {
@@ -933,6 +945,12 @@ export function chatRoutes(): Router {
         log.warn({ err }, 'Memory recall failed, continuing without memories');
         return [] as any[];
       });
+      // Fetch user's persistent preferences in parallel — injected into every system prompt
+      const persistentPromise = fetchActivePersistentMemories(chatReq.ownerWallet!)
+        .catch(err => {
+          log.warn({ err }, 'Persistent-memory fetch failed, continuing without');
+          return [] as any[];
+        });
       const countPromise = db.from('memories')
         .select('id', { count: 'exact', head: true })
         .eq('owner_wallet', chatReq.ownerWallet!);
@@ -968,13 +986,14 @@ export function chatRoutes(): Router {
       }
 
       // 6. Load history IN PARALLEL with recall completion (recall was started earlier)
-      const [recalled, countResult, temporalResults, historyResult] = await Promise.all([
+      const [recalled, countResult, temporalResults, historyResult, persistentMemories] = await Promise.all([
         recallPromise, countPromise, temporalPromise,
         db.from('chat_messages')
           .select('role, content')
           .eq('conversation_id', conversationId)
           .order('created_at', { ascending: true })
           .limit(50), // fetch more than needed; fitToTokenBudget trims to fit
+        persistentPromise,
       ]);
 
       memories = recalled;
@@ -1007,7 +1026,7 @@ export function chatRoutes(): Router {
       const history = (historyResult.data || []).map(m => ({ role: m.role, content: m.content }));
       const modelId = model || conversation.model || DEFAULT_MODEL;
       const { messagesArray, trimmedMemories } = fitToTokenBudget(
-        history, memories, modelId, totalMemoryCount,
+        history, memories, modelId, totalMemoryCount, persistentMemories,
       );
       // Update memoryIds to reflect what was actually sent
       memoryIds = trimmedMemories.map(m => m.id);
@@ -1052,6 +1071,32 @@ export function chatRoutes(): Router {
       const modelDef = CHAT_MODELS.find(m => m.id === modelId);
       const maxTokens = isBYOK ? 16384 : (modelDef?.tier === 'pro' ? 16384 : 8192);
 
+      // suggestSavePreference — lightweight "proposal" tool. The model calls it when
+      // the user expresses a lasting preference; the client renders the output as a
+      // confirmation card. Accepting the card POSTs directly to persistent-memory
+      // routes — no model round-trip required. The execute() resolves immediately so
+      // the tool call is always paired with a tool result (no orphan tool_use).
+      const suggestSavePreferenceTool = tool({
+        description:
+          'Propose saving a LASTING user preference as a permanent setting. Call this ONLY when the user expresses something they want followed across all future conversations (patterns: "always", "from now on", "remember", "never", "stop doing X", tone/language/persona rules). Do NOT call for one-off requests. Do NOT call if a matching preference is already in <persistent_preferences>.',
+        inputSchema: jsonSchema<{ summary: string; key: string; value: string }>({
+          type: 'object',
+          properties: {
+            summary: { type: 'string', description: 'Short human-readable phrasing, e.g. "Always respond in Japanese"' },
+            key: { type: 'string', description: 'Stable slug for this preference, e.g. "response_language", "tone", "name"' },
+            value: { type: 'string', description: 'The concrete value, e.g. "Japanese" or "casual"' },
+          },
+          required: ['summary', 'key', 'value'],
+          additionalProperties: false,
+        }),
+        execute: async ({ summary, key, value }) => ({
+          kind: 'suggestion' as const,
+          summary,
+          key,
+          value,
+        }),
+      });
+
       const result = streamText({
         model: llmModel,
         messages: messagesArray.map(m => ({
@@ -1062,6 +1107,8 @@ export function chatRoutes(): Router {
         temperature: 0.7,
         abortSignal: abortController.signal,
         experimental_transform: smoothStream({ chunking: 'word' }),
+        tools: { suggestSavePreference: suggestSavePreferenceTool },
+        stopWhen: stepCountIs(3), // allow optional short acknowledgement after tool call
       });
 
       result.pipeUIMessageStreamToResponse(res, {

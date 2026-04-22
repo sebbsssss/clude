@@ -60,6 +60,16 @@ export type CludeChatMessage = UIMessage<ChatMessageMetadata>;
 
 // --- Legacy types (used by guest chat + greeting which still use custom SSE) ---
 
+export interface PreferenceSuggestionPart {
+  readonly type: 'suggest-preference';
+  readonly toolCallId: string;
+  readonly summary: string;
+  readonly key: string;
+  readonly value: string;
+}
+
+export type AssistantExtraPart = PreferenceSuggestionPart;
+
 export interface SettledMessage {
   readonly kind: 'settled';
   readonly id: string;
@@ -74,6 +84,31 @@ export interface SettledMessage {
   readonly receipt?: MessageReceipt;
   readonly isGreeting?: boolean;
   readonly greetingMeta?: GreetingMeta;
+  readonly extraParts?: readonly AssistantExtraPart[];
+}
+
+// --- Persistent memory (user-managed "remember this always" preferences) ---
+
+export interface PersistentMemory {
+  id: number;
+  summary: string;
+  key: string | null;
+  value: string | null;
+  created_at: string;
+}
+
+export interface PersistentMemoryListResponse {
+  memories: PersistentMemory[];
+  count: number;
+  max: number;
+}
+
+export interface PersistentMemorySaveResponse {
+  id: number;
+  summary: string;
+  key: string;
+  value: string;
+  replaced: number;
 }
 
 export interface StreamingState {
