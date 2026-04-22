@@ -143,7 +143,7 @@ function parseArgs() {
     readerModel: 'claude-sonnet-4-5-20250929',
     oracleBypass: false, // skip recall, pass raw haystack sessions to reader
     countingUnion: false, // use union extraction for counting questions
-    countingRuns: 3, // number of extraction runs for counting union
+    countingRuns: 5, // number of extraction runs for counting union (v2: increased from 3→5)
     rejudge: '' as string, // path to results JSON to re-judge with current judge model
     runId: '' as string, // unique run ID — creates isolated owner_wallet to avoid cleanup
     truncateSessions: false, // use old truncate-to-5000 seeding instead of session chunking
@@ -528,75 +528,6 @@ async function generateAnswerCoN(
 ): Promise<string> {
   const typeInstruction = TYPE_INSTRUCTIONS[questionType] || '';
   const dateContext = questionDate ? `\nThe question is being asked on: ${questionDate}. Use this to resolve relative time references like "last week", "a few months ago", etc.` : '';
-
-  // Two-stage approach for SS-User: extract user-stated facts first, then answer
-  if (questionType === 'single-session-user') {
-    // Stage 1: Find and quote the exact user statements relevant to the question
-    const stage1 = await anthropic.messages.create({
-      model: readerModel,
-      max_tokens: 1200,
-      temperature: 0,
-      system: `You are searching conversation memories to find specific information the USER stated.
-
-The question asks about something the user said, mentioned, owns, did, or experienced. Your job is to find the exact conversation and quote the user's specific statements.${dateContext}
-
-STEP 1: Read ALL conversations — do NOT skip any. The relevant conversation may not be obvious from its title.
-STEP 2: Check each conversation for user statements related to the question topic. The topic might be mentioned briefly in passing within a longer conversation.
-STEP 3: From the relevant conversation, QUOTE the user's exact words that contain:
-- Specific names (people, places, brands, products, activities)
-- Specific numbers (counts, amounts, ages, measurements)
-- Specific events (what happened, what they did, what they own, what they plan to do)
-- Specific opinions or experiences stated by the user
-
-OUTPUT FORMAT:
-RELEVANT CONVERSATION: [conversation number and date]
-TOPIC MATCH: [why this matches the question]
-USER QUOTES:
-- "[exact user quote with relevant detail]"
-- "[exact user quote with relevant detail]"
-KEY FACTS: [specific names, numbers, events from the user's statements]
-
-CRITICAL:
-- The answer is something the USER said or mentioned. Focus on user turns, not assistant turns.
-- Search EVERY conversation — the detail may be buried in a long conversation about a different topic.
-- The question may use different words: "pet" = "dog/cat/fish", "vehicle" = "car/bike/truck", "workout" = "exercise/gym/run".
-- If you can't find an exact match, look for semantically related statements.`,
-      messages: [{
-        role: 'user',
-        content: `Memory context:\n${context}\n\nQuestion: ${question}\n\nFind the user's specific statements:`,
-      }],
-    });
-
-    const ssuExtraction = stage1.content[0].type === 'text' ? stage1.content[0].text.trim() : '';
-
-    // Stage 2: Answer using extracted user quotes
-    const stage2 = await anthropic.messages.create({
-      model: readerModel,
-      max_tokens: 300,
-      temperature: 0,
-      system: `Answer the question using the extracted user statements below.
-
-Rules:
-- The answer comes from what the USER said or mentioned in their conversations
-- Use specific names, numbers, and details from the quotes
-- Answer directly and concisely (1-2 sentences, ideally under 10 words)
-- NEVER say "I don't have information" — the quotes contain the answer
-- If the quotes don't clearly answer, check the original context too
-- Prefer exact names and specific details over vague descriptions`,
-      messages: [{
-        role: 'user',
-        content: `Extracted user statements:\n${ssuExtraction}\n\nOriginal memory context:\n${context}\n\nQuestion: ${question}\n\nAnswer:`,
-      }],
-    });
-
-    const ssuAnswer = stage2.content[0].type === 'text' ? stage2.content[0].text.trim() : '';
-    // Only fall through if clearly IDK — keep most SS-User answers from stage2
-    const ssuHardIdk = /^(i don't|i do not|i cannot|no information|not mentioned|not found|there is no)/i.test(ssuAnswer);
-    if (!ssuHardIdk) {
-      return ssuAnswer;
-    }
-    // Fall through to standard single-pass below
-  }
 
   // Two-stage approach for SS-Asst: extract assistant details first, then answer
   if (questionType === 'single-session-assistant') {
@@ -1043,7 +974,8 @@ async function generateCountingUnionAnswer(
   const dateContext = questionDate ? `\nThe question is being asked on: ${questionDate}.` : '';
 
   // Check if this is a counting/aggregation question
-  const isCountingQ = /\bhow many\b|\bhow much total\b|\bhow much .* (spend|spent|raise|raised|earn|earned|pay|paid|cost|save|saved)\b|\btotal (number|amount|cost|distance|money)\b|\bwhat is the (total|average|minimum|maximum)\b|\bhow much (did|will|would|do) I\b|\bhow much money\b|\bpage count\b|\bspend the most\b|\bapproximate (increase|decrease)\b/i.test(question);
+  // v2: widened regex to catch more multi-session enumeration questions
+  const isCountingQ = /\bhow many\b|\bhow much total\b|\bhow much .* (spend|spent|raise|raised|earn|earned|pay|paid|cost|save|saved)\b|\btotal (number|amount|cost|distance|money)\b|\bwhat is the (total|average|minimum|maximum)\b|\bhow much (did|will|would|do) I\b|\bhow much money\b|\bpage count\b|\bspend the most\b|\bapproximate (increase|decrease)\b|\bwhich .* (most|least|highest|lowest|best|worst|first|last)\b|\bhow long did it take\b|\bhow long have I been\b|\bhow long was\b|\bhow (many|much) time\b/i.test(question);
   if (!isCountingQ) {
     // Fall back to standard answer for non-counting questions
     return generateAnswerCoN(context, question, _questionType, readerModel, questionDate);
@@ -1150,23 +1082,30 @@ CRITICAL RULES:
 
   const synthesisResp = await anthropic.messages.create({
     model: readerModel,
-    max_tokens: 600,
+    max_tokens: 800,
     temperature: 0,
     system: `You answer a question using extracted data items from a user's conversation history.${dateContext}
 
-You have been given a comprehensive list of items found across multiple extraction passes. Use ALL of them.
+You have been given a comprehensive list of items found across multiple extraction passes.
+
+IMPORTANT PROCESS:
+1. Review ALL numbered extracted items carefully
+2. Quickly scan the original context for ANY items that might have been missed in extraction
+3. Combine extracted items + any additional items found in step 2
+4. Give your final answer
 
 Rules:
-- For "how many" questions: count ALL items in the list, then answer with the total count and list each item
-- For "how much total/spent" questions: extract dollar amounts from each item, sum them, show the breakdown
-- For "average" questions: extract all values, sum them, divide by count
-- For comparison (most, least, first, last): compare all items
-- Answer concisely (1-3 sentences) with the specific count/amount
-- Include the specific count or sum — do NOT be vague
+- For "how many" questions: NUMBER each item explicitly (1, 2, 3...) then give the total. Example: "1. Blue dress (Conv 3), 2. Red scarf (Conv 5), 3. Boots (Conv 7) = 3 items total"
+- For "how much total/spent" questions: list each amount then sum. Show: "$50 + $120 + $15 = $185 total"
+- For "average/increase/decrease": show the math step by step
+- For comparison (most, least, which): compare ALL items and pick the winner explicitly
+- For "how long": compute start and end dates, show the arithmetic
+- Answer concisely (2-4 sentences) with the specific count/amount/answer
+- Include the specific number — do NOT be vague
 - Do NOT say "I don't have information" — you have the extracted data`,
     messages: [{
       role: 'user',
-      content: `Extracted items (${itemList.length} found):\n${itemList.map((item, i) => `${i + 1}. ${item}`).join('\n')}\n\nQuestion: ${question}\n\nAnswer:`,
+      content: `Extracted items (${itemList.length} found across ${numRuns} extraction passes):\n${itemList.map((item, i) => `${i + 1}. ${item}`).join('\n')}\n\nOriginal memory context (scan for any missed items):\n${context.slice(0, 8000)}\n\nQuestion: ${question}\n\nAnswer (enumerate items, then give total):`,
     }],
   });
 
