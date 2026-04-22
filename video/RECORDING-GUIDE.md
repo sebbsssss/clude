@@ -55,10 +55,11 @@ Open three terminals:
 
 **Terminal 1** — Clude backend:
 ```bash
-cd /Users/sebastien/Projects/cluude-bot
-npm run dev:server
+cd /Users/sebastien/Projects/cluude-bot/apps/server
+pnpm run dev
 ```
-Wait for `listening on :3000` (or similar).
+(This project uses pnpm workspaces. If `pnpm` isn't installed: `npm install -g pnpm`.)
+Wait for a line like `listening on :3000` or `Server started`.
 
 **Terminal 2** — Clude adapter for benchmarks (needs to run during the two-agent demo):
 ```bash
@@ -69,10 +70,10 @@ Wait for `running on http://127.0.0.1:9877`.
 
 **Terminal 3** — Dashboard frontend:
 ```bash
-cd /Users/sebastien/Projects/cluude-bot/apps/dashboard
-npm run dev
+cd /Users/sebastien/Projects/cluude-bot
+npm run dashboard
 ```
-Wait for `Local: http://localhost:5173` (or whichever port).
+Wait for `Local: http://localhost:5173` (or similar port).
 
 Open `http://localhost:5173/showcase/graph` in Chrome. You should see the empty graph with a text input. If you see the indicator say `● connected` — the SSE stream is working. Type anything and press Store. Watch nodes appear.
 
