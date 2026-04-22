@@ -53,29 +53,36 @@ https://elevenlabs.io — free tier has 10k characters/month. Our 8 VO scripts t
 
 Open three terminals:
 
+**IMPORTANT — all dev servers must run from the WORKTREE**, not the main checkout. Our hackathon code (showcase page, showcase API, etc.) only exists on the worktree branch. The main checkout is on a different branch.
+
+Worktree path: `/Users/sebastien/Projects/cluude-bot/.claude/worktrees/hackathon-colosseum-work`
+
 **Terminal 1** — Clude backend:
 ```bash
-cd /Users/sebastien/Projects/cluude-bot/apps/server
+cd /Users/sebastien/Projects/cluude-bot/.claude/worktrees/hackathon-colosseum-work/apps/server
+pnpm install   # first time only; takes ~1-2 min
 pnpm run dev
 ```
-(This project uses pnpm workspaces. If `pnpm` isn't installed: `npm install -g pnpm`.)
+(Uses pnpm workspaces. If `pnpm` isn't installed: `npm install -g pnpm`.)
 Wait for a line like `listening on :3000` or `Server started`.
 
 **Terminal 2** — Clude adapter for benchmarks (needs to run during the two-agent demo):
 ```bash
-cd /Users/sebastien/Projects/cluude-bot
+cd /Users/sebastien/Projects/cluude-bot/.claude/worktrees/hackathon-colosseum-work
 npx tsx experiments/MemoryAgentBench/clude-adapter/server.ts
 ```
+*Note:* `experiments/` is gitignored (only lives in main checkout), so this command actually reads from the MAIN checkout path: `/Users/sebastien/Projects/cluude-bot/experiments/`. That's fine — they share the same filesystem parent.
 Wait for `running on http://127.0.0.1:9877`.
 
 **Terminal 3** — Dashboard frontend:
 ```bash
-cd /Users/sebastien/Projects/cluude-bot
-npm run dashboard
+cd /Users/sebastien/Projects/cluude-bot/.claude/worktrees/hackathon-colosseum-work/apps/dashboard
+pnpm install   # first time only
+pnpm run dev
 ```
 Wait for `Local: http://localhost:5173` (or similar port).
 
-Open `http://localhost:5173/showcase/graph` in Chrome. You should see the empty graph with a text input. If you see the indicator say `● connected` — the SSE stream is working. Type anything and press Store. Watch nodes appear.
+Open `http://localhost:5173/dashboard/showcase/graph` in Chrome. You should see the empty graph with a text input. If you see the indicator say `● connected` — the SSE stream is working. Type anything and press Store. Watch nodes appear.
 
 **If anything fails:** fix before proceeding. Everything downstream depends on these three working.
 
@@ -298,7 +305,7 @@ Unlikely, but possible. Options:
 
 1. Backend (Terminal 1) still running.
 2. Dashboard (Terminal 3) still running.
-3. Open Chrome, fresh window, navigate to `http://localhost:5173/showcase/graph`. Full-screen the browser (⌃⌘F).
+3. Open Chrome, fresh window, navigate to `http://localhost:5173/dashboard/showcase/graph`. Full-screen the browser (⌃⌘F).
 4. Confirm the page shows `● connected` (green dot) — SSE is live.
 5. In OBS: new scene called "Graph". Display Capture source. No crop needed (full screen).
 6. Prepare these three snippets in a scratch text file (so you paste, not type):
