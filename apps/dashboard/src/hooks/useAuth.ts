@@ -151,7 +151,9 @@ export function useAuth(): AuthState {
     if (privyAuth) {
       logout();
     }
-    api.emitRefresh();
+    // Don't emitRefresh() here: listeners would re-fetch in legacy mode
+    // against requirePrivyAuth endpoints and cascade into 401s before the
+    // app re-renders to Landing. The unmount on re-render is enough.
   }, [privyAuth, logout]);
 
   // Stable ref for handleLogout — avoids effect re-running on identity changes

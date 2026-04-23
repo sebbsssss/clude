@@ -70,6 +70,24 @@ export async function requireOwnership(
     return;
   }
 
+  // No wallet claimed + cortex API key — resolve owner_wallet from agent row.
+  // Lets cortex-mode clients (e.g. dashboard after auto-register) reach
+  // wallet-scoped endpoints without having to send a Solana address.
+  if (!wallet) {
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer clk_')) {
+      const apiKey = authHeader.slice(7);
+      const agent = await authenticateAgent(apiKey);
+      if (agent?.owner_wallet) {
+        req.verifiedWallet = agent.owner_wallet;
+        next();
+        return;
+      }
+      res.status(401).json({ error: 'Invalid or inactive API key' });
+      return;
+    }
+  }
+
   if (!wallet || !SOLANA_ADDR_RE.test(wallet)) {
     res.status(400).json({ error: 'Valid Solana wallet address required (?wallet= or body.wallet)' });
     return;
