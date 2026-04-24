@@ -513,9 +513,10 @@ class CludeAPI {
           return [{
             id: stats.agent_id,
             name: stats.agent_name || stats.agent_id,
-            wallet_address: stats.owner_wallet || null,
+            wallet_address: stats.owner_wallet || '',
+            api_endpoint: '',
             created_at: stats.registered_at || new Date().toISOString(),
-            last_active: stats.last_used || null,
+            last_active: stats.last_used || '',
             memory_count: stats.total_memories || 0,
           }];
         }
