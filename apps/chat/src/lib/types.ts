@@ -76,6 +76,30 @@ export interface SettledMessage {
   readonly greetingMeta?: GreetingMeta;
 }
 
+// --- Persistent memory (user-managed "remember this always" preferences) ---
+
+export interface PersistentMemory {
+  id: number;
+  summary: string;
+  key: string | null;
+  value: string | null;
+  created_at: string;
+}
+
+export interface PersistentMemoryListResponse {
+  memories: PersistentMemory[];
+  count: number;
+  max: number;
+}
+
+export interface PersistentMemorySaveResponse {
+  id: number;
+  summary: string;
+  key: string;
+  value: string;
+  replaced: number;
+}
+
 export interface StreamingState {
   readonly kind: 'streaming';
   readonly id: string;

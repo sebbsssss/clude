@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Menu } from 'lucide-react';
+import { Menu, BookmarkPlus } from 'lucide-react';
 import { useAuthContext } from '../hooks/AuthContext';
 import { useChat } from '../hooks/use-chat';
 import { useConversations } from '../hooks/useConversations';
@@ -16,6 +16,7 @@ import { SettledBubble, StreamingBubble, TransactionHistory } from './MessageBub
 import { InputArea } from './InputArea';
 import { PromoSlideout } from './PromoSlideout';
 import { BYOKModal } from './byok-modal';
+import { PersistentMemoryModal } from './PersistentMemoryModal';
 
 export function ChatInterface() {
   const { authenticated } = useAuthContext();
@@ -28,6 +29,7 @@ export function ChatInterface() {
   const byok = useBYOK();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [byokOpen, setBYOKOpen] = useState(false);
+  const [persistentOpen, setPersistentOpen] = useState(false);
   const greetedRef = useRef(false);
   const {
     conversations, activeId, hasMoreMessages,
@@ -188,6 +190,15 @@ export function ChatInterface() {
               <Menu className="h-5 w-5" />
             </button>
           )}
+          {authenticated && (
+            <button
+              onClick={() => setPersistentOpen(true)}
+              className="text-zinc-500 hover:text-violet-300 transition-colors p-2"
+              title="Permanent preferences"
+            >
+              <BookmarkPlus className="h-4 w-4" />
+            </button>
+          )}
           <div className="flex-1">
             <ChatHeader />
           </div>
@@ -290,6 +301,10 @@ export function ChatInterface() {
         loading={byok.loading}
         onSave={byok.saveKey}
         onRemove={byok.removeKey}
+      />
+      <PersistentMemoryModal
+        open={persistentOpen}
+        onClose={() => setPersistentOpen(false)}
       />
       {/* First-time promo slideout — shows once per device for signed-in users with an active promo */}
       <PromoSlideout show={authenticated && !!balanceInfo?.promo} />
