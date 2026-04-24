@@ -14,7 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Funnel+Sans:ital,wght@0,300..800;1,300..800&family=Inconsolata:wght@300..700&display=swap" rel="stylesheet" />
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- Three.js is loaded after first paint (see particles init script at the bottom) to keep the hero text TTI fast on slow CPUs. -->
+
 <style>
   :root {
     --bg: #f5f5f0;           /* brand off-white */
@@ -87,6 +88,17 @@
     background: rgba(245, 245, 240, 0.62);
     backdrop-filter: blur(10px) saturate(108%);
     -webkit-backdrop-filter: blur(10px) saturate(108%);
+  }
+  /* On low-end devices and mobile, backdrop-filter blur is a major GPU cost.
+     Swap for an opaque paper layer — the grain + a few particles still peek
+     through if the WebGL scene loads, and it stays fast on older hardware. */
+  @media (max-width: 768px), (pointer: coarse), (prefers-reduced-motion: reduce) {
+    .pane {
+      background: rgba(245, 245, 240, 0.92);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    .grain { opacity: 0.2; }
   }
   .col {
     max-width: 680px;
@@ -632,7 +644,7 @@
     <a href="/docs.html">Docs</a>
     <a href="/chat">Chat</a>
     <a href="/dashboard">Dashboard</a>
-    <a href="https://github.com/sebbsssss/cludebot" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://github.com/sebbsssss/clude" target="_blank" rel="noopener">GitHub</a>
   </div>
 </nav>
 
@@ -875,7 +887,7 @@
     <a href="/install.html">Install</a>
     <a href="/chat">Chat</a>
     <a href="/dashboard">Dashboard</a>
-    <a href="https://github.com/sebbsssss/cludebot" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://github.com/sebbsssss/clude" target="_blank" rel="noopener">GitHub</a>
     <a href="/compare.html">Compare</a>
     <a href="/privacy.html">Privacy</a>
   </div>
@@ -978,24 +990,67 @@ void main() {
 </script>
 
 <script>
-  // ---- Three.js scene setup ----
-  const canvas = document.getElementById('bg-canvas');
-  const renderer = new THREE.WebGLRenderer({
-    canvas,
-    antialias: true,
-    alpha: true,
-  });
-  const pixelRatio = Math.min(window.devicePixelRatio, 2);
-  renderer.setPixelRatio(pixelRatio);
-  renderer.setSize(window.innerWidth, window.innerHeight, false);
-  renderer.setClearColor(0x000000, 0);
+  // ---- Adaptive hero particle init ----
+  // Respects prefers-reduced-motion, drops particle count on mobile/low-core
+  // machines, pauses when the tab is hidden, and loads Three.js after first
+  // paint so the hero text is interactive before the 600KB library arrives.
+  (function initParticlesWhenReady() {
+    const canvas = document.getElementById('bg-canvas');
+    if (!canvas) return;
 
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
-  camera.position.set(0, 0, 6.5);
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReducedMotion) return; // canvas stays blank; pane + grain carry the look.
 
-  // ---- Particle field ----
-  const COUNT = 30000;
+    const ua = navigator.userAgent || '';
+    const isMobileUA = /Mobi|Android|iPhone|iPad|iPod/i.test(ua);
+    const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
+    const isSmallViewport = window.innerWidth < 768;
+    const cores = navigator.hardwareConcurrency || 4;
+    // Rough memory hint (Chrome exposes it; fall back to a reasonable guess)
+    const memGb = navigator.deviceMemory || 4;
+
+    // Tiered particle counts: mobile and low-power boxes get drastic cuts,
+    // capable desktops keep the original density.
+    let COUNT;
+    if (isMobileUA || isSmallViewport || isCoarsePointer) {
+      COUNT = 3500;
+    } else if (cores < 4 || memGb < 4) {
+      COUNT = 8000;
+    } else {
+      COUNT = 30000;
+    }
+
+    // Lower pixel ratio on mobile shaves a lot of fragment work.
+    const pixelRatioCap = (isMobileUA || isSmallViewport) ? 1 : 2;
+
+    // Load Three.js after first paint so the hero text is interactive first.
+    if (document.readyState === 'complete') {
+      loadThree();
+    } else {
+      window.addEventListener('load', loadThree, { once: true });
+    }
+
+    function loadThree() {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
+      s.async = true;
+      s.onload = () => initScene(COUNT, pixelRatioCap);
+      s.onerror = () => { /* canvas stays blank, page still works */ };
+      document.head.appendChild(s);
+    }
+
+    function initScene(particleCount, pixelRatioCap) {
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: true, powerPreference: 'low-power' });
+      const pixelRatio = Math.min(window.devicePixelRatio, pixelRatioCap);
+      renderer.setPixelRatio(pixelRatio);
+      renderer.setSize(window.innerWidth, window.innerHeight, false);
+      renderer.setClearColor(0x000000, 0);
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+      camera.position.set(0, 0, 6.5);
+
+      const COUNT = particleCount;
   const geometry = new THREE.BufferGeometry();
 
   const seeds = new Float32Array(COUNT * 3);
@@ -1070,30 +1125,71 @@ void main() {
   }
   window.addEventListener('resize', onResize);
 
-  // ---- Animate ----
-  const clock = new THREE.Clock();
-  function tick() {
-    const dt = clock.getDelta();
-    material.uniforms.uTime.value += dt;
+      // ---- Animate ----
+      const clock = new THREE.Clock();
+      let rafId = null;
+      let running = true;
+      function tick() {
+        if (!running) return;
+        const dt = clock.getDelta();
+        material.uniforms.uTime.value += dt;
 
-    // smooth mouse
-    mouse.x += (targetMouse.x - mouse.x) * 0.08;
-    mouse.y += (targetMouse.y - mouse.y) * 0.08;
-    material.uniforms.uMouse.value.copy(mouse);
+        // smooth mouse
+        mouse.x += (targetMouse.x - mouse.x) * 0.08;
+        mouse.y += (targetMouse.y - mouse.y) * 0.08;
+        material.uniforms.uMouse.value.copy(mouse);
 
-    const currentStrength = material.uniforms.uMouseStrength.value;
-    material.uniforms.uMouseStrength.value = currentStrength + (targetStrength - currentStrength) * 0.05;
+        const currentStrength = material.uniforms.uMouseStrength.value;
+        material.uniforms.uMouseStrength.value = currentStrength + (targetStrength - currentStrength) * 0.05;
 
-    // slow drift of camera for parallax
-    const t = material.uniforms.uTime.value;
-    camera.position.x = Math.sin(t * 0.12) * 0.15;
-    camera.position.y = Math.cos(t * 0.09) * 0.08;
-    camera.lookAt(0, 0, 0);
+        // slow drift of camera for parallax
+        const t = material.uniforms.uTime.value;
+        camera.position.x = Math.sin(t * 0.12) * 0.15;
+        camera.position.y = Math.cos(t * 0.09) * 0.08;
+        camera.lookAt(0, 0, 0);
 
-    renderer.render(scene, camera);
-    requestAnimationFrame(tick);
-  }
-  tick();
+        renderer.render(scene, camera);
+        rafId = requestAnimationFrame(tick);
+      }
+
+      // Pause rendering when the tab isn't visible (kills battery + GPU
+      // on older phones sitting on the page in the background).
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          running = false;
+          if (rafId) cancelAnimationFrame(rafId);
+          rafId = null;
+        } else if (!running) {
+          running = true;
+          clock.getDelta(); // reset clock so the drift doesn't jump
+          rafId = requestAnimationFrame(tick);
+        }
+      });
+
+      // Also pause when the hero has fully scrolled out of view.
+      const hero = document.querySelector('.hero');
+      if (hero && 'IntersectionObserver' in window) {
+        const io = new IntersectionObserver((entries) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) {
+              if (!running) {
+                running = true;
+                clock.getDelta();
+                rafId = requestAnimationFrame(tick);
+              }
+            } else {
+              running = false;
+              if (rafId) cancelAnimationFrame(rafId);
+              rafId = null;
+            }
+          }
+        }, { threshold: 0.01 });
+        io.observe(hero);
+      }
+
+      tick();
+    } // end initScene
+  })(); // end initParticlesWhenReady
 </script>
 
 <script>

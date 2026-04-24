@@ -11,7 +11,7 @@ Thanks for your interest in contributing. This guide covers the basics.
 ## Getting started
 
 ```bash
-git clone https://github.com/sebbsssss/cludebot.git
+git clone https://github.com/sebbsssss/clude.git
 cd cludebot
 npm install
 cp .env.example .env  # Fill in your API keys
@@ -62,7 +62,7 @@ Tests use Vitest. Run with `pnpm --filter brain test`. Core memory and dream cyc
 
 ## Good first issues
 
-Look for issues labeled [`good first issue`](https://github.com/sebbsssss/cludebot/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) for beginner-friendly tasks.
+Look for issues labeled [`good first issue`](https://github.com/sebbsssss/clude/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) for beginner-friendly tasks.
 
 ## Questions?
 

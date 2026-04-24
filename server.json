@@ -1,0 +1,59 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.sebbsssss/clude",
+  "description": "Portable agent memory anchored on Solana. Local SQLite + vector recall, open export.",
+  "repository": {
+    "url": "https://github.com/sebbsssss/clude",
+    "source": "github"
+  },
+  "version": "3.0.3",
+  "websiteUrl": "https://clude.io",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@clude/sdk",
+      "version": "3.0.3",
+      "runtimeHint": "npx",
+      "runtimeArguments": [
+        {
+          "type": "positional",
+          "value": "mcp-serve"
+        }
+      ],
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "CORTEX_API_KEY",
+          "description": "Clude API key from https://clude.io/register",
+          "isRequired": true,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "CORTEX_HOST_URL",
+          "description": "Clude host URL (defaults to https://clude.io)",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string",
+          "default": "https://clude.io"
+        },
+        {
+          "name": "CLUDE_WALLET",
+          "description": "Solana wallet public key used to sign and anchor memories (optional but recommended)",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "CLUDE_AGENT_NAME",
+          "description": "Human-readable name for this agent instance",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}

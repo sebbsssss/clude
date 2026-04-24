@@ -552,7 +552,7 @@ export async function runInit(): Promise<void> {
     }
   }
 
-  console.log(`\n  ${c.dim}Docs:    https://github.com/sebbsssss/cludebot${c.reset}`);
+  console.log(`\n  ${c.dim}Docs:    https://github.com/sebbsssss/clude${c.reset}`);
   console.log(`  ${c.dim}Website: https://clude.io${c.reset}`);
   printDivider();
   console.log('');
