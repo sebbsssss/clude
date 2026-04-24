@@ -1,6 +1,12 @@
 # Build stage
 FROM node:22-slim AS builder
 
+# node-gyp (used by better-sqlite3 and keccak native bindings) needs python3
+# and a C++ toolchain. `node:22-slim` ships without these.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
 
 WORKDIR /app
@@ -41,6 +47,13 @@ RUN pnpm --filter @clude/dashboard exec vite build
 
 # Production stage
 FROM node:22-slim
+
+# Same native toolchain — the prod `pnpm install --prod` still triggers
+# native builds (better-sqlite3, keccak) because prebuilds aren't available
+# for every arch.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
 
