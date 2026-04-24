@@ -58,7 +58,28 @@ export function Explore() {
 
   const handleMemoryClick = useCallback((id: number) => {
     const node = nodeMap.get(id);
-    if (node) setSelectedNode(node);
+    if (node) {
+      setSelectedNode(node);
+      return;
+    }
+    // Memory referenced in chat but not in the loaded graph — can happen if the
+    // memory was created after the graph loaded, or is outside the loaded set.
+    // Open the detail panel with a stub so user sees something, and warn so
+    // we can confirm whether that's the zoom-stopped-working cause.
+    console.warn(`[explore] Memory #${id} not in loaded graph (${nodeMap.size} nodes). Opening stub panel; 3D zoom needs the node to be loaded.`);
+    setSelectedNode({
+      id,
+      type: 'episodic',
+      summary: `Memory #${id}`,
+      content: '(Not in loaded graph — refresh or reload to see full details.)',
+      tags: [],
+      importance: 0,
+      decay: 1,
+      valence: 0,
+      accessCount: 0,
+      source: '',
+      createdAt: '',
+    });
   }, [nodeMap]);
 
   const handleBackgroundClick = useCallback(() => { setSelectedNode(null); setHighlightedIds(new Set()); }, []);

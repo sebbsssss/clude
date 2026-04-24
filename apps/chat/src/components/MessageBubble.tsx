@@ -5,7 +5,6 @@ import { ChevronDown, Clock, X } from 'lucide-react';
 import { Markdown } from './Markdown';
 import { MemoryPills } from './MemoryPills';
 import { StaticAvatar } from './StaticAvatar';
-import { PreferenceSuggestionCard } from './PreferenceSuggestionCard';
 import type { SettledMessage, StreamingState, GreetingMeta } from '../lib/types';
 
 // --- Avatar shader props as module-level constants (never recreated) ---
@@ -184,18 +183,10 @@ export const SettledBubble = memo(function SettledBubble({
           <div className="bg-zinc-900/80 border border-blue-500/20 rounded-xl rounded-tl-sm px-3 py-2">
             {message.content ? (
               <Markdown content={message.content} />
-            ) : message.extraParts && message.extraParts.length > 0 ? (
-              // Model emitted only tool calls (no text) — render a neutral prompt
-              <p className="text-white/70 text-[13px] italic">Noticed a preference — see card below.</p>
             ) : (
               <p className="text-white/90 text-[13px]">Failed to get response</p>
             )}
           </div>
-          {message.extraParts?.map((p) =>
-            p.type === 'suggest-preference'
-              ? <PreferenceSuggestionCard key={p.toolCallId} part={p} />
-              : null,
-          )}
           <MemoryPills memoryIds={message.memoryIds as number[] | undefined} visible={showMemoryPills} />
           {message.isGreeting && message.greetingMeta && message.greetingMeta.total_memories > 0 && (
             <GreetingMetaBar meta={message.greetingMeta} />
