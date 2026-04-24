@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { AuthContext } from './hooks/AuthContext';
 import { AgentProvider } from './context/AgentContext';
@@ -13,6 +13,7 @@ import { Settings } from './pages/Settings';
 import { Setup } from './pages/Setup';
 import { FileMemory } from './pages/file-memory';
 import { Explore } from './pages/explore';
+import LiveGraph from './pages/showcase/LiveGraph';
 
 function AuthenticatedApp() {
   return (
@@ -38,6 +39,18 @@ function AuthenticatedApp() {
 
 export default function App() {
   const auth = useAuth();
+  const location = useLocation();
+
+  // Public showcase routes — no auth required, bypasses Landing.
+  // Judges / general visitors land here without needing a wallet.
+  if (location.pathname.startsWith('/showcase')) {
+    return (
+      <Routes>
+        <Route path="/showcase/graph" element={<LiveGraph />} />
+        <Route path="/showcase/*" element={<Navigate to="/showcase/graph" replace />} />
+      </Routes>
+    );
+  }
 
   if (!auth.ready) return null;
 

@@ -74,6 +74,12 @@
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSCameraUsageDescription</key>
+	<string>Clude does not actively use the camera. This permission is only requested if you choose to scan a QR code from within a linked wallet provider.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Clude needs access to your photo library so you can select memory pack files to import into your account.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Clude does not use your location. This permission is referenced by our network connectivity library and is never actively requested.</string>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

@@ -13,7 +13,7 @@ import { recallMemories } from "@clude/brain/memory";
 import { getDb } from "@clude/shared/core/database";
 import { createChildLogger } from "@clude/shared/core/logger";
 import { config } from "@clude/shared/config";
-import { requirePrivyAuth } from "@clude/brain/auth/privy-auth";
+import { optionalPrivyAuth } from "@clude/brain/auth/privy-auth";
 import { requireOwnership } from "@clude/brain/auth/require-ownership";
 import {
   generateOpenRouterResponse,
@@ -76,20 +76,18 @@ This line will be parsed by the UI to highlight nodes in the graph. Always inclu
 export function exploreRoutes(): Router {
   const router = Router();
 
-  // All explore routes require authentication + wallet ownership
-  router.use(requirePrivyAuth);
+  // Auth: accept either Privy JWT (optional) or cortex API key.
+  // requireOwnership resolves the caller's wallet from either path and
+  // sets req.verifiedWallet — use that for scoping, not body.wallet.
+  router.use(optionalPrivyAuth);
   router.use(requireOwnership);
 
   router.post("/", async (req: Request, res: Response) => {
-    const { content, history, wallet } = req.body;
+    const { content, history } = req.body;
+    const wallet = req.verifiedWallet!;
 
     if (!content || typeof content !== "string") {
       res.status(400).json({ error: "content is required" });
-      return;
-    }
-
-    if (!wallet) {
-      res.status(400).json({ error: "wallet is required" });
       return;
     }
 

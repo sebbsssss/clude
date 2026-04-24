@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #0a0a0a;
+      }
+
+      .scene {
+        width: 1920px;
+        height: 1080px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        padding: 90px 180px 80px;
+        background: #0a0a0a;
+        position: relative;
+      }
+
+      .scene::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(ellipse at 50% 20%, rgba(92, 181, 255, 0.03) 0%, transparent 60%);
+        pointer-events: none;
+      }
+
+      .main-title {
+        font-family: -apple-system, system-ui, "SF Pro Text", sans-serif;
+        font-size: 36px;
+        font-weight: 600;
+        color: #ffffff;
+        text-align: center;
+        letter-spacing: -0.01em;
+        opacity: 0;
+        margin-bottom: 52px;
+      }
+
+      .charts-container {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        gap: 52px;
+      }
+
+      .chart-block {
+        opacity: 0;
+        transform: translateY(16px);
+      }
+
+      .chart-title {
+        font-family: -apple-system, system-ui, "SF Pro Text", sans-serif;
+        font-size: 20px;
+        font-weight: 500;
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 20px;
+      }
+
+      .bar-row {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        margin-bottom: 14px;
+      }
+
+      .bar-label {
+        font-family: -apple-system, system-ui, "SF Pro Text", sans-serif;
+        font-size: 22px;
+        font-weight: 500;
+        color: #eee;
+        width: 160px;
+        flex-shrink: 0;
+        text-align: right;
+      }
+
+      .bar-track {
+        flex: 1;
+        height: 44px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 4px;
+        overflow: hidden;
+        position: relative;
+      }
+
+      .bar-fill {
+        height: 100%;
+        width: 0%;
+        border-radius: 4px;
+        position: relative;
+      }
+
+      .bar-fill.clude {
+        background: linear-gradient(90deg, #7c5cff, #5ce1ff);
+        box-shadow: 0 0 24px rgba(124, 92, 255, 0.6), 0 0 48px rgba(92, 225, 255, 0.3);
+      }
+
+      .bar-fill.grey {
+        background: #444;
+      }
+
+      .bar-score {
+        font-family: -apple-system, system-ui, "SF Pro Text", sans-serif;
+        font-size: 24px;
+        font-weight: 700;
+        color: #fff;
+        width: 90px;
+        flex-shrink: 0;
+        opacity: 0;
+      }
+
+      .bar-score.clude-score {
+        color: #5ce1ff;
+      }
+
+      .bar-subtitle {
+        font-family: -apple-system, system-ui, "SF Pro Text", sans-serif;
+        font-size: 16px;
+        font-weight: 400;
+        color: #666;
+        margin-left: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      H2 — Leaderboard reveal (scene 4, ~23 seconds)
+      Resolution: 1920x1080
+      Duration: 23 seconds @ 30fps
+
+      Numbers from BENCHMARK_RESULTS.md:
+      - PERMA: Clude 61.8%
+      - HotPotQA: Clude 62.0%, BM25 58.0%
+      - LongMemEval: Clude 53.3% (gpt-4o-mini reader)
+    -->
+    <div
+      id="root"
+      data-composition-id="h2-leaderboard"
+      data-start="0"
+      data-duration="23"
+      data-width="1920"
+      data-height="1080"
+    >
+      <div
+        id="scene"
+        class="scene clip"
+        data-start="0"
+        data-duration="23"
+        data-track-index="1"
+      >
+        <div id="main-title" class="main-title">We ran every memory benchmark we could find.</div>
+
+        <div class="charts-container">
+
+          <!-- Chart 1: PERMA -->
+          <div id="chart1" class="chart-block">
+            <div class="chart-title">PERMA — cross-session personalization</div>
+            <div class="bar-row">
+              <div class="bar-label">Clude</div>
+              <div class="bar-track">
+                <div id="bar-perma-clude" class="bar-fill clude" style="width: 0%;"></div>
+              </div>
+              <div id="score-perma-clude" class="bar-score clude-score">61.8%</div>
+            </div>
+          </div>
+
+          <!-- Chart 2: HotPotQA -->
+          <div id="chart2" class="chart-block">
+            <div class="chart-title">HotPotQA — multi-hop reasoning</div>
+            <div class="bar-row">
+              <div class="bar-label">Clude</div>
+              <div class="bar-track">
+                <div id="bar-hotpot-clude" class="bar-fill clude" style="width: 0%;"></div>
+              </div>
+              <div id="score-hotpot-clude" class="bar-score clude-score">62.0%</div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label">BM25</div>
+              <div class="bar-track">
+                <div id="bar-hotpot-bm25" class="bar-fill grey" style="width: 0%;"></div>
+              </div>
+              <div id="score-hotpot-bm25" class="bar-score">58.0%</div>
+            </div>
+          </div>
+
+          <!-- Chart 3: LongMemEval -->
+          <div id="chart3" class="chart-block">
+            <div class="chart-title">LongMemEval — long-term chat memory</div>
+            <div class="bar-row">
+              <div class="bar-label">Clude</div>
+              <div class="bar-track">
+                <div id="bar-lme-clude" class="bar-fill clude" style="width: 0%;"></div>
+              </div>
+              <div id="score-lme-clude" class="bar-score clude-score">
+                53.3%<span class="bar-subtitle">gpt-4o-mini reader</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+
+      const tl = gsap.timeline({ paused: true });
+
+      // Title appears at t=0.3s
+      tl.to("#main-title", {
+        opacity: 1,
+        duration: 0.8,
+        ease: "power2.out"
+      }, 0.3);
+
+      // Chart 1 appears at t=2s
+      tl.to("#chart1", {
+        opacity: 1,
+        y: 0,
+        duration: 0.5,
+        ease: "power2.out"
+      }, 2.0);
+
+      // Animate PERMA bar: 0% → 61.8% of the bar track (max scale ~100% = 100% of bar width)
+      // The track is flex:1, so we express as percentage of 100
+      tl.to("#bar-perma-clude", {
+        width: "61.8%",
+        duration: 1.0,
+        ease: "power2.out"
+      }, 2.2);
+      tl.to("#score-perma-clude", {
+        opacity: 1,
+        duration: 0.4,
+        ease: "power1.out"
+      }, 2.8);
+
+      // Chart 2 appears at t=9s
+      tl.to("#chart2", {
+        opacity: 1,
+        y: 0,
+        duration: 0.5,
+        ease: "power2.out"
+      }, 9.0);
+
+      // Animate HotPotQA bars
+      tl.to("#bar-hotpot-clude", {
+        width: "62.0%",
+        duration: 1.0,
+        ease: "power2.out"
+      }, 9.2);
+      tl.to("#score-hotpot-clude", {
+        opacity: 1,
+        duration: 0.4,
+        ease: "power1.out"
+      }, 9.8);
+
+      tl.to("#bar-hotpot-bm25", {
+        width: "58.0%",
+        duration: 1.0,
+        ease: "power2.out"
+      }, 9.7);
+      tl.to("#score-hotpot-bm25", {
+        opacity: 1,
+        duration: 0.4,
+        ease: "power1.out"
+      }, 10.3);
+
+      // Chart 3 appears at t=16s
+      tl.to("#chart3", {
+        opacity: 1,
+        y: 0,
+        duration: 0.5,
+        ease: "power2.out"
+      }, 16.0);
+
+      // Animate LongMemEval bar
+      tl.to("#bar-lme-clude", {
+        width: "53.3%",
+        duration: 1.0,
+        ease: "power2.out"
+      }, 16.2);
+      tl.to("#score-lme-clude", {
+        opacity: 1,
+        duration: 0.4,
+        ease: "power1.out"
+      }, 16.8);
+
+      window.__timelines["h2-leaderboard"] = tl;
+    </script>
+  </body>
+</html>

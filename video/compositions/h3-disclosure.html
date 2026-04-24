@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #0a0a0a;
+      }
+
+      .scene {
+        width: 1920px;
+        height: 1080px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        padding: 110px 200px 80px;
+        background: #0a0a0a;
+        position: relative;
+      }
+
+      /* Deliberately no blue tint — humbler tone */
+
+      .main-title {
+        font-family: -apple-system, system-ui, "SF Pro Text", sans-serif;
+        font-size: 28px;
+        font-weight: 500;
+        color: #ddd;
+        text-align: center;
+        letter-spacing: -0.01em;
+        opacity: 0;
+        margin-bottom: 60px;
+        line-height: 1.4;
+      }
+
+      .chart-block {
+        width: 100%;
+        opacity: 0;
+      }
+
+      .bar-row {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        margin-bottom: 22px;
+      }
+
+      .bar-label {
+        font-family: -apple-system, system-ui, "SF Pro Text", sans-serif;
+        font-size: 20px;
+        font-weight: 400;
+        color: #bbb;
+        width: 220px;
+        flex-shrink: 0;
+        text-align: right;
+      }
+
+      .bar-track {
+        flex: 1;
+        height: 40px;
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 4px;
+        overflow: hidden;
+      }
+
+      .bar-fill {
+        height: 100%;
+        width: 0%;
+        border-radius: 4px;
+      }
+
+      /* Gold/amber for no-memory winner — surprising, slightly alarming */
+      .bar-fill.gold {
+        background: linear-gradient(90deg, #c8a000, #e8c840);
+      }
+
+      /* Plain grey for BM25 */
+      .bar-fill.grey {
+        background: #555;
+      }
+
+      /* Clude bar: gradient but NO glow — honest, not bragging */
+      .bar-fill.clude-honest {
+        background: linear-gradient(90deg, #7c5cff, #5ce1ff);
+        /* no box-shadow here intentionally */
+      }
+
+      /* mem0 — grey, low */
+      .bar-fill.low {
+        background: #3a3a3a;
+      }
+
+      .bar-score {
+        font-family: -apple-system, system-ui, "SF Pro Text", sans-serif;
+        font-size: 22px;
+        font-weight: 600;
+        color: #ccc;
+        width: 80px;
+        flex-shrink: 0;
+        opacity: 0;
+      }
+
+      .chart-subtitle {
+        font-family: -apple-system, system-ui, "SF Pro Text", sans-serif;
+        font-size: 17px;
+        font-weight: 400;
+        color: #555;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-top: 30px;
+        text-align: center;
+        opacity: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      H3 — Honest disclosure (scene 5, ~10 seconds)
+      Resolution: 1920x1080
+      Duration: 10 seconds @ 30fps
+
+      Numbers from BENCHMARK_RESULTS.md (MemoryAgentBench CR):
+      - GPT-4o-mini alone (no memory): 87.0%
+      - BM25: 80.0%
+      - Clude: 55.0%
+      - mem0: 14.0%
+    -->
+    <div
+      id="root"
+      data-composition-id="h3-disclosure"
+      data-start="0"
+      data-duration="10"
+      data-width="1920"
+      data-height="1080"
+    >
+      <div
+        id="scene"
+        class="scene clip"
+        data-start="0"
+        data-duration="10"
+        data-track-index="1"
+      >
+        <div id="main-title" class="main-title">
+          And here's what every competitive memory system loses to.
+        </div>
+
+        <div id="chart" class="chart-block">
+          <div class="bar-row">
+            <div class="bar-label">GPT-4o-mini alone</div>
+            <div class="bar-track">
+              <div id="bar-nomem" class="bar-fill gold" style="width: 0%;"></div>
+            </div>
+            <div id="score-nomem" class="bar-score" style="color: #e8c840;">87.0%</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label">BM25</div>
+            <div class="bar-track">
+              <div id="bar-bm25" class="bar-fill grey" style="width: 0%;"></div>
+            </div>
+            <div id="score-bm25" class="bar-score">80.0%</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label">Clude</div>
+            <div class="bar-track">
+              <div id="bar-clude" class="bar-fill clude-honest" style="width: 0%;"></div>
+            </div>
+            <div id="score-clude" class="bar-score" style="color: #9a8bcc;">55.0%</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label">mem0</div>
+            <div class="bar-track">
+              <div id="bar-mem0" class="bar-fill low" style="width: 0%;"></div>
+            </div>
+            <div id="score-mem0" class="bar-score" style="color: #666;">14.0%</div>
+          </div>
+
+          <div id="chart-subtitle" class="chart-subtitle">
+            Conflict Resolution — 6k tokens of context
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+
+      const tl = gsap.timeline({ paused: true });
+
+      // Title at t=0.3
+      tl.to("#main-title", {
+        opacity: 1,
+        duration: 0.7,
+        ease: "power2.out"
+      }, 0.3);
+
+      // Chart block appears at t=1.5
+      tl.to("#chart", {
+        opacity: 1,
+        duration: 0.5,
+        ease: "power1.out"
+      }, 1.5);
+
+      // All bars animate simultaneously, staggered slightly
+      const barData = [
+        { bar: "#bar-nomem", score: "#score-nomem", pct: "87%", delay: 1.7 },
+        { bar: "#bar-bm25",  score: "#score-bm25",  pct: "80%", delay: 1.9 },
+        { bar: "#bar-clude", score: "#score-clude",  pct: "55%", delay: 2.1 },
+        { bar: "#bar-mem0",  score: "#score-mem0",   pct: "14%", delay: 2.3 },
+      ];
+
+      barData.forEach(({ bar, score, pct, delay }) => {
+        tl.to(bar, {
+          width: pct,
+          duration: 0.9,
+          ease: "power2.out"
+        }, delay);
+        tl.to(score, {
+          opacity: 1,
+          duration: 0.4,
+          ease: "power1.out"
+        }, delay + 0.5);
+      });
+
+      // Chart subtitle appears last
+      tl.to("#chart-subtitle", {
+        opacity: 1,
+        duration: 0.6,
+        ease: "power1.out"
+      }, 3.8);
+
+      window.__timelines["h3-disclosure"] = tl;
+    </script>
+  </body>
+</html>

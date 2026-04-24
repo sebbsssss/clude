@@ -1,0 +1,33 @@
+opt_out_usage
+
+default_platform(:ios)
+
+IPA_PATH = "../build/ios/ipa/clude_mobile.ipa"
+
+platform :ios do
+  desc "Build the Flutter iOS release IPA"
+  lane :build do
+    sh("cd ../.. && flutter build ipa --release --export-options-plist=ios/ExportOptions.plist")
+  end
+
+  desc "Build and upload to TestFlight"
+  lane :beta do
+    build
+    upload_to_testflight(
+      ipa: IPA_PATH,
+      skip_waiting_for_build_processing: true,
+      skip_submission: true,
+      changelog: ENV["TESTFLIGHT_CHANGELOG"] || "Internal build."
+    )
+  end
+
+  desc "Upload the most recently built IPA to TestFlight (no rebuild)"
+  lane :upload do
+    upload_to_testflight(
+      ipa: IPA_PATH,
+      skip_waiting_for_build_processing: true,
+      skip_submission: true,
+      changelog: ENV["TESTFLIGHT_CHANGELOG"] || "Internal build."
+    )
+  end
+end

@@ -174,20 +174,6 @@ class SettingsScreen extends ConsumerWidget {
             ],
           ),
 
-          // ── Delete Account ────────────────────────────────────────────────
-          if (authState.isAuthenticated)
-            Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: TextButton.icon(
-                style: TextButton.styleFrom(
-                  foregroundColor: colorScheme.error.withAlpha(180),
-                ),
-                icon: const Icon(Icons.delete_forever, size: 18),
-                label: const Text('Delete Account'),
-                onPressed: () => _showDeleteAccountDialog(context, ref),
-              ),
-            ),
-
           // ── Logout button ─────────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 24),
@@ -208,6 +194,20 @@ class SettingsScreen extends ConsumerWidget {
               },
             ),
           ),
+
+          // ── Delete Account ────────────────────────────────────────────────
+          if (authState.isAuthenticated)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: TextButton.icon(
+                style: TextButton.styleFrom(
+                  foregroundColor: colorScheme.error.withAlpha(180),
+                ),
+                icon: const Icon(Icons.delete_forever, size: 18),
+                label: const Text('Delete Account'),
+                onPressed: () => _showDeleteAccountDialog(context, ref),
+              ),
+            ),
         ],
       ),
     );

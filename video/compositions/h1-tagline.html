@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #0a0a0a;
+      }
+
+      .scene {
+        width: 1920px;
+        height: 1080px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #0a0a0a;
+        /* Subtle cool-blue tint via overlay */
+        position: relative;
+      }
+
+      .scene::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(ellipse at center, rgba(92, 181, 255, 0.04) 0%, transparent 70%);
+        pointer-events: none;
+      }
+
+      .text-block {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 18px;
+      }
+
+      .line1 {
+        font-family: -apple-system, system-ui, "SF Pro Text", sans-serif;
+        font-size: 80px;
+        font-weight: 700;
+        color: #ffffff;
+        letter-spacing: -0.03em;
+        display: inline-block;
+      }
+
+      .line2 {
+        font-family: -apple-system, system-ui, "SF Pro Text", sans-serif;
+        font-size: 34px;
+        font-weight: 300;
+        font-style: italic;
+        color: #c0cfe8;
+        letter-spacing: 0.01em;
+      }
+
+      .line3 {
+        font-family: -apple-system, system-ui, "SF Pro Text", sans-serif;
+        font-size: 22px;
+        font-weight: 400;
+        color: #888;
+        letter-spacing: 0.02em;
+        margin-top: 12px;
+      }
+
+      /* Word-by-word spans for line 1 and 2 */
+      .word {
+        display: inline-block;
+        opacity: 0;
+        transform: translateY(12px);
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      H1 — Tagline card (scene 3, ~20 seconds)
+      Resolution: 1920x1080
+      Duration: 20 seconds @ 30fps
+    -->
+    <div
+      id="root"
+      data-composition-id="h1-tagline"
+      data-start="0"
+      data-duration="20"
+      data-width="1920"
+      data-height="1080"
+    >
+      <div
+        id="scene"
+        class="scene clip"
+        data-start="0"
+        data-duration="20"
+        data-track-index="1"
+      >
+        <div class="text-block">
+          <!-- Line 1: "Clude" large, word-by-word -->
+          <div id="line1" class="line1">
+            <span class="word" id="w-clude">Clude</span>
+          </div>
+
+          <!-- Line 2: "verifiable memory for AI" italic -->
+          <div id="line2" class="line2" style="opacity: 0;">
+            verifiable memory for AI
+          </div>
+
+          <!-- Line 3: sub-line, appears after beat -->
+          <div id="line3" class="line3" style="opacity: 0;">
+            plug it into any model. owned by you. anchored on Solana.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+
+      const tl = gsap.timeline({ paused: true });
+
+      // Line 1: "Clude" appears with a nice reveal at t=0.3s
+      tl.to("#w-clude", {
+        opacity: 1,
+        y: 0,
+        duration: 0.6,
+        ease: "power3.out"
+      }, 0.3);
+
+      // Line 2 fades in after a brief beat (t=1.2s)
+      tl.to("#line2", {
+        opacity: 1,
+        y: 0,
+        duration: 0.8,
+        ease: "power2.out"
+      }, 1.2);
+
+      // Line 3 appears after another beat (t=2.6s)
+      tl.to("#line3", {
+        opacity: 1,
+        duration: 0.7,
+        ease: "power1.out"
+      }, 2.6);
+
+      // Subtle pulse on "Clude" word (scale 1.0 → 1.02 loop, starts after everything is visible)
+      tl.to("#w-clude", {
+        scale: 1.02,
+        duration: 2,
+        ease: "sine.inOut",
+        yoyo: true,
+        // Finite repeat: composition is 20s, pulse starts at 4s, cycle = 4s (2s up + 2s down)
+        // Available window = 20 - 4 = 16s, so Math.floor(16 / 4) - 1 = 3
+        repeat: 3
+      }, 4.0);
+
+      window.__timelines["h1-tagline"] = tl;
+    </script>
+  </body>
+</html>

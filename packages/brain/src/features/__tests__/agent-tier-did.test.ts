@@ -337,4 +337,163 @@ describe('findOrCreateAgentForDid', () => {
     expect(result.isNew).toBe(true);
     expect(result.ownerWallet).toHaveLength(44);
   });
+
+  // ---- migrateOwnerWallet collision → adoption branch ----
+  // Context: email-only user with synthetic wallet later provides a real
+  // wallet. migrateOwnerWallet collides (real wallet already has an agent).
+  // The fix adopts the orphan real-wallet agent instead of leaving the user
+  // stranded on the synthetic row.
+  describe('collision adoption', () => {
+    const SYNTHETIC_WALLET = 'a'.repeat(44); // 44-char hex, matches HEX_WALLET_RE
+    const REAL_WALLET = 'SoL3333333333333333333333333333333333333333'; // 43-char base58
+    const DID = 'did:privy:collision_user';
+
+    function syntheticDidLookup() {
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: {
+            agent_id: 'agent_synthetic_existing',
+            api_key: 'clk_synthetic_key',
+            owner_wallet: SYNTHETIC_WALLET,
+          },
+          error: null,
+        }),
+      };
+    }
+
+    function collisionCheck() {
+      // migrateOwnerWallet's collision check: real wallet already has an
+      // active agent → triggers throw inside migrateOwnerWallet.
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: { agent_id: 'agent_real_wallet' },
+          error: null,
+        }),
+      };
+    }
+
+    it('adopts orphan real-wallet agent when wallet is in linked_accounts', async () => {
+      mockResolveWallets.mockResolvedValue([REAL_WALLET]);
+
+      const didLookupChain = syntheticDidLookup();
+      const collisionChain = collisionCheck();
+      // Adoption lookup: real-wallet agent exists AND is orphan (privy_did null)
+      const adoptLookupChain: any = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: { agent_id: 'agent_real_wallet', api_key: 'clk_real_wallet_key' },
+          error: null,
+        }),
+      };
+      // Retire synthetic
+      const retireChain: any = {
+        update: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({ error: null }),
+      };
+      // Claim real-wallet
+      const claimChain: any = {
+        update: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({ error: null }),
+      };
+
+      let callIndex = 0;
+      const chains = [didLookupChain, collisionChain, adoptLookupChain, retireChain, claimChain];
+      const db = { from: vi.fn(() => chains[callIndex++] ?? claimChain) };
+      mockGetDb.mockReturnValue(db as any);
+
+      const result = await findOrCreateAgentForDid(DID, REAL_WALLET);
+
+      expect(result).toEqual({
+        apiKey: 'clk_real_wallet_key',
+        agentId: 'agent_real_wallet',
+        isNew: false,
+        ownerWallet: REAL_WALLET,
+      });
+
+      // Retire synthetic: privy_did cleared AND is_active=false
+      expect(retireChain.update).toHaveBeenCalledWith({ privy_did: null, is_active: false });
+      expect(retireChain.eq).toHaveBeenCalledWith('agent_id', 'agent_synthetic_existing');
+
+      // Claim real-wallet agent for the DID
+      expect(claimChain.update).toHaveBeenCalledWith({ privy_did: DID });
+      expect(claimChain.eq).toHaveBeenCalledWith('agent_id', 'agent_real_wallet');
+
+      // Adoption lookup scoped to orphan rows only
+      expect(adoptLookupChain.is).toHaveBeenCalledWith('privy_did', null);
+    });
+
+    it('does NOT adopt when wallet is not in Privy linked_accounts (prevents account takeover)', async () => {
+      // Privy says this DID does not own the wallet — refuse adoption
+      mockResolveWallets.mockResolvedValue([]);
+
+      const didLookupChain = syntheticDidLookup();
+      const collisionChain = collisionCheck();
+      // No adoption queries should run. Only the above two chains should fire.
+      // Any further .from call returns a terminal no-op chain.
+      const noopChain: any = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: null, error: null }),
+        update: vi.fn().mockReturnThis(),
+      };
+
+      let callIndex = 0;
+      const chains = [didLookupChain, collisionChain];
+      const db = { from: vi.fn(() => chains[callIndex++] ?? noopChain) };
+      mockGetDb.mockReturnValue(db as any);
+
+      const result = await findOrCreateAgentForDid(DID, REAL_WALLET);
+
+      // Fell through — returned the synthetic agent untouched
+      expect(result).toEqual({
+        apiKey: 'clk_synthetic_key',
+        agentId: 'agent_synthetic_existing',
+        isNew: false,
+        ownerWallet: SYNTHETIC_WALLET,
+      });
+    });
+
+    it('does NOT adopt when the real-wallet agent is already claimed by another DID', async () => {
+      // Privy confirms ownership, BUT the real-wallet row already has a DID —
+      // orphan-only filter excludes it. Refuse to steal another user's claim.
+      mockResolveWallets.mockResolvedValue([REAL_WALLET]);
+
+      const didLookupChain = syntheticDidLookup();
+      const collisionChain = collisionCheck();
+      // Adoption lookup with .is('privy_did', null) finds nothing
+      const adoptLookupChain: any = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST116' } }),
+      };
+
+      let callIndex = 0;
+      const chains = [didLookupChain, collisionChain, adoptLookupChain];
+      const db = { from: vi.fn(() => chains[callIndex++] ?? adoptLookupChain) };
+      mockGetDb.mockReturnValue(db as any);
+
+      const result = await findOrCreateAgentForDid(DID, REAL_WALLET);
+
+      // Fell through — returned synthetic agent, didn't touch the claimed row
+      expect(result).toEqual({
+        apiKey: 'clk_synthetic_key',
+        agentId: 'agent_synthetic_existing',
+        isNew: false,
+        ownerWallet: SYNTHETIC_WALLET,
+      });
+    });
+  });
 });

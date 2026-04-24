@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #0a0a0a;
+      }
+
+      .scene {
+        width: 1920px;
+        height: 1080px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #0a0a0a;
+        position: relative;
+      }
+
+      .scene::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(ellipse at 50% 50%, rgba(92, 181, 255, 0.03) 0%, transparent 70%);
+        pointer-events: none;
+      }
+
+      /* Chat-style callout card */
+      .chat-card {
+        background: #141414;
+        border: 1px solid #222;
+        border-radius: 16px;
+        padding: 52px 64px;
+        width: 1320px;
+        opacity: 0;
+        position: relative;
+      }
+
+      .chat-question {
+        font-family: -apple-system, system-ui, "SF Pro Text", sans-serif;
+        font-size: 22px;
+        font-weight: 500;
+        color: #888;
+        margin-bottom: 24px;
+        font-style: italic;
+      }
+
+      .chat-question::before {
+        content: 'Q: ';
+        color: #555;
+      }
+
+      .chat-answer {
+        font-family: -apple-system, system-ui, "SF Pro Text", sans-serif;
+        font-size: 24px;
+        font-weight: 400;
+        color: #eee;
+        line-height: 1.7;
+      }
+
+      .tx-hash {
+        color: #5ce1ff;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+        font-family: "SF Mono", "Monaco", "Menlo", monospace;
+        font-size: 20px;
+        font-weight: 500;
+        /* glow effect instead of hover */
+        text-shadow: 0 0 12px rgba(92, 225, 255, 0.5);
+        cursor: pointer;
+        position: relative;
+      }
+
+      /* Solana Explorer badge */
+      .explorer-badge {
+        position: absolute;
+        right: 60px;
+        bottom: -80px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: rgba(20, 241, 149, 0.08);
+        border: 1px solid rgba(20, 241, 149, 0.25);
+        border-radius: 10px;
+        padding: 14px 22px;
+        opacity: 0;
+      }
+
+      .solana-logo {
+        width: 36px;
+        height: 36px;
+        flex-shrink: 0;
+      }
+
+      .explorer-text {
+        font-family: -apple-system, system-ui, "SF Pro Text", sans-serif;
+        font-size: 18px;
+        font-weight: 500;
+        color: #14f195;
+      }
+
+      .explorer-sub {
+        font-family: -apple-system, system-ui, "SF Pro Text", sans-serif;
+        font-size: 14px;
+        color: #5a8f74;
+        display: block;
+      }
+
+      /* Arrow SVG connecting tx hash to badge */
+      .arrow-svg {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      /* Confirmed pill */
+      .confirmed-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(20, 241, 149, 0.1);
+        border: 1px solid rgba(20, 241, 149, 0.3);
+        border-radius: 20px;
+        padding: 4px 12px;
+        font-family: -apple-system, system-ui, "SF Pro Text", sans-serif;
+        font-size: 14px;
+        font-weight: 500;
+        color: #14f195;
+        margin-left: 10px;
+        vertical-align: middle;
+        opacity: 0;
+      }
+
+      .confirmed-dot {
+        width: 8px;
+        height: 8px;
+        background: #14f195;
+        border-radius: 50%;
+        display: inline-block;
+        box-shadow: 0 0 6px #14f195;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      H4 — On-chain attestation callout (scene 7, ~12 seconds)
+      Resolution: 1920x1080
+      Duration: 12 seconds @ 30fps
+    -->
+    <div
+      id="root"
+      data-composition-id="h4-attestation"
+      data-start="0"
+      data-duration="12"
+      data-width="1920"
+      data-height="1080"
+    >
+      <div
+        id="scene"
+        class="scene clip"
+        data-start="0"
+        data-duration="12"
+        data-track-index="1"
+      >
+        <div id="chat-card" class="chat-card">
+          <div class="chat-question">What should I feed Pepper?</div>
+          <div class="chat-answer">
+            Since Pepper is allergic to chicken
+            (recorded&nbsp;2026-01-15,&nbsp;tx&nbsp;<span class="tx-hash" id="tx-hash">2fkEHwn…iYo3tzN8g</span>)<span id="confirmed-pill" class="confirmed-pill"><span class="confirmed-dot"></span>confirmed</span>
+            and you prefer animal-based dog food, consider turkey&nbsp;+&nbsp;sweet&nbsp;potato.
+          </div>
+
+          <!-- Solana Explorer badge — positioned below the card -->
+          <div id="explorer-badge" class="explorer-badge">
+            <!-- Inline minimal Solana logo SVG (three gradient gradient bands) -->
+            <svg class="solana-logo" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="sol1" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stop-color="#9945ff"/>
+                  <stop offset="100%" stop-color="#14f195"/>
+                </linearGradient>
+              </defs>
+              <!-- Band 1 (top) -->
+              <rect x="8" y="14" width="80" height="16" rx="4" fill="url(#sol1)"/>
+              <!-- Band 2 (middle) -->
+              <rect x="8" y="40" width="80" height="16" rx="4" fill="url(#sol1)" opacity="0.85"/>
+              <!-- Band 3 (bottom) -->
+              <rect x="8" y="66" width="80" height="16" rx="4" fill="url(#sol1)" opacity="0.7"/>
+            </svg>
+            <div>
+              <span class="explorer-text">explorer.solana.com</span>
+              <span class="explorer-sub">Devnet · Transaction confirmed</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Connecting arrow SVG -->
+        <svg id="arrow-svg" class="arrow-svg" width="200" height="100" viewBox="0 0 200 100"
+          style="position: absolute; left: 1080px; top: 590px;">
+          <defs>
+            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="#14f195" opacity="0.7"/>
+            </marker>
+          </defs>
+          <path d="M 20 10 Q 100 10 180 80"
+            stroke="#14f195"
+            stroke-width="2"
+            fill="none"
+            stroke-dasharray="200"
+            stroke-dashoffset="200"
+            opacity="0.7"
+            marker-end="url(#arrowhead)"
+          />
+        </svg>
+      </div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+
+      const tl = gsap.timeline({ paused: true });
+
+      // Chat card fades in at t=0.3
+      tl.to("#chat-card", {
+        opacity: 1,
+        y: 0,
+        duration: 0.8,
+        ease: "power2.out"
+      }, 0.3);
+
+      // tx hash glows in — already styled but add a pulse for emphasis at t=1.5
+      tl.to("#tx-hash", {
+        textShadow: "0 0 20px rgba(92, 225, 255, 0.9), 0 0 40px rgba(92, 225, 255, 0.4)",
+        duration: 0.5,
+        ease: "power2.out"
+      }, 1.5);
+
+      // "confirmed" pill fades in at t=2.2
+      tl.to("#confirmed-pill", {
+        opacity: 1,
+        duration: 0.4,
+        ease: "power1.out"
+      }, 2.2);
+
+      // At ~5s, explorer badge appears
+      tl.to("#explorer-badge", {
+        opacity: 1,
+        y: 0,
+        duration: 0.6,
+        ease: "power2.out"
+      }, 5.0);
+
+      // Arrow draws from tx hash to explorer badge
+      tl.to("#arrow-svg", {
+        opacity: 1,
+        duration: 0.1
+      }, 5.0);
+      tl.to("#arrow-svg path", {
+        strokeDashoffset: 0,
+        duration: 0.7,
+        ease: "power2.inOut"
+      }, 5.1);
+
+      window.__timelines["h4-attestation"] = tl;
+    </script>
+  </body>
+</html>

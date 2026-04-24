@@ -30,10 +30,14 @@ chat/
 clude/
 agents/
 experiments/
-programs/
-video/
+# programs/ — un-ignored 2026-04-17 for Colosseum Frontier hackathon (memory-registry Anchor program is load-bearing)
+programs/**/target/
+programs/**/Cargo.lock
+# video/ — un-ignored 2026-04-17 for Colosseum Frontier hackathon (Remotion scenes for submission video)
+video/node_modules/
+video/out/
 tmp/
-src/
+/src/
 migrations/
 
 # One-off scripts and artifacts
@@ -48,6 +52,7 @@ clu294-upload.py
 package-lock.json
 misc/scripts/.longmemeval-cache/
 misc/scripts/longmemeval-*.ts
+!misc/scripts/longmemeval-benchmark-openai-v2.ts
 misc/src
 
 # AI spec-driven development (local dev aids, not committed)

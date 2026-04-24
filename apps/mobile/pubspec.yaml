@@ -1,7 +1,7 @@
 name: clude_mobile
 description: "Clude mobile app — AI memory companion"
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: ^3.11.4
@@ -49,3 +49,6 @@ flutter_launcher_icons:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/clude-logo.png
+    - assets/clude-logo-white.png

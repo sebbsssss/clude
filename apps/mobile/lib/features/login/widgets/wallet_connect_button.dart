@@ -52,13 +52,15 @@ class _WalletConnectButtonState extends ConsumerState<WalletConnectButton> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return SizedBox(
       height: 48,
       child: OutlinedButton(
         onPressed: _isLoading ? null : _connectWallet,
         style: OutlinedButton.styleFrom(
           side: BorderSide(
-            color: Theme.of(context).colorScheme.outline,
+            color: colorScheme.outlineVariant,
           ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
@@ -70,12 +72,20 @@ class _WalletConnectButtonState extends ConsumerState<WalletConnectButton> {
                 width: 20,
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
-            : const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+            : Row(
                 children: [
-                  Icon(Icons.account_balance_wallet_outlined, size: 20),
-                  SizedBox(width: 8),
-                  Text('Connect Wallet'),
+                  Icon(Icons.account_balance_wallet_outlined,
+                      size: 20, color: colorScheme.onSurface),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Continue with a wallet',
+                      style: TextStyle(color: colorScheme.onSurface),
+                    ),
+                  ),
+                  Icon(Icons.chevron_right,
+                      size: 20,
+                      color: colorScheme.onSurface.withValues(alpha: 0.5)),
                 ],
               ),
       ),

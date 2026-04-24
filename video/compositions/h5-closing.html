@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #000;
+      }
+
+      .scene {
+        width: 1920px;
+        height: 1080px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #000;
+        position: relative;
+      }
+
+      .content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        opacity: 0;
+      }
+
+      .brand {
+        font-family: -apple-system, system-ui, "SF Pro Text", sans-serif;
+        font-size: 72px;
+        font-weight: 700;
+        color: #ffffff;
+        letter-spacing: -0.03em;
+      }
+
+      .tagline {
+        font-family: -apple-system, system-ui, "SF Pro Text", sans-serif;
+        font-size: 28px;
+        font-weight: 300;
+        font-style: italic;
+        color: #888;
+        letter-spacing: 0.01em;
+        margin-bottom: 12px;
+      }
+
+      .links {
+        font-family: -apple-system, system-ui, "SF Pro Text", sans-serif;
+        font-size: 20px;
+        font-weight: 400;
+        color: #555;
+        letter-spacing: 0.04em;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .link-dot {
+        color: #333;
+      }
+
+      .link-item {
+        color: #5c9eff;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      H5 — Closing card (scene 10, ~3 seconds)
+      Resolution: 1920x1080
+      Duration: 3 seconds @ 30fps
+    -->
+    <div
+      id="root"
+      data-composition-id="h5-closing"
+      data-start="0"
+      data-duration="3"
+      data-width="1920"
+      data-height="1080"
+    >
+      <div
+        id="scene"
+        class="scene clip"
+        data-start="0"
+        data-duration="3"
+        data-track-index="1"
+      >
+        <div id="content" class="content">
+          <div class="brand">Clude</div>
+          <div class="tagline">verifiable memory for AI</div>
+          <div class="links">
+            <span class="link-item">clude.io</span>
+            <span class="link-dot">·</span>
+            <span class="link-item">github.com/sebbsssss/cludebot</span>
+            <span class="link-dot">·</span>
+            <span class="link-item">@cludebot</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+
+      const tl = gsap.timeline({ paused: true });
+
+      // Content fades in over 0.5s
+      tl.to("#content", {
+        opacity: 1,
+        duration: 0.5,
+        ease: "power1.out"
+      }, 0.0);
+
+      // Hold for 2.5s, then hard cut (no fade out — video editor cuts to black)
+
+      window.__timelines["h5-closing"] = tl;
+    </script>
+  </body>
+</html>

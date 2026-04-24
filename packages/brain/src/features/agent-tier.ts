@@ -246,6 +246,50 @@ export async function findOrCreateAgentForDid(
           ownerWallet: wallet,
         };
       } catch (err: any) {
+        // Migration collided: the real wallet already has an agent (typically
+        // an orphan row from the pre-Privy wallet-auth era). Adopt that row
+        // only if BOTH guards pass:
+        //   1. Privy confirms this DID actually owns the wallet — otherwise
+        //      anyone could claim any wallet by passing it in the body.
+        //   2. The existing agent is orphan (privy_did IS NULL) — never steal
+        //      another DID's claim.
+        const linkedWallets = await resolveWalletsForDid(did).catch(() => [] as string[]);
+        if (linkedWallets.includes(wallet)) {
+          const { data: realAgent } = await db
+            .from('agent_keys')
+            .select('agent_id, api_key')
+            .eq('owner_wallet', wallet)
+            .eq('is_active', true)
+            .is('privy_did', null)
+            .limit(1)
+            .single();
+
+          if (realAgent) {
+            // Retire synthetic first — the unique index on privy_did forbids
+            // two active rows carrying the same DID.
+            await db
+              .from('agent_keys')
+              .update({ privy_did: null, is_active: false })
+              .eq('agent_id', existing.agent_id);
+
+            await db
+              .from('agent_keys')
+              .update({ privy_did: did })
+              .eq('agent_id', realAgent.agent_id);
+
+            log.info(
+              { did, wallet, retired: existing.agent_id, adopted: realAgent.agent_id },
+              'Migration collision resolved: adopted orphan real-wallet agent',
+            );
+
+            return {
+              apiKey: realAgent.api_key,
+              agentId: realAgent.agent_id,
+              isNew: false,
+              ownerWallet: wallet,
+            };
+          }
+        }
         log.warn({ did, wallet, err: err.message }, 'Wallet linking migration failed');
         // Fall through — return existing agent with synthetic wallet
       }

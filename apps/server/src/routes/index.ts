@@ -16,6 +16,7 @@ import { compoundRoutes } from './compound.routes.js';
 import { memoryRoutes } from './memory.routes.js';
 import { memoryPacksRoutes } from './memory-packs.routes.js';
 import { demoRoutes } from './demo.routes.js';
+import { showcaseRoutes } from './showcase.routes.js';
 import { walletAuthRoutes } from './wallet-auth.routes.js';
 import { createChildLogger } from '@clude/shared/core/logger';
 import rateLimit from 'express-rate-limit';
@@ -56,6 +57,10 @@ export function mountApiRoutes(app: express.Application): void {
 
   // Demo: trigger, poll, stats, store, recall
   app.use('/api/demo', demoRoutes());
+
+  // Public hackathon showcase endpoints (SSE + ingest). No auth, fixed
+  // owner_wallet isolation inside the handler.
+  app.use('/api/showcase', showcaseRoutes());
 
   // Aliases: /api/memory/* → /api/demo/*
   const reRoute = (target: string) => (req: Request, res: Response) => {

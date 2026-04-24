@@ -1,0 +1,8 @@
+app_identifier("io.clude.cludeMobile")
+team_id("6UD78P8SB8")
+
+# Apple ID used for App Store Connect. Override with FASTLANE_USER env var.
+apple_id(ENV["FASTLANE_USER"] || "kohjunqiang@gmail.com")
+
+# ITC team for app submissions (same as developer team here).
+itc_team_id("19249802579")
