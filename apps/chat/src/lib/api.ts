@@ -1,4 +1,4 @@
-import type { ChatModel, Conversation, Message, MemoryStats, MemorySummary, CompoundMarketsResponse, CompoundAccuracy, CompoundTimeline, MarketCategory, MarketDetailResponse, CompoundPredictionsResponse, BYOKProvider, PersistentMemoryListResponse, PersistentMemorySaveResponse } from './types';
+import type { ChatModel, Conversation, Message, MemoryStats, MemorySummary, CompoundMarketsResponse, CompoundAccuracy, CompoundTimeline, MarketCategory, MarketDetailResponse, CompoundPredictionsResponse, BYOKProvider } from './types';
 
 const API_BASE = '';
 
@@ -185,25 +185,6 @@ class ChatAPI {
   async getRecentMemories(limit = 20): Promise<MemorySummary[]> {
     const data = await this.fetchJson<any>(`${API_BASE}/api/cortex/recent?limit=${limit}`);
     return data.memories || data;
-  }
-
-  // ---- Persistent memory (user-managed "remember this always" preferences) ----
-
-  async listPersistentMemories(): Promise<PersistentMemoryListResponse> {
-    return this.fetchJson(`${API_BASE}/api/chat/persistent-memory`);
-  }
-
-  async savePersistentMemory(input: { summary: string; key: string; value: string }): Promise<PersistentMemorySaveResponse> {
-    return this.fetchJson(`${API_BASE}/api/chat/persistent-memory`, {
-      method: 'POST',
-      body: JSON.stringify(input),
-    });
-  }
-
-  async deletePersistentMemory(id: number): Promise<{ ok: true; id: number }> {
-    return this.fetchJson(`${API_BASE}/api/chat/persistent-memory/${id}`, {
-      method: 'DELETE',
-    });
   }
 
   async importMemoryPack(pack: any): Promise<{ imported: number }> {

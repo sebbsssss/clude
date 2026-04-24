@@ -7,7 +7,6 @@ import { cortexRoutes } from './cortex.routes.js';
 import { graphRoutes } from './graph.routes.js';
 import { campaignRoutes } from './campaign.routes.js';
 import { chatRoutes } from './chat.routes.js';
-import { persistentMemoryRoutes } from './persistent-memory.routes.js';
 import { uploadRoutes } from './upload.routes.js';
 import { exploreRoutes } from './explore.routes.js';
 import { lotrRoutes } from './lotr.routes.js';
@@ -96,9 +95,6 @@ export function mountApiRoutes(app: express.Application): void {
 
   // Chat API (memory-augmented chat with OpenRouter inference)
   app.use('/api/chat', chatRoutes());
-
-  // Persistent preferences (user-managed "remember this always" memory)
-  app.use('/api/chat/persistent-memory', persistentMemoryRoutes());
 
   // Chat billing: balance, top-up confirmation, history
   app.use('/api/chat', topupApiRoutes());

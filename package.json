@@ -26,21 +26,9 @@
     "LICENSE"
   ],
   "scripts": {
-    "dev": "turbo dev",
-    "dev:server": "turbo dev --filter=@clude/server",
-    "dev:chat": "turbo dev --filter=@clude/chat",
-    "dev:dashboard": "turbo dev --filter=@clude/dashboard",
-    "dev:workers": "turbo dev --filter=@clude/workers",
-    "build": "turbo build",
-    "build:clean": "pnpm clean && turbo build",
     "build:publish": "node scripts/build-publish.mjs",
-    "clean": "rimraf --glob \"apps/*/dist\" \"packages/*/dist\" \".turbo\" \"apps/*/.turbo\" \"packages/*/.turbo\"",
-    "clean:all": "pnpm dlx rimraf --glob \"apps/*/dist\" \"packages/*/dist\" \".turbo\" \"apps/*/.turbo\" \"packages/*/.turbo\" \"node_modules\" \"apps/*/node_modules\" \"packages/*/node_modules\"",
-    "start": "pnpm --filter @clude/server start",
-    "typecheck": "turbo typecheck",
-    "test": "turbo test",
-    "test:watch": "pnpm --filter @clude/server test:watch",
     "prepublishOnly": "pnpm --filter @clude/shared build && pnpm --filter @clude/brain build && node scripts/build-publish.mjs",
+    "typecheck": "tsc --noEmit",
     "dashboard": "cd apps/dashboard && pnpm run dev",
     "dashboard:build": "cd apps/dashboard && pnpm run build"
   },
@@ -118,9 +106,7 @@
     "@types/node": "^22.19.11",
     "@types/node-cron": "^3.0.11",
     "esbuild": "^0.28.0",
-    "rimraf": "^6.0.1",
     "tsx": "^4.19.0",
-    "turbo": "^2.8.21",
     "typescript": "^5.6.0"
   },
   "optionalDependencies": {

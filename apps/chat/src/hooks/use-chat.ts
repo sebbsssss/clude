@@ -246,15 +246,10 @@ export function useChat() {
   // Convert AI SDK messages to the shape components expect
   const aiSettled: SettledMessage[] = aiMessages.map(m => {
     const meta = m.metadata as ChatMessageMetadata | undefined;
-    // Some models emit leading whitespace/newlines on the first chunk after a
-    // tool call, which Markdown would render as an empty line of height above
-    // the first paragraph. Trim so the bubble hugs the text.
     const textContent = m.parts
       .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
       .map(p => p.text)
-      .join('')
-      .trim();
-
+      .join('');
     return {
       kind: 'settled' as const,
       id: m.id,
@@ -288,14 +283,8 @@ export function useChat() {
         const textContent = last.parts
           .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
           .map(p => p.text)
-          .join('')
-          .trimStart();
-        return {
-          kind: 'streaming',
-          id: last.id,
-          role: 'assistant',
-          content: textContent,
-        };
+          .join('');
+        return { kind: 'streaming', id: last.id, role: 'assistant', content: textContent };
       }
     }
     return null;
