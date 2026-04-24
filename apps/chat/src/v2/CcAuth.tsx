@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLoginWithEmail } from '@privy-io/react-auth';
 import { useAuthContext } from '../hooks/AuthContext';
 import { CcWordmark } from './atoms';
@@ -14,8 +14,15 @@ import { CcWordmark } from './atoms';
  * Wallet sign-in falls back to the generic Privy modal (`login()`) since
  * wallet pairing can't be headless the same way.
  */
-export function CcAuth({ theme }: { theme: 'light' | 'dark' }) {
-  const { login } = useAuthContext();
+export function CcAuth({
+  theme,
+  onEntered,
+}: {
+  theme: 'light' | 'dark';
+  onEntered?: () => void;
+}) {
+  const auth = useAuthContext();
+  const { login } = auth;
   const { sendCode, loginWithCode, state } = useLoginWithEmail();
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -26,6 +33,18 @@ export function CcAuth({ theme }: { theme: 'light' | 'dark' }) {
   // Local card step — lets the user go back to "change email" even though
   // Privy's OtpFlowState is still `awaiting-code-input`.
   const [step, setStep] = useState<'email' | 'code'>('email');
+
+  // Auto-enter the app when auth transitions from signed-out → signed-in
+  // (e.g. after OTP verification or wallet-modal connection). We explicitly
+  // skip the initial render — a user who was already signed in from the
+  // main /chat route should still see the auth screen and click Continue.
+  const prevAuthRef = useRef<boolean>(auth.authenticated);
+  useEffect(() => {
+    if (auth.authenticated && !prevAuthRef.current && onEntered) {
+      onEntered();
+    }
+    prevAuthRef.current = auth.authenticated;
+  }, [auth.authenticated, onEntered]);
 
   // Privy's OtpFlowState status used to disable buttons while in-flight.
   const statusName: string = (state as any)?.status ?? 'initial';
@@ -143,14 +162,18 @@ export function CcAuth({ theme }: { theme: 'light' | 'dark' }) {
           <div className="cc-auth__card">
             <div>
               <h2 className="cc-auth__title">
-                {step === 'code'
+                {auth.authenticated
+                  ? 'Welcome back.'
+                  : step === 'code'
                   ? 'Check your inbox.'
                   : mode === 'login'
                   ? 'Welcome back.'
                   : 'Start your memory.'}
               </h2>
               <p className="cc-auth__desc">
-                {step === 'code'
+                {auth.authenticated
+                  ? 'Your session is active — continue into Clude Chat v2.'
+                  : step === 'code'
                   ? `We sent a 6‑digit code to ${email}. Enter it below to continue.`
                   : mode === 'login'
                   ? 'Sign in with a one‑time code or wallet. Your memories are waiting — typed, decayed, and ready to recall.'
@@ -158,7 +181,29 @@ export function CcAuth({ theme }: { theme: 'light' | 'dark' }) {
               </p>
             </div>
 
-            {step === 'email' ? (
+            {auth.authenticated ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <button
+                  type="button"
+                  className="cc-auth__primary"
+                  onClick={() => onEntered?.()}
+                >
+                  Continue to Chat <span className="cc-arrow">→</span>
+                </button>
+                <button
+                  type="button"
+                  className="cc-auth__primary"
+                  style={{
+                    background: 'transparent',
+                    color: 'var(--fg-2)',
+                    borderColor: 'var(--line-strong)',
+                  }}
+                  onClick={() => auth.logout()}
+                >
+                  Sign out
+                </button>
+              </div>
+            ) : step === 'email' ? (
               <form onSubmit={handleSendCode} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                 <div className="cc-auth__field">
                   <label className="cc-auth__label">Email</label>
