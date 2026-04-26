@@ -1,5 +1,7 @@
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, statSync } from 'fs';
+import { join } from 'path';
 import { printSuccess, printError, printInfo, printDivider, c } from './banner';
+import { readMemoryPack } from '../memorypack/index.js';
 
 function hasFlag(args: string[], flag: string): boolean {
   return args.includes(flag);
@@ -12,6 +14,37 @@ interface ImportedMemory {
   importance: number;
   tags: string[];
   source: string;
+}
+
+function isMemoryPackDir(path: string): boolean {
+  try {
+    return statSync(path).isDirectory() && existsSync(join(path, 'manifest.json'));
+  } catch {
+    return false;
+  }
+}
+
+function parseMemoryPackDir(dir: string): ImportedMemory[] {
+  const result = readMemoryPack(dir);
+  const signedCount = result.verifiedRecords.size;
+  if (signedCount > 0) {
+    const pubFp = result.manifest.producer.public_key?.slice(0, 8) ?? '?';
+    printInfo(`Verified ${signedCount} record signature(s) against ${pubFp}...`);
+  } else {
+    printInfo('Pack is unsigned (no signatures.jsonl) — proceeding without verification');
+  }
+  for (const w of result.warnings) printInfo(`warning: ${w}`);
+
+  return result.records.map(r => ({
+    content: r.content,
+    summary: r.summary || r.content.slice(0, 200),
+    type: (['episodic', 'semantic', 'procedural'].includes(r.kind)
+      ? r.kind
+      : 'episodic') as ImportedMemory['type'],
+    importance: r.importance,
+    tags: [...(r.tags || []), 'imported', 'memorypack'],
+    source: r.source || 'memorypack',
+  }));
 }
 
 function isZipFile(path: string): boolean {
@@ -309,9 +342,10 @@ export async function runImport(): Promise<void> {
   ${c.bold}Usage:${c.reset}  npx @clude/sdk import <file> [options]
 
   ${c.bold}Supported formats:${c.reset}
+    ${c.cyan}pack/${c.reset}                    MemoryPack v0.1 directory (manifest.json + records.jsonl)
     ${c.cyan}chatgpt-export.zip${c.reset}     ChatGPT data export (ZIP with conversations.json)
     ${c.cyan}memories.md${c.reset}             Markdown or text file (paragraphs → memories)
-    ${c.cyan}pack.json${c.reset}               Clude MemoryPack JSON
+    ${c.cyan}pack.json${c.reset}               Legacy Clude MemoryPack JSON
 
   ${c.bold}Options:${c.reset}
     --dry-run              Show what would be imported without storing
@@ -359,11 +393,14 @@ export async function runImport(): Promise<void> {
 
   let memories: ImportedMemory[];
 
-  if (isZipFile(filePath)) {
+  if (isMemoryPackDir(filePath)) {
+    printInfo('Detected: MemoryPack v0.1 directory');
+    memories = parseMemoryPackDir(filePath);
+  } else if (isZipFile(filePath)) {
     printInfo('Detected: ChatGPT data export (ZIP)');
     memories = await parseChatGPTZip(filePath);
   } else if (isJsonFile(filePath)) {
-    printInfo('Detected: MemoryPack JSON');
+    printInfo('Detected: Legacy MemoryPack JSON');
     memories = parseMemoryPack(filePath);
   } else if (isMarkdownOrText(filePath)) {
     printInfo('Detected: Markdown/text file');

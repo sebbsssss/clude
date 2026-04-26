@@ -1,5 +1,6 @@
 import { writeFileSync } from 'fs';
 import { printSuccess, printError, printInfo, printDivider, c } from './banner';
+import { writeMemoryPack, MemoryPackRecord } from '../memorypack/index.js';
 
 function getFlag(args: string[], flag: string): string | undefined {
   const idx = args.indexOf(flag);
@@ -188,7 +189,8 @@ export async function runExport(): Promise<void> {
     -h, --help             Show this help
 
   ${c.bold}Formats:${c.reset}
-    ${c.cyan}json${c.reset}        MemoryPack JSON (default)
+    ${c.cyan}json${c.reset}        Legacy single-file JSON (default)
+    ${c.cyan}memorypack${c.reset}  MemoryPack v0.1 spec directory (manifest + records.jsonl + sigs)
     ${c.cyan}md${c.reset}          Clean Markdown
     ${c.cyan}chatgpt${c.reset}     System prompt for ChatGPT Custom Instructions
     ${c.cyan}gemini${c.reset}      System prompt for Gemini Gems
@@ -210,7 +212,7 @@ export async function runExport(): Promise<void> {
   const typesRaw = getFlag(args, '--types');
   const types = typesRaw ? typesRaw.split(',').map(t => t.trim()) : undefined;
 
-  const validFormats = ['json', 'md', 'chatgpt', 'gemini', 'clipboard'];
+  const validFormats = ['json', 'md', 'chatgpt', 'gemini', 'clipboard', 'memorypack'];
   if (!validFormats.includes(format)) {
     printError(`Format must be one of: ${validFormats.join(', ')}`);
     process.exit(1);
@@ -370,6 +372,74 @@ export async function runExport(): Promise<void> {
   } else if (format === 'md') {
     content = formatMarkdown(memories);
     defaultName = 'clude-memories.md';
+  } else if (format === 'memorypack') {
+    // Spec-compliant MemoryPack v0.1 directory output.
+    // Writes manifest.json + records.jsonl (+ signatures.jsonl if a
+    // wallet keypair is available). Signatures are best-effort: if
+    // no signing key is configured, the pack is emitted unsigned
+    // (spec allows this).
+    const outputDir = output || 'clude-memorypack';
+
+    const records: MemoryPackRecord[] = memories.map((m: any, i: number) => {
+      const id = m.id ? String(m.id) : String(i + 1);
+      const kind = m.type || m.memory_type || 'episodic';
+      const rec: MemoryPackRecord = {
+        id,
+        created_at: m.created_at || new Date().toISOString(),
+        kind,
+        content: m.content || '',
+        tags: m.tags || [],
+        importance: typeof m.importance === 'number' ? m.importance : 0.5,
+        source: m.source || '',
+      };
+      if (m.summary) rec.summary = m.summary;
+      if (m.access_count != null) rec.access_count = m.access_count;
+      if (m.last_accessed_at) rec.last_accessed_at = m.last_accessed_at;
+      return rec;
+    });
+
+    // Pull the wallet keypair if available. Local mode with a
+    // configured wallet, or hosted mode that injected it via
+    // _configureSolana, will sign records. Otherwise emit unsigned.
+    let secretKey: Uint8Array | undefined;
+    let publicKey: string | undefined;
+    try {
+      const { getBotWallet } = require('@clude/shared/core/solana-client');
+      const wallet = getBotWallet();
+      if (wallet) {
+        secretKey = wallet.secretKey;
+        publicKey = wallet.publicKey.toBase58();
+      }
+    } catch {
+      /* no wallet configured — emit unsigned pack */
+    }
+
+    writeMemoryPack(outputDir, records, {
+      producer: {
+        name: 'clude',
+        version: '3.0.3',
+        agent_id: config?.agent?.id,
+        public_key: publicKey,
+      },
+      record_schema: 'clude-memory-v3',
+      secretKey,
+      anchor_chain: 'solana-mainnet',
+    });
+
+    printSuccess(
+      `MemoryPack written to ${outputDir}/ (${records.length} records${secretKey ? ', signed' : ', UNSIGNED'})`,
+    );
+    if (!secretKey) {
+      console.log(
+        `\n  ${c.dim}No wallet configured — pack is unsigned. Set CLUDE_WALLET_SECRET to sign.${c.reset}`,
+      );
+    }
+    console.log(
+      `\n  ${c.dim}Contents: manifest.json, records.jsonl${secretKey ? ', signatures.jsonl' : ''}${c.reset}`,
+    );
+    printDivider();
+    console.log('');
+    return;
   } else {
     defaultName = 'clude-memories.json';
     const pack = {

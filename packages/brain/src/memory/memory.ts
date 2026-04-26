@@ -413,10 +413,16 @@ async function commitMemoryToChain(memoryId: number, opts: StoreMemoryOptions): 
     );
   }
 
-  // Fallback to memo if registry unavailable or failed
+  // Fallback to memo if registry unavailable or failed.
+  //
+  // Format `clude:v1:sha256:<hex>` matches the MemoryPack v0.1 spec
+  // `memo-v1` anchor. Replaces the legacy `clude-memory | v2 | <hex>`
+  // so third-party readers can parse our anchors against the public
+  // spec. Existing on-chain memos are unaffected; only new writes
+  // use the new format.
   if (!signature) {
     const contentHashHex = contentHashBuf.toString('hex');
-    const memo = `clude-memory | v2 | ${contentHashHex}`;
+    const memo = `clude:v1:sha256:${contentHashHex}`;
     signature = await writeMemo(memo);
   }
 
