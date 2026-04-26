@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Clude Treasury — every dollar buys $CLUDE</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link href="https://fonts.googleapis.com/css2?family=Funnel+Sans:wght@400;500;600;700&family=Inconsolata:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f5f5f0;
+      --ink: #1a1b1f;
+      --accent: #2244ff;
+      --muted: #5b616e;
+      --line: rgba(91, 97, 110, 0.18);
+      --paper: #ffffff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Funnel Sans', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.5;
+      padding: 40px 20px;
+    }
+    .wrap { max-width: 880px; margin: 0 auto; }
+    header { margin-bottom: 40px; border-bottom: 1px solid var(--line); padding-bottom: 24px; }
+    h1 { font-size: 28px; font-weight: 700; margin-bottom: 6px; }
+    .sub { color: var(--muted); font-size: 14px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 36px;
+    }
+    .card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 18px;
+    }
+    .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 6px; }
+    .stat { font-size: 22px; font-weight: 700; font-family: 'Inconsolata', monospace; word-break: break-all; }
+    .accent { color: var(--accent); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+    th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 500; }
+    td.mono { font-family: 'Inconsolata', monospace; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-family: 'Inconsolata', monospace; background: rgba(34, 68, 255, 0.08); color: var(--accent); }
+    footer { margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+    footer p { margin-bottom: 8px; }
+    .empty { text-align: center; padding: 48px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Clude Treasury</h1>
+      <p class="sub">Every dollar of revenue auto-buys $CLUDE on Jupiter and sinks to the treasury multisig. Refreshed every 30 seconds.</p>
+    </header>
+
+    <section class="grid" id="stats">
+      <div class="card"><div class="label">Treasury $CLUDE</div><div class="stat" id="stat-clude">—</div></div>
+      <div class="card"><div class="label">Total USDC routed</div><div class="stat" id="stat-usdc">—</div></div>
+      <div class="card"><div class="label">Swaps</div><div class="stat" id="stat-count">—</div></div>
+      <div class="card"><div class="label">Last swap</div><div class="stat" id="stat-last">—</div></div>
+    </section>
+
+    <h2 style="font-size:18px;font-weight:600;margin-bottom:14px;">Recent swaps</h2>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <table id="recent">
+        <thead>
+          <tr><th>When</th><th>Source</th><th>USDC in</th><th>$CLUDE out</th><th>Slippage</th><th>Tx</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <footer>
+      <p><strong>Treasury:</strong> <span class="mono" id="addr-treasury">—</span> <span class="pill">Squads multisig</span></p>
+      <p><strong>Hot wallet:</strong> <span class="mono" id="addr-hot">—</span> <span class="pill">single-sig, swept hourly, ≤ $5k limit</span></p>
+      <p><strong>Token:</strong> <span class="mono">$CLUDE</span> &middot; mint AWGCDT2gd8JadbYbYyZy1iKxfWokPNgrEQoU24zUpump</p>
+      <p style="margin-top:18px;">No fee, no burn, no gating. Token is a sink, not a key. Every dollar of revenue auto-routes here, and the destination is a multisig you can audit.</p>
+    </footer>
+  </div>
+
+  <script>
+    function fmtAmount(microStr, decimals) {
+      const n = BigInt(microStr || '0');
+      const div = 10n ** BigInt(decimals);
+      const whole = n / div;
+      const frac = n % div;
+      const fracStr = frac.toString().padStart(decimals, '0').slice(0, 2);
+      return `${whole.toLocaleString()}.${fracStr}`;
+    }
+    function fmtAgo(iso) {
+      if (!iso) return '—';
+      const ms = Date.now() - new Date(iso).getTime();
+      const m = Math.floor(ms / 60000);
+      if (m < 1) return 'just now';
+      if (m < 60) return `${m}m ago`;
+      const h = Math.floor(m / 60);
+      if (h < 24) return `${h}h ago`;
+      return `${Math.floor(h / 24)}d ago`;
+    }
+    function shortSig(s) {
+      if (!s) return '—';
+      return s.slice(0, 6) + '…' + s.slice(-4);
+    }
+    function shortAddr(s) {
+      if (!s) return '—';
+      return s.slice(0, 8) + '…' + s.slice(-6);
+    }
+    async function refresh() {
+      try {
+        const r = await fetch('/api/treasury/stats');
+        const d = await r.json();
+        document.getElementById('stat-clude').textContent =
+          fmtAmount(d.total_clude_purchased_lamports, 6) + ' $CLUDE';
+        document.getElementById('stat-usdc').textContent =
+          '$' + fmtAmount(d.total_usdc_collected_micro, 6);
+        document.getElementById('stat-count').textContent = String(d.swap_count);
+        document.getElementById('stat-last').textContent = fmtAgo(d.last_swap_at);
+
+        const t = document.getElementById('addr-treasury');
+        t.textContent = d.treasury_pubkey || '—';
+        if (d.treasury_pubkey) t.outerHTML = `<a class="mono" href="https://solscan.io/account/${d.treasury_pubkey}" target="_blank" rel="noopener">${d.treasury_pubkey}</a>`;
+        const h = document.getElementById('addr-hot');
+        if (d.hot_wallet_pubkey) h.outerHTML = `<a class="mono" href="https://solscan.io/account/${d.hot_wallet_pubkey}" target="_blank" rel="noopener">${shortAddr(d.hot_wallet_pubkey)}</a>`;
+
+        const tb = document.querySelector('#recent tbody');
+        tb.innerHTML = '';
+        if (!d.recent || d.recent.length === 0) {
+          tb.innerHTML = '<tr><td colspan="6" class="empty">No swaps yet. The first revenue dollar will land here.</td></tr>';
+          return;
+        }
+        for (const r of d.recent) {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${fmtAgo(r.swapped_at)}</td>
+            <td><span class="pill">${r.source}</span></td>
+            <td class="mono">$${fmtAmount(r.usdc_in_micro, 6)}</td>
+            <td class="mono">${fmtAmount(r.clude_out_lamports, 6)}</td>
+            <td class="mono">${r.realised_slippage_bps != null ? (r.realised_slippage_bps / 100).toFixed(2) + '%' : '—'}</td>
+            <td>${r.swap_tx_sig ? `<a class="mono" href="https://solscan.io/tx/${r.swap_tx_sig}" target="_blank" rel="noopener">${shortSig(r.swap_tx_sig)} ↗</a>` : '—'}</td>
+          `;
+          tb.appendChild(tr);
+        }
+      } catch (e) {
+        console.error('treasury fetch', e);
+      }
+    }
+    refresh();
+    setInterval(refresh, 30000);
+  </script>
+</body>
+</html>

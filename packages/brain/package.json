@@ -48,6 +48,7 @@
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@openrouter/ai-sdk-provider": "^2.3.3",
     "@privy-io/node": "^0.12.0",
+    "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.98.4",
     "@supabase/supabase-js": "^2.95.3",
     "ai": "^6.0.142",

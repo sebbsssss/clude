@@ -18,6 +18,8 @@ import { memoryPacksRoutes } from './memory-packs.routes.js';
 import { demoRoutes } from './demo.routes.js';
 import { showcaseRoutes } from './showcase.routes.js';
 import { walletAuthRoutes } from './wallet-auth.routes.js';
+import { billingRoutes } from './billing.routes.js';
+import { treasuryRoutes } from './treasury.routes.js';
 import { createChildLogger } from '@clude/shared/core/logger';
 import rateLimit from 'express-rate-limit';
 
@@ -101,6 +103,10 @@ export function mountApiRoutes(app: express.Application): void {
 
   // Wallet auth (direct Phantom signature verification for mobile)
   app.use('/api/wallet-auth', walletAuthRoutes());
+
+  // Token sink (v0): direct USDC tier upgrades + public treasury stats.
+  app.use('/api/billing', billingRoutes());
+  app.use('/api/treasury', treasuryRoutes());
 
   // Helius webhook (USDC payment detection — outside /api to avoid API rate limiter)
   app.use('/webhook', topupWebhookRoutes());

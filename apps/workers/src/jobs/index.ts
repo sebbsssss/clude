@@ -72,6 +72,16 @@ function buildWorkerList(): WorkerDef[] {
       stop: () => require('./task-executor-worker').stop(),
       enabled: () => true,
     },
+    {
+      name: 'usdc-sink',
+      start: () => require('./usdc-sink-worker').start(),
+      stop: () => require('./usdc-sink-worker').stop(),
+      // Disabled until both env vars are wired (treasury + hot wallet
+      // private key). Worker self-detects and no-ops if either is missing,
+      // but we'd rather not register it as 'started' in that case.
+      enabled: () =>
+        !!process.env.SINK_HOT_PRIVATE_KEY && !!process.env.SINK_TREASURY_PUBKEY,
+    },
   ];
 }
 
