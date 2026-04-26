@@ -12,7 +12,7 @@ import { CcMessage, type V2Message } from './CcMessage';
 import { CcComposer } from './CcComposer';
 import { CcMemoryPanel } from './CcMemoryPanel';
 import { CcMemoryPill } from './CcMemoryPill';
-import { V2_FALLBACK_MEMORIES, toV2Model } from './data';
+import { toV2Model } from './data';
 import { MEMORY_COLORS, type V2Memory, type V2Model, type V2Theme, type V2Thread } from './types';
 
 function threadGroupFor(updatedAt: string): V2Thread['group'] {
@@ -198,9 +198,7 @@ export function CcChat({
 
   const backgroundMemories = useMemo<V2Memory[]>(() => {
     const recalledSet = new Set(recalledMemories.map((m) => m.id));
-    const bg = recentV2.filter((m) => !recalledSet.has(m.id));
-    if (bg.length === 0 && recentV2.length === 0) return V2_FALLBACK_MEMORIES;
-    return bg;
+    return recentV2.filter((m) => !recalledSet.has(m.id));
   }, [recentV2, recalledMemories]);
 
   const savedTokToday = useMemo(() => {
@@ -316,7 +314,6 @@ export function CcChat({
             totals={{
               stored: memHook.stats?.total ?? recentV2.length,
               savedTokToday,
-              halluRate: 1.96,
             }}
             onClose={() => setMemoryOpen(false)}
             showCitations={showCitations}
