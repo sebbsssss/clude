@@ -6,13 +6,13 @@
     "url": "https://github.com/sebbsssss/clude",
     "source": "github"
   },
-  "version": "3.0.3",
+  "version": "3.0.4",
   "websiteUrl": "https://clude.io",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@clude/sdk",
-      "version": "3.0.3",
+      "version": "3.0.4",
       "runtimeHint": "npx",
       "runtimeArguments": [
         {
