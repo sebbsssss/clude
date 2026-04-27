@@ -417,7 +417,7 @@ export async function runExport(): Promise<void> {
     writeMemoryPack(outputDir, records, {
       producer: {
         name: 'clude',
-        version: '3.0.3',
+        version: '3.1.0',
         agent_id: config?.agent?.id,
         public_key: publicKey,
       },

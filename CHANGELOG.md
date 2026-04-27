@@ -4,6 +4,44 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.1.0] — 2026-04-28
+
+MemoryPack v0.2 — encryption, blob attachments, tarball packs, hardened
+chain-anchor verifier, auditor CLI, cron-friendly snapshot. Fully
+backward compatible: v0.1 packs still read by the new reader.
+
+### Added
+- **`writeMemoryPack({ format: 'tarball' })`** — compresses the pack as `.tar.zst`. Stable inner-dir name (no PID/timestamp leak). Runs `tar` via `spawnSync` with argv array — no shell, Windows-safe.
+- **`writeMemoryPack({ encryption: { key, scope } })`** — pack-level xsalsa20-poly1305 encryption. `scope: 'records'` ciphers `record.content`; `scope: 'records+blobs'` also ciphers blob bytes and omits `filename`/`content_type` from `blobs/index.jsonl` to avoid plaintext metadata leak.
+- **`writeMemoryPack({ blobs })`** — attach binary content. Stored at `blobs/sha256/<hex>` with a manifest at `blobs/index.jsonl`. Producers reference attachments via `record.blob_ref: sha256:<hex>`.
+- **`writeMemoryPack({ clock })`** — deterministic timestamp injection for reference test vectors and reproducible snapshots.
+- **`readMemoryPack` accepts tarballs** — auto-detected by `.tar.zst` extension or by being a file (not a directory). Extracts to a per-call temp dir, reads, cleans up on success and failure.
+- **Tarball extraction is path-traversal hardened** — pre-lists members with `tar -tvf` and rejects symlinks, hardlinks, absolute paths, `..` segments, and characters outside `[A-Za-z0-9._/-]`. Adds `--no-same-owner --no-same-permissions` for defense in depth.
+- **`readMemoryPack({ decryptionKey })`** — decrypts in place when manifest declares encryption. Validates key length, handles missing nonce gracefully, strips nonce from in-memory record after successful decrypt.
+- **`ReaderResult.verifiedBlobs`** — set of blob hashes that round-tripped against the index. **`ReaderResult.minimalRecords`** — spec-compliant minimal projection that **excludes** records still marked `encrypted=true` so consumers ignoring `result.warnings` can't accidentally surface base64 ciphertext as plaintext content.
+- **`verifyChainAnchors(anchors, opts)`** — async chain anchor verifier with SPL Memo program ID checking, exact memo data matching, and signer binding (`opts.expectedSigner`). Optional cluster cross-check via `getGenesisHash()`. Replaces the v0.1 log-string-regex approach which trusted any program's arbitrary log output (anchors were forgeable for ~5000 lamports per record).
+- **`clude verify <pack>`** — auditor CLI for directory or `.tar.zst` packs. Optional `--verify-chain --rpc-url --cluster --decrypt-key --strict-signatures --strict-chain --public-key`. Exit code drives CI usage.
+- **`clude snapshot`** — cron-friendly tarball of local memories. Single-line stdout = the snapshot path; errors → stderr; default output `~/.clude/snapshots/clude-YYYYMMDD-HHMMSS.tar.zst`.
+- **Reference test vectors** — `packages/brain/src/memorypack/__tests__/fixtures.ts` exposes `FIXTURE_RECORDS`, `FIXTURE_BLOB_DATA`, `FIXTURE_ENCRYPTION_KEY`, `FIXTURE_CLOCK`, and `EXPECTED_RECORD_HASHES`. External MemoryPack implementers can use these as a contract test.
+
+### Changed
+- `MEMORYPACK_VERSION` bumped from `0.1` to `0.2` (additive — readers remain compatible with `0.1` packs).
+- `MemoryPackManifest` adds `pack_format`, `encryption`, `blobs_count`.
+- `MemoryPackRecord` adds `encrypted`, `nonce`. `serializeRecord` keeps stable key order including the new fields.
+- Directory-mode writer **clears stale prior outputs** before writing — signed→unsigned re-export over the same dir no longer leaves an orphan `signatures.jsonl` that would fail verification on the next read.
+- `WriterOptions.anchors` moved from positional 4th arg into options (no caller change needed; positional path was unused).
+
+### Fixed
+- Signature verification now runs over **ciphertext bytes** (the stored line) BEFORE decryption — tampering caught regardless of whether the reader has a key.
+- `blob_ref` cross-check runs even when `blobs/index.jsonl` is absent. Previously a record claiming a blob a pack didn't physically contain passed silently; now warns with diagnostic detail.
+- Decryption with the wrong key emits a per-record warning instead of throwing, so a verifier can still report on the rest of the pack.
+
+### Security review (folded in)
+- SPL Memo program ID + signer binding closes the v0.1 anchor forgery vector (any program could `msg!()` a `clude:v1:...` string under the old regex check).
+- Tarball extraction symlink/path-traversal hardening blocks the classic symlink-then-write escape used to write outside the extraction tmp dir.
+- `records+blobs` encryption scope ciphers the blob bytes AND omits filename/content_type from the index to avoid plaintext metadata leak even when filenames are sensitive (e.g. `medical-report.pdf`).
+- Windows `tar` invocation switched to `spawnSync` with argv array; the previous POSIX `shellQuote` was a no-op on `cmd.exe` and produced literal-quote-character file names.
+
 ## [3.0.1] — 2026-04-17
 
 ### Changed
