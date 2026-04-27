@@ -1,15 +1,23 @@
+import { useState } from 'react';
 import { CcWordmark } from './atoms';
 import { V2_THREAD_GROUPS } from './data';
 import type { V2Thread } from './types';
 
+function shortWallet(addr: string): string {
+  if (addr.length <= 10) return addr;
+  return `${addr.slice(0, 4)}…${addr.slice(-4)}`;
+}
+
 export function CcSidebar({
   user,
+  walletAddress,
   threads,
   onNewChat,
   onSelect,
   onLogout,
 }: {
   user: { name?: string; email?: string } | null;
+  walletAddress: string | null;
   threads: V2Thread[];
   onNewChat: () => void;
   onSelect: (id: string) => void;
@@ -21,6 +29,19 @@ export function CcSidebar({
   })).filter((g) => g.items.length > 0);
 
   const initials = ((user?.name || user?.email || 'SK').slice(0, 2) || 'SK').toUpperCase();
+
+  // Wallet copy button: brief "copied" state.
+  const [copied, setCopied] = useState(false);
+  const copyWallet = async () => {
+    if (!walletAddress) return;
+    try {
+      await navigator.clipboard.writeText(walletAddress);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch {
+      /* ignore */
+    }
+  };
 
   return (
     <aside className="cc-side">
@@ -64,6 +85,36 @@ export function CcSidebar({
             ⏻
           </button>
         </div>
+        {walletAddress && (
+          <button
+            type="button"
+            onClick={copyWallet}
+            title={copied ? 'Copied!' : `Copy: ${walletAddress}`}
+            style={{
+              marginTop: 8,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 8,
+              padding: '6px 10px',
+              border: '1px solid var(--line)',
+              borderRadius: 2,
+              background: 'transparent',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              letterSpacing: '0.04em',
+              color: 'var(--fg-3)',
+              cursor: 'pointer',
+              width: '100%',
+              textAlign: 'left',
+            }}
+          >
+            <span style={{ color: 'var(--fg-3)' }}>◇ wallet</span>
+            <span style={{ color: 'var(--fg-2)', fontFeatureSettings: '"tnum" 1' }}>
+              {copied ? '✓ copied' : shortWallet(walletAddress)}
+            </span>
+          </button>
+        )}
       </div>
     </aside>
   );

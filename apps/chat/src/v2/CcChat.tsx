@@ -1,4 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { usePrivy } from '@privy-io/react-auth';
 import { useAuthContext } from '../hooks/AuthContext';
 import { useBalance } from '../hooks/useBalance';
 import { useChat } from '../hooks/use-chat';
@@ -100,6 +101,10 @@ export function CcChat({
   setTheme: (t: V2Theme) => void;
 }) {
   const auth = useAuthContext();
+  // Pull the linked email straight from Privy — chat's AuthContext doesn't
+  // surface it today and we want it for the sidebar profile row.
+  const { user: privyUser } = usePrivy();
+  const email = privyUser?.email?.address ?? null;
   const {
     settled,
     streamingMsg,
@@ -289,11 +294,10 @@ export function CcChat({
       {showSidebar && (
         <CcSidebar
           user={{
-            name: auth.walletAddress
-              ? `${auth.walletAddress.slice(0, 4)}…${auth.walletAddress.slice(-4)}`
-              : 'Guest',
-            email: walletAddress || undefined,
+            name: email ? email.split('@')[0] : 'Guest',
+            email: email || undefined,
           }}
+          walletAddress={walletAddress}
           threads={threads}
           onNewChat={handleNewChat}
           onSelect={(id) => {

@@ -98,6 +98,46 @@ export function useAuth(): AuthState {
     })();
   }, [privyReady, privyAuth, wallets, cortexKey, getAccessToken]);
 
+  // Email-signup wallet race: Privy provisions the embedded Solana wallet
+  // asynchronously, sometimes after our first auto-register call. When the
+  // wallet finally lands, re-fire auto-register with the real address — the
+  // server's findOrCreateAgentForDid → migrateOwnerWallet flow swaps the
+  // synthetic hex owner_wallet for the real one and carries the chat_balances
+  // row across. Idempotent: returns the same agent if owner_wallet already
+  // matches, so it's safe to fire on every wallet update.
+  const lastSyncedWalletRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!privyReady || !privyAuth || !cortexKey) return;
+    const realWallet = wallets?.[0]?.address;
+    if (!realWallet) return;
+    if (realWallet === lastSyncedWalletRef.current) return;
+    if (realWallet === walletAddress) {
+      lastSyncedWalletRef.current = realWallet;
+      return;
+    }
+    lastSyncedWalletRef.current = realWallet;
+    (async () => {
+      try {
+        const token = await getAccessToken();
+        if (!token) return;
+        const result = await api.autoRegister(token, realWallet);
+        // If the server returned a different key (key was rotated as part
+        // of agent adoption — rare), update local state.
+        if (result.api_key && result.api_key !== cortexKey) {
+          api.setKey(result.api_key);
+          setCortexKey(result.api_key);
+          localStorage.setItem(STORAGE_KEYS.cortexKey, result.api_key);
+        }
+        const finalWallet = result.wallet || realWallet;
+        setWalletAddress(finalWallet);
+        localStorage.setItem(STORAGE_KEYS.wallet, finalWallet);
+      } catch (err) {
+        // Migration failure is non-fatal — user can still chat on free tier.
+        console.warn('Wallet migration after auto-register failed:', err);
+      }
+    })();
+  }, [privyReady, privyAuth, cortexKey, wallets, walletAddress, getAccessToken]);
+
   const login = useCallback(async () => {
     // If Privy already has an active session but we have no cortex key
     // (e.g. auto-register failed or key expired), logout first to clear
