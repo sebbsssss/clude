@@ -1,0 +1,73 @@
+{
+  "name": "@clude/memorypack",
+  "version": "0.2.0",
+  "description": "Reference reader/writer for the MemoryPack spec — open, signed, chain-anchorable file format for portable AI agent memory.",
+  "license": "MIT",
+  "homepage": "https://github.com/sebbsssss/clude/blob/main/docs/memorypack.md",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sebbsssss/clude.git",
+    "directory": "packages/memorypack"
+  },
+  "bugs": {
+    "url": "https://github.com/sebbsssss/clude/issues",
+    "email": "support@clude.io"
+  },
+  "keywords": [
+    "memorypack",
+    "ai",
+    "agents",
+    "memory",
+    "portable",
+    "signed",
+    "ed25519",
+    "solana",
+    "verifiable",
+    "audit-trail"
+  ],
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "pnpm clean && pnpm build && pnpm test"
+  },
+  "dependencies": {
+    "bs58": "^6.0.0",
+    "tweetnacl": "^1.0.3"
+  },
+  "peerDependencies": {
+    "@solana/web3.js": "^1.98.0"
+  },
+  "peerDependenciesMeta": {
+    "@solana/web3.js": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@solana/web3.js": "^1.98.4",
+    "@types/node": "^22.19.11",
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
