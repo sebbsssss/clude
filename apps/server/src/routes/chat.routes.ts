@@ -40,8 +40,10 @@ export const CHAT_MODELS = [
   { id: 'llama-uncensored', name: 'Venice Uncensored', openrouterId: OPENROUTER_MODELS['venice-uncensored'], privacy: 'private', context: 32000, tier: 'pro' as const, cost: { input: 0.15, output: 0.15 } },
   { id: 'qwen-235b', name: 'Qwen3 235B', openrouterId: OPENROUTER_MODELS['qwen-235b'], privacy: 'private', context: 128000, tier: 'pro' as const, cost: { input: 0.50, output: 0.50 } },
   // Frontier models (via OpenRouter)
+  { id: 'claude-opus-4.7', name: 'Claude Opus 4.7', openrouterId: OPENROUTER_MODELS['claude-opus-4.7'], privacy: 'anonymized', context: 1000000, tier: 'pro' as const, cost: { input: 15.00, output: 75.00 } },
   { id: 'claude-sonnet-4.6', name: 'Claude Sonnet 4.6', openrouterId: OPENROUTER_MODELS['claude-sonnet-4.6'], privacy: 'anonymized', context: 1000000, tier: 'pro' as const, cost: { input: 3.00, output: 15.00 } },
   { id: 'claude-opus-4.6', name: 'Claude Opus 4.6', openrouterId: OPENROUTER_MODELS['claude-opus-4.6'], privacy: 'anonymized', context: 1000000, tier: 'pro' as const, cost: { input: 15.00, output: 75.00 } },
+  { id: 'gpt-5.5', name: 'GPT-5.5', openrouterId: OPENROUTER_MODELS['gpt-5.5'], privacy: 'anonymized', context: 1000000, tier: 'pro' as const, cost: { input: 2.50, output: 10.00 } },
   { id: 'gpt-5.4', name: 'GPT-5.4', openrouterId: OPENROUTER_MODELS['gpt-5.4'], privacy: 'anonymized', context: 1000000, tier: 'pro' as const, cost: { input: 2.00, output: 8.00 } },
   { id: 'grok-4.1-fast', name: 'Grok 4.1 Fast', openrouterId: OPENROUTER_MODELS['grok-4.1'], privacy: 'anonymized', context: 1000000, tier: 'pro' as const, cost: { input: 3.00, output: 15.00 } },
   { id: 'gemini-3-pro', name: 'Gemini 3 Pro', openrouterId: OPENROUTER_MODELS['gemini-3-pro'], privacy: 'anonymized', context: 198000, tier: 'pro' as const, cost: { input: 1.25, output: 5.00 } },

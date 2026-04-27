@@ -46,12 +46,14 @@ export interface OpenRouterResponse {
 // OpenRouter model IDs — provider/model format
 export const OPENROUTER_MODELS = {
   // Frontier (Anthropic)
+  'claude-opus-4.7': 'anthropic/claude-opus-4.7',
   'claude-opus-4.6': 'anthropic/claude-opus-4.6',
   'claude-sonnet-4.6': 'anthropic/claude-sonnet-4.6',
   'claude-opus-4.5': 'anthropic/claude-opus-4.5',
   'claude-sonnet-4.5': 'anthropic/claude-sonnet-4.5',
 
   // Frontier (Other providers)
+  'gpt-5.5': 'openai/gpt-5.5',
   'gpt-5.4': 'openai/gpt-5.4',
   'grok-4.1': 'x-ai/grok-4.1-fast',
   'gemini-3-pro': 'google/gemini-3-pro-preview',
