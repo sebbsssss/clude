@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pricing — Clude</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Pay in USDC. Every dollar of revenue auto-buys $CLUDE and sinks to a treasury multisig — transparent on-chain." />
+  <link rel="icon" type="image/svg+xml" href="/logo/Clude-Icon-Blue.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Funnel+Sans:ital,wght@0,300..800;1,300..800&family=Inconsolata:wght@300..700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f5f5f0;
+      --bg-2: #ecece6;
+      --ink: #1a1b1f;
+      --ink-2: #2a2b30;
+      --mute: #5b5f68;
+      --accent: #2244ff;
+      --accent-soft: rgba(34, 68, 255, 0.08);
+      --line: rgba(26, 27, 31, 0.12);
+      --paper: #ffffff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: 'Funnel Sans', system-ui, sans-serif;
+      font-weight: 400;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+    nav {
+      max-width: 1100px; margin: 0 auto;
+      padding: 24px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    nav .logo { font-weight: 800; letter-spacing: 0.02em; font-size: 18px; color: var(--ink); text-decoration: none; }
+    nav .links { display: flex; gap: 22px; }
+    nav a { color: var(--ink); text-decoration: none; font-size: 14px; font-weight: 500; }
+    nav a:hover { color: var(--accent); }
+
+    main { max-width: 1100px; margin: 0 auto; padding: 60px 24px 100px; }
+    .hero {
+      text-align: center; margin-bottom: 56px;
+    }
+    .hero h1 { font-size: 44px; font-weight: 700; line-height: 1.1; margin-bottom: 14px; letter-spacing: -0.01em; }
+    .hero h1 em { font-style: normal; font-weight: 700; color: var(--accent); }
+    .hero p { color: var(--mute); max-width: 580px; margin: 0 auto; font-size: 17px; }
+
+    .cards {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 16px; margin-bottom: 56px;
+      max-width: 880px; margin-left: auto; margin-right: auto;
+    }
+    @media (max-width: 760px) {
+      .cards { grid-template-columns: 1fr; max-width: 480px; }
+    }
+    .card {
+      background: var(--paper); border: 1px solid var(--line);
+      border-radius: 14px; padding: 28px;
+      display: flex; flex-direction: column;
+    }
+    .card.featured { border: 2px solid var(--accent); }
+    .badge {
+      display: inline-block; align-self: flex-start;
+      padding: 3px 9px; border-radius: 999px;
+      font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+      background: var(--accent-soft); color: var(--accent); font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .name { font-size: 14px; color: var(--mute); font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; }
+    .price { font-size: 40px; font-weight: 700; margin: 8px 0 4px; font-family: 'Inconsolata', monospace; }
+    .price small { font-size: 14px; font-weight: 400; color: var(--mute); }
+    .price-sub { color: var(--mute); font-size: 13px; margin-bottom: 20px; }
+    ul { list-style: none; margin-bottom: 24px; }
+    ul li { padding: 6px 0; font-size: 14px; color: var(--ink-2); position: relative; padding-left: 22px; }
+    ul li::before { content: '✓'; position: absolute; left: 0; color: var(--accent); font-weight: 700; }
+    .cta {
+      display: block; padding: 12px 18px; border-radius: 10px;
+      background: var(--ink); color: var(--bg); text-align: center;
+      font-weight: 600; font-size: 14px; cursor: pointer; border: none;
+      width: 100%; transition: background 0.15s; margin-top: auto;
+      font-family: inherit;
+    }
+    .cta:hover { background: var(--accent); }
+    .cta:disabled { background: var(--mute); cursor: not-allowed; opacity: 0.6; }
+    .cta.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+    .cta.secondary:hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+
+    .compare {
+      background: var(--paper); border: 1px solid var(--line);
+      border-radius: 14px; padding: 28px;
+      margin-bottom: 56px;
+    }
+    .compare h2 { font-size: 18px; font-weight: 700; margin-bottom: 18px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--line); font-size: 14px; }
+    th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--mute); font-weight: 500; }
+    td.center { text-align: center; }
+    td.mono { font-family: 'Inconsolata', monospace; }
+
+    .sink-note {
+      background: var(--accent-soft); border-radius: 14px;
+      padding: 28px; margin-bottom: 40px;
+    }
+    .sink-note h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+    .sink-note p { color: var(--ink-2); font-size: 14px; }
+    .sink-note a { color: var(--accent); }
+
+    .checkout-modal {
+      position: fixed; inset: 0;
+      background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(4px);
+      display: none; align-items: center; justify-content: center;
+      padding: 20px; z-index: 100;
+    }
+    .checkout-modal.open { display: flex; }
+    .checkout-box {
+      background: var(--paper); border-radius: 14px;
+      max-width: 480px; width: 100%; padding: 28px;
+    }
+    .checkout-box h2 { font-size: 20px; font-weight: 700; margin-bottom: 14px; }
+    .checkout-step { padding: 12px 0; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; font-size: 14px; }
+    .checkout-step:last-child { border-bottom: none; }
+    .step-dot {
+      width: 22px; height: 22px; border-radius: 50%;
+      border: 1.5px solid var(--line); flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; color: var(--mute); font-weight: 600;
+    }
+    .step-dot.active { border-color: var(--accent); color: var(--accent); }
+    .step-dot.done { border-color: var(--accent); background: var(--accent); color: white; }
+    .step-text { flex: 1; }
+    .step-text strong { display: block; font-weight: 600; color: var(--ink); }
+    .step-text span { color: var(--mute); font-size: 13px; }
+    .checkout-actions { display: flex; gap: 10px; margin-top: 22px; }
+    .checkout-actions .cta { flex: 1; }
+    .err { color: #b94330; font-size: 13px; margin-top: 14px; padding: 10px; background: rgba(185, 67, 48, 0.06); border-radius: 8px; }
+    .ok { color: #2a8547; font-size: 13px; margin-top: 14px; padding: 10px; background: rgba(42, 133, 71, 0.06); border-radius: 8px; }
+    .ok a { color: #2a8547; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/" class="logo">CLUDE</a>
+    <div class="links">
+      <a href="/docs.html">Docs</a>
+      <a href="/pricing">Pricing</a>
+      <a href="/treasury.html">Treasury</a>
+      <a href="https://github.com/sebbsssss/clude" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </nav>
+
+  <main>
+    <section class="hero">
+      <h1>Memory your agent <em>actually owns.</em></h1>
+      <p>Pay in USDC. Every dollar auto-buys $CLUDE and sinks to a treasury multisig you can audit on Solscan. No surprise fees, no per-message charges.</p>
+    </section>
+
+    <section class="cards">
+      <div class="card">
+        <span class="name">Free</span>
+        <div class="price">$0</div>
+        <div class="price-sub">forever, local-only</div>
+        <ul>
+          <li>Local SQLite memory store</li>
+          <li>Up to 200 memories/day</li>
+          <li>MemoryPack export anytime</li>
+          <li>On-chain anchoring (you pay $0 gas via Helius)</li>
+          <li>MCP integration with Claude Desktop</li>
+        </ul>
+        <a href="/install.html" class="cta secondary">Install free</a>
+      </div>
+
+      <div class="card featured">
+        <span class="badge">Most popular</span>
+        <span class="name">Personal</span>
+        <div class="price">$5<small>/mo</small></div>
+        <div class="price-sub">USDC, billed monthly</div>
+        <ul>
+          <li>Everything in Free</li>
+          <li>Cloud sync across devices</li>
+          <li>Up to 5,000 memories/day</li>
+          <li>Hosted recall (no local Postgres needed)</li>
+          <li>Dream cycles run on our servers</li>
+        </ul>
+        <button class="cta" data-tier="personal" data-price="5">Upgrade — $5 USDC</button>
+      </div>
+
+      <div class="card">
+        <span class="name">Pro</span>
+        <div class="price">$19<small>/mo</small></div>
+        <div class="price-sub">USDC, billed monthly</div>
+        <ul>
+          <li>Everything in Personal</li>
+          <li>Up to 50,000 memories/day</li>
+          <li>Content anchoring (IPFS pinning included)</li>
+          <li>Priority dream cycles</li>
+          <li>Email support</li>
+        </ul>
+        <button class="cta" data-tier="pro" data-price="19">Upgrade — $19 USDC</button>
+      </div>
+
+    </section>
+
+    <section class="compare">
+      <h2>What you get at every tier</h2>
+      <table>
+        <thead>
+          <tr><th>Feature</th><th class="center">Free</th><th class="center">Personal</th><th class="center">Pro</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Local memory store</td><td class="center">✓</td><td class="center">✓</td><td class="center">✓</td></tr>
+          <tr><td>MemoryPack export</td><td class="center">✓</td><td class="center">✓</td><td class="center">✓</td></tr>
+          <tr><td>On-chain anchoring</td><td class="center">✓</td><td class="center">✓</td><td class="center">✓</td></tr>
+          <tr><td>Daily memory quota</td><td class="center mono">200</td><td class="center mono">5k</td><td class="center mono">50k</td></tr>
+          <tr><td>Cloud sync across devices</td><td class="center">—</td><td class="center">✓</td><td class="center">✓</td></tr>
+          <tr><td>Hosted recall API</td><td class="center">—</td><td class="center">✓</td><td class="center">✓</td></tr>
+          <tr><td>Hosted dream cycles</td><td class="center">—</td><td class="center">✓</td><td class="center">✓</td></tr>
+          <tr><td>Content anchoring (IPFS)</td><td class="center">—</td><td class="center">—</td><td class="center">✓</td></tr>
+          <tr><td>Email support</td><td class="center">—</td><td class="center">—</td><td class="center">✓</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="sink-note">
+      <h3>Where your USDC goes.</h3>
+      <p>
+        Every dollar of revenue routes through Jupiter into $CLUDE and lands in a treasury multisig at
+        <code style="font-family:'Inconsolata',monospace;font-size:12px;">4GJXeBY3FH…YxZ4kwLom</code>.
+        The mechanism is automatic and transparent. <a href="/treasury.html">Watch it live →</a>
+      </p>
+    </section>
+  </main>
+
+  <!-- Checkout modal -->
+  <div class="checkout-modal" id="checkout">
+    <div class="checkout-box">
+      <h2 id="checkout-title">Upgrade to <span id="checkout-tier">Personal</span></h2>
+      <div class="checkout-step" data-step="1">
+        <div class="step-dot active">1</div>
+        <div class="step-text"><strong>Connect wallet</strong><span>Phantom or Solflare</span></div>
+      </div>
+      <div class="checkout-step" data-step="2">
+        <div class="step-dot">2</div>
+        <div class="step-text"><strong id="step2-text">Send $5 USDC</strong><span>To the sink hot wallet</span></div>
+      </div>
+      <div class="checkout-step" data-step="3">
+        <div class="step-dot">3</div>
+        <div class="step-text"><strong>Sign upgrade message</strong><span>Proves the tx is yours</span></div>
+      </div>
+      <div class="checkout-step" data-step="4">
+        <div class="step-dot">4</div>
+        <div class="step-text"><strong>Done</strong><span>Tier active for 30 days</span></div>
+      </div>
+      <div id="checkout-msg"></div>
+      <div class="checkout-actions">
+        <button class="cta secondary" id="checkout-cancel">Cancel</button>
+        <button class="cta" id="checkout-go">Connect &amp; pay</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    // Phantom-based USDC checkout. We deliberately don't pull in a
+    // wallet adapter framework here — a single static page should not
+    // depend on a React build. Phantom + Solflare both inject window.solana
+    // (or window.solflare) with the same interface we use below.
+
+    const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+    const TIER_PRICE_USDC = { personal: 5, pro: 19 };
+
+    // Hot wallet pubkey is fetched from the public stats endpoint so
+    // we never hardcode it in two places.
+    let SINK_HOT_PUBKEY = null;
+    fetch('/api/treasury/stats')
+      .then((r) => r.json())
+      .then((d) => { SINK_HOT_PUBKEY = d.hot_wallet_pubkey; })
+      .catch(() => {});
+
+    const modal = document.getElementById('checkout');
+    const title = document.getElementById('checkout-tier');
+    const step2 = document.getElementById('step2-text');
+    const msg = document.getElementById('checkout-msg');
+    const goBtn = document.getElementById('checkout-go');
+    const cancelBtn = document.getElementById('checkout-cancel');
+    let activeTier = null;
+
+    function setStep(n, state) {
+      const dot = document.querySelector(`.checkout-step[data-step="${n}"] .step-dot`);
+      if (!dot) return;
+      dot.classList.remove('active', 'done');
+      if (state) dot.classList.add(state);
+    }
+    function resetSteps() {
+      for (let i = 1; i <= 4; i++) setStep(i, null);
+      setStep(1, 'active');
+      msg.innerHTML = '';
+    }
+    function showError(text) {
+      msg.innerHTML = `<div class="err">${text}</div>`;
+    }
+    function showSuccess(html) {
+      msg.innerHTML = `<div class="ok">${html}</div>`;
+    }
+
+    document.querySelectorAll('button[data-tier]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        activeTier = btn.dataset.tier;
+        title.textContent = activeTier.charAt(0).toUpperCase() + activeTier.slice(1);
+        step2.textContent = `Send $${TIER_PRICE_USDC[activeTier]} USDC`;
+        resetSteps();
+        modal.classList.add('open');
+      });
+    });
+    cancelBtn.addEventListener('click', () => modal.classList.remove('open'));
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('open'); });
+
+    goBtn.addEventListener('click', async () => {
+      goBtn.disabled = true;
+      goBtn.textContent = 'Working…';
+      try {
+        await runCheckout(activeTier);
+      } catch (err) {
+        showError(err.message || String(err));
+      } finally {
+        goBtn.disabled = false;
+        goBtn.textContent = 'Connect & pay';
+      }
+    });
+
+    async function runCheckout(tier) {
+      if (!window.solana && !window.solflare) {
+        throw new Error('No Solana wallet detected. Install Phantom or Solflare.');
+      }
+      if (!SINK_HOT_PUBKEY) {
+        throw new Error('Sink address not configured yet — check back in a few minutes.');
+      }
+
+      // Step 1: connect
+      const provider = window.solana || window.solflare;
+      const conn = await provider.connect();
+      const wallet = conn.publicKey?.toString() || provider.publicKey?.toString();
+      if (!wallet) throw new Error('Wallet did not return a public key.');
+      setStep(1, 'done');
+      setStep(2, 'active');
+
+      // Step 2: build USDC transfer + send
+      // We use the wallet's signAndSendTransaction with a versioned tx
+      // built locally. Loaded from solana web3 via UMD.
+      const web3 = await loadSolanaWeb3();
+      const splToken = await loadSplToken();
+
+      const conn2 = new web3.Connection('https://mainnet.helius-rpc.com/?api-key=1e0cda16-6469-457c-8ef8-c6ecbc4a624e', 'confirmed');
+      const fromPub = new web3.PublicKey(wallet);
+      const toPub = new web3.PublicKey(SINK_HOT_PUBKEY);
+      const usdcMint = new web3.PublicKey(USDC_MINT);
+      const fromAta = await splToken.getAssociatedTokenAddress(usdcMint, fromPub);
+      const toAta = await splToken.getAssociatedTokenAddress(usdcMint, toPub);
+      const amountMicro = BigInt(TIER_PRICE_USDC[tier]) * 1_000_000n;
+
+      const ix = splToken.createTransferCheckedInstruction(
+        fromAta, usdcMint, toAta, fromPub, amountMicro, 6,
+      );
+      const tx = new web3.Transaction().add(ix);
+      tx.feePayer = fromPub;
+      const { blockhash } = await conn2.getLatestBlockhash();
+      tx.recentBlockhash = blockhash;
+
+      const { signature: txSig } = await provider.signAndSendTransaction(tx);
+      await conn2.confirmTransaction(txSig, 'confirmed');
+      setStep(2, 'done');
+      setStep(3, 'active');
+
+      // Step 3: sign canonical message
+      const canonical = `clude-billing-upgrade-v1:${wallet}:${tier}:${txSig}`;
+      const sig = await provider.signMessage(new TextEncoder().encode(canonical), 'utf8');
+      const sigBytes = sig.signature || sig;
+      const sigB58 = await base58Encode(sigBytes);
+      setStep(3, 'done');
+      setStep(4, 'active');
+
+      // Step 4: POST to /api/billing/upgrade
+      const res = await fetch('/api/billing/upgrade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          wallet,
+          tier,
+          tx_sig: txSig,
+          signed_message: sigB58,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'upgrade failed');
+      setStep(4, 'done');
+
+      showSuccess(`
+        <strong>${tier.charAt(0).toUpperCase() + tier.slice(1)} tier active.</strong><br/>
+        Active until ${new Date(data.active_until).toLocaleDateString()}.
+        <br/><a href="https://solscan.io/tx/${txSig}" target="_blank" rel="noopener">View on Solscan ↗</a>
+      `);
+    }
+
+    // Lazy-load web3 + spl-token from CDN so the static page stays light.
+    async function loadSolanaWeb3() {
+      if (window.solanaWeb3) return window.solanaWeb3;
+      await loadScript('https://unpkg.com/@solana/web3.js@1.95.5/lib/index.iife.min.js');
+      return window.solanaWeb3;
+    }
+    async function loadSplToken() {
+      if (window.splToken) return window.splToken;
+      await loadScript('https://unpkg.com/@solana/spl-token@0.4.9/lib/cjs/index.iife.min.js');
+      return window.splToken;
+    }
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = src;
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error(`failed to load ${src}`));
+        document.head.appendChild(s);
+      });
+    }
+
+    // base58 encoding without a library — small enough to inline.
+    async function base58Encode(bytes) {
+      const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+      const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+      let zeros = 0;
+      while (zeros < arr.length && arr[zeros] === 0) zeros++;
+      let num = 0n;
+      for (const b of arr) num = num * 256n + BigInt(b);
+      let out = '';
+      while (num > 0n) { out = ALPHABET[Number(num % 58n)] + out; num /= 58n; }
+      for (let i = 0; i < zeros; i++) out = '1' + out;
+      return out;
+    }
+  </script>
+</body>
+</html>

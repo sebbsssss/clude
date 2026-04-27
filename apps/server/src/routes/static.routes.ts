@@ -45,6 +45,16 @@ export function staticRoutes(): Router {
     next();
   });
 
+  router.get('/pricing', (req: Request, _res: Response, next: express.NextFunction) => {
+    req.url = '/pricing.html';
+    next();
+  });
+
+  router.get('/treasury', (req: Request, _res: Response, next: express.NextFunction) => {
+    req.url = '/treasury.html';
+    next();
+  });
+
   router.get('/compare', (req: Request, _res: Response, next: express.NextFunction) => {
     req.url = '/compare.html';
     next();
