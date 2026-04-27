@@ -141,7 +141,7 @@ export async function runSnapshot(): Promise<void> {
     writeMemoryPack(outPath, records, {
       producer: {
         name: 'clude',
-        version: '3.0.5',
+        version: '3.1.0',
         public_key: publicKey,
       },
       record_schema: 'clude-memory-v3',

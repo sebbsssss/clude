@@ -1,8 +1,25 @@
-# MemoryPack v0.1 — Portable Agent Memory Format
+# MemoryPack v0.2 — Portable Agent Memory Format
 
-**Status:** Draft, reference implementation shipping in `@clude/sdk ≥ 3.0.4`
+**Status:** Reference implementation shipping in `@clude/sdk ≥ 3.1.0`
 **Authors:** Clude team
-**Last updated:** 2026-04-26
+**Last updated:** 2026-04-28
+
+## Implementation status (v0.2)
+
+| Feature | Status | Reference |
+|---|---|---|
+| Directory packs (manifest + records + sigs + anchors) | Shipped (v0.1) | `packages/brain/src/memorypack/{writer,reader}.ts` |
+| ed25519 record signing | Shipped (v0.1) | `packages/brain/src/memorypack/sign.ts` |
+| `.tar.zst` compressed packs | Shipped (v0.2) | `WriterOptions.format: 'tarball'` |
+| `blobs/` attachment storage + index | Shipped (v0.2) | `WriterOptions.blobs` |
+| Pack-level encryption (xsalsa20-poly1305) | Shipped (v0.2) | `WriterOptions.encryption.{key, scope}` |
+| Reader auto-extracts tarballs (path-traversal hardened) | Shipped (v0.2) | `readMemoryPack(<.tar.zst>)` |
+| Chain anchor verification (SPL Memo + signer binding) | Shipped (v0.2) | `verifyChainAnchors()` |
+| `clude verify <pack>` standalone CLI | Shipped (v0.2) | `cli/verify.ts` |
+| `clude snapshot` cron-friendly CLI | Shipped (v0.2) | `cli/snapshot.ts` |
+| Reference test vectors (deterministic fixture) | Shipped (v0.2) | `__tests__/fixtures.ts` |
+| Standalone `@clude/memorypack` npm package | Planned (v0.3) | extraction from `@clude/brain` |
+| Content anchoring via IPFS/Arweave (opt-in) | Planned (v0.3) | — |
 
 ## Motivation
 
@@ -40,8 +57,8 @@ A MemoryPack is a **directory** containing:
 ./anchors.jsonl         # optional, on-chain proofs
 ```
 
-`.tar.zst` compression, `blobs/` attachments, and automated chain
-verification are specified but **not yet implemented** — see Roadmap.
+v0.2 adds optional `blobs/` attachments + a `.tar.zst` packaged form;
+both still surface a directory shape to the reader after extraction.
 
 ### `manifest.json`
 
@@ -138,7 +155,7 @@ On-chain proofs (optional):
 
 **`memo-v1`:** the on-chain memo payload is the exact string `clude:v1:sha256:<hex>`, 73 bytes for a SHA-256 hash. Fits well under Solana's 566-byte memo cap.
 
-Chain anchor verification — fetching the tx and confirming the memo matches `clude:v1:sha256:<record_hash_hex>` — is **specified but not yet implemented in the reader**. Use `solscan` or an explorer to verify manually today. See Roadmap.
+Chain anchor verification (v0.2) — fetching the tx and confirming the memo matches `clude:v1:sha256:<record_hash_hex>` is implemented in `verifyChainAnchors()`. The verifier walks `tx.transaction.message.instructions`, requires at least one whose program ID is the canonical SPL Memo program (`MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr` v3 or `Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo` v1), decodes that instruction's data as UTF-8, and exact-matches it against the expected memo. When `expectedSigner` is set, the verifier additionally requires that key is among the transaction's signers — without this binding any program could `msg!()` a clude memo and present it as a "verified" anchor. Optional `cluster` cross-checks `getGenesisHash()` so a devnet RPC can't accept a mainnet anchor.
 
 ## Read algorithm
 
@@ -205,17 +222,47 @@ The primitive we ship today is **portability + authenticity**, not distributed c
 - Embedding portability at vector level. Embeddings ship as a hint; readers re-embed against their own model as needed.
 - Content-level on-chain storage. The chain holds hashes, not content. See Roadmap for opt-in content anchoring.
 
+## Snapshots and cron (v0.2)
+
+`clude snapshot` writes a dated `.tar.zst` of your local memories to
+`~/.clude/snapshots/clude-YYYYMMDD-HHMMSS.tar.zst` (UTC). The command
+is cron-friendly:
+
+- single-line stdout = the snapshot path on success
+- errors → stderr only
+- exit code drives the cron mailer
+
+Example crontab (daily 03:00 local):
+
+```
+0 3 * * *  /usr/local/bin/node /usr/local/lib/node_modules/@clude/sdk/dist/cli/index.js snapshot
+```
+
+Pass `--encrypt-key <base64>` to encrypt the snapshot with a 32-byte
+xsalsa20-poly1305 key (recommended for any snapshot you'll move
+off-host). Pass `--out <path>` to override the default location.
+
+## Reference test vectors
+
+A canonical fixture lives at
+`packages/brain/src/memorypack/__tests__/fixtures.ts`. Exports:
+
+- `FIXTURE_RECORDS` — frozen input records.
+- `FIXTURE_BLOB_DATA` + `FIXTURE_BLOB_HASH` — frozen blob payload + sha256.
+- `FIXTURE_ENCRYPTION_KEY` — frozen 32-byte symmetric key.
+- `FIXTURE_CLOCK` — deterministic timestamp generator.
+- `EXPECTED_RECORD_HASHES` — frozen sha256 of the serialized records.
+
+External implementers can reproduce the same hashes from the same
+inputs and use them as a contract test against this spec.
+
 ## Roadmap
 
 Tracked as GitHub issues with the `memorypack` label:
 
-- **`.tar.zst` compressed packs.** Today writer emits directories only. Reader will learn to auto-extract tarballs.
-- **Chain anchor verification in the reader.** `verify-chain: true` option fetches each anchor's Solana tx and confirms the memo payload. Gated by an RPC dependency; today callers verify manually.
-- **`blobs/` attachment storage.** Referenced via `blob_ref: sha256:...` in records.
-- **Daily auto-snapshot.** Background `clude daemon` writes a dated pack to `~/.clude/snapshots/` so users don't lose memory if they forget to export.
-- **Standalone `clude verify <pack>` command.** Validates a pack against just a wallet pubkey, no Clude server required — for auditors and long-term preservation.
 - **Content anchoring.** Opt-in `--anchor-content` that stores encrypted content via IPFS/Arweave and commits the CID rather than just the hash.
 - **`@clude/memorypack` standalone npm package.** Splits the reader/writer into a zero-dependency package so competing vendors can implement the spec without installing Clude.
+- **Streaming reader for very large packs.** Today `readMemoryPack` loads the entire pack in memory; a streaming variant lands when single packs cross ~100MB in the wild.
 
 ## Open questions
 
