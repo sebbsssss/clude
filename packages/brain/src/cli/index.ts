@@ -75,6 +75,30 @@ if (command === 'setup') {
     console.error('Dream failed:', err.message);
     process.exit(1);
   });
+} else if (command === 'verify') {
+  // `clude verify <pack>` — standalone MemoryPack verifier (auditor CLI).
+  try {
+    const { runVerify } = require('./verify');
+    runVerify().catch((err: Error) => {
+      console.error('Verify failed:', err.message);
+      process.exit(1);
+    });
+  } catch (err: any) {
+    console.error('Verify failed:', err.message);
+    process.exit(1);
+  }
+} else if (command === 'snapshot') {
+  // `clude snapshot` — cron-friendly tarball of local memories.
+  try {
+    const { runSnapshot } = require('./snapshot');
+    runSnapshot().catch((err: Error) => {
+      console.error('Snapshot failed:', err.message);
+      process.exit(1);
+    });
+  } catch (err: any) {
+    console.error('Snapshot failed:', err.message);
+    process.exit(1);
+  }
 } else if (command === 'mcp-serve') {
   // Start the MCP server (used by IDE integrations)
   require('../mcp/server');
@@ -98,8 +122,10 @@ if (command === 'setup') {
   console.log(`    ${c.cyan}npx @clude/sdk register${c.reset}      Get an API key only`);
   console.log(`    ${c.cyan}npx @clude/sdk mcp-install${c.reset}   Install MCP server for your IDE`);
   console.log(`    ${c.cyan}npx @clude/sdk inject-instructions${c.reset}  Write usage instructions to CLAUDE.md`);
-  console.log(`    ${c.cyan}npx @clude/sdk export${c.reset}        Export memories (json/md/chatgpt/gemini)`);
+  console.log(`    ${c.cyan}npx @clude/sdk export${c.reset}        Export memories (json/md/chatgpt/gemini/memorypack)`);
   console.log(`    ${c.cyan}npx @clude/sdk import${c.reset}        Import from ChatGPT export, markdown, JSON`);
+  console.log(`    ${c.cyan}npx @clude/sdk verify${c.reset}        Verify a MemoryPack (.tar.zst or directory)`);
+  console.log(`    ${c.cyan}npx @clude/sdk snapshot${c.reset}      Cron-friendly tarball of local memories`);
   console.log(`    ${c.cyan}npx @clude/sdk sync${c.reset}          Auto-update system prompt file`);
   console.log(`    ${c.cyan}npx @clude/sdk ship "msg"${c.reset}    Broadcast to Telegram channel`);
   console.log(`    ${c.cyan}npx @clude/sdk doctor${c.reset}        Run diagnostics`);
