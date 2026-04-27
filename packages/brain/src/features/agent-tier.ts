@@ -2,7 +2,7 @@ import { randomBytes, createHash } from 'crypto';
 import { getDb } from '@clude/shared/core/database';
 import { createChildLogger } from '@clude/shared/core/logger';
 import type { AgentTier } from '../character/agent-tier-modifiers';
-import { resolveWalletsForDid } from '../auth/privy-wallet-resolver';
+import { resolveWalletsForDid, ensurePrivySolanaWalletForDid } from '../auth/privy-wallet-resolver';
 
 const log = createChildLogger('agent-tier');
 
@@ -295,6 +295,39 @@ export async function findOrCreateAgentForDid(
       }
     }
 
+    // Existing agent has a synthetic-hex wallet AND no real wallet was passed
+    // in this call. Try to provision one via Privy and migrate. This rescues
+    // pre-existing email-signup accounts that registered before auto-
+    // provisioning was wired (e.g. seb@clude.io, alexiustham@gmail.com).
+    if (
+      !wallet &&
+      existing.owner_wallet &&
+      HEX_WALLET_RE.test(existing.owner_wallet)
+    ) {
+      try {
+        const provisioned = await ensurePrivySolanaWalletForDid(did);
+        if (SOLANA_ADDR_RE.test(provisioned) && provisioned !== existing.owner_wallet) {
+          await migrateOwnerWallet(existing.owner_wallet, provisioned);
+          log.info(
+            { did, agentId: existing.agent_id, from: existing.owner_wallet, to: provisioned },
+            'Auto-migrated existing email-signup agent to Privy embedded wallet',
+          );
+          return {
+            apiKey: existing.api_key,
+            agentId: existing.agent_id,
+            isNew: false,
+            ownerWallet: provisioned,
+          };
+        }
+      } catch (err: any) {
+        log.warn(
+          { did, err: err.message },
+          'Auto-provisioning + migration failed for existing synthetic agent',
+        );
+        // Fall through — return existing agent with synthetic wallet.
+      }
+    }
+
     return {
       apiKey: existing.api_key,
       agentId: existing.agent_id,
@@ -357,7 +390,34 @@ export async function findOrCreateAgentForDid(
     );
   }
 
-  // 3. No wallet (email-only user) — generate synthetic owner_wallet
+  // 2.6. Still no wallet found — provision a Privy embedded Solana wallet
+  //      so the user has a fundable address from day one. This is the
+  //      difference between an account that can top up and one that's
+  //      stuck on a synthetic-hex owner_wallet forever.
+  try {
+    const provisionedWallet = await ensurePrivySolanaWalletForDid(did);
+    if (SOLANA_ADDR_RE.test(provisionedWallet)) {
+      const result = await findOrCreateAgentForWallet(provisionedWallet);
+      await db
+        .from('agent_keys')
+        .update({ privy_did: did })
+        .eq('agent_id', result.agentId);
+      log.info(
+        { did, agentId: result.agentId, wallet: provisionedWallet },
+        'Provisioned Privy Solana wallet for new email-signup agent',
+      );
+      return { ...result, ownerWallet: provisionedWallet };
+    }
+  } catch (err: any) {
+    log.warn(
+      { did, err: err.message },
+      'Privy wallet auto-provisioning failed — falling back to synthetic owner_wallet',
+    );
+  }
+
+  // 3. Last resort — synthetic owner_wallet. Reached only if Privy's wallet
+  //    API is down or not configured. The user can still chat (free tier)
+  //    but cannot top up until the wallet is later provisioned.
   const syntheticWallet = createHash('sha256')
     .update(`privy:${did}`)
     .digest('hex')
@@ -373,7 +433,7 @@ export async function findOrCreateAgentForDid(
     .update({ owner_wallet: syntheticWallet, privy_did: did })
     .eq('agent_id', agentId);
 
-  log.info({ agentId, did, ownerWallet: syntheticWallet }, 'Created agent for Privy DID (email-only)');
+  log.warn({ agentId, did, ownerWallet: syntheticWallet }, 'Created agent for Privy DID with SYNTHETIC wallet (Privy provisioning unavailable)');
 
   return { apiKey, agentId, isNew: true, ownerWallet: syntheticWallet };
 }

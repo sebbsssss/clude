@@ -162,3 +162,61 @@ export async function findOrCreatePrivyUserByEmail(email: string): Promise<strin
 
   return user.id;
 }
+
+/**
+ * Ensure a Privy user has a Solana embedded wallet, returning its address.
+ *
+ * Strategy:
+ *   1. Look up the user via Privy and return any existing Solana wallet.
+ *   2. If none exists, mint a new embedded Solana wallet via the Wallets API
+ *      and link it to the user. Returns the new address.
+ *
+ * Lets every email-signup user reach a real Solana address from day one,
+ * so /api/chat/topup/intent (which requires a base58 address) always works.
+ *
+ * Uses the Privy REST API directly — the node SDK's wallets().create input
+ * shape is awkward to type when targeting an existing user.
+ *
+ * @throws if Privy isn't configured or both lookup and creation fail.
+ */
+export async function ensurePrivySolanaWalletForDid(did: string): Promise<string> {
+  const appId = config.privy.appId;
+  const appSecret = config.privy.appSecret;
+  if (!appId || !appSecret) {
+    throw new Error('Privy not configured (missing PRIVY_APP_ID or PRIVY_APP_SECRET)');
+  }
+
+  // 1. Try the cache + linked-accounts path first.
+  const linked = await resolveWalletsForDid(did);
+  if (linked.length > 0) return linked[0];
+
+  // 2. Mint a new embedded Solana wallet linked to this DID.
+  const basicAuth = Buffer.from(`${appId}:${appSecret}`).toString('base64');
+  const res = await fetch('https://api.privy.io/v1/wallets', {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${basicAuth}`,
+      'privy-app-id': appId,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      chain_type: 'solana',
+      owner: { user_id: did },
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Privy wallet creation failed: ${res.status} ${body.slice(0, 200)}`);
+  }
+
+  const wallet = (await res.json()) as { address?: string; chain_type?: string };
+  if (!wallet.address || wallet.chain_type !== 'solana') {
+    throw new Error('Privy wallet creation returned no Solana address');
+  }
+
+  // Invalidate the cache so the next resolveWalletsForDid sees the new wallet.
+  cache.delete(did);
+  log.info({ did, wallet: wallet.address }, 'Provisioned Privy Solana wallet for DID');
+  return wallet.address;
+}
