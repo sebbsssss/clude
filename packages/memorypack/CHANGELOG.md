@@ -2,6 +2,53 @@
 
 All notable changes to `@clude/memorypack` are documented here. The package follows [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] — 2026-04-28
+
+Standalone CLI verifier. Auditors can install `@clude/memorypack` alone (~30 KB) and run `npx @clude/memorypack verify <pack>` without touching the rest of Clude.
+
+### Added
+
+- New CLI binary `memorypack` declared via the package's `bin` field. Available as `npx @clude/memorypack verify <pack>` or as a globally installed `memorypack verify` after `npm install -g`.
+- `dist/cli.js` (preserved shebang `#!/usr/bin/env node`).
+- New subpath export `@clude/memorypack/cli` for programmatic callers that want to invoke the CLI surface (`runVerify`, `parseArgs`, `printUsage`, `printVersion`).
+- Verifier surfaces the v0.4 revocations panel when `revocations.jsonl` is present.
+
+### CLI flags
+
+```
+verify <pack>                Validate a pack (directory or .tar.zst)
+  --public-key <base58>      Override the manifest public key
+  --strict-signatures        Fail if any record is unsigned
+  --verify-chain             Also verify Solana on-chain anchors
+  --strict-chain             Fail on any chain verification mismatch
+  --rpc-url <url>            Solana RPC URL
+  --cluster <name>           Cross-check RPC genesis hash
+  --decrypt-key <base64>     Pack-level decryption key (32 bytes)
+--version                    Print the package version
+--help                       Print usage
+```
+
+Exit codes: `0` if every check passed, `1` otherwise. `NO_COLOR=1` honored for CI logs.
+
+### Tests
+
+11 new CLI tests (subprocess-invoked against the built `dist/cli.js`):
+
+- `--version`, `--help`, bare invocation, unknown command exit codes
+- `parseArgs` unit tests (every flag + error cases)
+- Round-trip verify on a synthesized signed pack (exit 0)
+- Tampered pack → exit 1 with REJECTED
+- Encrypted pack with correct decrypt key → exit 0 + decryption diagnostic
+- `--strict-signatures` rejects unsigned packs
+
+Total: 70 tests passing.
+
+### Not in this release
+
+- Tarball-aware `appendRevocations` — still requires extract / append / re-tarball.
+- Chain-anchored revocations.
+- Production IPFS / Arweave content anchoring.
+
 ## [0.4.0] — 2026-04-28
 
 Signed revocations — soft-delete protocol for GDPR right-to-erasure, PII leaks, and corrections.

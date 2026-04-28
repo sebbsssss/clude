@@ -24,6 +24,28 @@ For chain anchor verification (Solana memo proofs), also install the optional pe
 npm install @solana/web3.js
 ```
 
+## CLI verifier
+
+The package ships a tiny standalone verifier — the auditor experience. Install one ~30 KB package, point it at a pack, get a clean OK / REJECTED with exit code 0 / 1. No Clude SDK, no Supabase, no API keys.
+
+```bash
+# Verify offline (signatures + blobs + revocations)
+npx @clude/memorypack verify ./my-pack
+
+# Also verify on-chain anchors against a Solana RPC
+npx @clude/memorypack verify ./my-pack \
+  --verify-chain --strict-chain \
+  --rpc-url https://api.mainnet-beta.solana.com
+
+# Decrypt a pack-level-encrypted pack
+npx @clude/memorypack verify ./my-pack \
+  --decrypt-key $(cat ~/.keys/pack-key.b64)
+```
+
+Exit codes: `0` if every check passed, `1` otherwise. Suitable for cron, CI, and regulator workflows.
+
+Run `npx @clude/memorypack --help` for the full flag list.
+
 ## Usage
 
 ### Write a pack
@@ -131,6 +153,7 @@ Records remain in `result.records` after revocation; apps decide whether to surf
 | Schema-evolution fallback (minimal-shape readers) | `result.minimalRecords` |
 | **Streaming reader for large packs** | `streamMemoryPack` (async iterator) |
 | **Signed revocations (soft-delete)** | `appendRevocations`, `result.revokedRecordHashes` |
+| **Standalone CLI verifier** | `npx @clude/memorypack verify <pack>` |
 | Reference test vectors (deterministic fixture) | `src/__tests__/fixtures.ts` |
 
 Full spec: [docs/memorypack.md](https://github.com/sebbsssss/clude/blob/main/docs/memorypack.md).
@@ -164,4 +187,4 @@ Post-v0.2 (tracked in the [main repo](https://github.com/sebbsssss/clude)):
 - Multi-chain anchors (Ethereum L2, Bitcoin OP_RETURN)
 - True streaming through tar (today the reader extracts to a temp dir first)
 - Tarball-aware `appendRevocations` (today only directory packs)
-- `clude verify` CLI distributed alongside this package
+- Chain-anchored revocations (so revocation timestamps can't be backdated)
