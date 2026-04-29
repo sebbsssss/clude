@@ -170,14 +170,14 @@ describe('appendRevocations', () => {
     expect(readFileSync(join(dir, 'manifest.json')).equals(manifestBytes)).toBe(true);
   });
 
-  it('throws on tarball pack', () => {
+  it('throws when tarball file does not exist', () => {
     expect(() =>
       appendRevocations(
-        join(dir, 'pack.tar.zst'),
+        join(dir, 'nonexistent-pack.tar.zst'),
         [{ record_hash: 'sha256:abc' }],
         { secretKey: new Uint8Array(64), publicKey: 'fake' },
       ),
-    ).toThrow(/tarball/i);
+    ).toThrow(/not found/i);
   });
 
   it('throws when packDir is missing manifest.json', () => {

@@ -211,6 +211,6 @@ Post-v0.2 (tracked in the [main repo](https://github.com/sebbsssss/clude)):
 - Production IPFS / Arweave content anchoring
 - Multi-chain anchors (Ethereum L2, Bitcoin OP_RETURN)
 - True streaming through tar (today the reader extracts to a temp dir first)
-- Tarball-aware `appendRevocations` / `appendRevocationAnchors` (today both are directory-only)
 - @solana/web3.js test mocks for `verifyChainAnchors` / `verifyRevocationAnchors`
 - Backdating detection (compare on-chain block timestamp to signed `revoked_at`)
+- Symbol.asyncDispose for the streaming reader (clean tarball temp dirs on early break)

@@ -132,12 +132,12 @@ describe('appendRevocationAnchors', () => {
     expect(JSON.parse(lines[1]).tx).toBe('t2');
   });
 
-  it('throws on tarball pack', () => {
+  it('throws when tarball file does not exist', () => {
     expect(() =>
-      appendRevocationAnchors(join(dir, 'pack.tar.zst'), [{
+      appendRevocationAnchors(join(dir, 'nonexistent-pack.tar.zst'), [{
         record_hash: 'sha256:abc', revoked_at: '2026-04-29T00:00:00Z', chain: 'solana-mainnet', tx: 't',
       }]),
-    ).toThrow(/tarball/i);
+    ).toThrow(/not found/i);
   });
 
   it('throws when manifest.json missing', () => {

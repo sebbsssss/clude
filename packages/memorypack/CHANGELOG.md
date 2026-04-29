@@ -2,6 +2,45 @@
 
 All notable changes to `@clude/memorypack` are documented here. The package follows [Semantic Versioning](https://semver.org/).
 
+## [0.7.0] — 2026-04-29
+
+`appendRevocations` and `appendRevocationAnchors` now accept `.tar.zst` paths transparently. Operators with tarball packs no longer have to extract / append / re-tarball by hand.
+
+### Added
+
+- Tarball-aware code path in both append functions: when the input path is a tarball, the function extracts to a temp directory, runs the directory-mode append against the inner pack, repacks atomically, and cleans up.
+- Atomic re-tarball: writes to `<original>.new-<pid>-<ts>` then renames into place. A failed extract / append / repack leaves the **original tarball untouched** — your audit trail never enters a half-written state.
+
+### Behaviour
+
+- Empty `revocations` / `anchors` input is a no-op (early return) — does NOT touch the tarball file. Mtime + bytes preserved.
+- Tarballs that decompress to multiple top-level directories are rejected (matches the reader's contract).
+- Tarballs whose extension is `.tar.zst` are routed through the tarball path. Other file paths are also routed through (in case someone renames a pack), then handled by the tar binary; truly malformed inputs fail at extraction.
+- Directory-mode behaviour is unchanged — covered by an explicit regression test.
+
+### Concurrency
+
+Concurrent appends to the same tarball are NOT safe — last writer wins. Same constraint as concurrent writes to a directory pack; callers needing multi-process coordination must layer their own locking. Single-producer flows (the common case) are unaffected.
+
+### Tests
+
+9 new tests, 92 total in this package, all green:
+
+- Append revocations to a tarball → read-back via `readMemoryPack` confirms presence
+- Append revocation anchors to a tarball → read-back confirms paired anchor
+- `streamMemoryPack` surfaces the appended anchor on tarballs too
+- Multiple appends stack across calls
+- Empty input is a no-op (mtime + bytes unchanged on the tarball file)
+- Successful append leaves no orphan staging files in the workdir
+- Tarball with multiple top-level dirs is rejected
+- Directory-mode regression guard
+
+### Limitations (deferred to v0.8)
+
+- @solana/web3.js test mocks for `verifyChainAnchors` / `verifyRevocationAnchors`.
+- Backdating-detection (`maxClockSkew`) on revocation anchors.
+- Symbol.asyncDispose for the streaming reader.
+
 ## [0.6.0] — 2026-04-29
 
 Chain-anchored revocations. Pin the `revoked_at` of a soft-deleted record to a Solana transaction so a producer can't backdate a deletion claim.
