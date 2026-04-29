@@ -2,6 +2,48 @@
 
 All notable changes to `@clude/memorypack` are documented here. The package follows [Semantic Versioning](https://semver.org/).
 
+## [0.7.1] — 2026-04-29
+
+Tests-only release. The on-chain verifiers (`verifyChainAnchors` and `verifyRevocationAnchors`) had been shipping structurally tested but not unit-tested with mocks. This release closes that gap.
+
+### Internal
+
+- New `__tests__/chain-verify.test.ts` covering `verifyChainAnchors` and `verifyRevocationAnchors` against a mocked `@solana/web3.js`.
+- Mocking pattern: `vi.hoisted` carries mutable mock state into the `vi.mock` factory; `beforeEach` resets it; tests populate canned `getTransaction` / `getGenesisHash` responses per case.
+- 23 new tests, 115 total in this package.
+
+### Coverage
+
+For both anchor verifiers:
+
+- Happy path with `compiledInstructions` (Uint8Array data)
+- Happy path with legacy `instructions` (bs58 string data)
+- Legacy SPL Memo program ID (`Memo1Uhk...`) accepted alongside v3 (`MemoSq4...`)
+- `getTransaction` returning `null` → unverified, warning
+- Tx exists but no SPL Memo program instruction → unverified
+- Memo present but bytes don't match expected → unverified
+- `expectedSigner` not in tx signers → unverified (signer-binding check)
+- Cluster cross-check pass / mismatch via `getGenesisHash`
+- `strict: true` throws on first failure (cluster mismatch + per-anchor failure)
+- Empty input is a no-op — `Connection` is never constructed
+- Unsupported `anchor_format` → caught + surfaced as warning
+- Multiple anchors: partial verified set when some fail
+
+For revocation anchors specifically:
+
+- Memo with wrong `revoked_at` → unverified (timestamp pinning works as intended)
+
+### No public API change
+
+- `dist/cli.js`, `dist/index.js`, type signatures, behaviour: all unchanged.
+- This is strictly a confidence/correctness release for the RPC-touching code that previously had untested-with-mocks status flagged in the v0.6 CHANGELOG.
+
+### Limitations (deferred to v0.8)
+
+- Backdating-detection (`maxClockSkew`) on revocation anchors.
+- `Symbol.asyncDispose` on the streaming reader.
+- Versioned-tx + address-lookup-table coverage in the verifier mocks.
+
 ## [0.7.0] — 2026-04-29
 
 `appendRevocations` and `appendRevocationAnchors` now accept `.tar.zst` paths transparently. Operators with tarball packs no longer have to extract / append / re-tarball by hand.

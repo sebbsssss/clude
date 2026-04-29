@@ -1,6 +1,6 @@
 {
   "name": "@clude/memorypack",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Reference reader/writer for the MemoryPack spec \u2014 open, signed, chain-anchorable file format for portable AI agent memory.",
   "license": "MIT",
   "homepage": "https://github.com/sebbsssss/clude/blob/main/docs/memorypack.md",
