@@ -5,6 +5,7 @@ import 'package:privy_flutter/privy_flutter.dart' as privy_sdk;
 import '../../config/env.dart';
 import '../../features/byok/byok_provider.dart';
 import '../api/api_client_provider.dart';
+import '../api/api_exceptions.dart';
 import '../storage/secure_storage_provider.dart';
 import 'auth_state.dart';
 import 'privy_provider.dart';
@@ -166,6 +167,24 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// Continue without authentication.
   void continueAsGuest() {
     state = const AuthState(isGuest: true);
+  }
+
+  /// Call the server delete-account endpoint. Returns true on success.
+  ///
+  /// On success the in-flight state (`isDeleting=true`) is left in place so a
+  /// dialog watching it doesn't visually rebuild before the caller can dismiss.
+  /// The caller MUST call [logout] after dismissing the dialog to clear local
+  /// credentials. On failure, `isDeleting` is reset and `error` is set.
+  Future<bool> deleteAccount() async {
+    state = state.copyWith(isDeleting: true, error: null);
+    try {
+      await _ref.read(apiClientProvider).deleteAccount();
+      return true;
+    } catch (e) {
+      final msg = e is ApiException ? e.message : e.toString();
+      state = state.copyWith(isDeleting: false, error: msg);
+      return false;
+    }
   }
 
   /// Clear all auth state and stored credentials.

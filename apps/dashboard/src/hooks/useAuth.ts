@@ -15,7 +15,6 @@ export function useAuth(): AuthState {
   const hasRefreshed = useRef(false);
   const getAccessTokenRef = useRef(getAccessToken);
   getAccessTokenRef.current = getAccessToken;
-  const refreshingRef = useRef<Promise<string | null> | null>(null);
 
   // Track whether cortex init is in progress — blocks Privy from overriding
   const cortexInitRef = useRef(false);

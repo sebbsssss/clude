@@ -13,6 +13,7 @@ class AuthState with _$AuthState {
     String? walletAddress,
     AuthMode? authMode,
     @Default(false) bool isLoading,
+    @Default(false) bool isDeleting,
     String? error,
   }) = _AuthState;
 }

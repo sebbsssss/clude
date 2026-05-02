@@ -336,4 +336,29 @@ class ApiClient {
         fromJson: (json) =>
             (json as List<dynamic>).map((e) => Agent.fromJson(e as Map<String, dynamic>)).toList(),
       );
+
+  // ---------------------------------------------------------------------------
+  // Account
+  // ---------------------------------------------------------------------------
+
+  /// Permanently delete the authenticated user's account (server cascades
+  /// owner-scoped data and the Privy user record). Throws on non-204.
+  Future<void> deleteAccount() async {
+    try {
+      final res = await _dio.delete<dynamic>('/api/account');
+      if (res.statusCode == 204) return;
+      throw ApiException(
+        'Unexpected status ${res.statusCode} from delete account',
+      );
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.connectionTimeout) {
+        throw NetworkException(e.message ?? 'Network error');
+      }
+      final msg = e.response?.data?['error']?.toString() ??
+          e.message ??
+          'Request failed';
+      throw ApiException(msg);
+    }
+  }
 }

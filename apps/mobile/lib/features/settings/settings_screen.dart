@@ -218,28 +218,61 @@ void _showDeleteAccountDialog(BuildContext context, WidgetRef ref) {
   final colorScheme = Theme.of(context).colorScheme;
   showDialog(
     context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text('Delete Account'),
-      content: const Text(
-        'This will permanently delete your account and all associated data. This action cannot be undone.',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(ctx).pop(),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          style: TextButton.styleFrom(foregroundColor: colorScheme.error),
-          onPressed: () {
-            Navigator.of(ctx).pop();
-            launchUrl(
-              Uri.parse('https://clude.io/delete-account'),
-              mode: LaunchMode.externalApplication,
-            );
-          },
-          child: const Text('Delete Account'),
-        ),
-      ],
+    barrierDismissible: false,
+    builder: (ctx) => Consumer(
+      builder: (ctx, dialogRef, _) {
+        final isDeleting = dialogRef.watch(
+          authNotifierProvider.select((s) => s.isDeleting),
+        );
+        return AlertDialog(
+          title: const Text('Delete Account'),
+          content: Text(
+            isDeleting
+                ? 'Deleting your account…'
+                : 'This will permanently delete your account and all associated data. This action cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: isDeleting ? null : () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: colorScheme.error),
+              onPressed: isDeleting
+                  ? null
+                  : () async {
+                      final notifier =
+                          ref.read(authNotifierProvider.notifier);
+                      final ok = await notifier.deleteAccount();
+                      if (!ctx.mounted) return;
+                      // Pop while state is still isDeleting=true so the dialog
+                      // doesn't visually flicker back to its initial state
+                      // when logout() resets AuthState below.
+                      Navigator.of(ctx).pop();
+                      if (!context.mounted) return;
+                      if (ok) {
+                        await notifier.logout();
+                        if (!context.mounted) return;
+                        context.go('/login');
+                      } else {
+                        final err = ref.read(authNotifierProvider).error ??
+                            'Could not delete account.';
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(err)),
+                        );
+                      }
+                    },
+              child: isDeleting
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Delete Account'),
+            ),
+          ],
+        );
+      },
     ),
   );
 }

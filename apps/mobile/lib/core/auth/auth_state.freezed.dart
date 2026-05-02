@@ -23,6 +23,7 @@ mixin _$AuthState {
   String? get walletAddress => throw _privateConstructorUsedError;
   AuthMode? get authMode => throw _privateConstructorUsedError;
   bool get isLoading => throw _privateConstructorUsedError;
+  bool get isDeleting => throw _privateConstructorUsedError;
   String? get error => throw _privateConstructorUsedError;
 
   /// Create a copy of AuthState
@@ -44,6 +45,7 @@ abstract class $AuthStateCopyWith<$Res> {
     String? walletAddress,
     AuthMode? authMode,
     bool isLoading,
+    bool isDeleting,
     String? error,
   });
 }
@@ -69,6 +71,7 @@ class _$AuthStateCopyWithImpl<$Res, $Val extends AuthState>
     Object? walletAddress = freezed,
     Object? authMode = freezed,
     Object? isLoading = null,
+    Object? isDeleting = null,
     Object? error = freezed,
   }) {
     return _then(
@@ -97,6 +100,10 @@ class _$AuthStateCopyWithImpl<$Res, $Val extends AuthState>
                 ? _value.isLoading
                 : isLoading // ignore: cast_nullable_to_non_nullable
                       as bool,
+            isDeleting: null == isDeleting
+                ? _value.isDeleting
+                : isDeleting // ignore: cast_nullable_to_non_nullable
+                      as bool,
             error: freezed == error
                 ? _value.error
                 : error // ignore: cast_nullable_to_non_nullable
@@ -123,6 +130,7 @@ abstract class _$$AuthStateImplCopyWith<$Res>
     String? walletAddress,
     AuthMode? authMode,
     bool isLoading,
+    bool isDeleting,
     String? error,
   });
 }
@@ -147,6 +155,7 @@ class __$$AuthStateImplCopyWithImpl<$Res>
     Object? walletAddress = freezed,
     Object? authMode = freezed,
     Object? isLoading = null,
+    Object? isDeleting = null,
     Object? error = freezed,
   }) {
     return _then(
@@ -175,6 +184,10 @@ class __$$AuthStateImplCopyWithImpl<$Res>
             ? _value.isLoading
             : isLoading // ignore: cast_nullable_to_non_nullable
                   as bool,
+        isDeleting: null == isDeleting
+            ? _value.isDeleting
+            : isDeleting // ignore: cast_nullable_to_non_nullable
+                  as bool,
         error: freezed == error
             ? _value.error
             : error // ignore: cast_nullable_to_non_nullable
@@ -194,6 +207,7 @@ class _$AuthStateImpl implements _AuthState {
     this.walletAddress,
     this.authMode,
     this.isLoading = false,
+    this.isDeleting = false,
     this.error,
   });
 
@@ -213,11 +227,14 @@ class _$AuthStateImpl implements _AuthState {
   @JsonKey()
   final bool isLoading;
   @override
+  @JsonKey()
+  final bool isDeleting;
+  @override
   final String? error;
 
   @override
   String toString() {
-    return 'AuthState(isAuthenticated: $isAuthenticated, isGuest: $isGuest, cortexKey: $cortexKey, walletAddress: $walletAddress, authMode: $authMode, isLoading: $isLoading, error: $error)';
+    return 'AuthState(isAuthenticated: $isAuthenticated, isGuest: $isGuest, cortexKey: $cortexKey, walletAddress: $walletAddress, authMode: $authMode, isLoading: $isLoading, isDeleting: $isDeleting, error: $error)';
   }
 
   @override
@@ -236,6 +253,8 @@ class _$AuthStateImpl implements _AuthState {
                 other.authMode == authMode) &&
             (identical(other.isLoading, isLoading) ||
                 other.isLoading == isLoading) &&
+            (identical(other.isDeleting, isDeleting) ||
+                other.isDeleting == isDeleting) &&
             (identical(other.error, error) || other.error == error));
   }
 
@@ -248,6 +267,7 @@ class _$AuthStateImpl implements _AuthState {
     walletAddress,
     authMode,
     isLoading,
+    isDeleting,
     error,
   );
 
@@ -268,6 +288,7 @@ abstract class _AuthState implements AuthState {
     final String? walletAddress,
     final AuthMode? authMode,
     final bool isLoading,
+    final bool isDeleting,
     final String? error,
   }) = _$AuthStateImpl;
 
@@ -283,6 +304,8 @@ abstract class _AuthState implements AuthState {
   AuthMode? get authMode;
   @override
   bool get isLoading;
+  @override
+  bool get isDeleting;
   @override
   String? get error;
 

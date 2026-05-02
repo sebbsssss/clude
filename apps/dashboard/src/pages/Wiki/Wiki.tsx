@@ -7,6 +7,10 @@ import { CommandPalette, type WikiTabId } from './CommandPalette';
 import { useWikiData } from './use-wiki-data';
 import { useTopicArticle } from './use-topic-article';
 import { SHOWCASE_ARTICLES } from './showcase-articles';
+import { SummaryView } from './SummaryView';
+import './Wiki.css';
+
+const SUMMARY_TOPIC_ID = '__summary__';
 
 // Topics worth flagging in the rail with the small attention dot — any topic
 // whose curated article has at least one `action`/`question`-kind section, or
@@ -20,7 +24,6 @@ function computeAttentionTopics(contradictionTags: Set<string>): Set<string> {
   }
   return out;
 }
-import './Wiki.css';
 
 type Density = 'comfortable' | 'compact';
 
@@ -34,8 +37,11 @@ export function Wiki({ showcase = false }: { showcase?: boolean }) {
   const { topics, fragments, graph, memories, contradictions } = wiki;
 
   const [tab, setTab] = useState<WikiTabId>('wiki');
-  const [activeTopic, setActiveTopic] = useState<string>(topics[0]?.id ?? '');
-  const activeTopicObj = topics.find((t) => t.id === activeTopic) ?? topics[0] ?? null;
+  // Default landing is the cross-topic summary view, accessible via a special
+  // pill at the head of the topic rail.
+  const [activeTopic, setActiveTopic] = useState<string>(SUMMARY_TOPIC_ID);
+  const isSummary = activeTopic === SUMMARY_TOPIC_ID;
+  const activeTopicObj = isSummary ? null : (topics.find((t) => t.id === activeTopic) ?? topics[0] ?? null);
   const topicData = useTopicArticle(activeTopicObj, topics, memories, contradictions);
 
   const tabDefs: { id: WikiTabId; label: string; icon: string; count: number }[] = [
@@ -79,6 +85,8 @@ export function Wiki({ showcase = false }: { showcase?: boolean }) {
         <TopicRail
           topics={topics}
           active={activeTopic}
+          summaryActive={isSummary}
+          summaryTopicId={SUMMARY_TOPIC_ID}
           attentionTopicIds={computeAttentionTopics(
             new Set(contradictions.flatMap((p) => [...(p.a.tags || []), ...(p.b.tags || [])])),
           )}
@@ -129,7 +137,16 @@ export function Wiki({ showcase = false }: { showcase?: boolean }) {
             </div>
           </div>
 
-          {tab === 'wiki'  && (
+          {tab === 'wiki' && isSummary && (
+            <SummaryView
+              topics={topics}
+              memories={memories}
+              articles={SHOWCASE_ARTICLES}
+              contradictions={contradictions}
+              onTopic={(id) => setActiveTopic(id)}
+            />
+          )}
+          {tab === 'wiki' && !isSummary && (
             <WikiTab
               article={topicData.article}
               backlinks={topicData.backlinks}
@@ -159,15 +176,25 @@ export function Wiki({ showcase = false }: { showcase?: boolean }) {
 }
 
 function TopicRail({
-  topics, active, attentionTopicIds, onSelect,
+  topics, active, summaryActive, summaryTopicId, attentionTopicIds, onSelect,
 }: {
   topics: { id: string; name: string; color: string; count: number }[];
   active: string;
+  summaryActive: boolean;
+  summaryTopicId: string;
   attentionTopicIds: Set<string>;
   onSelect: (id: string) => void;
 }) {
   return (
     <div className="wk-topics">
+      <button
+        className={`wk-topic-pill wk-topic-pill--summary ${summaryActive ? 'is-active' : ''}`}
+        onClick={() => onSelect(summaryTopicId)}
+      >
+        <span className="wk-topic-pill__icon" aria-hidden>↗</span>
+        <span>Across everything</span>
+      </button>
+      <span className="wk-topics__divider" aria-hidden />
       {topics.map((t) => (
         <button
           key={t.id}
