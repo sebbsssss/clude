@@ -11,10 +11,17 @@ import { createSolanaRpc } from '@solana/kit';
 export const SOLANA_NETWORK = (import.meta.env.VITE_SOLANA_NETWORK ?? 'mainnet-beta') as 'mainnet-beta' | 'devnet';
 export const IS_DEVNET = SOLANA_NETWORK === 'devnet';
 
+// The public mainnet-beta endpoint blocks browser requests with 403 (CORS +
+// rate-limiting), so we ship a Helius public-tier URL as the fallback when
+// VITE_SOLANA_RPC_URL isn't set in the deploy env. This is a domain-scoped
+// read key — fine to embed client-side; rotate via the Helius dashboard if
+// it gets abused.
+const MAINNET_FALLBACK_RPC = 'https://mainnet.helius-rpc.com/?api-key=1e0cda16-6469-457c-8ef8-c6ecbc4a624e';
+
 // Individual RPC URLs
 export const MAINNET_RPC_URL = !IS_DEVNET && import.meta.env.VITE_SOLANA_RPC_URL
   ? import.meta.env.VITE_SOLANA_RPC_URL
-  : 'https://api.mainnet-beta.solana.com';
+  : MAINNET_FALLBACK_RPC;
 
 export const DEVNET_RPC_URL = IS_DEVNET && import.meta.env.VITE_SOLANA_RPC_URL
   ? import.meta.env.VITE_SOLANA_RPC_URL
