@@ -128,7 +128,7 @@ export function useWikiData(options: UseWikiDataOptions = {}): WikiData {
       try {
         const [memResult, kg, memGraph] = await Promise.all([
           api.getMemories({ hours: 168, limit: 200 }),
-          api.getKnowledgeGraph({ minMentions: 2 }).catch(() => ({ nodes: [], edges: [] })),
+          api.getKnowledgeGraph({ minMentions: 2, limit: 500 }).catch(() => ({ nodes: [], edges: [] })),
           api.getMemoryGraph({ limit: 200 }).catch(() => ({ nodes: [], links: [], total: 0 })),
         ]);
 
