@@ -6,7 +6,7 @@
  *   VITE_SOLANA_RPC_URL  — override RPC endpoint
  */
 
-import { createSolanaRpc } from '@solana/kit';
+import { createSolanaRpc, createSolanaRpcSubscriptions } from '@solana/kit';
 
 export const SOLANA_NETWORK = (import.meta.env.VITE_SOLANA_NETWORK ?? 'mainnet-beta') as 'mainnet-beta' | 'devnet';
 export const IS_DEVNET = SOLANA_NETWORK === 'devnet';
@@ -27,22 +27,26 @@ export const DEVNET_RPC_URL = IS_DEVNET && import.meta.env.VITE_SOLANA_RPC_URL
   ? import.meta.env.VITE_SOLANA_RPC_URL
   : 'https://api.devnet.solana.com';
 
+// Derive WSS URLs from HTTP RPC URLs — Helius and Solana public endpoints
+// expose the same path on wss:// for subscriptions. Privy's React hook
+// requires both rpc + rpcSubscriptions in PrivyProvider's solana.rpcs config.
+const toWss = (url: string) => url.replace(/^https?:/, 'wss:');
+
 // Individual RPC Instances
 export const MAINNET_RPC = createSolanaRpc(MAINNET_RPC_URL);
 export const DEVNET_RPC = createSolanaRpc(DEVNET_RPC_URL);
+export const MAINNET_RPC_SUBSCRIPTIONS = createSolanaRpcSubscriptions(toWss(MAINNET_RPC_URL));
+export const DEVNET_RPC_SUBSCRIPTIONS = createSolanaRpcSubscriptions(toWss(DEVNET_RPC_URL));
 
 /**
- * CAIP-2 Solana chain IDs — the *genesis-hash* form. Privy's
- * `useSignAndSendTransaction` (`@privy-io/react-auth/solana`) expects
- * exactly these strings; the friendly `solana:mainnet` alias compiles
- * (we previously cast it with `as any`) but isn't matched at runtime,
- * which causes the wallet hand-off to silently misroute on signing.
- *
- * Reference: https://docs.privy.io/wallets/using-wallets/solana/send-a-transaction
+ * Privy chain IDs — friendly aliases (`solana:mainnet`, `solana:devnet`).
+ * Privy's React `useSignAndSendTransaction` looks up RPCs by these exact
+ * strings at runtime; the CAIP-2 genesis-hash form (`solana:5eykt...`) is
+ * for the server-side SDK only.
  */
 export const SOLANA_CHAIN_IDS = {
-  mainnet: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
-  devnet: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+  mainnet: 'solana:mainnet',
+  devnet: 'solana:devnet',
 } as const;
 
 /** Current active Chain ID based on environment */
