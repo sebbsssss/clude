@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronDown, CheckCircle, AlertCircle, Copy, Loader2, QrCode, Smartphone } from 'lucide-react';
 import { useSolanaWallet } from '../hooks/use-solana-wallet';
@@ -259,15 +259,33 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
     }
   }, [effectiveAmount, isValidAmount, payMethod, currentBalance, startStatusPolling]);
 
+  /**
+   * Pick the wallet to send from. Prefer external wallets (Phantom > any
+   * non-Privy connector) over the auto-provisioned Privy embedded wallet.
+   * Email-only users still fall back to embedded — but typically that
+   * wallet is empty (no SOL for fees, no USDC) and the tx will fail with
+   * a Solana RPC error. We surface that case as a clear error message.
+   */
+  const senderWallet = useMemo(() => {
+    if (!wallets || wallets.length === 0) return null;
+    const phantom = wallets.find((w) => w.standardWallet?.name === 'Phantom');
+    if (phantom) return phantom;
+    const external = wallets.find((w) => w.standardWallet?.name && w.standardWallet.name !== 'Privy');
+    if (external) return external;
+    return wallets[0];
+  }, [wallets]);
+  const senderName = senderWallet?.standardWallet?.name ?? null;
+  const isEmbedded = senderName === 'Privy' || (!!senderWallet && !senderName);
+
   /** Direct wallet transfer via Privy (embedded wallet flow) */
   const handleSolanaWallet = useCallback(async () => {
-    if (!walletAddress || !isValidAmount) return;
-    const wallet = wallets[0];
-    if (!wallet) {
-      setErrorMsg('No Solana wallet connected. Please sign in with your wallet.');
+    if (!isValidAmount) return;
+    if (!senderWallet) {
+      setErrorMsg('No Solana wallet connected. Please connect Phantom or sign in with a wallet.');
       setTxState('error');
       return;
     }
+    const senderAddress = senderWallet.address;
 
     setTxState('building');
     setErrorMsg('');
@@ -290,13 +308,14 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
     let txBytes: Uint8Array;
     try {
       console.log('[TopUp] Building tx:', {
-        sender: walletAddress,
+        sender: senderAddress,
+        senderWallet: senderName,
         dest: intent.dest_address,
         amount: effectiveAmount,
         usingServerBlockhash: !!intent.recent_blockhash,
       });
       txBytes = await buildSolanaUsdcTx(
-        walletAddress,
+        senderAddress,
         intent.dest_address,
         effectiveAmount,
         intent.recent_blockhash,
@@ -311,10 +330,10 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
 
     // 3. Sign & send via Privy wallet
     setTxState('signing');
-    console.log('[TopUp] Requesting wallet sign & send...');
+    console.log('[TopUp] Requesting wallet sign & send via', senderName);
     let hash: string;
     try {
-      hash = await signAndSendTransaction(txBytes, walletAddress, SOLANA_CHAIN);
+      hash = await signAndSendTransaction(txBytes, senderAddress, SOLANA_CHAIN);
     } catch (sigErr: unknown) {
       console.error('[TopUp] Wallet sign/send failed:', sigErr);
       if (isWalletRejection(sigErr)) {
@@ -322,7 +341,18 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
         setErrorMsg('Your wallet blocked this transaction. Try the QR code instead.');
       } else {
         const detail = (sigErr as any)?.message || (sigErr as any)?.error?.message || '';
-        setErrorMsg(`Wallet failed to send: ${detail || 'unknown error'}. Try the QR code method instead.`);
+        // Solana RPC error -32002 on the embedded wallet almost always means
+        // the wallet has no SOL for fees or no USDC to transfer. Surface a
+        // clearer message so the user knows where to fund.
+        const isFundingIssue =
+          /-32002|blockhash not found|insufficient/i.test(String(detail));
+        if (isEmbedded && isFundingIssue) {
+          setErrorMsg(
+            'Your auto-generated wallet has no SOL or USDC. Connect Phantom (or fund your Clude wallet) before topping up.',
+          );
+        } else {
+          setErrorMsg(`Wallet failed to send: ${detail || 'unknown error'}. Try the QR code method instead.`);
+        }
       }
       setTxState('error');
       return;
@@ -345,7 +375,7 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
       // Start polling as fallback — the Helius webhook or next status check should credit it
       startStatusPolling(currentBalance ?? 0, intent.id);
     }
-  }, [walletAddress, wallets, signAndSendTransaction, effectiveAmount, isValidAmount, currentBalance, onSuccess, startStatusPolling]);
+  }, [senderWallet, senderName, isEmbedded, signAndSendTransaction, effectiveAmount, isValidAmount, currentBalance, onSuccess, startStatusPolling]);
 
   const handleBaseManualConfirm = useCallback(async (manualTxHash: string) => {
     if (!manualTxHash.trim()) return;
@@ -467,6 +497,23 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
                     <p className="text-[10px] text-red-400 mt-1">Minimum top-up is $1 USDC</p>
                   )}
                 </div>
+
+                {/* Sender wallet — surfaces which wallet the user is paying from
+                    so embedded-wallet users (which start empty) understand
+                    why a tx might fail with insufficient funds. */}
+                {chain === 'solana' && senderWallet && (
+                  <div className="mb-3 px-3 py-1.5 bg-zinc-800/50 border border-zinc-700 rounded-lg flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-[10px] text-zinc-400">
+                      <span className="text-zinc-500 uppercase tracking-wider">From</span>
+                      <span className={isEmbedded ? 'text-amber-400' : 'text-zinc-200'}>
+                        {isEmbedded ? 'Auto-generated wallet' : senderName ?? 'Wallet'}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-zinc-500 font-mono">
+                      {senderWallet.address.slice(0, 4)}…{senderWallet.address.slice(-4)}
+                    </span>
+                  </div>
+                )}
 
                 {/* Chain selector */}
                 <div className="mb-5">
