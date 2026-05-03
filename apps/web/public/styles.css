@@ -530,47 +530,6 @@ button { font: inherit; cursor: pointer; }
   text-wrap: pretty;
 }
 
-/* ============== Backed by ============== */
-.backed {
-  padding: 36px 0;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  background: var(--bg-2);
-}
-.backed__inner {
-  display: flex;
-  align-items: center;
-  gap: 56px;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-.backed__label {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.28em;
-  text-transform: uppercase;
-  color: var(--fg-3);
-}
-.backed__logos {
-  display: flex;
-  gap: 48px;
-  align-items: center;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  color: var(--fg-2);
-  flex-wrap: wrap;
-  justify-content: center;
-}
-.backed__logo {
-  display: flex; align-items: center; gap: 8px;
-  opacity: 0.75;
-  transition: opacity var(--dur-fast) var(--ease);
-}
-.backed__logo:hover { opacity: 1; }
-
 /* ============== Feature tabs ============== */
 .featuretabs {
   border: 1px solid var(--line);

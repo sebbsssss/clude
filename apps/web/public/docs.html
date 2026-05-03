@@ -1,283 +1,293 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Docs · Clude</title>
-<meta name="description" content="Clude documentation: memory types, recall mechanics, dream cycles, and the SDK reference." />
-<link rel="icon" type="image/svg+xml" href="/logo/Clude-Icon-Blue.svg" />
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Funnel+Sans:ital,wght@0,300..800;1,300..800&family=Inconsolata:wght@300..700&display=swap" rel="stylesheet" />
-<style>
-  :root {
-    --bg: #f5f5f0;
-    --ink: #1a1b1f;
-    --ink-2: #2a2b30;
-    --mute: #5b5f68;
-    --accent: #2244ff;
-    --line: rgba(26, 27, 31, 0.12);
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html { scroll-behavior: smooth; }
-  body {
-    background: var(--bg);
-    color: var(--ink);
-    font-family: 'Funnel Sans', system-ui, sans-serif;
-    font-weight: 400;
-    -webkit-font-smoothing: antialiased;
-  }
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Docs · Clude</title>
+  <meta name="description" content="Clude documentation: memory types, recall mechanics, dream cycles, and the SDK reference." />
+  <link rel="icon" type="image/svg+xml" href="/logo/Clude-Icon-Blue.svg" />
+  <link rel="stylesheet" href="/colors_and_type.css" />
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    html { scroll-behavior: smooth; }
 
-  nav {
-    position: sticky; top: 0;
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 20px 32px;
-    background: rgba(245,245,240,0.85);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border-bottom: 1px solid var(--line);
-    z-index: 10;
-    font-size: 12px; letter-spacing: 0.15em; text-transform: uppercase;
-    color: var(--ink-2);
-  }
-  nav .logo { font-weight: 600; letter-spacing: 0.22em; color: inherit; text-decoration: none; }
-  nav .links { display: flex; gap: 28px; font-weight: 500; opacity: 0.7; }
-  nav .links a { color: inherit; text-decoration: none; }
-  nav .links a:hover { opacity: 1; color: var(--ink); }
-  @media (max-width: 480px) {
-    nav { padding: 16px 18px; font-size: 11px; letter-spacing: 0.12em; gap: 16px; }
-    nav .links { gap: 16px; }
-  }
-
-  .doc-layout {
-    max-width: 1240px; margin: 0 auto;
-    display: grid;
-    grid-template-columns: 240px 1fr;
-    gap: 80px;
-    padding: 80px 7vw 120px;
-  }
-  @media (max-width: 1000px) { .doc-layout { grid-template-columns: 1fr; gap: 40px; padding-top: 40px; } }
-
-  aside.toc {
-    position: sticky;
-    top: 100px;
-    align-self: start;
-    font-family: 'Inconsolata', monospace;
-    font-size: 12px; font-weight: 500;
-    letter-spacing: 0.1em; text-transform: uppercase;
-    color: var(--mute);
-  }
-  aside.toc .toc-group { margin-bottom: 28px; }
-  aside.toc .toc-group-title {
-    color: var(--ink);
-    letter-spacing: 0.18em;
-    margin-bottom: 14px;
-  }
-  aside.toc a {
-    display: block;
-    color: var(--mute);
-    text-decoration: none;
-    padding: 6px 0;
-    border-left: 1px solid transparent;
-    padding-left: 14px;
-    margin-left: -14px;
-    transition: all 120ms ease;
-  }
-  aside.toc a:hover { color: var(--ink); }
-  aside.toc a.active { color: var(--ink); border-left-color: var(--accent); }
-  @media (max-width: 1000px) { aside.toc { position: static; } }
-
-  article { max-width: 780px; }
-
-  .page-head { margin-bottom: 80px; }
-  .page-head .eyebrow {
-    font-family: 'Inconsolata', monospace;
-    font-size: 12px; font-weight: 500;
-    letter-spacing: 0.18em; text-transform: uppercase;
-    color: var(--mute);
-    display: inline-flex; align-items: center; gap: 10px;
-    margin-bottom: 28px;
-  }
-  .page-head .eyebrow::before { content: ''; width: 28px; height: 1px; background: var(--ink); opacity: 0.4; }
-  h1 {
-    font-family: 'Funnel Sans', sans-serif;
-    font-weight: 600;
-    font-size: clamp(44px, 5.5vw, 80px);
-    line-height: 1.02;
-    letter-spacing: -0.03em;
-    margin-bottom: 28px;
-  }
-  h1 em {
-    font-style: normal;
-    color: var(--accent);
-    display: inline-block;
+    .docs {
+      max-width: 1240px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      gap: 64px;
+      padding: 64px 32px 96px;
     }
-  .page-lede {
-    font-size: 18px; line-height: 1.55;
-    color: var(--ink-2);
-    max-width: 52ch;
-  }
+    @media (max-width: 1000px) {
+      .docs { grid-template-columns: 1fr; gap: 32px; padding: 32px 24px 64px; }
+    }
 
-  h2 {
-    font-family: 'Funnel Sans', sans-serif;
-    font-weight: 500;
-    font-size: clamp(26px, 2.6vw, 36px);
-    line-height: 1.1;
-    letter-spacing: -0.02em;
-    margin: 80px 0 24px;
-    padding-top: 40px;
-    border-top: 1px solid var(--line);
-  }
-  h3 {
-    font-family: 'Funnel Sans', sans-serif;
-    font-weight: 600;
-    font-size: 20px; line-height: 1.3;
-    letter-spacing: -0.01em;
-    margin: 36px 0 14px;
-  }
-  article p {
-    font-size: 16.5px; line-height: 1.7;
-    color: var(--ink-2);
-    margin-bottom: 18px;
-    max-width: 64ch;
-  }
-  article p + p { margin-top: -4px; }
-  article a.inline {
-    color: var(--accent); text-decoration: none;
-    border-bottom: 1px solid rgba(34,68,255,0.3);
-  }
-  article a.inline:hover { border-bottom-color: var(--accent); }
-  article code.inline {
-    font-family: 'Inconsolata', monospace;
-    font-size: 13.5px;
-    background: rgba(0,0,0,0.05);
-    padding: 2px 6px;
-    border-radius: 3px;
-  }
-  article ul {
-    font-size: 16px; line-height: 1.7;
-    color: var(--ink-2);
-    margin: 10px 0 22px 20px;
-    max-width: 64ch;
-  }
-  article ul li { margin-bottom: 6px; }
-  article ul li::marker { color: var(--accent); }
+    .toc {
+      position: sticky;
+      top: 88px;
+      align-self: start;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.06em;
+    }
+    @media (max-width: 1000px) { .toc { position: static; } }
+    .toc__group { margin-bottom: 24px; }
+    .toc__title {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--fg-3);
+      margin-bottom: 12px;
+    }
+    .toc__link {
+      display: block;
+      color: var(--fg-2);
+      padding: 6px 0 6px 14px;
+      margin-left: -14px;
+      border-left: 1px solid transparent;
+      transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+    }
+    .toc__link:hover { color: var(--fg-1); }
+    .toc__link.is-active {
+      color: var(--fg-1);
+      border-left-color: var(--brand);
+    }
 
-  .code-block {
-    background: var(--ink);
-    color: #d8d8d0;
-    padding: 18px 22px;
-    border-radius: 4px;
-    font-family: 'Inconsolata', monospace;
-    font-size: 13.5px;
-    line-height: 1.65;
-    overflow-x: auto;
-    margin: 20px 0 28px;
-    white-space: pre;
-  }
-  .code-block .k { color: #7f97ff; }
-  .code-block .s { color: #7dd28a; }
-  .code-block .c { color: rgba(216,216,208,0.45); font-style: italic; }
+    .docs__article { max-width: 760px; }
 
-  table.memory-table {
-    width: 100%; max-width: 64ch;
-    border-collapse: collapse;
-    font-size: 14.5px;
-    margin: 20px 0 28px;
-  }
-  table.memory-table th, table.memory-table td {
-    text-align: left;
-    padding: 10px 12px 10px 0;
-    border-bottom: 1px solid var(--line);
-    vertical-align: top;
-  }
-  table.memory-table th {
-    font-family: 'Inconsolata', monospace;
-    font-size: 12px; font-weight: 500;
-    letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--mute);
-  }
-  table.memory-table td.type {
-    font-family: 'Inconsolata', monospace;
-    font-size: 13px;
-    color: var(--ink);
-  }
-  table.memory-table td.decay {
-    font-family: 'Inconsolata', monospace;
-    color: var(--mute);
-  }
+    .docs__head { margin-bottom: 56px; }
+    .docs__eyebrow { display: inline-flex; align-items: center; gap: 10px; margin-bottom: 22px; }
+    .docs__title {
+      font-family: var(--font-sans);
+      font-size: clamp(40px, 5vw, 64px);
+      font-weight: 700;
+      letter-spacing: -0.022em;
+      line-height: 1.02;
+      margin: 0 0 18px;
+      text-wrap: balance;
+    }
+    .docs__title em {
+      font-style: normal;
+      background: linear-gradient(90deg, var(--brand) 0%, #5b78ff 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .docs__lede {
+      font-family: var(--font-sans);
+      font-size: 17px;
+      line-height: 1.55;
+      color: var(--fg-2);
+      max-width: 56ch;
+      margin: 0;
+      text-wrap: pretty;
+    }
 
-  .note {
-    font-family: 'Inconsolata', monospace;
-    font-size: 13px;
-    color: var(--mute);
-    border-left: 2px solid var(--accent);
-    padding: 10px 0 10px 14px;
-    max-width: 62ch;
-    margin: 24px 0 28px;
-    line-height: 1.6;
-  }
+    .docs__article h2 {
+      font-family: var(--font-sans);
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.012em;
+      line-height: 1.15;
+      color: var(--fg-1);
+      margin: 56px 0 14px;
+      scroll-margin-top: 88px;
+      text-wrap: balance;
+    }
+    .docs__article h3 {
+      font-family: var(--font-sans);
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--fg-1);
+      margin: 28px 0 10px;
+    }
+    .docs__article p {
+      font-family: var(--font-sans);
+      font-size: 15px;
+      line-height: 1.65;
+      color: var(--fg-1);
+      margin: 0 0 14px;
+      text-wrap: pretty;
+      max-width: 64ch;
+    }
+    .docs__article ul {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 14px;
+      max-width: 64ch;
+    }
+    .docs__article li {
+      font-family: var(--font-sans);
+      font-size: 15px;
+      line-height: 1.65;
+      color: var(--fg-1);
+      padding-left: 18px;
+      position: relative;
+      margin-bottom: 6px;
+    }
+    .docs__article li::before {
+      content: "·";
+      position: absolute;
+      left: 4px;
+      color: var(--brand);
+      font-weight: 700;
+    }
+    .docs__article a.inline {
+      color: var(--brand);
+      border-bottom: 1px solid rgba(34, 68, 255, 0.32);
+      padding-bottom: 1px;
+      transition: border-color var(--dur-fast) var(--ease);
+    }
+    .docs__article a.inline:hover { border-bottom-color: var(--brand); }
+    .docs__article code.inline {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      padding: 1px 6px;
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      border-radius: 2px;
+      color: var(--fg-1);
+    }
 
-  footer {
-    padding: 60px 7vw 48px;
-    border-top: 1px solid var(--line);
-    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 32px;
-    font-family: 'Inconsolata', monospace;
-    font-size: 12.5px; font-weight: 500;
-    letter-spacing: 0.12em; text-transform: uppercase;
-    color: var(--mute);
-  }
-  footer a { color: inherit; text-decoration: none; }
-  footer a:hover { color: var(--ink); }
-  footer .footer-nav { display: flex; gap: 28px; flex-wrap: wrap; }
-</style>
+    .code {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.65;
+      color: var(--fg-1);
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      border-left: 2px solid var(--brand);
+      padding: 14px 18px;
+      margin: 12px 0 22px;
+      border-radius: 0 2px 2px 0;
+      overflow-x: auto;
+      white-space: pre;
+    }
+    .code .k { color: var(--brand); font-weight: 600; }
+    .code .s { color: var(--clude-success); }
+    .code .c { color: var(--fg-3); font-style: italic; }
+
+    .docs__table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0 28px;
+      font-family: var(--font-sans);
+      font-size: 14px;
+      border: 1px solid var(--line);
+    }
+    .docs__table th {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--fg-2);
+      text-align: left;
+      padding: 12px 16px;
+      background: var(--bg-2);
+      border-bottom: 1px solid var(--line);
+    }
+    .docs__table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      color: var(--fg-1);
+      vertical-align: top;
+    }
+    .docs__table tr:last-child td { border-bottom: 0; }
+    .docs__table .type {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--fg-1);
+      font-weight: 600;
+    }
+    .docs__table .decay {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--fg-3);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .docs__note {
+      font-family: var(--font-sans);
+      font-size: 13.5px;
+      line-height: 1.6;
+      color: var(--fg-2);
+      border-left: 2px solid var(--brand);
+      padding: 12px 0 12px 16px;
+      max-width: 60ch;
+      margin: 16px 0 24px;
+    }
+  </style>
 </head>
 <body>
 
-<nav>
-  <a href="/" class="logo">CLUDE</a>
-  <div class="links">
-    <a href="/docs.html">Docs</a>
-    <a href="/chat">Chat</a>
-    <a href="/dashboard">Dashboard</a>
-    <a href="https://github.com/sebbsssss/clude" target="_blank" rel="noopener">GitHub</a>
+<header class="topnav">
+  <div class="container topnav__inner">
+    <a class="topnav__brand" href="/">
+      <img class="topnav__brand-mark" src="/logo/Clude-Icon-Blue.svg" alt="" />
+      <span class="topnav__wm">CLUDE</span>
+    </a>
+    <div class="prodswitch">
+      <a class="prodswitch__item" href="/">Memory</a>
+      <a class="prodswitch__item" href="/chat/v2">Chat</a>
+      <a class="prodswitch__item prodswitch__item--active" href="/docs">SDK</a>
+    </div>
+    <nav class="topnav__links">
+      <a class="topnav__link" href="/#demo">Demo</a>
+      <a class="topnav__link" href="/#features">Product</a>
+      <a class="topnav__link" href="/chat/v2">Chat</a>
+      <a class="topnav__link" href="/#integrations">Integrations</a>
+      <a class="topnav__link" href="/#compare">Compare</a>
+      <a class="topnav__link topnav__link--active" href="/docs">Docs</a>
+    </nav>
+    <div class="topnav__right">
+      <a class="topnav__link" href="/dashboard">Sign in</a>
+      <a class="btn btn--brand" href="/docs#install">Get started →</a>
+    </div>
   </div>
-</nav>
+</header>
 
-<div class="doc-layout">
+<div class="docs">
 
   <aside class="toc">
-    <div class="toc-group">
-      <div class="toc-group-title">Start</div>
-      <a href="#install">Install</a>
-      <a href="#first-run">First run</a>
+    <div class="toc__group">
+      <div class="toc__title">Start</div>
+      <a class="toc__link" href="#install">Install</a>
+      <a class="toc__link" href="#first-run">First run</a>
     </div>
-    <div class="toc-group">
-      <div class="toc-group-title">Concepts</div>
-      <a href="#memory-types">Memory types</a>
-      <a href="#recall">Recall</a>
-      <a href="#dream">Dream cycles</a>
-      <a href="#decay">Decay</a>
+    <div class="toc__group">
+      <div class="toc__title">Concepts</div>
+      <a class="toc__link" href="#memory-types">Memory types</a>
+      <a class="toc__link" href="#recall">Recall</a>
+      <a class="toc__link" href="#dream">Dream cycles</a>
+      <a class="toc__link" href="#decay">Decay</a>
     </div>
-    <div class="toc-group">
-      <div class="toc-group-title">SDK</div>
-      <a href="#sdk">Cortex client</a>
-      <a href="#mcp">MCP tools</a>
+    <div class="toc__group">
+      <div class="toc__title">SDK</div>
+      <a class="toc__link" href="#sdk">Cortex client</a>
+      <a class="toc__link" href="#mcp">MCP tools</a>
     </div>
-    <div class="toc-group">
-      <div class="toc-group-title">Deploy</div>
-      <a href="#modes">Modes</a>
-      <a href="#self-hosted">Self-hosted</a>
+    <div class="toc__group">
+      <div class="toc__title">Deploy</div>
+      <a class="toc__link" href="#modes">Modes</a>
+      <a class="toc__link" href="#self-hosted">Self-hosted</a>
     </div>
   </aside>
 
-  <article>
+  <article class="docs__article">
 
-    <div class="page-head">
-      <div class="eyebrow">Documentation / v3.0.1</div>
-      <h1>Memory that <em>lasts.</em></h1>
-      <p class="page-lede">
-        Clude is an open implementation of Stanford's <em style="font-style:italic">Generative Agents</em>: memory streams,
+    <div class="docs__head">
+      <span class="eyebrow eyebrow--brand docs__eyebrow">
+        <span class="dot" style="width:6px;height:6px;border-radius:50%;background:var(--clude-success);box-shadow:0 0 0 3px rgba(16,185,129,0.16);"></span>
+        Documentation · v3.0.1
+      </span>
+      <h1 class="docs__title">Memory that <em>lasts.</em></h1>
+      <p class="docs__lede">
+        Clude is an open implementation of Stanford's <em>Generative Agents</em> — memory streams,
         reflection, and dream cycles, wired for production on Supabase + pgvector,
         with a local-first SQLite backend for offline use.
       </p>
@@ -285,17 +295,17 @@
 
     <h2 id="install">Install</h2>
     <p>One command, zero config. Detects your email from git, creates your agent, installs the MCP server for any editor you have:</p>
-    <div class="code-block">npx @clude/sdk setup</div>
+    <div class="code">npx @clude/sdk setup</div>
     <p>Full install guide: <a href="/install.html" class="inline">clude.io/install</a>.</p>
 
     <h2 id="first-run">First run</h2>
     <p>After setup, your agent gets four MCP tools: <code class="inline">store_memory</code>, <code class="inline">recall_memories</code>, <code class="inline">get_memory_stats</code>, and <code class="inline">find_clinamen</code>. Memories live at <code class="inline">~/.clude/brain.db</code> by default.</p>
     <p>Verify with:</p>
-    <div class="code-block">npx @clude/sdk doctor</div>
+    <div class="code">npx @clude/sdk doctor</div>
 
     <h2 id="memory-types">Memory types</h2>
     <p>Clude stores five kinds of memory. Each decays at a different rate, faithful to how human memory actually works:</p>
-    <table class="memory-table">
+    <table class="docs__table">
       <thead>
         <tr><th>Type</th><th>What it holds</th><th>Decay / day</th></tr>
       </thead>
@@ -310,7 +320,7 @@
 
     <h2 id="recall">Recall</h2>
     <p>Clude's recall is hybrid: vector similarity (cosine, 384-dim embeddings) plus keyword matching plus tag scoring, with a composite score weighted by importance and recency. The math:</p>
-    <div class="code-block">score = (0.45 × similarity)
+    <div class="code">score = (0.45 × similarity)
       + (0.25 × importance)
       + (0.15 × recency)
       + (0.15 × tag_overlap)
@@ -319,7 +329,7 @@
 
     <h3>Progressive disclosure</h3>
     <p>Context windows are expensive. Use <code class="inline">recallSummaries()</code> for ~50-token previews, then <code class="inline">hydrate()</code> only the full content of the memories you actually need:</p>
-    <div class="code-block"><span class="k">const</span> previews = <span class="k">await</span> brain.recallSummaries({ query });
+    <div class="code"><span class="k">const</span> previews = <span class="k">await</span> brain.recallSummaries({ query });
 <span class="c">// rank or filter previews...</span>
 <span class="k">const</span> full = <span class="k">await</span> brain.hydrate(previews.slice(0, <span class="k">3</span>).map(p =&gt; p.id));</div>
 
@@ -333,15 +343,15 @@
       <li><strong>Emergence.</strong> Links related memories across time into a knowledge graph.</li>
     </ul>
     <p>Trigger manually:</p>
-    <div class="code-block">npx @clude/sdk dream</div>
+    <div class="code">npx @clude/sdk dream</div>
 
     <h2 id="decay">Decay</h2>
     <p>Memories don't just accumulate. They fade. Each memory has a <code class="inline">decay_factor</code> in <code class="inline">[0,1]</code> that declines over time based on its type. Access boosts it (up to 0.1 per recall). Faded memories drop below the recall threshold and eventually get compacted.</p>
-    <div class="note">This is the single biggest quality-of-life difference vs. a flat vector database. Old irrelevant context doesn't poison recall forever.</div>
+    <div class="docs__note">This is the single biggest quality-of-life difference vs. a flat vector database. Old irrelevant context doesn't poison recall forever.</div>
 
     <h2 id="sdk">Cortex client</h2>
     <p>The SDK works the same way regardless of backend:</p>
-    <div class="code-block"><span class="k">import</span> { Cortex } <span class="k">from</span> <span class="s">'@clude/sdk'</span>;
+    <div class="code"><span class="k">import</span> { Cortex } <span class="k">from</span> <span class="s">'@clude/sdk'</span>;
 
 <span class="c">// Hosted (zero setup)</span>
 <span class="k">const</span> brain = <span class="k">new</span> Cortex({ hosted: { apiKey } });
@@ -363,17 +373,17 @@
       <li><code class="inline">store_memory(content, type, source)</code></li>
       <li><code class="inline">recall_memories(query, limit?, type?)</code></li>
       <li><code class="inline">get_memory_stats()</code></li>
-      <li><code class="inline">find_clinamen(query)</code>. Finds surprising or tangential memories via anti-similarity.</li>
+      <li><code class="inline">find_clinamen(query)</code> — finds surprising or tangential memories via anti-similarity.</li>
     </ul>
 
     <h2 id="modes">Modes</h2>
     <p>Clude detects its mode from the environment:</p>
-    <table class="memory-table">
+    <table class="docs__table">
       <thead>
         <tr><th>Mode</th><th>Trigger</th><th>Storage</th></tr>
       </thead>
       <tbody>
-        <tr><td class="type">Hosted</td><td><code class="inline">CORTEX_API_KEY</code></td><td>clude.io (zero setup)</td></tr>
+        <tr><td class="type">Hosted</td><td><code class="inline">CORTEX_API_KEY</code></td><td>clude.io · zero setup</td></tr>
         <tr><td class="type">Self-hosted</td><td><code class="inline">SUPABASE_URL</code> + <code class="inline">SUPABASE_SERVICE_KEY</code></td><td>Your Supabase</td></tr>
         <tr><td class="type">Local</td><td>no env vars set</td><td><code class="inline">~/.clude/brain.db</code></td></tr>
       </tbody>
@@ -388,7 +398,7 @@
       <li>Optional: Anthropic for dream cycle reflection (<code class="inline">ANTHROPIC_API_KEY</code>)</li>
     </ul>
     <p>Point the SDK at it:</p>
-    <div class="code-block"><span class="k">new</span> Cortex({
+    <div class="code"><span class="k">new</span> Cortex({
   supabase: {
     url: process.env.SUPABASE_URL,
     serviceKey: process.env.SUPABASE_SERVICE_KEY,
@@ -399,33 +409,73 @@
   </article>
 </div>
 
-<footer>
-  <div class="copyright">© 2026 Clude · MIT License</div>
-  <div class="footer-nav">
-    <a href="/docs.html">Docs</a>
-    <a href="/install.html">Install</a>
-    <a href="/chat">Chat</a>
-    <a href="/dashboard">Dashboard</a>
-    <a href="https://github.com/sebbsssss/clude" target="_blank" rel="noopener">GitHub</a>
-    <a href="https://arxiv.org/abs/2304.03442" target="_blank" rel="noopener">Paper</a>
-    <a href="/privacy.html">Privacy</a>
+<footer class="footer">
+  <div class="container">
+    <div class="footer__inner">
+      <div class="footer__brand">
+        <div class="topnav__brand">
+          <img class="topnav__brand-mark" src="/logo/Clude-Icon-Blue.svg" alt="" />
+          <span class="topnav__wm">CLUDE</span>
+        </div>
+        <p class="footer__tag">
+          Cognitive memory for AI agents. Not a service you depend on —
+          infrastructure you own.
+        </p>
+      </div>
+      <div class="footer__col">
+        <h4>Product</h4>
+        <ul>
+          <li><a href="/docs">SDK</a></li>
+          <li><a href="/dashboard">Dashboard</a></li>
+          <li><a href="/chat/v2">Chat</a></li>
+          <li><a href="/docs#mcp">MCP server</a></li>
+        </ul>
+      </div>
+      <div class="footer__col">
+        <h4>Resources</h4>
+        <ul>
+          <li><a href="/docs">Docs</a></li>
+          <li><a href="/benchmark">HaluMem benchmark</a></li>
+          <li><a href="/install">Install</a></li>
+          <li><a href="https://github.com/sebbsssss/clude" target="_blank" rel="noopener">GitHub ↗</a></li>
+        </ul>
+      </div>
+      <div class="footer__col">
+        <h4>Company</h4>
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/privacy">Privacy</a></li>
+          <li><a href="https://x.com/Cludebot" target="_blank" rel="noopener">X / @Cludebot</a></li>
+          <li><a href="https://arxiv.org/abs/2304.03442" target="_blank" rel="noopener">Paper ↗</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer__bot">
+      <span>© 2026 Clude · Cognitive memory infrastructure</span>
+      <div class="footer__bot-right">
+        <span>MIT License</span>
+        <span>v3.0.1</span>
+      </div>
+    </div>
   </div>
 </footer>
 
 <script>
   // TOC active state on scroll
-  const headings = Array.from(document.querySelectorAll('article h2[id]'));
-  const links = Array.from(document.querySelectorAll('aside.toc a'));
-  function updateActive() {
-    const y = window.scrollY + 140;
-    let currentId = headings[0]?.id;
-    for (const h of headings) {
-      if (h.offsetTop <= y) currentId = h.id;
+  (function () {
+    const headings = Array.from(document.querySelectorAll('article h2[id], article h3[id]'));
+    const links = Array.from(document.querySelectorAll('.toc__link'));
+    function update() {
+      const y = window.scrollY + 140;
+      let currentId = headings[0] && headings[0].id;
+      for (const h of headings) {
+        if (h.offsetTop <= y) currentId = h.id;
+      }
+      links.forEach(a => a.classList.toggle('is-active', a.getAttribute('href') === '#' + currentId));
     }
-    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + currentId));
-  }
-  window.addEventListener('scroll', updateActive, { passive: true });
-  updateActive();
+    window.addEventListener('scroll', update, { passive: true });
+    update();
+  })();
 </script>
 
 </body>

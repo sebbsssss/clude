@@ -29,20 +29,20 @@ function TopNav() {
           <span className="topnav__wm">CLUDE</span>
         </a>
         <div className="prodswitch">
-          <button className="prodswitch__item prodswitch__item--active">Memory</button>
-          <button className="prodswitch__item">Chat</button>
-          <button className="prodswitch__item">SDK</button>
+          <a className="prodswitch__item prodswitch__item--active" href="/">Memory</a>
+          <a className="prodswitch__item" href="/chat/v2">Chat</a>
+          <a className="prodswitch__item" href="/docs">SDK</a>
         </div>
         <nav className="topnav__links">
           <a className="topnav__link" href="#demo">Demo</a>
           <a className="topnav__link" href="#features">Product</a>
-          <a className="topnav__link" href="#chat">Chat</a>
+          <a className="topnav__link" href="/chat/v2">Chat</a>
           <a className="topnav__link" href="#integrations">Integrations</a>
           <a className="topnav__link" href="#compare">Compare</a>
-          <a className="topnav__link" href="#docs">Docs</a>
+          <a className="topnav__link" href="/docs">Docs</a>
         </nav>
         <div className="topnav__right">
-          <a className="topnav__link" href="#signin">Sign in</a>
+          <a className="topnav__link" href="/dashboard">Sign in</a>
           <a className="btn btn--brand" href="#install">Get started →</a>
         </div>
       </div>
@@ -70,7 +70,7 @@ function Hero() {
           </p>
           <div className="hero__ctas" id="install">
             <NpmInstall size="lg" />
-            <a className="btn btn--ghost btn--lg" href="#docs">Read docs ↗</a>
+            <a className="btn btn--ghost btn--lg" href="/docs">Read docs ↗</a>
           </div>
           <div className="hero__signal">
             <div>
@@ -185,31 +185,6 @@ function LiveDemoSection() {
               <span><span className="demo__legend-dot demo__legend-dot--brand"></span>With Clude</span>
             </div>
           </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function BackedBy() {
-  const logos = [
-    { name: "Solana", glyph: "◈" },
-    { name: "MCP", glyph: "▦" },
-    { name: "Stanford NLP", glyph: "◉" },
-    { name: "Letta Labs", glyph: "◇" },
-    { name: "Primer", glyph: "◎" },
-  ];
-  return (
-    <section className="backed">
-      <div className="container backed__inner">
-        <span className="backed__label">Backed by</span>
-        <div className="backed__logos">
-          {logos.map(l => (
-            <span className="backed__logo" key={l.name}>
-              <span style={{fontSize:18, color:"var(--fg-1)"}}>{l.glyph}</span>
-              <span>{l.name}</span>
-            </span>
-          ))}
         </div>
       </div>
     </section>
@@ -370,8 +345,8 @@ function ChatProductSection() {
               </div>
             </div>
             <div style={{marginTop:18, display:"flex", gap:10, flexWrap:"wrap", alignItems:"center"}}>
-              <a className="btn btn--brand" href="#chat-app">Open Clude Chat ↗</a>
-              <a className="btn btn--ghost" href="#ios">iOS · Android · Web</a>
+              <a className="btn btn--brand" href="/chat/v2">Open Clude Chat ↗</a>
+              <a className="btn btn--ghost" href="/chat/v2">iOS · Android · Web</a>
             </div>
           </div>
           <div className="bigfeature__art" style={{padding:"36px 28px", overflow:"visible"}}>
@@ -587,8 +562,8 @@ function CTASection() {
           <NpmInstall size="lg" />
         </div>
         <div className="cta__ctas">
-          <a className="btn btn--primary btn--lg" href="#docs">Read the SDK docs →</a>
-          <a className="btn btn--ghost btn--lg" href="#chat-app">Open Clude Chat</a>
+          <a className="btn btn--primary btn--lg" href="/docs">Read the SDK docs →</a>
+          <a className="btn btn--ghost btn--lg" href="/chat/v2">Open Clude Chat</a>
         </div>
       </div>
     </section>
@@ -613,28 +588,28 @@ function Footer() {
           <div className="footer__col">
             <h4>Product</h4>
             <ul>
-              <li><a href="#">SDK</a></li>
-              <li><a href="#">Dashboard</a></li>
-              <li><a href="#">MCP server</a></li>
-              <li><a href="#">Memory packs</a></li>
+              <li><a href="/docs">SDK</a></li>
+              <li><a href="/dashboard">Dashboard</a></li>
+              <li><a href="/chat/v2">Chat</a></li>
+              <li><a href="/docs#mcp">MCP server</a></li>
             </ul>
           </div>
           <div className="footer__col">
             <h4>Resources</h4>
             <ul>
-              <li><a href="#">Docs</a></li>
-              <li><a href="#">HaluMem benchmark</a></li>
-              <li><a href="#">Blog</a></li>
-              <li><a href="#">GitHub ↗</a></li>
+              <li><a href="/docs">Docs</a></li>
+              <li><a href="/benchmark">HaluMem benchmark</a></li>
+              <li><a href="/install">Install</a></li>
+              <li><a href="https://github.com/sebbsssss/clude" target="_blank" rel="noopener">GitHub ↗</a></li>
             </ul>
           </div>
           <div className="footer__col">
             <h4>Company</h4>
             <ul>
-              <li><a href="#">About</a></li>
-              <li><a href="#">Contact</a></li>
-              <li><a href="#">X / @Cludebot</a></li>
-              <li><a href="#">LinkedIn</a></li>
+              <li><a href="/privacy">Privacy</a></li>
+              <li><a href="https://x.com/Cludebot" target="_blank" rel="noopener">X / @Cludebot</a></li>
+              <li><a href="https://arxiv.org/abs/2304.03442" target="_blank" rel="noopener">Paper ↗</a></li>
+              <li><a href="https://github.com/sebbsssss/clude" target="_blank" rel="noopener">GitHub</a></li>
             </ul>
           </div>
         </div>
@@ -656,7 +631,6 @@ function App() {
     <div className="page">
       <TopNav />
       <Hero />
-      <BackedBy />
       <LiveDemoSection />
       <FeatureSection />
       <ChatProductSection />
