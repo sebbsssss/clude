@@ -51,13 +51,19 @@ export function WikiTab({ article, backlinks, recentEdits, contradictions, loadi
     return <DemoArticleBody />;
   }
 
+  // True empty state — only fires when even the pack template fallback is
+  // unavailable (topic isn't in any pack manifest). Pack-defined topics
+  // render their templated scaffolding via the section loop below instead.
   if (article.sections.length === 0 && !loading) {
     return (
       <div className="wk-wiki">
         <div className="wk-article">
+          <ArticleHero article={article} />
           <div className="wk-empty" style={{ padding: 24 }}>
-            No memories indexed under <strong>{article.title}</strong> yet.
-            Add a memory tagged <code>{article.id}</code> or run a recall cycle to populate this article.
+            No memories indexed under <strong>{article.title}</strong> yet,
+            and this topic isn't backed by a memory pack with section templates.
+            Add a memory tagged <code>{article.id}</code> or install a pack to
+            scaffold this article.
           </div>
         </div>
         <RightRail
@@ -226,7 +232,38 @@ function ProseBlockRenderer({
   if (block.kind === 'code') {
     return <pre className="wk-code"><code>{block.text}</code></pre>;
   }
+  if (block.kind === 'placeholder') {
+    return <SectionPlaceholder kind={block.sectionKind} hintKeywords={block.hintKeywords} />;
+  }
   return null;
+}
+
+const PLACEHOLDER_COPY: Record<SectionKind, string> = {
+  overview:  'Nothing tracked here yet.',
+  highlight: 'No patterns surfaced yet.',
+  concern:   'No issues flagged yet.',
+  question:  'No open questions raised yet.',
+  action:    'No items added yet.',
+  decision:  'No decisions logged yet.',
+};
+
+function SectionPlaceholder({ kind, hintKeywords }: { kind: SectionKind; hintKeywords?: string[] }) {
+  return (
+    <div className="wk-placeholder">
+      <div className="wk-placeholder__title">{PLACEHOLDER_COPY[kind]}</div>
+      <div className="wk-placeholder__sub">
+        Your agent will populate this as it captures relevant memories.
+      </div>
+      {hintKeywords && hintKeywords.length > 0 && (
+        <div className="wk-placeholder__hints">
+          <span className="wk-placeholder__hints-label">Auto-tagged on:</span>
+          {hintKeywords.map((kw) => (
+            <span key={kw} className="wk-placeholder__chip">{kw}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // Inline formatting: **bold**, *italic*, `code`, [[topic-id|label]] wikilinks.

@@ -8,6 +8,7 @@ import {
 } from './wiki-data';
 import { prettySource, relativeTime, type ContradictionPair, type GraphMemoryNode } from './use-wiki-data';
 import { getCuratedArticle, findCuratedBacklinks } from './showcase-articles';
+import { packForTopic } from './wiki-packs';
 
 export type ProseBlock =
   | { kind: 'p'; text: string }
@@ -15,7 +16,11 @@ export type ProseBlock =
   | { kind: 'contradiction' }
   | { kind: 'callout'; tone: 'question' | 'note'; text: string }
   | { kind: 'list'; items: string[] }
-  | { kind: 'code'; lang?: string; text: string };
+  | { kind: 'code'; lang?: string; text: string }
+  // Empty-state placeholder: rendered when a section template has no
+  // memories yet. Carries a hint about what kind of content lands here
+  // and which keywords trigger auto-categorisation.
+  | { kind: 'placeholder'; sectionKind: SectionKind; hintKeywords?: string[] };
 
 // Section visual kind. Drives the left-edge accent + glyph + tint so the eye
 // can scan an article and immediately spot what's working / what isn't /
@@ -107,6 +112,7 @@ export function useTopicArticle(
 
   const article = buildArticle(topic, merged);
   applyCuratedSections(article, topic, merged);
+  applyTemplateSections(article, topic);
   const curatedBacklinks = curatedBacklinksFor(topic, allTopics);
   const backlinks = curatedBacklinks.length > 0
     ? curatedBacklinks
@@ -153,6 +159,37 @@ function memoriesReferencedBy(prose: ProseBlock[], memories: Memory[]): Memory[]
   const hashes = new Set<string>();
   for (const b of prose) if (b.kind === 'reframe') hashes.add(b.memoryHash);
   return memories.filter((m) => m.hash_id && hashes.has(m.hash_id));
+}
+
+// When a topic comes from a pack with `sectionTemplates` and the article
+// has no sections yet (no curated body, no memories indexed), render the
+// pack's intended structure as empty scaffolding. Each templated section
+// gets a single `placeholder` ProseBlock that hints at what'll land here
+// + which keywords trigger auto-categorisation. Lets installed-but-unused
+// packs feel like real workspaces, not blank pages.
+function applyTemplateSections(article: TopicArticle, topic: Topic): void {
+  if (article.sections.length > 0) return;
+
+  const pack = packForTopic(topic.id);
+  if (!pack) return;
+
+  const packTopic = pack.topics.find((t) => t.id === topic.id);
+  const templates = packTopic?.sectionTemplates ?? [];
+  if (templates.length === 0) return;
+
+  const rule = pack.rules.find((r) => r.topicId === topic.id);
+  const hintKeywords = rule?.keywords?.slice(0, 4);
+
+  article.sections = templates.map((tpl) => {
+    const sectionKind = (tpl.kind as TopicArticle['sections'][number]['kind']) ?? 'overview';
+    return {
+      id: tpl.id,
+      title: tpl.title,
+      kind: sectionKind,
+      memories: [],
+      prose: [{ kind: 'placeholder', sectionKind: sectionKind!, hintKeywords }],
+    };
+  });
 }
 
 // ─────────── Contradictions per topic ───────────

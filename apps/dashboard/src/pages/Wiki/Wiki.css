@@ -1274,6 +1274,55 @@ html.dark .wk-app {
 }
 .wk-wikilink:hover { background: var(--brand-tint); border-bottom-style: solid; }
 
+/* ─── Section placeholder (templated empty state) ─── */
+.wk-placeholder {
+  margin: 8px 0 18px;
+  padding: 16px 18px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg-2);
+}
+.wk-placeholder__title {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-1);
+  margin-bottom: 4px;
+}
+.wk-placeholder__sub {
+  font-family: Georgia, serif;
+  font-style: italic;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fg-3);
+  margin-bottom: 12px;
+}
+.wk-placeholder__hints {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.wk-placeholder__hints-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--fg-3);
+  margin-right: 2px;
+}
+.wk-placeholder__chip {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  color: var(--fg-2);
+  background: var(--bg-2);
+}
+
 /* ─── Section count chip ─── */
 .wk-section-count {
   font-family: var(--mono);
