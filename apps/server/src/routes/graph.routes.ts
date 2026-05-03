@@ -34,7 +34,7 @@ export function graphRoutes(): Router {
         : undefined;
       const minMentions = parseInt(req.query.minMentions as string) || 1;
       const includeMemories = req.query.includeMemories === 'true';
-      const limit = Math.min(parseInt(req.query.limit as string) || 100, 500);
+      const limit = Math.min(parseInt(req.query.limit as string) || 100, 2000);
 
       const graph = await getKnowledgeGraph({
         entityTypes,

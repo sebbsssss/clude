@@ -183,6 +183,7 @@ class CludeAPI {
   async getKnowledgeGraph(opts?: {
     includeMemories?: boolean;
     minMentions?: number;
+    limit?: number;
   }): Promise<KnowledgeGraph> {
     if (this.mode === 'cortex') {
       return { nodes: [], edges: [] };
@@ -190,6 +191,7 @@ class CludeAPI {
     const params = new URLSearchParams();
     if (opts?.includeMemories) params.set('includeMemories', 'true');
     if (opts?.minMentions) params.set('minMentions', String(opts.minMentions));
+    if (opts?.limit) params.set('limit', String(opts.limit));
     return this.fetch(this.appendWallet(`/api/graph?${params}`));
   }
 
