@@ -1,8 +1,11 @@
+import { useState } from 'react';
 import type { Memory } from '../../types/memory';
 import type { Topic } from './wiki-data';
 import type { CuratedArticle } from './showcase-articles';
 import type { ContradictionPair } from './use-wiki-data';
 import { prettySource, relativeTime } from './use-wiki-data';
+import { SharePopover } from './SharePopover';
+import { SHOWCASE_PERSISTENCE } from './showcase-data';
 
 // "Across everything" — the wiki's home page. Reads as a Sunday-morning
 // briefing: what changed this week, what's open, what was decided. Pulls
@@ -16,7 +19,22 @@ interface SummaryViewProps {
 }
 
 export function SummaryView({ topics, memories, articles, contradictions, onTopic }: SummaryViewProps) {
+  const [shareOpen, setShareOpen] = useState(false);
   const topicLookup = new Map(topics.map((t) => [t.id, t]));
+
+  // Aggregate persistence: longest-running topic + total conversations.
+  const persistence = topics.reduce(
+    (acc, t) => {
+      const p = SHOWCASE_PERSISTENCE[t.id];
+      if (!p) return acc;
+      return {
+        maxDays: Math.max(acc.maxDays, p.days),
+        totalConversations: acc.totalConversations + p.conversations,
+        sources: new Set([...acc.sources, ...p.sources]),
+      };
+    },
+    { maxDays: 0, totalConversations: 0, sources: new Set<string>() },
+  );
 
   // Sort memories by recency for the headlines feed.
   const recent = [...memories]
@@ -50,10 +68,29 @@ export function SummaryView({ topics, memories, articles, contradictions, onTopi
       >
         <span className="wk-hero__bar" aria-hidden />
         <div className="wk-hero__inner">
-          <h1 className="wk-hero__title">Across everything</h1>
+          <div className="wk-hero__top">
+            <h1 className="wk-hero__title">Across everything</h1>
+            <div className="wk-hero__actions">
+              <button
+                className="wk-hero__action wk-hero__action--primary"
+                onClick={() => setShareOpen((v) => !v)}
+                aria-expanded={shareOpen}
+              >
+                <span aria-hidden>↗</span>
+                Share workspace
+              </button>
+              {shareOpen && (
+                <SharePopover
+                  topicId="workspace"
+                  topicName="My work wiki"
+                  onClose={() => setShareOpen(false)}
+                />
+              )}
+            </div>
+          </div>
           <p className="wk-hero__lede">
-            A weekly briefing on what your memory has been collecting — what changed,
-            what's open, what you decided. Click any item to jump into the full topic.
+            A weekly briefing on what your memory has been collecting across every project —
+            what changed, what's open, what you decided. Share with colleagues to bring them up to speed.
           </p>
           <div className="wk-hero__meta">
             <span><strong>{topics.length}</strong> topics</span>
@@ -62,6 +99,16 @@ export function SummaryView({ topics, memories, articles, contradictions, onTopi
             <span className="wk-hero__meta-sep">·</span>
             <span><strong>{needsAttention.length}</strong> needing attention</span>
           </div>
+          {persistence.maxDays > 0 && (
+            <div className="wk-hero__persistence">
+              <span className="wk-hero__persistence-dot" aria-hidden />
+              <span>
+                Your agent has been remembering across <strong>{persistence.maxDays}</strong> days
+                {' '}and <strong>{persistence.totalConversations}</strong> conversations
+                {' '}from {persistence.sources.size} different sources.
+              </span>
+            </div>
+          )}
         </div>
       </header>
 

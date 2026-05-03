@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { NeuralCanvas } from '../components/NeuralCanvas';
 import { ActivityFeed } from '../components/ActivityFeed';
+import { WikiSummaryCard } from '../components/WikiSummaryCard';
 import { useAgentContext } from '../context/AgentContext';
 import { useAuthContext } from '../hooks/AuthContext';
 import type { Memory, MemoryStats } from '../types/memory';
@@ -452,6 +453,9 @@ export function Dashboard() {
           {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
         </span>
       </div>
+
+      {/* ── Brain Wiki Summary Card — bridges into the human-readable surface ── */}
+      <WikiSummaryCard />
 
       {/* ── Bento Grid ── */}
       <div className="bento-grid" style={{

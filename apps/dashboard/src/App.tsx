@@ -15,6 +15,7 @@ import { FileMemory } from './pages/file-memory';
 import { Explore } from './pages/explore';
 import { Wiki } from './pages/Wiki/Wiki';
 import LiveGraph from './pages/showcase/LiveGraph';
+import DashboardPreview from './pages/showcase/DashboardPreview';
 
 function AuthenticatedApp() {
   return (
@@ -50,6 +51,7 @@ export default function App() {
       <Routes>
         <Route path="/showcase/graph" element={<LiveGraph />} />
         <Route path="/showcase/wiki" element={<Wiki showcase />} />
+        <Route path="/showcase/dashboard" element={<DashboardPreview />} />
         <Route path="/showcase/*" element={<Navigate to="/showcase/graph" replace />} />
       </Routes>
     );

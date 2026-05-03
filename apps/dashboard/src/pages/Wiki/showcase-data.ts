@@ -1,6 +1,6 @@
-// Rich curated dataset for /showcase/wiki — frames the page as a non-technical
-// user's personal memory wiki. Topics are life domains; memories are
-// conversations, observations, decisions captured by the agent across weeks.
+// Work-focused dataset for /showcase/wiki. Memories spread across weeks of
+// conversations to make the persistence story tangible — the agent has been
+// remembering this stuff since well before today.
 
 import type { Memory } from '../../types/memory';
 import type { ContradictionPair, GraphMemoryNode } from './use-wiki-data';
@@ -17,91 +17,98 @@ interface SeedRow {
 }
 
 const SEED: SeedRow[] = [
-  // ── sleep ──
-  { topic: 'sleep', source: 'morning chat', type: 'episodic', importance: 0.85, minutesAgo: 180,
-    content: "slept terribly. went to bed at 1am after scrolling. woke up four times. need to actually do the no-phone-after-10 thing for real this week.",
-    summary: "Bad night again — bed at 1am after phone scrolling, woke four times. The no-phone-after-10 rule keeps slipping; committing again for this week." },
-  { topic: 'sleep', source: 'evening note', type: 'semantic', importance: 0.78, minutesAgo: 1440,
-    content: "the week i actually kept the 10pm phone cutoff i felt totally different by friday. sharper at work, less anxious. it's not subtle.",
-    summary: "When the 10pm phone cutoff is actually held, the difference by Friday is dramatic — sharper, less anxious. This is the single biggest sleep lever." },
-  { topic: 'sleep', source: 'morning chat', type: 'episodic', importance: 0.62, minutesAgo: 4320,
-    content: "tried magnesium glycinate before bed. fell asleep faster but woke up groggy. not sure it's worth it." },
-  { topic: 'sleep', source: 'morning chat', type: 'semantic', importance: 0.71, minutesAgo: 10080,
-    content: "consistent bedtime matters more than total hours. 7 hours from 11→6 beats 8 hours from 1→9. body wants the rhythm.",
-    summary: "Consistent bedtime beats total hours — 7h from 11→6 feels better than 8h from 1→9. The rhythm is the lever, not the duration." },
+  // ── q3-roadmap ──
+  { topic: 'q3-roadmap', source: 'standup notes', type: 'semantic', importance: 0.94, minutesAgo: 60,
+    content: "team agreed: Q3 ships are auth migration, the new dashboard, and the export pipeline. brain-trust feature is cut. lina pushed back but the data isn't there.",
+    summary: "Q3 commits: auth migration, new dashboard, export pipeline. Brain-trust feature cut despite Lina's pushback — usage data didn't justify the build cost." },
+  { topic: 'q3-roadmap', source: 'planning doc', type: 'semantic', importance: 0.86, minutesAgo: 4320,
+    content: "the framing question for Q3 is 'what unblocks customer #1's renewal'. ranking by that filter changes the order — auth has to ship first because their security review is in week 3.",
+    summary: "Q3 priority filter: 'what unblocks the top customer's renewal'. Auth ships first because their security review is in week 3 — non-negotiable date." },
+  { topic: 'q3-roadmap', source: '1:1 with maya', type: 'episodic', importance: 0.78, minutesAgo: 7200,
+    content: "maya wants to take on the export pipeline. she has more context than anyone else after the spike last quarter. assign it to her formally next week.",
+    summary: "Decision: assign export pipeline to Maya — she has the most context from last quarter's spike. Make it formal in next week's planning." },
+  { topic: 'q3-roadmap', source: 'retro notes', type: 'semantic', importance: 0.62, minutesAgo: 28800,
+    content: "what we missed in Q2: didn't budget time for migrations, again. third quarter in a row. need to actually pad the estimates this time.", compacted: true },
 
-  // ── sarahs-wedding ──
-  { topic: 'sarahs-wedding', source: 'sarah text', type: 'episodic', importance: 0.92, minutesAgo: 30,
-    content: "sarah confirmed pat is coming. need to RSVP +1 by friday. she also asked if we want the chicken or the fish.",
-    summary: "Pat is confirmed for Sarah's wedding — RSVP +1 by Friday, plus pick chicken or fish for the meal." },
-  { topic: 'sarahs-wedding', source: 'planning notes', type: 'procedural', importance: 0.81, minutesAgo: 720,
-    content: "wedding is may 24 in healdsburg. driving up friday morning. need to book hotel — sarah said the inn at the river is where the bridal party is staying but the wine country inn is half the price.",
-    summary: "May 24, Healdsburg. Driving up Friday morning. Two hotel options: the Inn at the River (with the bridal party, pricier) or Wine Country Inn (half the price). Decision pending." },
-  { topic: 'sarahs-wedding', source: 'evening note', type: 'episodic', importance: 0.74, minutesAgo: 3000,
-    content: "gift idea: that ceramic platter from heath we kept talking about. sarah and ben had registered for plates but not for serveware. 200ish, well within budget.",
-    summary: "Gift decided: the Heath ceramic platter we'd talked about — registry has plates but no serveware, ~$200, within budget." },
-  { topic: 'sarahs-wedding', source: 'morning chat', type: 'episodic', importance: 0.55, minutesAgo: 8640,
-    content: "should i wear the navy suit or the lighter linen one. it's outdoors in may, healdsburg gets hot." },
+  // ── auth-migration ──
+  { topic: 'auth-migration', source: 'incident slack', type: 'episodic', importance: 0.97, minutesAgo: 35,
+    content: "auth rollout broke at 2:14am. session-cookie fallback wasn't preserving the org_id claim. rolled back in 11 min. ari has the postmortem.",
+    summary: "Auth rollout failed at 2:14am — fallback path didn't preserve org_id. 11-minute rollback. Ari owns the postmortem; full RCA by Thursday." },
+  { topic: 'auth-migration', source: 'design doc', type: 'procedural', importance: 0.88, minutesAgo: 2880,
+    content: "decision: dual-stack JWT + session cookies for 2 weeks, then cookie removal. the cutover gate is 'jwt error rate under 0.05% for 72 hours straight'.",
+    summary: "Migration plan: dual-stack JWT + session cookies for 2 weeks, then cookie removal. Cutover gate is JWT error rate under 0.05% for 72h straight." },
+  { topic: 'auth-migration', source: 'code review', type: 'semantic', importance: 0.74, minutesAgo: 5760,
+    content: "the refresh token flow needs to clamp the renewal window so a stale token can't extend itself indefinitely. saw this in two existing PRs that need to be revisited.",
+    summary: "Refresh token renewal window must be clamped — otherwise stale tokens self-extend. Found this issue in two existing PRs that need revisiting." },
+  { topic: 'auth-migration', source: 'design doc', type: 'episodic', importance: 0.51, minutesAgo: 14400,
+    content: "looked at how stripe handles their auth migration. they ran a 5-week parallel period. we're doing 2. that's tight but their scale is different.", compacted: true },
 
-  // ── apartment-search ──
-  { topic: 'apartment-search', source: 'evening note', type: 'episodic', importance: 0.88, minutesAgo: 240,
-    content: "saw the bernal heights one. great light, terrible kitchen. landlord seems flaky — took 4 days to respond. probably a no but i'm sleeping on it.",
-    summary: "Bernal Heights apartment: great light, terrible kitchen, slow-responding landlord. Leaning no but sleeping on it before deciding." },
-  { topic: 'apartment-search', source: 'planning notes', type: 'semantic', importance: 0.83, minutesAgo: 1080,
-    content: "non-negotiables i keep coming back to: natural light (south or west exposure), in-unit washer dryer, walkable to a coffee shop. ceiling height is nice-to-have but not a deal breaker. parking doesn't matter.",
-    summary: "Non-negotiables: natural light (S or W exposure), in-unit W/D, walkable coffee. Nice-to-have: ceiling height. Doesn't matter: parking." },
-  { topic: 'apartment-search', source: 'morning chat', type: 'episodic', importance: 0.65, minutesAgo: 5040,
-    content: "the noe valley one rented before i even saw it. that's the third time. need to be more aggressive about scheduling viewings same-day." },
-  { topic: 'apartment-search', source: 'evening note', type: 'episodic', importance: 0.51, minutesAgo: 14400, compacted: true,
-    content: "checked craigslist. mostly junk. zillow has been better." },
+  // ── customer-research ──
+  { topic: 'customer-research', source: 'customer call', type: 'semantic', importance: 0.91, minutesAgo: 240,
+    content: "5th customer asking about audit logs in 3 weeks. they keep framing it as 'we can't deploy without SOC2 evidence.' this is the buy-blocker for enterprise.",
+    summary: "Audit logs = the recurring enterprise buy-blocker. 5 customers in 3 weeks framed it as 'no SOC2 evidence, no deployment.' Needs roadmap action." },
+  { topic: 'customer-research', source: 'customer call', type: 'semantic', importance: 0.83, minutesAgo: 1440,
+    content: "noticed: nobody asks about the brain-trust feature anymore. used to be the top question 6 months ago. either we explained it well or it stopped mattering. probably the latter.",
+    summary: "Brain-trust feature: zero questions in 6 months. Was the top ask before. Strong signal that the feature stopped mattering — supports the Q3 cut decision." },
+  { topic: 'customer-research', source: 'email thread', type: 'semantic', importance: 0.79, minutesAgo: 5760,
+    content: "across the last 14 calls: 11 mentioned 'compliance' unprompted; 9 mentioned 'team workspace'; 3 asked about pricing. the order of priority is clearer than i expected.",
+    summary: "Last 14 calls: compliance (11 mentions, unprompted) → team workspace (9) → pricing (3). Customers care about the first two; pricing isn't the friction we thought." },
+  { topic: 'customer-research', source: '1:1 with anya', type: 'episodic', importance: 0.66, minutesAgo: 11520,
+    content: "anya pointed out we keep mishearing 'i want X' as 'X is the most important thing'. customers say 'I want audit logs' but mean 'I want to feel safe deploying.' the underlying need matters more.",
+    summary: "Anya's insight: customers say 'I want X' but mean 'I want to feel Y'. We keep treating literal asks as priorities — should map to underlying needs first." },
 
-  // ── cooking ──
-  { topic: 'cooking', source: 'evening note', type: 'episodic', importance: 0.79, minutesAgo: 360,
-    content: "made the za'atar chicken thighs again. third time. it's officially in the rotation. crispy skin trick: pat dry, salt 30 min before, hot cast iron.",
-    summary: "Za'atar chicken thighs — third time making them, officially in the rotation. Crispy skin requires: pat dry → salt 30 min ahead → hot cast iron." },
-  { topic: 'cooking', source: 'morning chat', type: 'procedural', importance: 0.72, minutesAgo: 2880,
-    content: "meal prep that actually worked: cook one big protein on sunday (chicken or pork shoulder), one grain (farro or rice), three veg. mix and match through the week.",
-    summary: "Sunday meal prep formula: one big protein + one grain + three vegetables, mixed and matched through the week. The only version that's actually stuck." },
-  { topic: 'cooking', source: 'evening note', type: 'episodic', importance: 0.58, minutesAgo: 7200,
-    content: "tried the sourdough thing. four loaves in. starting to look like bread. starter is named gerald." },
+  // ── pricing-model ──
+  { topic: 'pricing-model', source: 'planning meeting', type: 'episodic', importance: 0.92, minutesAgo: 90,
+    content: "anya wants per-seat pricing. predictable for finance, easy to reason about. seb still wants per-token. these are different pricing models entirely.",
+    summary: "Active conflict: Anya wants per-seat pricing (predictable, easy for finance); Seb wants per-token (aligned with usage). Decision needed before Friday." },
+  { topic: 'pricing-model', source: 'design doc', type: 'semantic', importance: 0.81, minutesAgo: 720,
+    content: "per-token usage. charge for inference, not seats. seats discourage adoption — every team adds 'just the people who really need it' which is the opposite of what we want.",
+    summary: "Per-token argument: charge for inference, not seats. Seat-based pricing limits team adoption (people opt out to save cost) — opposite of growth we want." },
+  { topic: 'pricing-model', source: 'investor email', type: 'semantic', importance: 0.74, minutesAgo: 4320,
+    content: "investor pushback on hybrid pricing: 'pick one. you can change later but ship one model first or you'll spend a quarter explaining yourself instead of selling.'",
+    summary: "Investor advice: pick ONE pricing model and ship it. Hybrid forces you to spend a quarter explaining yourself instead of selling. Change later if needed." },
 
-  // ── reading ──
-  { topic: 'reading', source: 'morning chat', type: 'semantic', importance: 0.84, minutesAgo: 480,
-    content: "finished 'the death of ivan ilyich.' completely flattened me. the line about 'we are all dying, but we don't believe it' is going to live in my head for years.",
-    summary: "Finished Ivan Ilyich — devastating in the best way. The line 'we are all dying, but we don't believe it' will stay with me." },
-  { topic: 'reading', source: 'evening note', type: 'semantic', importance: 0.69, minutesAgo: 4320,
-    content: "halfway through 'the master and his emissary.' iain mcgilchrist. left vs right brain hemispheres but it's actually about how western civilization went wrong. dense but worth it.",
-    summary: "Reading McGilchrist's 'The Master and His Emissary' — left/right hemisphere thesis but really an argument about Western civilization's wrong turn. Dense, but worth the slog." },
-  { topic: 'reading', source: 'evening note', type: 'episodic', importance: 0.46, minutesAgo: 20160,
-    content: "didn't finish 'piranesi.' couldn't get into it despite everyone saying it's a masterpiece. moving on." },
+  // ── demo-day-prep ──
+  { topic: 'demo-day-prep', source: 'rehearsal notes', type: 'episodic', importance: 0.89, minutesAgo: 180,
+    content: "ran the full demo. the persistence reveal lands every time. when the agent recalls something from 'last week' the room goes quiet. that's the moment to lean on.",
+    summary: "Demo strongest moment: the persistence reveal — when the agent recalls something from 'last week,' the room goes quiet. Lean on this; build the demo around it." },
+  { topic: 'demo-day-prep', source: 'rehearsal notes', type: 'episodic', importance: 0.81, minutesAgo: 720,
+    content: "the entity graph slide doesn't work. people glaze. cut it from the live demo, save it for a follow-up deck if asked.",
+    summary: "Cut the entity-graph slide from the live demo — audience glazes. Keep it as follow-up material for technical questions." },
+  { topic: 'demo-day-prep', source: 'team chat', type: 'procedural', importance: 0.72, minutesAgo: 4320,
+    content: "demo checklist: load test data on day-of, switch to demo agent, check screen mirroring, have the backup video ready, water on the podium.",
+    summary: "Demo-day checklist: load test data day-of → switch to demo agent → screen mirroring check → backup video ready → water on the podium." },
 
-  // ── moms-surgery ──
-  { topic: 'moms-surgery', source: 'sister call', type: 'episodic', importance: 0.96, minutesAgo: 90,
-    content: "mom's surgery is may 18. dr chen at UCSF. my sister is taking the first three days. i'm covering days 4-7. need to book the flight tonight.",
-    summary: "Mom's surgery is May 18 with Dr Chen at UCSF. Sister covers days 1–3, I cover days 4–7. Flight needs to be booked tonight." },
-  { topic: 'moms-surgery', source: 'evening note', type: 'episodic', importance: 0.87, minutesAgo: 1440,
-    content: "talked to mom. she's scared but pretending not to be. just listened mostly. she said the thing she's most worried about is being a burden after, which broke my heart a little.",
-    summary: "Mom's main worry is being 'a burden' after surgery — not the surgery itself. Be ready to push back on that gently in the recovery week." },
-  { topic: 'moms-surgery', source: 'planning notes', type: 'procedural', importance: 0.79, minutesAgo: 4320,
-    content: "things to organize before going: groceries delivered to her place, ride from the airport, work let know i'm OOO, phone charger for the hospital, the soft pillow she likes.",
-    summary: "Pre-departure checklist: groceries delivered to mom's, airport ride sorted, work OOO notice, phone charger, the soft pillow she likes." },
+  // ── hiring ──
+  { topic: 'hiring', source: '1:1 with priya', type: 'episodic', importance: 0.86, minutesAgo: 360,
+    content: "phone screen with james (sr backend). strong signals on systems thinking. pushed back hard on one of our design choices in a way that made us reconsider. moving to onsite.",
+    summary: "James (sr backend) advancing to onsite — strong systems thinker, pushed back on a design choice in a way that made the team reconsider. Good signal." },
+  { topic: 'hiring', source: 'team chat', type: 'semantic', importance: 0.77, minutesAgo: 2880,
+    content: "pattern across 6 candidates this quarter: the ones who close ask about 'what's hard right now' on the first call. the ones who ghost ask about benefits.",
+    summary: "Hiring pattern (6 candidates): ones who close ask 'what's hard right now' on call #1. Ones who ghost ask about benefits. Use as an early signal." },
+  { topic: 'hiring', source: 'planning doc', type: 'episodic', importance: 0.55, minutesAgo: 14400,
+    content: "rejected sara after onsite. great résumé but the system design round was rough. team aligned on the call.", compacted: true },
 
-  // ── career ──
-  { topic: 'career', source: 'evening note', type: 'semantic', importance: 0.86, minutesAgo: 540,
-    content: "the longer i think about it, the more i don't want to be a manager. i like building. the path everyone keeps pushing me toward is exactly the one i don't want.",
-    summary: "Recurring thought: I don't want to be a manager. I want to keep building. The default path everyone assumes I'm on isn't the one I want." },
-  { topic: 'career', source: 'morning chat', type: 'episodic', importance: 0.72, minutesAgo: 3600,
-    content: "lunch with maya. she made the staff engineer transition without going into management. her take: it requires being LOUD about what you're doing. write more, present more, claim scope.",
-    summary: "Maya's advice on the staff-without-management path: be LOUD about your work — write, present, claim scope. The work alone isn't visible enough." },
-  { topic: 'career', source: 'evening note', type: 'episodic', importance: 0.58, minutesAgo: 14400,
-    content: "felt great after that talk i gave at the team offsite. that's the kind of work i want more of. why do i not do more of it." },
+  // ── team-process ──
+  { topic: 'team-process', source: 'retro notes', type: 'self_model', importance: 0.84, minutesAgo: 480,
+    content: "we keep saying 'we should do shorter standups' and not doing it. third retro in a row that mentioned this. it's not a discipline problem at this point, it's a structural one.",
+    summary: "'Shorter standups' has surfaced in 3 consecutive retros without action. This isn't a discipline problem; it's structural. Need a different intervention." },
+  { topic: 'team-process', source: 'retro notes', type: 'semantic', importance: 0.71, minutesAgo: 2880,
+    content: "noticed: the team ships best when there's exactly one person clearly accountable. when ownership is ambiguous, things drift for 2-3 weeks before someone steps in.",
+    summary: "Pattern: team ships best with exactly one clearly accountable owner per project. Ambiguous ownership → 2-3 week drift before recovery. Default to single owner." },
+  { topic: 'team-process', source: '1:1 with anya', type: 'episodic', importance: 0.62, minutesAgo: 7200,
+    content: "anya raised the deep work problem again. afternoons are getting eaten by sync. tried 'no meetings tuesday' last quarter and it survived 3 weeks." },
 
-  // ── money ──
-  { topic: 'money', source: 'planning notes', type: 'semantic', importance: 0.81, minutesAgo: 720,
-    content: "decided: 20% of every paycheck to index funds, automatic on the 1st. 10% to the apartment-down-payment savings. rest to checking. stop overthinking the asset allocation.",
-    summary: "Auto-allocation set: 20% paycheck → index funds (on the 1st), 10% → apartment fund, rest → checking. Stop overthinking allocations — consistency beats optimization." },
-  { topic: 'money', source: 'morning chat', type: 'episodic', importance: 0.67, minutesAgo: 4320,
-    content: "the new mac was $3400. that's 4 months of apartment savings. it was the right call for work but i should sit with that number for a minute." },
+  // ── design-decisions ──
+  { topic: 'design-decisions', source: 'design doc', type: 'semantic', importance: 0.88, minutesAgo: 540,
+    content: "API decision: every list endpoint returns paginated by default with cursor-based pagination. NOT offset. learned this the hard way last year — offset breaks under concurrent inserts.",
+    summary: "API rule: list endpoints use cursor-based pagination by default, never offset. Offset breaks under concurrent inserts (learned the hard way last year)." },
+  { topic: 'design-decisions', source: 'code review', type: 'semantic', importance: 0.79, minutesAgo: 2880,
+    content: "naming: we use 'memory' for the noun (the thing stored), 'recall' for the verb. NOT 'memorize'/'remember'. this is across the SDK, the API, and the docs. consistency matters.",
+    summary: "Naming convention (SDK + API + docs): 'memory' (noun) + 'recall' (verb). Avoid 'memorize'/'remember'. Consistency across surfaces is non-negotiable." },
+  { topic: 'design-decisions', source: 'design doc', type: 'semantic', importance: 0.71, minutesAgo: 8640,
+    content: "for any operation that can be expensive, we expose both a sync and async variant. the async returns a job id immediately, sync blocks. defaults to sync because most callers don't need otherwise.",
+    summary: "Expensive ops: expose both sync (default — most callers) and async (returns job id) variants. Decision codified after the export-pipeline timeout incident." },
 ];
 
 function memoryFrom(seed: SeedRow, idx: number): Memory {
@@ -134,12 +141,11 @@ function memoryFrom(seed: SeedRow, idx: number): Memory {
 
 export const SHOWCASE_MEMORIES: Memory[] = SEED.map(memoryFrom);
 
-// Curated contradiction: the apartment-search hotel choice surfaced an internal
-// disagreement between "stay with the bridal party" and "save half the cost."
-// Synthetic but uses two real seeded memories.
+// Curated contradiction: the pricing-model debate. Older = Anya per-seat,
+// Newer = Seb's per-token argument.
 export const SHOWCASE_CONTRADICTIONS: ContradictionPair[] = (() => {
-  const aIdx = SEED.findIndex((s) => s.topic === 'sleep' && s.minutesAgo === 4320);
-  const bIdx = SEED.findIndex((s) => s.topic === 'sleep' && s.minutesAgo === 1440);
+  const aIdx = SEED.findIndex((s) => s.topic === 'pricing-model' && s.minutesAgo === 90);
+  const bIdx = SEED.findIndex((s) => s.topic === 'pricing-model' && s.minutesAgo === 720);
   if (aIdx < 0 || bIdx < 0) return [];
   const a = SHOWCASE_MEMORIES[aIdx];
   const b = SHOWCASE_MEMORIES[bIdx];
@@ -153,10 +159,25 @@ export const SHOWCASE_CONTRADICTIONS: ContradictionPair[] = (() => {
     source: m.source,
     createdAt: m.created_at,
   });
-  return [{ a: toGraphNode(a), b: toGraphNode(b), strength: 0.78 }];
+  return [{ a: toGraphNode(a), b: toGraphNode(b), strength: 0.88 }];
 })();
 
 export const SHOWCASE_TOPIC_COUNTS: Record<string, number> = SEED.reduce((acc, s) => {
   acc[s.topic] = (acc[s.topic] ?? 0) + 1;
   return acc;
 }, {} as Record<string, number>);
+
+// Persistence stats per topic — derived from the seed's age range. Used by
+// ArticleHero to show "tracked for X days · Y conversations".
+export const SHOWCASE_PERSISTENCE: Record<string, { days: number; conversations: number; sources: Set<string> }> = (() => {
+  const out: Record<string, { days: number; conversations: number; sources: Set<string> }> = {};
+  for (const seed of SEED) {
+    const days = Math.max(1, Math.round(seed.minutesAgo / 60 / 24));
+    const cur = out[seed.topic] ?? { days: 0, conversations: 0, sources: new Set() };
+    cur.days = Math.max(cur.days, days);
+    cur.conversations += 1;
+    cur.sources.add(seed.source);
+    out[seed.topic] = cur;
+  }
+  return out;
+})();
