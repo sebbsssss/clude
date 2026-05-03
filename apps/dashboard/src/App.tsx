@@ -9,6 +9,7 @@ import { Timeline } from './pages/Timeline';
 import { EntityMap } from './pages/EntityMap';
 import { DecayHeatmap } from './pages/DecayHeatmap';
 import { MemoryPacks } from './pages/MemoryPacks';
+import { WikiPacks } from './pages/WikiPacks';
 import { Settings } from './pages/Settings';
 import { Setup } from './pages/Setup';
 import { FileMemory } from './pages/file-memory';
@@ -29,6 +30,7 @@ function AuthenticatedApp() {
           <Route path="/wiki" element={<Wiki />} />
           <Route path="/decay" element={<DecayHeatmap />} />
           <Route path="/packs" element={<MemoryPacks />} />
+          <Route path="/wiki-packs" element={<WikiPacks />} />
           <Route path="/file-memory" element={<FileMemory />} />
           <Route path="/explore" element={<Explore />} />
           <Route path="/setup" element={<Setup />} />
@@ -52,6 +54,16 @@ export default function App() {
         <Route path="/showcase/graph" element={<LiveGraph />} />
         <Route path="/showcase/wiki" element={<Wiki showcase />} />
         <Route path="/showcase/dashboard" element={<DashboardPreview />} />
+        <Route path="/showcase/packs" element={
+          <div style={{
+            minHeight: '100vh',
+            background: 'var(--bg)',
+            color: 'var(--text)',
+            padding: '40px',
+          }}>
+            <WikiPacks />
+          </div>
+        } />
         <Route path="/showcase/*" element={<Navigate to="/showcase/graph" replace />} />
       </Routes>
     );

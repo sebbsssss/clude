@@ -9,12 +9,13 @@ import styles from './Layout.module.css';
 
 const NAV_ITEMS = [
   { path: '/wiki', label: 'Brain Wiki', icon: '▥' },
+  { path: '/wiki-packs', label: 'Wiki Packs', icon: '▦' },
   { path: '/', label: 'Stats', icon: '◉' },
   { path: '/timeline', label: 'Timeline', icon: '▤' },
   { path: '/entities', label: 'Entities', icon: '◎' },
   { path: '/brain', label: 'Brain Map', icon: '◈' },
   { path: '/decay', label: 'Decay', icon: '◇' },
-  { path: '/packs', label: 'Memory Packs', icon: '▦' },
+  { path: '/packs', label: 'Memory Packs', icon: '▩' },
   { path: '/settings', label: 'Settings', icon: '⚙' },
 ];
 
