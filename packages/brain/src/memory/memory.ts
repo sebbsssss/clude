@@ -27,6 +27,7 @@ import type { MemoryLinkType } from '@clude/shared/utils/constants';
 import { generateImportanceScore } from '@clude/shared/core/claude-client';
 import { writeMemo, isRegistryEnabled, registerMemoryOnChain } from '@clude/shared/core/solana-client';
 import { generateEmbedding, generateQueryEmbedding, generateEmbeddings, isEmbeddingEnabled } from '@clude/shared/core/embeddings';
+import { autoCategorizeTags, DEFAULT_PACK_ID } from '@clude/shared/wiki-packs';
 import { getExperimentalConfig } from '../experimental/config';
 import { bm25SearchMemories } from '../experimental/bm25-search';
 import { generateOpenRouterResponse, isOpenRouterEnabled } from '@clude/shared/core/openrouter-client';
@@ -303,6 +304,61 @@ function isDuplicateWrite(source: string, summary: string): boolean {
   return false;
 }
 
+// ─────────── Installed wiki packs cache ───────────
+//
+// storeMemory() runs on every memory write. Querying wiki_pack_installations
+// every time would be wasteful — pack lists change rarely. Cache per wallet
+// for 60s. Workspace pack is implicit so a missing/empty cache still
+// triggers default-pack categorisation.
+
+interface InstalledPacksCacheEntry {
+  ids: string[];
+  expiresAt: number;
+}
+const installedPacksCache = new Map<string, InstalledPacksCacheEntry>();
+const INSTALLED_PACKS_TTL_MS = 60_000;
+
+async function getInstalledPackIdsCached(ownerWallet: string | null): Promise<string[]> {
+  const key = ownerWallet ?? '__no_owner__';
+  const now = Date.now();
+  const cached = installedPacksCache.get(key);
+  if (cached && cached.expiresAt > now) return cached.ids;
+
+  let ids: string[] = [DEFAULT_PACK_ID];
+  if (ownerWallet) {
+    try {
+      const db = getDb();
+      const { data, error } = await db
+        .from('wiki_pack_installations')
+        .select('pack_id')
+        .eq('owner_wallet', ownerWallet);
+      if (!error && data) {
+        const fromDb = data.map((r) => r.pack_id);
+        ids = Array.from(new Set([DEFAULT_PACK_ID, ...fromDb]));
+      }
+    } catch (err) {
+      log.debug({ err }, 'Failed to fetch installed packs (using default only)');
+    }
+  }
+
+  installedPacksCache.set(key, { ids, expiresAt: now + INSTALLED_PACKS_TTL_MS });
+
+  // Bound cache size — evict expired entries when we cross 200 wallets.
+  if (installedPacksCache.size > 200) {
+    for (const [k, v] of installedPacksCache) {
+      if (v.expiresAt <= now) installedPacksCache.delete(k);
+    }
+  }
+
+  return ids;
+}
+
+/** Test/admin helper: clear the installed-packs cache (e.g. after install/uninstall). */
+export function invalidateInstalledPacksCache(ownerWallet?: string): void {
+  if (ownerWallet) installedPacksCache.delete(ownerWallet);
+  else installedPacksCache.clear();
+}
+
 // ---- STORE ---- //
 
 export async function storeMemory(opts: StoreMemoryOptions): Promise<number | null> {
@@ -314,9 +370,22 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
   }
 
   const db = getDb();
+  const ownerWallet = getOwnerWallet();
 
   // Auto-classify concepts if not explicitly provided
   const concepts = opts.concepts || inferConcepts(opts.summary, opts.source, opts.tags || []);
+
+  // Auto-route memory to wiki-pack topics whose keyword rules match.
+  // Workspace pack runs implicitly; additional packs come from the
+  // owner's wiki_pack_installations row (cached briefly to avoid
+  // hammering the DB on every store).
+  const installedPackIds = await getInstalledPackIdsCached(ownerWallet);
+  const taggedTags = autoCategorizeTags({
+    content: opts.content,
+    summary: opts.summary,
+    existingTags: opts.tags || [],
+    installedPackIds,
+  });
 
   // Generate collision-resistant hash ID (Beads-inspired)
   const hashId = generateHashId();
@@ -334,7 +403,7 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
         memory_type: opts.type,
         content: storedContent,
         summary: opts.summary.slice(0, MEMORY_MAX_SUMMARY_LENGTH),
-        tags: opts.tags || [],
+        tags: taggedTags,
         concepts,
         emotional_valence: clamp(opts.emotionalValence ?? 0, -1, 1),
         importance: clamp(opts.importance ?? 0.5, 0, 1),
@@ -347,7 +416,7 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
         compacted: false,
         encrypted: shouldEncrypt,
         encryption_pubkey: shouldEncrypt ? getEncryptionPubkey() : null,
-        owner_wallet: getOwnerWallet() || null,
+        owner_wallet: ownerWallet || null,
       })
       .select('id, hash_id')
       .single();

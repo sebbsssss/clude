@@ -3,6 +3,7 @@ import { createChildLogger } from '@clude/shared/core/logger';
 import { getDb } from '@clude/shared/core/database';
 import { requirePrivyAuth } from '@clude/brain/auth/privy-auth';
 import { optionalOwnership } from '@clude/brain/auth/require-ownership';
+import { invalidateInstalledPacksCache } from '@clude/brain/memory';
 
 const log = createChildLogger('wiki-packs-routes');
 
@@ -80,6 +81,10 @@ export function wikiPacksRoutes(): Router {
         res.status(500).json({ error: 'Failed to install pack' });
         return;
       }
+      // Invalidate the per-wallet installed-packs cache in storeMemory so the
+      // new pack's keyword rules take effect on the very next memory write
+      // (otherwise we'd wait up to 60s for the TTL to expire).
+      invalidateInstalledPacksCache(owner);
       res.json({ packId, installed: true, timestamp: new Date().toISOString() });
     } catch (err) {
       log.error({ err }, 'Install pack error');
@@ -112,6 +117,7 @@ export function wikiPacksRoutes(): Router {
         res.status(500).json({ error: 'Failed to uninstall pack' });
         return;
       }
+      invalidateInstalledPacksCache(owner);
       res.json({ packId, installed: false, timestamp: new Date().toISOString() });
     } catch (err) {
       log.error({ err }, 'Uninstall pack error');

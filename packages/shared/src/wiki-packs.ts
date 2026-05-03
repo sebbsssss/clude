@@ -1,43 +1,42 @@
-// Memory-pack definitions for the Wiki. A pack is a structured bundle that
-// scaffolds a vertical: it declares topics, section templates, and the
-// auto-categorisation rules that route incoming memories into them.
-//
-// When a user installs a pack, the wiki gains those topics. New memories
-// matching the pack's `categorize` rules get tagged automatically; existing
-// memories can be retroactively categorised on install.
-//
-// ⚠ DUAL SOURCE OF TRUTH ⚠
-// The same manifest data lives in `packages/shared/src/wiki-packs.ts` so the
-// brain (server-side, called from storeMemory()) can run the auto-categoriser
-// without pulling browser-bundled code. Edit BOTH files when changing pack
-// content. The dashboard can't import from @clude/shared because that would
-// drag express/supabase/pino into the browser bundle.
+/**
+ * Memory pack manifests + auto-categorisation logic.
+ *
+ * Lives in @clude/shared so both the brain (server-side, called from
+ * storeMemory()) and the dashboard (client-side, for the topic rail)
+ * can read the same definitions.
+ *
+ * A pack is a structured bundle that scaffolds a vertical: it declares
+ * topics, section templates, and the keyword rules that route incoming
+ * memories into them at store time.
+ */
 
-import type { Topic, Cluster } from './wiki-data';
+export type PackCluster = 'architecture' | 'research' | 'product' | 'self';
 
 export interface PackTopicTemplate {
   id: string;
   name: string;
-  cluster: Cluster;
+  cluster: PackCluster;
   color: string;
   summary: string;
-  // Optional starter section structure that empty articles render with.
+  /** Optional starter section structure that empty articles render with. */
   sectionTemplates?: { id: string; title: string; kind?: string }[];
 }
 
 export interface CategorizationRule {
-  // Which topic to route into when this rule matches.
+  /** Topic id to tag the memory with when this rule matches. */
   topicId: string;
-  // Memory matches if any of these substrings appear in content/summary/tags.
-  // Case-insensitive. Empty array = no auto-categorisation for this topic.
+  /**
+   * Substrings searched (case-insensitive) in content + summary + tags.
+   * Empty array = pack defines this topic but doesn't auto-categorise.
+   */
   keywords: string[];
 }
 
-export interface MemoryPack {
+export interface MemoryPackManifest {
   id: string;
   name: string;
-  vendor: string;       // who shipped it — e.g. "Clude" or third-party
-  vertical: string;     // human label — "Compliance", "Sales", "Engineering"
+  vendor: string;
+  vertical: string;
   version: string;
   description: string;
   installedByDefault?: boolean;
@@ -45,13 +44,9 @@ export interface MemoryPack {
   rules: CategorizationRule[];
 }
 
-// ─────────── Default workspace pack ───────────
-//
-// The "Workspace" pack covers the generic knowledge-worker vertical and ships
-// installed by default. The 8 work topics in showcase-topics.ts are sourced
-// from this pack.
+// ─────────── Pack manifests ───────────
 
-const WORKSPACE_PACK: MemoryPack = {
+const WORKSPACE_PACK: MemoryPackManifest = {
   id: 'workspace',
   name: 'Workspace Essentials',
   vendor: 'Clude',
@@ -81,13 +76,7 @@ const WORKSPACE_PACK: MemoryPack = {
   ],
 };
 
-// ─────────── Compliance pack ───────────
-//
-// First commercial vertical. Demonstrates the pack model: install it and the
-// wiki gets a structured Compliance section with topics matching real
-// regulatory work — audit trails, evidence, regulator asks, policy decisions.
-
-const COMPLIANCE_PACK: MemoryPack = {
+const COMPLIANCE_PACK: MemoryPackManifest = {
   id: 'compliance',
   name: 'Clude Compliance',
   vendor: 'Clude',
@@ -139,9 +128,7 @@ const COMPLIANCE_PACK: MemoryPack = {
   ],
 };
 
-// ─────────── Sales pack (additional example) ───────────
-
-const SALES_PACK: MemoryPack = {
+const SALES_PACK: MemoryPackManifest = {
   id: 'sales',
   name: 'Sales Intelligence',
   vendor: 'Clude',
@@ -149,10 +136,10 @@ const SALES_PACK: MemoryPack = {
   version: '1.0.0',
   description: 'Auto-organises pipeline conversations, deal blockers, objection patterns, and post-call follow-ups. Built for AEs who hate CRM data entry.',
   topics: [
-    { id: 'pipeline',          name: 'Pipeline',          cluster: 'product',  color: '#10B981', summary: 'Active deals, stages, blockers.' },
-    { id: 'objections',        name: 'Objections',        cluster: 'research', color: '#F59E0B', summary: 'Patterns across discovery calls.' },
-    { id: 'follow-ups',        name: 'Follow-ups',        cluster: 'product',  color: '#10B981', summary: 'What you committed to send and to whom.' },
-    { id: 'champions',         name: 'Champions',         cluster: 'self',     color: '#8B5CF6', summary: 'Who is championing your product internally at each account.' },
+    { id: 'pipeline',   name: 'Pipeline',   cluster: 'product',  color: '#10B981', summary: 'Active deals, stages, blockers.' },
+    { id: 'objections', name: 'Objections', cluster: 'research', color: '#F59E0B', summary: 'Patterns across discovery calls.' },
+    { id: 'follow-ups', name: 'Follow-ups', cluster: 'product',  color: '#10B981', summary: 'What you committed to send and to whom.' },
+    { id: 'champions',  name: 'Champions',  cluster: 'self',     color: '#8B5CF6', summary: 'Who is championing your product internally at each account.' },
   ],
   rules: [
     { topicId: 'pipeline',   keywords: ['deal', 'opportunity', 'stage', 'close date', 'mql', 'sql'] },
@@ -164,39 +151,60 @@ const SALES_PACK: MemoryPack = {
 
 // ─────────── Registry ───────────
 
-export const ALL_PACKS: MemoryPack[] = [WORKSPACE_PACK, COMPLIANCE_PACK, SALES_PACK];
+export const ALL_PACK_MANIFESTS: MemoryPackManifest[] = [
+  WORKSPACE_PACK,
+  COMPLIANCE_PACK,
+  SALES_PACK,
+];
 
-export function getPack(id: string): MemoryPack | undefined {
-  return ALL_PACKS.find((p) => p.id === id);
+/** Default pack — every wallet has Workspace implicitly installed. */
+export const DEFAULT_PACK_ID = 'workspace';
+
+export function getPackManifest(id: string): MemoryPackManifest | undefined {
+  return ALL_PACK_MANIFESTS.find((p) => p.id === id);
 }
 
-// Topic id → pack provenance lookup.
-export function packForTopic(topicId: string): MemoryPack | undefined {
-  return ALL_PACKS.find((p) => p.topics.some((t) => t.id === topicId));
+export function packForTopicId(topicId: string): MemoryPackManifest | undefined {
+  return ALL_PACK_MANIFESTS.find((p) => p.topics.some((t) => t.id === topicId));
 }
 
-// Build the union of topics from a set of installed packs. When two packs
-// declare the same topic id, the first one wins.
-export function topicsFromPacks(installedIds: string[]): (Topic & { packId: string; packName: string })[] {
-  const seen = new Set<string>();
-  const out: (Topic & { packId: string; packName: string })[] = [];
-  for (const id of installedIds) {
-    const pack = getPack(id);
+// ─────────── Auto-categorisation ───────────
+
+/**
+ * Walk the rules for every installed pack and return the topic ids whose
+ * keyword rules match the given memory text. Case-insensitive substring
+ * match against `content + summary + tags`. Existing tags are deduped.
+ *
+ * Used by storeMemory() to auto-route incoming memories to the right
+ * topics without requiring the caller to know which packs are installed.
+ */
+export function autoCategorizeTags(opts: {
+  content: string;
+  summary?: string;
+  existingTags?: string[];
+  installedPackIds: string[];
+}): string[] {
+  const haystack = [
+    opts.content || '',
+    opts.summary || '',
+    ...(opts.existingTags || []),
+  ].join(' ').toLowerCase();
+
+  const matched = new Set<string>(opts.existingTags || []);
+
+  // Always run the default pack's rules — workspace is implicitly installed.
+  const ids = new Set([DEFAULT_PACK_ID, ...opts.installedPackIds]);
+
+  for (const packId of ids) {
+    const pack = getPackManifest(packId);
     if (!pack) continue;
-    for (const t of pack.topics) {
-      if (seen.has(t.id)) continue;
-      seen.add(t.id);
-      out.push({
-        id: t.id,
-        name: t.name,
-        cluster: t.cluster,
-        color: t.color,
-        count: 0,
-        summary: t.summary,
-        packId: pack.id,
-        packName: pack.name,
-      });
+    for (const rule of pack.rules) {
+      if (matched.has(rule.topicId)) continue;
+      if (rule.keywords.some((kw) => kw.length > 0 && haystack.includes(kw.toLowerCase()))) {
+        matched.add(rule.topicId);
+      }
     }
   }
-  return out;
+
+  return Array.from(matched);
 }

@@ -36,6 +36,9 @@ export {
   createMemoryLinksBatch,
   type MemoryLinkRow,
 
+  // Wiki packs (auto-categorisation)
+  invalidateInstalledPacksCache,
+
   // Decay
   decayMemories,
   storeDreamLog,
