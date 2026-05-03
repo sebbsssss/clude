@@ -31,10 +31,18 @@ export const DEVNET_RPC_URL = IS_DEVNET && import.meta.env.VITE_SOLANA_RPC_URL
 export const MAINNET_RPC = createSolanaRpc(MAINNET_RPC_URL);
 export const DEVNET_RPC = createSolanaRpc(DEVNET_RPC_URL);
 
-/** Standard Chain IDs */
+/**
+ * CAIP-2 Solana chain IDs — the *genesis-hash* form. Privy's
+ * `useSignAndSendTransaction` (`@privy-io/react-auth/solana`) expects
+ * exactly these strings; the friendly `solana:mainnet` alias compiles
+ * (we previously cast it with `as any`) but isn't matched at runtime,
+ * which causes the wallet hand-off to silently misroute on signing.
+ *
+ * Reference: https://docs.privy.io/wallets/using-wallets/solana/send-a-transaction
+ */
 export const SOLANA_CHAIN_IDS = {
-  mainnet: 'solana:mainnet',
-  devnet: 'solana:devnet',
+  mainnet: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
+  devnet: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
 } as const;
 
 /** Current active Chain ID based on environment */

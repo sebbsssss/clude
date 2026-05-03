@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { PrivyProvider } from '@privy-io/react-auth'
 import { toSolanaWalletConnectors } from '@privy-io/react-auth/solana'
 import { BrowserRouter } from 'react-router-dom'
-import { MAINNET_RPC, DEVNET_RPC } from './lib/solana-config'
+import { MAINNET_RPC, DEVNET_RPC, SOLANA_CHAIN_IDS } from './lib/solana-config'
 import { App } from './App'
 import './index.css'
 
@@ -32,9 +32,9 @@ createRoot(document.getElementById('root')!).render(
         },
         solana: {
           rpcs: {
-            'solana:mainnet': { rpc: MAINNET_RPC },
-            'solana:devnet': { rpc: DEVNET_RPC },
-          } as any
+            [SOLANA_CHAIN_IDS.mainnet]: { rpc: MAINNET_RPC },
+            [SOLANA_CHAIN_IDS.devnet]: { rpc: DEVNET_RPC },
+          }
         }
       }}
     >
