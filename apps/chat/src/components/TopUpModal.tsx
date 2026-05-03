@@ -166,6 +166,10 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
     setWalletRejected(false);
     setSolanaPayUrl('');
     setIntentId('');
+    // Reset back to default picker logic so reopening doesn't keep a
+    // stale explicit choice from the previous session.
+    setSelectedSenderAddress(null);
+    setShowWalletDropdown(false);
     onClose();
   }, [txState, onClose]);
 
@@ -260,22 +264,33 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
   }, [effectiveAmount, isValidAmount, payMethod, currentBalance, startStatusPolling]);
 
   /**
-   * Pick the wallet to send from. Prefer external wallets (Phantom > any
-   * non-Privy connector) over the auto-provisioned Privy embedded wallet.
-   * Email-only users still fall back to embedded — but typically that
-   * wallet is empty (no SOL for fees, no USDC) and the tx will fail with
-   * a Solana RPC error. We surface that case as a clear error message.
+   * Default sender selection — prefer external (Phantom > other) over the
+   * Privy embedded wallet, since the embedded wallet is auto-provisioned
+   * empty for email signups. Users can override via the wallet picker
+   * dropdown below.
    */
-  const senderWallet = useMemo(() => {
+  const defaultSenderAddress = useMemo(() => {
     if (!wallets || wallets.length === 0) return null;
     const phantom = wallets.find((w) => w.standardWallet?.name === 'Phantom');
-    if (phantom) return phantom;
-    const external = wallets.find((w) => w.standardWallet?.name && w.standardWallet.name !== 'Privy');
-    if (external) return external;
-    return wallets[0];
+    if (phantom) return phantom.address;
+    const external = wallets.find(
+      (w) => w.standardWallet?.name && w.standardWallet.name !== 'Privy',
+    );
+    if (external) return external.address;
+    return wallets[0].address;
   }, [wallets]);
+
+  // User's explicit choice — null means "use the default picker logic."
+  const [selectedSenderAddress, setSelectedSenderAddress] = useState<string | null>(null);
+  const [showWalletDropdown, setShowWalletDropdown] = useState(false);
+  const senderWallet = useMemo(() => {
+    const target = selectedSenderAddress ?? defaultSenderAddress;
+    return wallets.find((w) => w.address === target) ?? wallets[0] ?? null;
+  }, [wallets, selectedSenderAddress, defaultSenderAddress]);
   const senderName = senderWallet?.standardWallet?.name ?? null;
   const isEmbedded = senderName === 'Privy' || (!!senderWallet && !senderName);
+  const friendlyWalletLabel = (name: string | null, embedded: boolean) =>
+    embedded ? 'Auto-generated wallet' : name ?? 'Wallet';
 
   /** Direct wallet transfer via Privy (embedded wallet flow) */
   const handleSolanaWallet = useCallback(async () => {
@@ -498,20 +513,77 @@ export function TopUpModal({ open, onClose, currentBalance, onSuccess }: Props) 
                   )}
                 </div>
 
-                {/* Sender wallet — surfaces which wallet the user is paying from
-                    so embedded-wallet users (which start empty) understand
-                    why a tx might fail with insufficient funds. */}
+                {/* Sender wallet picker — lets users toggle between connected
+                    wallets (typically Phantom vs the auto-provisioned Privy
+                    embedded wallet). Read-only chip when only one wallet is
+                    connected; dropdown when there are multiple. */}
                 {chain === 'solana' && senderWallet && (
-                  <div className="mb-3 px-3 py-1.5 bg-zinc-800/50 border border-zinc-700 rounded-lg flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-[10px] text-zinc-400">
-                      <span className="text-zinc-500 uppercase tracking-wider">From</span>
-                      <span className={isEmbedded ? 'text-amber-400' : 'text-zinc-200'}>
-                        {isEmbedded ? 'Auto-generated wallet' : senderName ?? 'Wallet'}
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-zinc-500 font-mono">
-                      {senderWallet.address.slice(0, 4)}…{senderWallet.address.slice(-4)}
-                    </span>
+                  <div className="mb-3 relative">
+                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">From</p>
+                    {wallets.length > 1 ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowWalletDropdown((v) => !v)}
+                        className="w-full flex items-center justify-between bg-zinc-800 border border-zinc-700 hover:bg-zinc-750 rounded-lg px-3 py-2 text-[12px] text-zinc-300 transition-colors"
+                      >
+                        <span className="flex items-center gap-2">
+                          <span className={isEmbedded ? 'text-amber-400' : 'text-zinc-200'}>
+                            {friendlyWalletLabel(senderName, isEmbedded)}
+                          </span>
+                          <span className="text-zinc-500 font-mono text-[10px]">
+                            {senderWallet.address.slice(0, 4)}…{senderWallet.address.slice(-4)}
+                          </span>
+                        </span>
+                        <ChevronDown className="h-3.5 w-3.5 text-zinc-500" />
+                      </button>
+                    ) : (
+                      <div className="px-3 py-2 bg-zinc-800/50 border border-zinc-700 rounded-lg flex items-center justify-between">
+                        <span className="flex items-center gap-2 text-[12px]">
+                          <span className={isEmbedded ? 'text-amber-400' : 'text-zinc-200'}>
+                            {friendlyWalletLabel(senderName, isEmbedded)}
+                          </span>
+                        </span>
+                        <span className="text-[10px] text-zinc-500 font-mono">
+                          {senderWallet.address.slice(0, 4)}…{senderWallet.address.slice(-4)}
+                        </span>
+                      </div>
+                    )}
+                    <AnimatePresence>
+                      {showWalletDropdown && wallets.length > 1 && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -4 }}
+                          className="absolute top-full mt-1 left-0 right-0 bg-zinc-800 border border-zinc-700 rounded-lg overflow-hidden z-10 shadow-lg"
+                        >
+                          {wallets.map((w) => {
+                            const name = w.standardWallet?.name ?? null;
+                            const embedded = name === 'Privy' || !name;
+                            const active = w.address === senderWallet.address;
+                            return (
+                              <button
+                                key={w.address}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedSenderAddress(w.address);
+                                  setShowWalletDropdown(false);
+                                }}
+                                className={`w-full text-left px-3 py-2 text-[12px] flex items-center justify-between gap-2 transition-colors ${
+                                  active ? 'bg-zinc-700 text-white' : 'text-zinc-300 hover:bg-zinc-700'
+                                }`}
+                              >
+                                <span className={embedded ? 'text-amber-400' : ''}>
+                                  {friendlyWalletLabel(name, embedded)}
+                                </span>
+                                <span className="text-[10px] text-zinc-500 font-mono">
+                                  {w.address.slice(0, 4)}…{w.address.slice(-4)}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 )}
 
