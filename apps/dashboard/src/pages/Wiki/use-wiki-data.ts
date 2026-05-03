@@ -181,7 +181,11 @@ export function useWikiData(options: UseWikiDataOptions = {}): WikiData {
       }
     })();
     return () => { cancelled = true; };
-  }, [showcase]);
+    // installedPacks affects topic merging — refetch on pack changes so the
+    // rail reflects the new pack list. The API calls are cached server-side
+    // so this is cheap.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showcase, installedPacks.join(',')]);
 
   return { ...data, loading, error, source };
 }
