@@ -47,14 +47,21 @@ function createUsdcTransferInstruction(
   owner: PublicKey,
   amountUsdc: number,
 ): TransactionInstruction {
+  // TransferChecked (opcode 12) instead of legacy Transfer (3): the checked
+  // variant includes the mint pubkey + decimals so wallets like Phantom can
+  // render the human-readable amount ("1 USDC") instead of the raw base
+  // units ("1,000,000"). Plain Transfer leaves the wallet to guess and many
+  // refuse to auto-confirm an unrecognized SPL transfer.
   const amount = BigInt(Math.round(amountUsdc * 10 ** USDC_DECIMALS));
-  const data = Buffer.alloc(9);
-  data.writeUInt8(3, 0); // Transfer instruction index
+  const data = Buffer.alloc(10);
+  data.writeUInt8(12, 0); // TransferChecked instruction index
   data.writeBigUInt64LE(amount, 1);
+  data.writeUInt8(USDC_DECIMALS, 9);
   return new TransactionInstruction({
     programId: TOKEN_PROGRAM_ID,
     keys: [
       { pubkey: source, isSigner: false, isWritable: true },
+      { pubkey: USDC_MINT, isSigner: false, isWritable: false },
       { pubkey: dest, isSigner: false, isWritable: true },
       { pubkey: owner, isSigner: true, isWritable: false },
     ],
