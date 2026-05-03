@@ -462,6 +462,33 @@ class CludeAPI {
     });
   }
 
+  // ── Wiki Packs (topic-taxonomy bundles) ──
+
+  /** List the wiki packs installed on the current wallet. */
+  async listInstalledWikiPacks(): Promise<string[]> {
+    if (this.mode === 'cortex') return ['workspace'];
+    const result = await this.fetch<{ installed: string[] }>(
+      this.appendWallet('/api/wiki-packs'),
+    );
+    return result.installed ?? ['workspace'];
+  }
+
+  /** Install a wiki pack for the current wallet (idempotent). */
+  async installWikiPack(packId: string): Promise<void> {
+    if (this.mode === 'cortex') return;
+    await this.fetch(this.appendWallet(`/api/wiki-packs/${encodeURIComponent(packId)}`), {
+      method: 'PUT',
+    });
+  }
+
+  /** Uninstall a wiki pack. The default `workspace` pack cannot be uninstalled. */
+  async uninstallWikiPack(packId: string): Promise<void> {
+    if (this.mode === 'cortex') return;
+    await this.fetch(this.appendWallet(`/api/wiki-packs/${encodeURIComponent(packId)}`), {
+      method: 'DELETE',
+    });
+  }
+
   // ── File Upload / Scene Extraction ──
 
   /** Check if current wallet has access to file upload feature */

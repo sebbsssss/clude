@@ -10,6 +10,7 @@ import { SHOWCASE_ARTICLES } from './showcase-articles';
 import { SummaryView } from './SummaryView';
 import { PackManager } from './PackManager';
 import { packForTopic } from './wiki-packs';
+import { api } from '../../lib/api';
 import './Wiki.css';
 
 const SUMMARY_TOPIC_ID = '__summary__';
@@ -36,6 +37,35 @@ export function Wiki({ showcase = false }: { showcase?: boolean }) {
   const [packsOpen, setPacksOpen] = useState(false);
   const wiki = useWikiData({ showcase, installedPacks });
   const { topics, fragments, graph, memories, contradictions } = wiki;
+
+  // Hydrate installed packs from the server in live mode. Showcase mode keeps
+  // its local-only state so toggling packs doesn't round-trip to a backend.
+  useEffect(() => {
+    if (showcase) return;
+    let cancelled = false;
+    api.listInstalledWikiPacks().then((ids) => {
+      if (!cancelled) setInstalledPacks(ids);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [showcase]);
+
+  const togglePack = async (id: string) => {
+    const willInstall = !installedPacks.includes(id);
+    // Optimistic update — UI flips immediately, request is fire-and-forget.
+    setInstalledPacks((cur) =>
+      willInstall ? [...cur, id] : cur.filter((c) => c !== id),
+    );
+    if (showcase) return;
+    try {
+      if (willInstall) await api.installWikiPack(id);
+      else await api.uninstallWikiPack(id);
+    } catch {
+      // Revert on failure so the UI doesn't lie about backend state.
+      setInstalledPacks((cur) =>
+        willInstall ? cur.filter((c) => c !== id) : [...cur, id],
+      );
+    }
+  };
 
   const [tab, setTab] = useState<WikiTabId>('wiki');
   // Default landing is the cross-topic summary view, accessible via a special
@@ -112,19 +142,14 @@ export function Wiki({ showcase = false }: { showcase?: boolean }) {
               </button>
             ))}
             <div className="wk-tabbar__right">
-              {/* Packs are wired into showcase mode only — live /wiki sources
-                  topics from the KG API, not from pack manifests yet. Hide
-                  the affordance so users don't see a no-op control. */}
-              {showcase && (
-                <button
-                  className="wk-iconbtn wk-iconbtn--text"
-                  onClick={() => setPacksOpen((v) => !v)}
-                  title="Memory packs"
-                  aria-pressed={packsOpen}
-                >
-                  <span aria-hidden>▦</span> Packs · {installedPacks.length}
-                </button>
-              )}
+              <button
+                className="wk-iconbtn wk-iconbtn--text"
+                onClick={() => setPacksOpen((v) => !v)}
+                title="Memory packs"
+                aria-pressed={packsOpen}
+              >
+                <span aria-hidden>▦</span> Packs · {installedPacks.length}
+              </button>
               <button className="wk-search" onClick={() => setCmdOpen(true)}>
                 <span className="wk-search__icon">⌕</span>
                 <span>Search wiki, fragments…</span>
@@ -177,9 +202,7 @@ export function Wiki({ showcase = false }: { showcase?: boolean }) {
         {packsOpen && (
           <PackManager
             installed={installedPacks}
-            onToggle={(id) => setInstalledPacks((cur) =>
-              cur.includes(id) ? cur.filter((c) => c !== id) : [...cur, id],
-            )}
+            onToggle={togglePack}
             onClose={() => setPacksOpen(false)}
           />
         )}

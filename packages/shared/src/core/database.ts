@@ -560,6 +560,19 @@ export async function initDatabase(): Promise<void> {
           created_at TIMESTAMPTZ DEFAULT NOW()
         );
         CREATE INDEX IF NOT EXISTS idx_chat_usage_wallet ON chat_usage(wallet_address, created_at DESC);
+
+        -- Wiki pack installations: which packs (Workspace, Compliance, Sales)
+        -- each wallet has installed. Drives the topic rail in /wiki and
+        -- the auto-categorisation rules applied to incoming memories.
+        CREATE TABLE IF NOT EXISTS wiki_pack_installations (
+          id BIGSERIAL PRIMARY KEY,
+          owner_wallet TEXT NOT NULL,
+          pack_id TEXT NOT NULL,
+          installed_at TIMESTAMPTZ DEFAULT NOW(),
+          UNIQUE (owner_wallet, pack_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_wiki_pack_installations_owner
+          ON wiki_pack_installations(owner_wallet);
       `
     });
 

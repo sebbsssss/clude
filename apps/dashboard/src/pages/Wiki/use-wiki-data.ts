@@ -136,7 +136,17 @@ export function useWikiData(options: UseWikiDataOptions = {}): WikiData {
 
         const memories = memResult.memories ?? [];
 
-        const topics = kgToTopics(kg.nodes, memories);
+        // Merge KG-derived topics with pack-defined topics. Pack topics that
+        // already exist as KG entities adopt the KG's count; pack-only topics
+        // appear with count 0 (empty articles backed by section templates).
+        const kgTopics = kgToTopics(kg.nodes, memories);
+        const packTopics = topicsFromPacks(installedPacks).map((t) => ({
+          ...t,
+          count: kgTopics.find((k) => k.id === t.id)?.count ?? 0,
+        }));
+        const seenIds = new Set(packTopics.map((t) => t.id));
+        const topics = [...packTopics, ...kgTopics.filter((t) => !seenIds.has(t.id))];
+
         const graph = kgToGraph(kg.nodes, kg.edges);
         const contradictions = extractContradictions(memGraph.nodes, memGraph.links);
 

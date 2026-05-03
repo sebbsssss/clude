@@ -15,6 +15,7 @@ import { dashboardRoutes } from './dashboard.routes.js';
 import { compoundRoutes } from './compound.routes.js';
 import { memoryRoutes } from './memory.routes.js';
 import { memoryPacksRoutes } from './memory-packs.routes.js';
+import { wikiPacksRoutes } from './wiki-packs.routes.js';
 import { demoRoutes } from './demo.routes.js';
 import { showcaseRoutes } from './showcase.routes.js';
 import { walletAuthRoutes } from './wallet-auth.routes.js';
@@ -55,6 +56,9 @@ export function mountApiRoutes(app: express.Application): void {
 
   // Memory packs: export, import, smart-export
   app.use('/api/memory-packs', memoryPacksRoutes());
+
+  // Wiki packs: install/uninstall topic-taxonomy packs (Workspace, Compliance, …)
+  app.use('/api/wiki-packs', wikiPacksRoutes());
 
   // Demo: trigger, poll, stats, store, recall
   app.use('/api/demo', demoRoutes());

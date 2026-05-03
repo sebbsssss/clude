@@ -529,3 +529,19 @@ CREATE TABLE IF NOT EXISTS chat_usage (
 );
 
 CREATE INDEX IF NOT EXISTS idx_chat_usage_wallet ON chat_usage(wallet_address, created_at DESC);
+
+-- ─────────── Wiki pack installations (PR #138) ───────────
+-- Tracks which wiki packs (Workspace, Compliance, Sales, future third-party
+-- packs) each wallet has installed. Drives the topic rail in /wiki and the
+-- auto-categorisation rules applied to incoming memories.
+
+CREATE TABLE IF NOT EXISTS wiki_pack_installations (
+  id BIGSERIAL PRIMARY KEY,
+  owner_wallet TEXT NOT NULL,
+  pack_id TEXT NOT NULL,
+  installed_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (owner_wallet, pack_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_wiki_pack_installations_owner
+  ON wiki_pack_installations(owner_wallet);
