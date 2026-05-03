@@ -27,7 +27,12 @@ import type { MemoryLinkType } from '@clude/shared/utils/constants';
 import { generateImportanceScore } from '@clude/shared/core/claude-client';
 import { writeMemo, isRegistryEnabled, registerMemoryOnChain } from '@clude/shared/core/solana-client';
 import { generateEmbedding, generateQueryEmbedding, generateEmbeddings, isEmbeddingEnabled } from '@clude/shared/core/embeddings';
-import { autoCategorizeTags, DEFAULT_PACK_ID } from '@clude/shared/wiki-packs';
+import {
+  autoCategorizeTags,
+  DEFAULT_PACK_ID,
+  topicEmbedSources,
+  semanticTagMatches,
+} from '@clude/shared/wiki-packs';
 import { getExperimentalConfig } from '../experimental/config';
 import { bm25SearchMemories } from '../experimental/bm25-search';
 import { generateOpenRouterResponse, isOpenRouterEnabled } from '@clude/shared/core/openrouter-client';
@@ -359,6 +364,56 @@ export function invalidateInstalledPacksCache(ownerWallet?: string): void {
   else installedPacksCache.clear();
 }
 
+// ─────────── Topic embeddings cache (semantic tagger) ───────────
+//
+// We embed each pack topic's name + summary + section titles ONCE (per
+// process lifetime) and cosine against incoming memory embeddings. The
+// cache is module-level since the manifests are static across requests.
+
+const topicEmbeddingCache = new Map<string, number[]>(); // topicId → embedding
+let topicEmbeddingPopulationLock: Promise<void> | null = null;
+
+async function ensureTopicEmbeddings(installedPackIds: string[]): Promise<Map<string, number[]>> {
+  const sources = topicEmbedSources(installedPackIds);
+  const missing = sources.filter((s) => !topicEmbeddingCache.has(s.topicId));
+
+  if (missing.length === 0) {
+    return new Map(sources.map((s) => [s.topicId, topicEmbeddingCache.get(s.topicId)!]));
+  }
+
+  // Single-flight: if another request is already populating, await it.
+  if (topicEmbeddingPopulationLock) {
+    await topicEmbeddingPopulationLock;
+  }
+  // Re-check after the lock — peer may have populated what we need.
+  const stillMissing = sources.filter((s) => !topicEmbeddingCache.has(s.topicId));
+  if (stillMissing.length === 0) {
+    return new Map(sources.map((s) => [s.topicId, topicEmbeddingCache.get(s.topicId)!]));
+  }
+
+  topicEmbeddingPopulationLock = (async () => {
+    try {
+      const texts = stillMissing.map((s) => s.text);
+      const embeddings = await generateEmbeddings(texts);
+      stillMissing.forEach((s, i) => {
+        const emb = embeddings[i];
+        if (emb) topicEmbeddingCache.set(s.topicId, emb);
+      });
+    } catch (err) {
+      log.warn({ err }, 'Failed to populate topic embeddings cache');
+    } finally {
+      topicEmbeddingPopulationLock = null;
+    }
+  })();
+  await topicEmbeddingPopulationLock;
+
+  return new Map(
+    sources
+      .filter((s) => topicEmbeddingCache.has(s.topicId))
+      .map((s) => [s.topicId, topicEmbeddingCache.get(s.topicId)!]),
+  );
+}
+
 // ---- STORE ---- //
 
 export async function storeMemory(opts: StoreMemoryOptions): Promise<number | null> {
@@ -518,11 +573,60 @@ async function embedMemory(memoryId: number, opts: StoreMemoryOptions): Promise<
   const embeddings = await generateEmbeddings([opts.summary]);
   const summaryEmbedding = embeddings[0];
 
-  if (summaryEmbedding) {
-    await db
-      .from('memories')
-      .update({ embedding: JSON.stringify(summaryEmbedding) })
-      .eq('id', memoryId);
+  if (!summaryEmbedding) {
+    log.debug({ memoryId }, 'No embedding generated; skipping semantic tagging');
+    return;
+  }
+
+  // Persist the embedding first — recall depends on it.
+  await db
+    .from('memories')
+    .update({ embedding: JSON.stringify(summaryEmbedding) })
+    .eq('id', memoryId);
+
+  // Semantic tagging layer: cosine the new memory's embedding against the
+  // cached topic embeddings for this owner's installed packs. Tags whose
+  // similarity exceeds the threshold get APPENDED to the memory's tag
+  // column. The keyword layer (autoCategorizeTags) already ran inline at
+  // store time; this is the precision-improving second pass.
+  try {
+    const ownerWallet = getOwnerWallet();
+    const installedPacks = await getInstalledPackIdsCached(ownerWallet);
+    const topicEmbeddings = await ensureTopicEmbeddings(installedPacks);
+
+    if (topicEmbeddings.size > 0) {
+      const semantic = semanticTagMatches(
+        summaryEmbedding,
+        Array.from(topicEmbeddings, ([topicId, embedding]) => ({ topicId, embedding })),
+      );
+
+      if (semantic.length > 0) {
+        // Read current tags so we can merge — Supabase doesn't have a
+        // native array-union update without RPC. The embedding write
+        // above already touched this row, so the read is warm.
+        const { data: row } = await db
+          .from('memories')
+          .select('tags')
+          .eq('id', memoryId)
+          .maybeSingle();
+
+        const existing = (row?.tags ?? []) as string[];
+        const merged = Array.from(new Set([...existing, ...semantic]));
+
+        if (merged.length !== existing.length) {
+          await db
+            .from('memories')
+            .update({ tags: merged })
+            .eq('id', memoryId);
+          log.debug({
+            memoryId,
+            added: semantic.filter((t) => !existing.includes(t)),
+          }, 'Semantic pack tags appended');
+        }
+      }
+    }
+  } catch (err) {
+    log.debug({ err, memoryId }, 'Semantic tagging skipped');
   }
 
   log.debug({ memoryId }, 'Memory embedded');

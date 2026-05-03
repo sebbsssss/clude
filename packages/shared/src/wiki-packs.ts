@@ -26,10 +26,20 @@ export interface CategorizationRule {
   /** Topic id to tag the memory with when this rule matches. */
   topicId: string;
   /**
-   * Substrings searched (case-insensitive) in content + summary + tags.
+   * Phrases searched (case-insensitive, word-boundary matched) in
+   * content + summary + tags. Each entry must be a whole word/phrase —
+   * "hire" does NOT match "hireling". Multi-word entries match exactly:
+   * "phone screen" matches "phone screen" but not "phone or screen".
    * Empty array = pack defines this topic but doesn't auto-categorise.
    */
   keywords: string[];
+  /**
+   * Phrases that, if present, VETO this rule even when keywords match.
+   * Use this to suppress false positives — e.g. tag `hiring` only when
+   * the memory mentions hire/candidate AND not "fired me" / "rejected
+   * my offer". Word-boundary matched the same way as `keywords`.
+   */
+  excludeKeywords?: string[];
 }
 
 export interface MemoryPackManifest {
@@ -70,7 +80,10 @@ const WORKSPACE_PACK: MemoryPackManifest = {
     { topicId: 'customer-research', keywords: ['customer call', 'interview', 'feedback', 'user research', 'persona'] },
     { topicId: 'pricing-model',     keywords: ['pricing', 'per-token', 'per-seat', 'subscription', 'billing tier'] },
     { topicId: 'demo-day-prep',     keywords: ['demo', 'rehearsal', 'investor', 'pitch'] },
-    { topicId: 'hiring',            keywords: ['candidate', 'interview', 'hire', 'phone screen', 'onsite', 'offer'] },
+    { topicId: 'hiring',            keywords: ['candidate', 'interview', 'hire', 'phone screen', 'onsite', 'offer'],
+      // Suppress when "hire" is in the wrong context — got fired, rejected an offer,
+      // hire-purchase, etc. The classic substring-match false positive.
+      excludeKeywords: ['fired me', 'i was fired', 'hire purchase', 'rejected my offer', 'rejected the offer'] },
     { topicId: 'team-process',      keywords: ['standup', 'retro', 'sprint', '1:1', 'process', 'team'] },
     { topicId: 'design-decisions',  keywords: ['api design', 'schema', 'naming', 'rfc', 'design doc'] },
   ],
@@ -168,15 +181,33 @@ export function packForTopicId(topicId: string): MemoryPackManifest | undefined 
   return ALL_PACK_MANIFESTS.find((p) => p.topics.some((t) => t.id === topicId));
 }
 
-// ─────────── Auto-categorisation ───────────
+// ─────────── Auto-categorisation (keyword layer) ───────────
+
+/**
+ * Word-boundary, case-insensitive match. Escapes regex special chars in
+ * `phrase`. Avoids false positives from substring matching — `hire` won't
+ * match inside `hireling`, `1:1` is treated literally, multi-word phrases
+ * like `phone screen` match the whole phrase only.
+ */
+export function matchesKeyword(text: string, phrase: string): boolean {
+  if (!phrase) return false;
+  const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Use Unicode-aware word boundaries via lookbehind/lookahead.
+  // (?<![\w-]) and (?![\w-]) treat hyphens as word chars too, so
+  // `per-token` matches `per-token` but not the `token` inside `tokenize`.
+  const re = new RegExp(`(?<![\\w-])${escaped}(?![\\w-])`, 'i');
+  return re.test(text);
+}
 
 /**
  * Walk the rules for every installed pack and return the topic ids whose
- * keyword rules match the given memory text. Case-insensitive substring
- * match against `content + summary + tags`. Existing tags are deduped.
+ * keyword rules match the given memory text. Word-boundary matched against
+ * `content + summary + tags`. Rules with matching `excludeKeywords` are
+ * suppressed even if `keywords` match.
  *
- * Used by storeMemory() to auto-route incoming memories to the right
- * topics without requiring the caller to know which packs are installed.
+ * This is the FAST path. The semantic layer (embedding similarity) runs
+ * later, async, and ADDs additional tags via UPDATE — see embedMemory()
+ * in packages/brain/src/memory/memory.ts.
  */
 export function autoCategorizeTags(opts: {
   content: string;
@@ -188,11 +219,11 @@ export function autoCategorizeTags(opts: {
     opts.content || '',
     opts.summary || '',
     ...(opts.existingTags || []),
-  ].join(' ').toLowerCase();
+  ].join(' ');
 
   const matched = new Set<string>(opts.existingTags || []);
 
-  // Always run the default pack's rules — workspace is implicitly installed.
+  // Workspace pack is implicit on every wallet.
   const ids = new Set([DEFAULT_PACK_ID, ...opts.installedPackIds]);
 
   for (const packId of ids) {
@@ -200,11 +231,82 @@ export function autoCategorizeTags(opts: {
     if (!pack) continue;
     for (const rule of pack.rules) {
       if (matched.has(rule.topicId)) continue;
-      if (rule.keywords.some((kw) => kw.length > 0 && haystack.includes(kw.toLowerCase()))) {
-        matched.add(rule.topicId);
-      }
+      const hasMatch = rule.keywords.some((kw) => matchesKeyword(haystack, kw));
+      if (!hasMatch) continue;
+      const isVetoed = (rule.excludeKeywords || []).some((kw) => matchesKeyword(haystack, kw));
+      if (isVetoed) continue;
+      matched.add(rule.topicId);
     }
   }
 
   return Array.from(matched);
+}
+
+// ─────────── Auto-categorisation (semantic / embedding layer) ───────────
+
+/**
+ * Cosine similarity threshold above which a memory is auto-tagged with a
+ * pack topic via embedding similarity. Tunable. Higher = stricter matching
+ * (fewer false positives, more false negatives).
+ */
+export const EMBEDDING_TAG_THRESHOLD = 0.78;
+
+/**
+ * Embeddable text describing a topic. Used as the source for the cached
+ * topic embedding that we cosine against incoming memory embeddings.
+ * Combines the topic name, summary, and any section template titles —
+ * gives the embedder enough surface area to capture the topic's intent.
+ */
+export function topicEmbedSources(installedPackIds: string[]): {
+  topicId: string;
+  packId: string;
+  text: string;
+}[] {
+  const out: { topicId: string; packId: string; text: string }[] = [];
+  const seen = new Set<string>();
+  const ids = new Set([DEFAULT_PACK_ID, ...installedPackIds]);
+  for (const packId of ids) {
+    const pack = getPackManifest(packId);
+    if (!pack) continue;
+    for (const t of pack.topics) {
+      if (seen.has(t.id)) continue;
+      seen.add(t.id);
+      const sectionTitles = (t.sectionTemplates || []).map((s) => s.title).join('. ');
+      const text = [t.name, t.summary, sectionTitles].filter(Boolean).join(' — ');
+      out.push({ topicId: t.id, packId, text });
+    }
+  }
+  return out;
+}
+
+/** Cosine similarity. Both inputs must be the same length. */
+export function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length !== b.length || a.length === 0) return 0;
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  const denom = Math.sqrt(normA) * Math.sqrt(normB);
+  return denom === 0 ? 0 : dot / denom;
+}
+
+/**
+ * Given a memory embedding and pre-computed topic embeddings for installed
+ * packs, return the topic ids whose similarity exceeds the threshold.
+ */
+export function semanticTagMatches(
+  memoryEmbedding: number[],
+  topicEmbeddings: { topicId: string; embedding: number[] }[],
+  threshold = EMBEDDING_TAG_THRESHOLD,
+): string[] {
+  const matched: string[] = [];
+  for (const { topicId, embedding } of topicEmbeddings) {
+    const sim = cosineSimilarity(memoryEmbedding, embedding);
+    if (sim >= threshold) matched.push(topicId);
+  }
+  return matched;
 }

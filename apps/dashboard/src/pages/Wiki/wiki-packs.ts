@@ -28,9 +28,12 @@ export interface PackTopicTemplate {
 export interface CategorizationRule {
   // Which topic to route into when this rule matches.
   topicId: string;
-  // Memory matches if any of these substrings appear in content/summary/tags.
-  // Case-insensitive. Empty array = no auto-categorisation for this topic.
+  // Word-boundary matched (case-insensitive) against content + summary + tags.
+  // Empty array = no auto-categorisation for this topic.
   keywords: string[];
+  // Suppresses the rule even if `keywords` matched. Used to veto false
+  // positives — e.g. "hire" + "fired me" should NOT tag `hiring`.
+  excludeKeywords?: string[];
 }
 
 export interface MemoryPack {
@@ -75,7 +78,8 @@ const WORKSPACE_PACK: MemoryPack = {
     { topicId: 'customer-research', keywords: ['customer call', 'interview', 'feedback', 'user research', 'persona'] },
     { topicId: 'pricing-model',     keywords: ['pricing', 'per-token', 'per-seat', 'subscription', 'billing tier'] },
     { topicId: 'demo-day-prep',     keywords: ['demo', 'rehearsal', 'investor', 'pitch'] },
-    { topicId: 'hiring',            keywords: ['candidate', 'interview', 'hire', 'phone screen', 'onsite', 'offer'] },
+    { topicId: 'hiring',            keywords: ['candidate', 'interview', 'hire', 'phone screen', 'onsite', 'offer'],
+      excludeKeywords: ['fired me', 'i was fired', 'hire purchase', 'rejected my offer', 'rejected the offer'] },
     { topicId: 'team-process',      keywords: ['standup', 'retro', 'sprint', '1:1', 'process', 'team'] },
     { topicId: 'design-decisions',  keywords: ['api design', 'schema', 'naming', 'rfc', 'design doc'] },
   ],
