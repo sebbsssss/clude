@@ -1,7 +1,6 @@
-// Curated wiki article bodies for /showcase/wiki — written from the
-// non-technical user's perspective. Each entry reads like a friend's notebook
-// summarising what they've said about a topic, with the actual quotes
-// embedded as evidence.
+// Curated work-focused wiki article bodies for /showcase/wiki. Each entry
+// reads like a doc you'd share with colleagues to bring them up to speed
+// on a project — built up from many conversations with your agent.
 
 import type { ProseBlock, SectionKind } from './use-topic-article';
 
@@ -19,125 +18,41 @@ export interface CuratedArticle {
 
 export const SHOWCASE_ARTICLES: CuratedArticle[] = [
   {
-    topicId: 'sleep',
+    topicId: 'q3-roadmap',
     sections: [
       {
-        id: 'whats-going-on',
-        title: "What's going on",
-        kind: 'overview',
-        prose: [
-          { kind: 'p', text:
-            "Sleep has been the dominant theme of your morning notes for the past month. The pattern is consistent: when you keep the **10pm phone cutoff**, the rest of the week is dramatically better. When you don't, you're up until 1am and the next morning is a wreck." },
-          { kind: 'p', text:
-            "You've named the cutoff three times as the single biggest lever. The friction isn't knowing what to do — it's the actual moment of putting the phone down." },
-        ],
-      },
-      {
-        id: 'whats-working',
-        title: "What's working",
-        kind: 'highlight',
-        prose: [
-          { kind: 'reframe', memoryHash: 'clude-0001' }, // 10pm cutoff transformative
-          { kind: 'reframe', memoryHash: 'clude-0003' }, // consistent bedtime > total hours
-          { kind: 'p', text:
-            "Two things are now well-supported by your own observations: a fixed bedtime is more important than how many hours you log, and the phone cutoff is the highest-leverage habit in your life right now. You don't need more data on either." },
-        ],
-      },
-      {
-        id: 'whats-not',
-        title: "What hasn't",
-        kind: 'concern',
-        prose: [
-          { kind: 'reframe', memoryHash: 'clude-0000' }, // bad night, scrolling
-          { kind: 'reframe', memoryHash: 'clude-0002' }, // magnesium tried, ambivalent
-          { kind: 'callout', tone: 'note', text:
-            "Magnesium is an inconclusive experiment. You tried it once, didn't like the grogginess, and haven't returned to it. Probably worth dropping from the active list — keep it in the back pocket." },
-        ],
-      },
-      {
-        id: 'open',
-        title: 'Open question',
-        kind: 'question',
-        prose: [
-          { kind: 'callout', tone: 'question', text:
-            "What's the actual mechanism for the 10pm cutoff? You've named it as the lever three times but the implementation keeps slipping. Maybe the phone needs to physically leave the bedroom, not just be face-down." },
-        ],
-      },
-    ],
-  },
-
-  {
-    topicId: 'sarahs-wedding',
-    sections: [
-      {
-        id: 'the-basics',
-        title: 'The basics',
-        kind: 'overview',
-        prose: [
-          { kind: 'p', text:
-            "**May 24 in Healdsburg.** Outdoor ceremony. You're driving up Friday morning and staying through Sunday." },
-          { kind: 'p', text:
-            "Pat is confirmed as your +1. Sarah needs the RSVP and the meal choice (chicken or fish) by Friday — that's the most time-sensitive thing on the list." },
-        ],
-      },
-      {
-        id: 'logistics',
-        title: 'Logistics',
-        kind: 'action',
-        prose: [
-          { kind: 'reframe', memoryHash: 'clude-0005' }, // hotel decision pending
-          { kind: 'p', text:
-            "The hotel decision is still open. The Inn at the River keeps you with the bridal party but is roughly twice the price. Wine Country Inn saves money but means a 15-minute drive each way and missing the after-party hangout. No wrong answer; depends on whether the bridal-party time matters more than the savings." },
-        ],
-      },
-      {
-        id: 'gift',
-        title: 'Gift',
+        id: 'commits',
+        title: "What's shipping",
         kind: 'decision',
         prose: [
-          { kind: 'reframe', memoryHash: 'clude-0006' }, // heath ceramic platter
+          { kind: 'reframe', memoryHash: 'clude-0000' }, // Q3 commits + Lina pushback
           { kind: 'p', text:
-            "Decided. You and Pat had been talking about that platter for months anyway, so it doubles as something you've genuinely wanted to gift. Order it this week — the registry was filling up fast last time you checked." },
+            "These three projects are the entire Q3 commitment. Anything else is explicitly **not** happening this quarter. The brain-trust feature was the hard cut and the hardest conversation; document the why so we don't relitigate it in October." },
         ],
       },
       {
-        id: 'open',
-        title: "Still to figure out",
+        id: 'priority-filter',
+        title: 'How we prioritised',
+        kind: 'overview',
+        prose: [
+          { kind: 'reframe', memoryHash: 'clude-0001' }, // priority filter
+          { kind: 'p', text:
+            "The priority filter for Q3 is *what unblocks customer #1's renewal*. That single question reorders everything: [[auth-migration|auth migration]] has to land in week 3 because their security review is the gating event. Pin this filter in every planning conversation this quarter." },
+        ],
+      },
+      {
+        id: 'ownership',
+        title: 'Owners',
         kind: 'action',
         prose: [
+          { kind: 'reframe', memoryHash: 'clude-0002' }, // assign export to maya
           { kind: 'list', items: [
-            "RSVP +1 and meal choice — by Friday",
-            "Book the hotel (Inn at the River vs Wine Country Inn)",
-            "Order the Heath platter",
-            "Decide on the navy suit vs the linen — you'd flagged that Healdsburg in May gets hot",
+            "**Auth migration** — Ari (lead), eng-1 + eng-2 supporting",
+            "**New dashboard** — Priya (lead), design embedded",
+            "**Export pipeline** — Maya (lead), formalise next week per 1:1",
           ] },
-        ],
-      },
-    ],
-  },
-
-  {
-    topicId: 'apartment-search',
-    sections: [
-      {
-        id: 'what-youre-looking-for',
-        title: "What you're looking for",
-        kind: 'overview',
-        prose: [
-          { kind: 'reframe', memoryHash: 'clude-0009' }, // non-negotiables
-          { kind: 'p', text:
-            "You've been remarkably consistent on this list — natural light, in-unit washer/dryer, walkable to a coffee shop. Anything that doesn't have all three has been a quick no. Parking and ceiling height keep coming up as things people *expect* you to care about, but you don't, and you've been right not to." },
-        ],
-      },
-      {
-        id: 'recent-viewings',
-        title: 'Recent viewings',
-        kind: 'overview',
-        prose: [
-          { kind: 'reframe', memoryHash: 'clude-0008' }, // bernal heights
-          { kind: 'reframe', memoryHash: 'clude-0010' }, // noe valley rented out
-          { kind: 'p', text:
-            "Pattern from the last few weeks: the good ones rent fast, often before you can see them. The Noe Valley one was the third time this happened. Worth being more aggressive about same-day viewings — it's costing you good options." },
+          { kind: 'callout', tone: 'note', text:
+            "[[team-process|Single owner per project]] is a pattern we've observed working. Don't dilute it by adding co-owners under pressure." },
         ],
       },
       {
@@ -146,182 +61,245 @@ export const SHOWCASE_ARTICLES: CuratedArticle[] = [
         kind: 'question',
         prose: [
           { kind: 'callout', tone: 'question', text:
-            "Should you call the Bernal Heights landlord back, or trust the slow-response signal? Slow-responding landlords during showing tend to stay slow once you're a tenant. That's a real cost, even with the great light." },
+            "Q2 retros flagged that we never budget for migrations and pay for it three quarters running. Are the Q3 estimates actually padded for the [[auth-migration|auth work]], or did we slip back into optimism?" },
         ],
       },
     ],
   },
 
   {
-    topicId: 'cooking',
+    topicId: 'auth-migration',
     sections: [
       {
-        id: 'in-the-rotation',
-        title: 'In the rotation',
-        kind: 'highlight',
-        prose: [
-          { kind: 'reframe', memoryHash: 'clude-0012' }, // za'atar chicken thighs
-          { kind: 'p', text:
-            "Three times in a month means it's officially in the rotation. You've documented the technique well enough that next time you make it, the crispy skin part shouldn't be guesswork." },
-        ],
-      },
-      {
-        id: 'meal-prep',
-        title: 'Meal prep',
-        kind: 'highlight',
-        prose: [
-          { kind: 'reframe', memoryHash: 'clude-0013' }, // sunday meal prep formula
-          { kind: 'p', text:
-            "This is the only meal prep approach that's actually stuck. It's worth saying out loud that you've tried five other systems and abandoned all of them. The reason this one works is that you don't have to *plan dinners* — you just assemble from what's already cooked." },
-        ],
-      },
-      {
-        id: 'projects',
-        title: 'Long-running projects',
+        id: 'status',
+        title: 'Where we are',
         kind: 'overview',
         prose: [
-          { kind: 'reframe', memoryHash: 'clude-0014' }, // sourdough, gerald the starter
-          { kind: 'callout', tone: 'note', text:
-            "Sourdough is in the 'getting better' phase. Four loaves in, you're past the everything-is-flat stage. Gerald the starter has survived a month, which is longer than any previous starter you've kept." },
+          { kind: 'p', text:
+            "Migration is **in flight**. Dual-stack period started two weeks ago. We had a rollout incident this morning that's been triaged. The cookie-removal cutover gate is the JWT error rate — currently sitting around 0.08%, just over the 0.05% threshold." },
         ],
       },
-    ],
-  },
-
-  {
-    topicId: 'reading',
-    sections: [
       {
-        id: 'recently-finished',
-        title: 'Recently finished',
+        id: 'plan',
+        title: 'The migration plan',
         kind: 'overview',
         prose: [
-          { kind: 'reframe', memoryHash: 'clude-0015' }, // ivan ilyich
+          { kind: 'reframe', memoryHash: 'clude-0005' }, // dual-stack plan + cutover gate
           { kind: 'p', text:
-            "Ivan Ilyich is going to keep coming back to you. The line you flagged — *we are all dying, but we don't believe it* — is the kind of thing that re-reads itself in your head when you're not expecting it. Worth re-reading the whole novella in a year and seeing what's changed." },
+            "We considered Stripe's 5-week parallel period but we're shipping ours in 2. That's defensible because our scale is different — but it's the kind of detail to flag when explaining the cutover risk to the board." },
         ],
       },
       {
-        id: 'currently',
-        title: 'Currently reading',
-        kind: 'overview',
-        prose: [
-          { kind: 'reframe', memoryHash: 'clude-0016' }, // master and his emissary
-          { kind: 'p', text:
-            "McGilchrist is dense. You're halfway through and the thesis is starting to land — it's not really a book about brain hemispheres, it's an argument about how we organise attention. Keep going. The last third is supposedly where the civilisation argument actually lands." },
-        ],
-      },
-      {
-        id: 'didnt-stick',
-        title: "Didn't stick",
+        id: 'incidents',
+        title: 'Incidents',
         kind: 'concern',
         prose: [
-          { kind: 'reframe', memoryHash: 'clude-0017' }, // didn't finish piranesi
-          { kind: 'callout', tone: 'note', text:
-            "Not every book needs to land. Three chapters in is enough to know. Don't let the 'everyone says it's a masterpiece' thing override your own read." },
-        ],
-      },
-    ],
-  },
-
-  {
-    topicId: 'moms-surgery',
-    sections: [
-      {
-        id: 'the-plan',
-        title: 'The plan',
-        kind: 'action',
-        prose: [
-          { kind: 'reframe', memoryHash: 'clude-0018' }, // surgery date, coverage split
+          { kind: 'reframe', memoryHash: 'clude-0004' }, // 2:14am incident
           { kind: 'p', text:
-            "Your sister has the first three days. You have days four through seven. Flight needs to be booked tonight — you flagged it and haven't done it yet. Set a reminder for after dinner if it's still open." },
+            "11-minute rollback. The fallback path didn't preserve `org_id` because it was reading from the wrong claim. Ari is on the postmortem; full RCA expected by Thursday. Keep this entry updated as the investigation progresses." },
         ],
       },
       {
-        id: 'what-mom-needs',
-        title: 'What mom actually needs',
-        kind: 'overview',
-        prose: [
-          { kind: 'reframe', memoryHash: 'clude-0019' }, // mom worried about being a burden
-          { kind: 'p', text:
-            "The thing she's most worried about isn't the surgery — it's being a burden after. That changes what 'helping' looks like during your week. It probably means doing less, asking what she wants, and not making everything visible labour." },
-        ],
-      },
-      {
-        id: 'before-going',
-        title: 'Before you go',
-        kind: 'action',
-        prose: [
-          { kind: 'reframe', memoryHash: 'clude-0020' }, // pre-departure checklist
-          { kind: 'list', items: [
-            'Groceries delivered to her place the day before',
-            'Airport ride sorted (uber will not work — she gets carsick)',
-            "Work knows you're OOO",
-            'Phone charger packed',
-            'The soft pillow she likes',
-          ] },
-        ],
-      },
-    ],
-  },
-
-  {
-    topicId: 'career',
-    sections: [
-      {
-        id: 'what-you-keep-saying',
-        title: 'What you keep saying',
-        kind: 'overview',
-        prose: [
-          { kind: 'reframe', memoryHash: 'clude-0021' }, // don't want to be a manager
-          { kind: 'p', text:
-            "This isn't a passing thought — it's a recurring conviction. The agent has heard it from you in slightly different forms across multiple weeks. The default path you're on is one you don't actually want, and naming that out loud is the first useful thing." },
-        ],
-      },
-      {
-        id: 'whats-actually-possible',
-        title: "What's actually possible",
+        id: 'gotchas',
+        title: 'Gotchas to remember',
         kind: 'highlight',
         prose: [
-          { kind: 'reframe', memoryHash: 'clude-0022' }, // maya's advice on staff path
-          { kind: 'reframe', memoryHash: 'clude-0023' }, // talk at offsite felt great
+          { kind: 'reframe', memoryHash: 'clude-0006' }, // refresh token clamp
+          { kind: 'callout', tone: 'note', text:
+            "Two existing PRs have the same refresh-token issue. Owner of those PRs needs the heads-up before they merge — leaving it implicit means we hit this exact bug again." },
+        ],
+      },
+    ],
+  },
+
+  {
+    topicId: 'customer-research',
+    sections: [
+      {
+        id: 'top-signal',
+        title: 'The signal you can\'t ignore',
+        kind: 'highlight',
+        prose: [
+          { kind: 'reframe', memoryHash: 'clude-0008' }, // 5 customers asking audit logs
           { kind: 'p', text:
-            "Two pieces of evidence are pointing the same direction. Maya did the staff-without-management transition by being LOUD about her work. And the talk you gave felt like the kind of work you want more of. Both suggest the path forward is **visibility of the work you already do well**, not a new kind of work." },
+            "When the same buy-blocker shows up five times in three weeks, it stops being feedback and starts being a roadmap input. This is the kind of pattern only the agent catches — none of us would have noticed the 5th instance was actually the 5th." },
+        ],
+      },
+      {
+        id: 'patterns',
+        title: 'What people keep saying',
+        kind: 'overview',
+        prose: [
+          { kind: 'reframe', memoryHash: 'clude-0010' }, // 14 calls breakdown
+          { kind: 'reframe', memoryHash: 'clude-0009' }, // brain-trust: zero questions
+          { kind: 'p', text:
+            "The brain-trust silence is interesting — it informed the [[q3-roadmap|Q3 cut decision]] more than anyone realised at the time. Without persistent memory, that 6-month signal would have been one person's vague intuition rather than evidence." },
+        ],
+      },
+      {
+        id: 'how-we-listen',
+        title: 'How we listen better',
+        kind: 'question',
+        prose: [
+          { kind: 'reframe', memoryHash: 'clude-0011' }, // anya: literal asks vs underlying needs
+          { kind: 'callout', tone: 'question', text:
+            "Are we still treating literal customer asks as priorities? Anya's framing is that 'I want X' usually means 'I want to feel Y'. The audit-logs ask is really 'I want to feel safe deploying'. Worth re-examining last quarter's roadmap through this lens." },
+        ],
+      },
+    ],
+  },
+
+  {
+    topicId: 'pricing-model',
+    sections: [
+      {
+        id: 'overview',
+        title: 'Where we are',
+        kind: 'overview',
+        prose: [
+          { kind: 'p', text:
+            "Pricing is **not yet decided**. There's an active disagreement between per-seat and per-token. The investor pressure is to **pick one and ship** — hybrid is off the table for now. Decision needed before Friday's call." },
+        ],
+      },
+      {
+        id: 'conflict',
+        title: 'Active disagreement',
+        kind: 'question',
+        prose: [
+          { kind: 'contradiction' },
+          { kind: 'p', text:
+            "Anya's argument is finance-readability and predictable revenue. Seb's argument is that seats discourage adoption — every team adds 'just the people who really need it', which kills the team-level workspace value prop the [[customer-research|research]] keeps surfacing." },
+        ],
+      },
+      {
+        id: 'investor-input',
+        title: 'External input',
+        kind: 'overview',
+        prose: [
+          { kind: 'reframe', memoryHash: 'clude-0014' }, // investor: pick one
+          { kind: 'callout', tone: 'note', text:
+            "The 'pick one' advice is uncomfortable but right. We've been in pricing debate for six weeks without shipping. Six weeks not selling is more expensive than picking the wrong model and changing later." },
+        ],
+      },
+    ],
+  },
+
+  {
+    topicId: 'demo-day-prep',
+    sections: [
+      {
+        id: 'works',
+        title: 'What works on stage',
+        kind: 'highlight',
+        prose: [
+          { kind: 'reframe', memoryHash: 'clude-0015' }, // persistence reveal lands
+          { kind: 'p', text:
+            "Build the demo around the persistence reveal. Everything else is supporting context for that one moment. The agent recalling something from 'last week' is the moment that converts skepticism into curiosity." },
+        ],
+      },
+      {
+        id: 'cut',
+        title: 'What to cut',
+        kind: 'concern',
+        prose: [
+          { kind: 'reframe', memoryHash: 'clude-0016' }, // cut entity graph slide
+          { kind: 'p', text:
+            "Keep the entity-graph as a follow-up artifact for technical Q&A. On stage it competes with the headline narrative." },
+        ],
+      },
+      {
+        id: 'checklist',
+        title: 'Day-of checklist',
+        kind: 'action',
+        prose: [
+          { kind: 'reframe', memoryHash: 'clude-0017' }, // demo checklist
+        ],
+      },
+    ],
+  },
+
+  {
+    topicId: 'hiring',
+    sections: [
+      {
+        id: 'in-flight',
+        title: 'In flight',
+        kind: 'action',
+        prose: [
+          { kind: 'reframe', memoryHash: 'clude-0018' }, // james advancing to onsite
+        ],
+      },
+      {
+        id: 'patterns',
+        title: 'Patterns we\'ve noticed',
+        kind: 'highlight',
+        prose: [
+          { kind: 'reframe', memoryHash: 'clude-0019' }, // close vs ghost pattern
+          { kind: 'callout', tone: 'note', text:
+            "The 'asks what's hard' signal is a free, no-cost early filter. Use it on the first call to triage who's actually invested vs collecting offers. This is the kind of cross-candidate pattern only persistent memory can surface." },
+        ],
+      },
+    ],
+  },
+
+  {
+    topicId: 'team-process',
+    sections: [
+      {
+        id: 'recurring',
+        title: 'Recurring observations',
+        kind: 'concern',
+        prose: [
+          { kind: 'reframe', memoryHash: 'clude-0021' }, // 3 retros mentioning shorter standups
+          { kind: 'p', text:
+            "When the same thing surfaces in three retros without action, the problem isn't that we forgot — it's that the proposed fix doesn't actually work. The honest move is to admit standup length isn't a discipline issue and try a structural change (async by default, sync only when blocked)." },
+        ],
+      },
+      {
+        id: 'works',
+        title: 'What we know works',
+        kind: 'highlight',
+        prose: [
+          { kind: 'reframe', memoryHash: 'clude-0022' }, // single owner pattern
+          { kind: 'p', text:
+            "Default to single ownership on every project including the [[q3-roadmap|Q3 commitments]]. Diluting ownership under pressure is the failure mode we keep falling into." },
         ],
       },
       {
         id: 'open',
-        title: 'The honest question',
+        title: 'Still open',
         kind: 'question',
         prose: [
+          { kind: 'reframe', memoryHash: 'clude-0023' }, // anya: deep work / no-meetings tuesday
           { kind: 'callout', tone: 'question', text:
-            "If giving talks feels great and you keep saying that, why don't you give more talks? What's the actual blocker? It's worth answering before the next offsite goes by." },
+            "No-meetings Tuesday survived 3 weeks last quarter. Is the right move to try again with stronger enforcement, or to accept that any single-day fix will erode and try something structural instead?" },
         ],
       },
     ],
   },
 
   {
-    topicId: 'money',
+    topicId: 'design-decisions',
     sections: [
       {
-        id: 'the-system',
-        title: 'The system',
+        id: 'rules',
+        title: 'Standing rules',
         kind: 'decision',
         prose: [
-          { kind: 'reframe', memoryHash: 'clude-0024' }, // 20/10/rest auto-allocation
-          { kind: 'p', text:
-            "This is the first time you've put a system in place rather than making the decision every paycheck. The point of the system is that it removes the decision — you don't have to be disciplined about it month-to-month, you just have to leave it alone." },
+          { kind: 'reframe', memoryHash: 'clude-0024' }, // cursor pagination
+          { kind: 'reframe', memoryHash: 'clude-0025' }, // memory/recall naming
+          { kind: 'reframe', memoryHash: 'clude-0026' }, // sync/async variants
         ],
       },
       {
-        id: 'big-purchases',
-        title: 'Big purchases',
-        kind: 'concern',
+        id: 'rationale',
+        title: 'Why these rules exist',
+        kind: 'overview',
         prose: [
-          { kind: 'reframe', memoryHash: 'clude-0025' }, // mac was 4 months of savings
+          { kind: 'p', text:
+            "Each of the rules above came from an incident, not a whiteboard. The pagination rule cost us a multi-hour outage. The naming rule was forced by a customer support thread that had to use both 'memorize' and 'remember' to get the right SDK call. Treat each as load-bearing." },
           { kind: 'callout', tone: 'note', text:
-            "The Mac was the right call but it cost real time on the [[apartment-search|apartment]] timeline. Worth being honest about that tradeoff for the next big purchase, instead of pretending the categories are independent." },
+            "Persistent memory for design decisions matters more than people realise. Without it, every new engineer relitigates these from first principles in their first month." },
         ],
       },
     ],
@@ -332,8 +310,6 @@ export function getCuratedArticle(topicId: string): CuratedArticle | null {
   return SHOWCASE_ARTICLES.find((a) => a.topicId === topicId) ?? null;
 }
 
-// Walk every curated article and collect: for each topic that appears as a
-// [[wikilink target]], the list of articles that reference it (with a snippet).
 export interface CuratedBacklink {
   fromTopicId: string;
   snippet: string;

@@ -1,34 +1,29 @@
-// Personal-life topic taxonomy for /showcase/wiki. Replaces the dev-tooling
-// topics (Memory Decay, Agent Loops…) with life domains a non-technical user
-// can immediately read as their own.
+// Work-focused topic taxonomy for /showcase/wiki. Reframes the page as a
+// knowledge worker's wiki built from many conversations with their agent —
+// the kind of context you'd share with colleagues and want to persist
+// across weeks of work.
 
 import type { Topic, Cluster } from './wiki-data';
 
-// Personal life clusters mapped onto the existing Cluster palette so the dot
-// colours stay consistent with the rest of the page chrome.
-//   architecture (blue)   → work / career
-//   research (orange)     → learning, reading, ideas
-//   product (green)       → home, money, planning
-//   self (purple)         → health, family, relationships, personal
-const PERSONAL_TOPICS: Topic[] = [
-  { id: 'sleep',           name: 'Sleep',                cluster: 'self' as Cluster,         color: '#8B5CF6', count: 0,
-    summary: "How you actually sleep — what's working, what isn't, and the patterns the agent has noticed across the last few weeks." },
-  { id: 'sarahs-wedding',  name: "Sarah's Wedding",      cluster: 'product' as Cluster,      color: '#10B981', count: 0,
-    summary: 'May 24 in Healdsburg. RSVPs, gift, hotel, what to wear — everything you need to remember in one place.' },
-  { id: 'apartment-search',name: 'Apartment Search',     cluster: 'product' as Cluster,      color: '#10B981', count: 0,
-    summary: "What you're looking for, the places you've seen, and the patterns of what you keep coming back to." },
-  { id: 'cooking',         name: 'Cooking',              cluster: 'research' as Cluster,     color: '#F59E0B', count: 0,
-    summary: "Recipes that made it into the rotation, techniques that worked, and what you've been learning about food." },
-  { id: 'reading',         name: 'Reading',              cluster: 'research' as Cluster,     color: '#F59E0B', count: 0,
-    summary: 'Books finished, books abandoned, lines that stuck. Your reading life as it accumulates.' },
-  { id: 'moms-surgery',    name: "Mom's Surgery",        cluster: 'self' as Cluster,         color: '#8B5CF6', count: 0,
-    summary: 'May 18 at UCSF. Logistics, who covers what, what mom needs, what you noticed in the calls leading up to it.' },
-  { id: 'career',          name: 'Career Direction',     cluster: 'architecture' as Cluster, color: '#2244FF', count: 0,
-    summary: "What you keep coming back to about your career — the path you're being pushed toward vs. the one you actually want." },
-  { id: 'money',           name: 'Money',                cluster: 'product' as Cluster,      color: '#10B981', count: 0,
-    summary: 'Decisions, allocations, big purchases. The financial picture as it changes month to month.' },
+const WORK_TOPICS: Topic[] = [
+  { id: 'q3-roadmap',         name: 'Q3 Roadmap',           cluster: 'architecture' as Cluster, color: '#2244FF', count: 0,
+    summary: 'What ships this quarter, what got cut, and the calls behind those decisions. The single source of truth for the team.' },
+  { id: 'auth-migration',     name: 'Auth Migration',       cluster: 'architecture' as Cluster, color: '#2244FF', count: 0,
+    summary: 'Moving from session cookies to JWT — incidents, fixes, and the rollback plan. Every gotcha encountered along the way.' },
+  { id: 'customer-research',  name: 'Customer Research',    cluster: 'research' as Cluster,     color: '#F59E0B', count: 0,
+    summary: 'Patterns surfaced across 14 customer calls. What people keep saying, what nobody asks for, what we keep mishearing.' },
+  { id: 'pricing-model',      name: 'Pricing Model',        cluster: 'product' as Cluster,      color: '#10B981', count: 0,
+    summary: 'Per-token vs per-seat vs hybrid. The active disagreement between Anya and Seb that needs to land before Friday.' },
+  { id: 'demo-day-prep',      name: 'Demo Day Prep',        cluster: 'product' as Cluster,      color: '#10B981', count: 0,
+    summary: 'What works in the live demo, what breaks, and the running checklist for the May 24 investor showcase.' },
+  { id: 'hiring',             name: 'Hiring Pipeline',      cluster: 'product' as Cluster,      color: '#10B981', count: 0,
+    summary: 'Candidates in flight, interview signals, and the patterns the team has noticed about who closes vs who ghosts.' },
+  { id: 'team-process',       name: 'Team Process',         cluster: 'self' as Cluster,         color: '#8B5CF6', count: 0,
+    summary: "How the team works — what's working, what isn't, and what we keep saying we'll change but don't." },
+  { id: 'design-decisions',   name: 'Design Decisions',     cluster: 'research' as Cluster,     color: '#F59E0B', count: 0,
+    summary: 'API shapes, naming choices, and the reasons behind them. Stops the "wait, why did we do it this way" conversations.' },
 ];
 
 export function showcaseTopics(): Topic[] {
-  return PERSONAL_TOPICS;
+  return WORK_TOPICS;
 }

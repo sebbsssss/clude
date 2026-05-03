@@ -8,6 +8,8 @@ import { useWikiData } from './use-wiki-data';
 import { useTopicArticle } from './use-topic-article';
 import { SHOWCASE_ARTICLES } from './showcase-articles';
 import { SummaryView } from './SummaryView';
+import { PackManager } from './PackManager';
+import { packForTopic } from './wiki-packs';
 import './Wiki.css';
 
 const SUMMARY_TOPIC_ID = '__summary__';
@@ -29,11 +31,10 @@ type Density = 'comfortable' | 'compact';
 
 export function Wiki({ showcase = false }: { showcase?: boolean }) {
   const location = useLocation();
-  // Showcase route renders without the dashboard Layout, so the .wk-page
-  // negative-margin trick (which absorbs Layout's 40px padding) needs to
-  // be disabled. The .is-standalone flag turns it off.
   const standalone = location.pathname.startsWith('/showcase');
-  const wiki = useWikiData({ showcase });
+  const [installedPacks, setInstalledPacks] = useState<string[]>(['workspace']);
+  const [packsOpen, setPacksOpen] = useState(false);
+  const wiki = useWikiData({ showcase, installedPacks });
   const { topics, fragments, graph, memories, contradictions } = wiki;
 
   const [tab, setTab] = useState<WikiTabId>('wiki');
@@ -111,6 +112,19 @@ export function Wiki({ showcase = false }: { showcase?: boolean }) {
               </button>
             ))}
             <div className="wk-tabbar__right">
+              {/* Packs are wired into showcase mode only — live /wiki sources
+                  topics from the KG API, not from pack manifests yet. Hide
+                  the affordance so users don't see a no-op control. */}
+              {showcase && (
+                <button
+                  className="wk-iconbtn wk-iconbtn--text"
+                  onClick={() => setPacksOpen((v) => !v)}
+                  title="Memory packs"
+                  aria-pressed={packsOpen}
+                >
+                  <span aria-hidden>▦</span> Packs · {installedPacks.length}
+                </button>
+              )}
               <button className="wk-search" onClick={() => setCmdOpen(true)}>
                 <span className="wk-search__icon">⌕</span>
                 <span>Search wiki, fragments…</span>
@@ -160,6 +174,16 @@ export function Wiki({ showcase = false }: { showcase?: boolean }) {
           {tab === 'inbox' && <InboxTab fragments={fragments} topics={topics} contradictions={contradictions} />}
         </div>
 
+        {packsOpen && (
+          <PackManager
+            installed={installedPacks}
+            onToggle={(id) => setInstalledPacks((cur) =>
+              cur.includes(id) ? cur.filter((c) => c !== id) : [...cur, id],
+            )}
+            onClose={() => setPacksOpen(false)}
+          />
+        )}
+
         <CommandPalette
           key={cmdOpen ? 'open' : 'closed'}
           open={cmdOpen}
@@ -195,20 +219,30 @@ function TopicRail({
         <span>Across everything</span>
       </button>
       <span className="wk-topics__divider" aria-hidden />
-      {topics.map((t) => (
-        <button
-          key={t.id}
-          className={`wk-topic-pill ${active === t.id ? 'is-active' : ''}`}
-          onClick={() => onSelect(t.id)}
-        >
-          <span className="wk-topic-pill__dot" style={{ background: t.color }} />
-          <span>{t.name}</span>
-          <span className="wk-topic-pill__count">{t.count}</span>
-          {attentionTopicIds.has(t.id) && (
-            <span className="wk-topic-pill__attn" title="Has action items or open questions" aria-label="needs attention" />
-          )}
-        </button>
-      ))}
+      {topics.map((t) => {
+        const pack = packForTopic(t.id);
+        const showPackBadge = pack && pack.id !== 'workspace';
+        return (
+          <button
+            key={t.id}
+            className={`wk-topic-pill ${active === t.id ? 'is-active' : ''}`}
+            onClick={() => onSelect(t.id)}
+            title={pack ? `From ${pack.name} pack` : undefined}
+          >
+            <span className="wk-topic-pill__dot" style={{ background: t.color }} />
+            <span>{t.name}</span>
+            <span className="wk-topic-pill__count">{t.count}</span>
+            {showPackBadge && (
+              <span className="wk-topic-pill__pack" title={`From ${pack!.name}`}>
+                {pack!.vertical.toUpperCase()}
+              </span>
+            )}
+            {attentionTopicIds.has(t.id) && (
+              <span className="wk-topic-pill__attn" title="Has action items or open questions" aria-label="needs attention" />
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }

@@ -8,6 +8,8 @@ import {
 } from './wiki-data';
 import type { ArticleSection, Backlink, ProseBlock, RecentEdit, SectionKind, TopicArticle } from './use-topic-article';
 import { prettySource, relativeTime } from './use-wiki-data';
+import { SharePopover } from './SharePopover';
+import { SHOWCASE_PERSISTENCE } from './showcase-data';
 
 // Glyph + label for each section kind. Drives the §-style marker beside the
 // section heading so the eye can spot section type without reading the title.
@@ -108,6 +110,9 @@ export function WikiTab({ article, backlinks, recentEdits, contradictions, loadi
 }
 
 function ArticleHero({ article }: { article: TopicArticle }) {
+  const [shareOpen, setShareOpen] = useState(false);
+  const persistence = SHOWCASE_PERSISTENCE[article.id];
+
   return (
     <header
       className="wk-hero"
@@ -115,13 +120,42 @@ function ArticleHero({ article }: { article: TopicArticle }) {
     >
       <span className="wk-hero__bar" aria-hidden />
       <div className="wk-hero__inner">
-        <h1 className="wk-hero__title">{article.title}</h1>
+        <div className="wk-hero__top">
+          <h1 className="wk-hero__title">{article.title}</h1>
+          <div className="wk-hero__actions">
+            <button
+              className="wk-hero__action wk-hero__action--primary"
+              onClick={() => setShareOpen((v) => !v)}
+              aria-expanded={shareOpen}
+            >
+              <span aria-hidden>↗</span>
+              Share
+            </button>
+            {shareOpen && (
+              <SharePopover
+                topicId={article.id}
+                topicName={article.title}
+                onClose={() => setShareOpen(false)}
+              />
+            )}
+          </div>
+        </div>
         <p className="wk-hero__lede">{article.lede}</p>
         <div className="wk-hero__meta">
           <span>built from <strong>{article.meta.sources}</strong> {article.meta.sources === 1 ? 'note' : 'notes'}</span>
           <span className="wk-hero__meta-sep">·</span>
           <span>last updated <strong>{article.meta.updated}</strong></span>
         </div>
+        {persistence && (
+          <div className="wk-hero__persistence" title="Memory persistence — how long your agent has been remembering this topic">
+            <span className="wk-hero__persistence-dot" aria-hidden />
+            <span>
+              Your agent has been tracking this for <strong>{persistence.days}</strong> {persistence.days === 1 ? 'day' : 'days'}
+              {' '}across <strong>{persistence.conversations}</strong> {persistence.conversations === 1 ? 'conversation' : 'conversations'}
+              {' '}({Array.from(persistence.sources).slice(0, 3).join(', ')}{persistence.sources.size > 3 ? '…' : ''}).
+            </span>
+          </div>
+        )}
       </div>
     </header>
   );

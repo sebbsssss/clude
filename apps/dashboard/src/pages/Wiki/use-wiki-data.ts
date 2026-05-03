@@ -21,7 +21,7 @@ import {
   SHOWCASE_CONTRADICTIONS,
   SHOWCASE_TOPIC_COUNTS,
 } from './showcase-data';
-import { showcaseTopics } from './showcase-topics';
+import { topicsFromPacks } from './wiki-packs';
 
 export interface ContradictionPair {
   a: GraphMemoryNode;
@@ -102,16 +102,24 @@ const MOCK: Omit<WikiData, 'loading' | 'error' | 'source'> = {
 export interface UseWikiDataOptions {
   /** Use a richer curated dataset and skip API calls. Drives /showcase/wiki. */
   showcase?: boolean;
+  /** Memory pack ids whose topics should appear in the rail. Defaults to ['workspace']. */
+  installedPacks?: string[];
 }
 
 export function useWikiData(options: UseWikiDataOptions = {}): WikiData {
-  const { showcase = false } = options;
+  const { showcase = false, installedPacks = ['workspace'] } = options;
   const [data, setData] = useState<Omit<WikiData, 'loading' | 'error' | 'source'>>(
-    showcase ? buildShowcaseData() : MOCK,
+    showcase ? buildShowcaseData(installedPacks) : MOCK,
   );
   const [loading, setLoading] = useState(!showcase);
   const [error, setError] = useState<string | null>(null);
   const [source, setSource] = useState<'live' | 'mock'>(showcase ? 'live' : 'mock');
+
+  // Re-derive when the installed-packs list changes in showcase mode.
+  useEffect(() => {
+    if (showcase) setData(buildShowcaseData(installedPacks));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showcase, installedPacks.join(',')]);
 
   useEffect(() => {
     if (showcase) return;
@@ -170,12 +178,12 @@ export function useWikiData(options: UseWikiDataOptions = {}): WikiData {
 
 // ─────────── Showcase mode ───────────
 
-function buildShowcaseData(): Omit<WikiData, 'loading' | 'error' | 'source'> {
-  // Topic counts derived from the showcase seed so the topic pills + tab
-  // badges match the rendered article body.
-  const topics: Topic[] = showcaseTopics()
-    .map((t) => ({ ...t, count: SHOWCASE_TOPIC_COUNTS[t.id] ?? 0 }))
-    .filter((t) => t.count > 0);
+function buildShowcaseData(installedPacks: string[]): Omit<WikiData, 'loading' | 'error' | 'source'> {
+  // Topics come from the union of installed packs. Counts derive from the
+  // showcase seed where present; pack-only topics start at 0 (empty articles
+  // ready to be filled).
+  const topics: Topic[] = topicsFromPacks(installedPacks)
+    .map((t) => ({ ...t, count: SHOWCASE_TOPIC_COUNTS[t.id] ?? 0 }));
 
   // Build a richer fragment list from the showcase memories — Inbox shows live
   // status diversity (synthesized / pending / archived / conflict) end-to-end.
