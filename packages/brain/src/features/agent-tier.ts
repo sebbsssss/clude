@@ -349,48 +349,16 @@ export async function findOrCreateAgentForDid(
     return { ...result, ownerWallet: wallet };
   }
 
-  // 2.5. No wallet passed, but the Privy user may have linked wallets from
-  //      prior dashboard logins. If any linked wallet already owns an agent
-  //      that isn't yet claimed by another DID, adopt it instead of creating
-  //      a duplicate. Only rows with privy_did=null are eligible so we never
-  //      hijack another user's account.
-  try {
-    const linkedWallets = await resolveWalletsForDid(did);
-    for (const linkedWallet of linkedWallets) {
-      const { data: adoptable } = await db
-        .from('agent_keys')
-        .select('agent_id, api_key')
-        .eq('owner_wallet', linkedWallet)
-        .eq('is_active', true)
-        .is('privy_did', null)
-        .limit(1)
-        .single();
+  // 2.5. (Removed) Auto-adoption of "linked" wallets used to live here. It
+  //      trusted Privy's `linked_accounts` API as proof of memory ownership,
+  //      but `linked_accounts` only means "this wallet was active in the
+  //      browser at signup," not "this user owns the wallet's history." A
+  //      shared computer or a still-connected Phantom from a prior session
+  //      caused new email signups to inherit unrelated history. Real
+  //      ownership now requires an explicit signed-message import flow
+  //      (Phase 2) — automatic adoption is gone.
 
-      if (adoptable) {
-        await db
-          .from('agent_keys')
-          .update({ privy_did: did })
-          .eq('agent_id', adoptable.agent_id);
-        log.info(
-          { did, agentId: adoptable.agent_id, linkedWallet },
-          'Adopted existing wallet-based agent via Privy linked_accounts',
-        );
-        return {
-          apiKey: adoptable.api_key,
-          agentId: adoptable.agent_id,
-          isNew: false,
-          ownerWallet: linkedWallet,
-        };
-      }
-    }
-  } catch (err: any) {
-    log.warn(
-      { did, err: err.message },
-      'Linked-wallet adoption check failed — falling through to synthetic wallet',
-    );
-  }
-
-  // 2.6. Still no wallet found — provision a Privy embedded Solana wallet
+  // 2.6. No existing record — provision a Privy embedded Solana wallet
   //      so the user has a fundable address from day one. This is the
   //      difference between an account that can top up and one that's
   //      stuck on a synthetic-hex owner_wallet forever.

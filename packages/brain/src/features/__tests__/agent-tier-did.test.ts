@@ -15,6 +15,10 @@ vi.mock('@clude/shared/core/logger', () => ({
 
 vi.mock('../../auth/privy-wallet-resolver', () => ({
   resolveWalletsForDid: vi.fn().mockResolvedValue([]),
+  // Step 2.6 in agent-tier provisions an embedded wallet via Privy. In tests
+  // we make this throw by default so the flow falls through to step 3
+  // (synthetic wallet). Individual tests can override via mockEnsurePrivyWallet.
+  ensurePrivySolanaWalletForDid: vi.fn().mockRejectedValue(new Error('test: privy provisioning disabled')),
 }));
 
 import { getDb } from '@clude/shared/core/database';
@@ -217,99 +221,15 @@ describe('findOrCreateAgentForDid', () => {
     expect(second.isNew).toBe(false);
   });
 
-  it('adopts an existing unclaimed wallet agent when Privy reports a linked wallet', async () => {
-    const did = 'did:privy:emailuser_adopt';
-    const linkedWallet = 'SoL1111111111111111111111111111111111111111';
-    mockResolveWallets.mockResolvedValue([linkedWallet]);
+  // Removed: two tests for the auto-adoption of "linked" wallets in step 2.5
+  // of findOrCreateAgentForDid. That behavior was removed because Privy's
+  // `linked_accounts` is not proof of ownership — it just reports any wallet
+  // active in the browser session at signup, which let unrelated history
+  // get attached to brand-new email accounts. New email signups now go
+  // straight to step 2.6 (provision an embedded Privy wallet) and historical
+  // wallet imports happen via an explicit signed-message flow (Phase 2).
 
-    // 1. DID lookup misses
-    const didLookupChain: any = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST116' } }),
-    };
-    // 2. Linked-wallet adoption lookup — finds an orphan agent
-    const adoptLookupChain: any = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      is: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({
-        data: { agent_id: 'agent_existing_wallet', api_key: 'clk_wallet_preexisting' },
-        error: null,
-      }),
-    };
-    // 3. Backfill privy_did on the adopted row
-    const backfillChain: any = {
-      update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({ error: null }),
-    };
-
-    let callIndex = 0;
-    const chains = [didLookupChain, adoptLookupChain, backfillChain];
-    const db = { from: vi.fn(() => chains[callIndex++] ?? backfillChain) };
-    mockGetDb.mockReturnValue(db as any);
-
-    const result = await findOrCreateAgentForDid(did);
-
-    expect(result).toEqual({
-      apiKey: 'clk_wallet_preexisting',
-      agentId: 'agent_existing_wallet',
-      isNew: false,
-      ownerWallet: linkedWallet,
-    });
-    expect(adoptLookupChain.eq).toHaveBeenCalledWith('owner_wallet', linkedWallet);
-    expect(adoptLookupChain.is).toHaveBeenCalledWith('privy_did', null);
-    expect(backfillChain.update).toHaveBeenCalledWith({ privy_did: did });
-  });
-
-  it('does not adopt when the linked wallet agent is already claimed by another DID', async () => {
-    const did = 'did:privy:emailuser_noclaim';
-    const linkedWallet = 'SoL2222222222222222222222222222222222222222';
-    mockResolveWallets.mockResolvedValue([linkedWallet]);
-
-    // 1. DID lookup misses
-    const didLookupChain: any = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST116' } }),
-    };
-    // 2. Adoption lookup — row exists but is_active+privy_did=null filter excludes it,
-    //    so .single() returns no data (simulating already-claimed agent)
-    const adoptLookupChain: any = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      is: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST116' } }),
-    };
-    // 3. Falls through to synthetic-wallet registerAgent insert
-    const insertChain: any = {
-      insert: vi.fn().mockResolvedValue({ error: null }),
-    };
-    // 4. Update synthetic wallet + privy_did on newly-created row
-    const updateChain: any = {
-      update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({ error: null }),
-    };
-
-    let callIndex = 0;
-    const chains = [didLookupChain, adoptLookupChain, insertChain, updateChain];
-    const db = { from: vi.fn(() => chains[callIndex++] ?? updateChain) };
-    mockGetDb.mockReturnValue(db as any);
-
-    const result = await findOrCreateAgentForDid(did);
-
-    // Got a brand-new synthetic-wallet agent, not the claimed one
-    expect(result.isNew).toBe(true);
-    expect(result.ownerWallet).toHaveLength(44);
-    expect(result.ownerWallet).toMatch(/^[0-9a-f]+$/);
-    expect(result.agentId).not.toBe('agent_existing_wallet');
-  });
-
-  it('falls through to synthetic wallet when Privy linked-wallet lookup throws', async () => {
+  it('falls through to synthetic wallet when Privy embedded-wallet provisioning fails', async () => {
     const did = 'did:privy:emailuser_privydown';
     mockResolveWallets.mockRejectedValue(new Error('Privy API 500'));
 
