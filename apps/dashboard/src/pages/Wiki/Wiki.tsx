@@ -9,7 +9,8 @@ import { useTopicArticle } from './use-topic-article';
 import { SHOWCASE_ARTICLES } from './showcase-articles';
 import { SummaryView } from './SummaryView';
 import { PackManager } from './PackManager';
-import { packForTopic } from './wiki-packs';
+import { PackInstalledModal } from './PackInstalledModal';
+import { packForTopic, getPack } from './wiki-packs';
 import { api } from '../../lib/api';
 import './Wiki.css';
 
@@ -35,6 +36,7 @@ export function Wiki({ showcase = false }: { showcase?: boolean }) {
   const standalone = location.pathname.startsWith('/showcase');
   const [installedPacks, setInstalledPacks] = useState<string[]>(['workspace']);
   const [packsOpen, setPacksOpen] = useState(false);
+  const [justInstalled, setJustInstalled] = useState<string | null>(null);
   const wiki = useWikiData({ showcase, installedPacks });
   const { topics, fragments, graph, memories, contradictions } = wiki;
 
@@ -55,10 +57,25 @@ export function Wiki({ showcase = false }: { showcase?: boolean }) {
     setInstalledPacks((cur) =>
       willInstall ? [...cur, id] : cur.filter((c) => c !== id),
     );
-    if (showcase) return;
+    if (showcase) {
+      // Showcase mode skips the backend; still pop the modal on install so
+      // visitors see the post-install messaging.
+      if (willInstall && id !== 'workspace') {
+        setPacksOpen(false);
+        setJustInstalled(id);
+      }
+      return;
+    }
     try {
-      if (willInstall) await api.installWikiPack(id);
-      else await api.uninstallWikiPack(id);
+      if (willInstall) {
+        await api.installWikiPack(id);
+        if (id !== 'workspace') {
+          setPacksOpen(false);
+          setJustInstalled(id);
+        }
+      } else {
+        await api.uninstallWikiPack(id);
+      }
     } catch {
       // Revert on failure so the UI doesn't lie about backend state.
       setInstalledPacks((cur) =>
@@ -206,6 +223,17 @@ export function Wiki({ showcase = false }: { showcase?: boolean }) {
             onClose={() => setPacksOpen(false)}
           />
         )}
+
+        {justInstalled && (() => {
+          const pack = getPack(justInstalled);
+          if (!pack) return null;
+          return (
+            <PackInstalledModal
+              pack={pack}
+              onClose={() => setJustInstalled(null)}
+            />
+          );
+        })()}
 
         <CommandPalette
           key={cmdOpen ? 'open' : 'closed'}

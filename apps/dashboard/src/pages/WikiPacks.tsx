@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
-import { ALL_PACKS, type MemoryPack } from './Wiki/wiki-packs';
+import { ALL_PACKS, getPack, type MemoryPack } from './Wiki/wiki-packs';
+import { PackInstalledModal } from './Wiki/PackInstalledModal';
 
 // Wiki-pack discovery page.
 //
@@ -19,6 +20,9 @@ export function WikiPacks() {
   const [state, setState] = useState<LoadState>('loading');
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Tracks the pack id of the most recent successful install so we can pop
+  // the post-install modal. Cleared when the modal is dismissed.
+  const [justInstalled, setJustInstalled] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -40,8 +44,15 @@ export function WikiPacks() {
     // Optimistic.
     setInstalled((cur) => willInstall ? [...cur, id] : cur.filter((c) => c !== id));
     try {
-      if (willInstall) await api.installWikiPack(id);
-      else await api.uninstallWikiPack(id);
+      if (willInstall) {
+        await api.installWikiPack(id);
+        // Pop the post-install modal — only on actual install (not uninstall).
+        // Skip for the default workspace pack since users can't actively
+        // install it (the button is disabled).
+        if (id !== 'workspace') setJustInstalled(id);
+      } else {
+        await api.uninstallWikiPack(id);
+      }
     } catch (err) {
       // Revert on failure.
       setInstalled((cur) => willInstall ? cur.filter((c) => c !== id) : [...cur, id]);
@@ -101,6 +112,19 @@ export function WikiPacks() {
       </div>
 
       <Footer />
+
+      {/* Post-install confirmation modal. Surfaces what the pack just did
+          + how to use it, anchored to the dashboard's flat aesthetic. */}
+      {justInstalled && (() => {
+        const pack = getPack(justInstalled);
+        if (!pack) return null;
+        return (
+          <PackInstalledModal
+            pack={pack}
+            onClose={() => setJustInstalled(null)}
+          />
+        );
+      })()}
     </div>
   );
 }
