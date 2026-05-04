@@ -1769,41 +1769,57 @@ export async function getMemoryStats(): Promise<MemoryStats> {
   };
 
   try {
-    // Get exact total count (Supabase defaults to max 1000 rows)
+    // Stats reflect what the user OWNS — not what's high-priority recallable.
+    // Decay-filtering belongs in retrieval, not counts. Older memories that
+    // have decayed below MEMORY_MIN_DECAY still exist; the wiki and timeline
+    // continue to surface them, so stats must too.
     let countQuery = db
       .from('memories')
-      .select('id', { count: 'exact', head: true })
-      .gt('decay_factor', MEMORY_MIN_DECAY);
+      .select('id', { count: 'exact', head: true });
     countQuery = scopeToOwner(countQuery);
     const { count: totalCount } = await countQuery;
     stats.total = totalCount || 0;
 
-    // Get embedded count separately
+    // Embedded count — also unfiltered by decay.
     let embeddedQuery = db
       .from('memories')
       .select('id', { count: 'exact', head: true })
-      .gt('decay_factor', MEMORY_MIN_DECAY)
       .not('embedding', 'is', null);
     embeddedQuery = scopeToOwner(embeddedQuery);
     const { count: embCount } = await embeddedQuery;
     stats.embeddedCount = embCount || 0;
 
-    // Fetch rows for aggregation — paginate to get all (without embedding column to reduce payload)
-    const PAGE_SIZE = 5000;
+    // Per-type counts via head queries — one per type. Cheap (no row fetch),
+    // and immune to the row-cap pagination bug that previously zeroed byType
+    // for users whose memories paginated past Supabase REST's 1000-row default.
+    const TYPES: MemoryType[] = ['episodic', 'semantic', 'procedural', 'self_model', 'introspective'];
+    await Promise.all(TYPES.map(async (type) => {
+      let q = db
+        .from('memories')
+        .select('id', { count: 'exact', head: true })
+        .eq('memory_type', type);
+      q = scopeToOwner(q);
+      const { count } = await q;
+      stats.byType[type] = count || 0;
+    }));
+
+    // Fetch rows for aggregation (importance avg, decay avg, tags, concepts,
+    // unique users). Order explicitly so pagination is deterministic; bound
+    // to a sane upper limit since these are aggregations, not exhaustive.
+    const PAGE_SIZE = 1000;
+    const MAX_PAGES = 20;
     let allMemories: any[] = [];
-    let page = 0;
-    while (true) {
+    for (let page = 0; page < MAX_PAGES; page++) {
       let pageQuery = db
         .from('memories')
-        .select('memory_type, importance, decay_factor, created_at, related_user, tags, concepts')
-        .gt('decay_factor', MEMORY_MIN_DECAY)
+        .select('importance, decay_factor, created_at, related_user, tags, concepts')
+        .order('id', { ascending: true })
         .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
       pageQuery = scopeToOwner(pageQuery);
       const { data: pageData } = await pageQuery;
       if (!pageData || pageData.length === 0) break;
       allMemories = allMemories.concat(pageData);
       if (pageData.length < PAGE_SIZE) break;
-      page++;
     }
 
     if (allMemories.length > 0) {
@@ -1814,8 +1830,8 @@ export async function getMemoryStats(): Promise<MemoryStats> {
       const users = new Set<string>();
 
       for (const m of allMemories) {
-        const type = m.memory_type as MemoryType;
-        if (type in stats.byType) stats.byType[type]++;
+        // byType is computed separately above via head:true counts; don't
+        // double-count it from the paginated row sample.
         impSum += m.importance;
         decaySum += m.decay_factor;
         if (m.related_user) users.add(m.related_user);
