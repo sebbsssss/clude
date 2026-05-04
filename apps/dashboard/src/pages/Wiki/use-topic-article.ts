@@ -233,6 +233,21 @@ function trim(s: string, n: number): string {
 
 // ─────────── Article assembly ───────────
 
+/**
+ * Synchronous article builder for export paths that need to construct
+ * articles for every topic without hitting the recall API.
+ *
+ * Filters in-memory memories by `mentionsTopic`, then runs the same
+ * curated-section + template-section passes the live hook does.
+ */
+export function buildArticleSync(topic: Topic, allMemories: Memory[]): TopicArticle {
+  const matching = allMemories.filter((m) => mentionsTopic(m, topic));
+  const article = buildArticle(topic, matching);
+  applyCuratedSections(article, topic, matching);
+  applyTemplateSections(article, topic);
+  return article;
+}
+
 function buildArticle(topic: Topic, memories: Memory[]): TopicArticle {
   const synthesized = memories.filter((m) => m.summary && m.summary !== m.content && !m.compacted);
   const raw = memories.filter((m) => !m.summary || m.summary === m.content);
