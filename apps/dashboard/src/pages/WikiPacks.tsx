@@ -61,7 +61,12 @@ export function WikiPacks() {
     <div style={{ maxWidth: 1100, margin: '0 auto', padding: '8px 0 60px' }}>
       <Hero installed={installedCount} totalTopics={totalTopics} onOpenWiki={() => navigate('/wiki')} />
 
-      {state === 'error' && (
+      {/* Surface ANY error — initial-load OR install/uninstall toggle. The
+          previous render only showed errors when state === 'error', which was
+          only set on initial-load failure. Toggle failures stored the error
+          but never displayed it, so installs that hit a missing-table 500
+          looked silent. */}
+      {(state === 'error' || error) && (
         <div style={{
           margin: '0 0 20px',
           padding: '10px 14px',
@@ -72,7 +77,9 @@ export function WikiPacks() {
           fontFamily: 'var(--mono)',
           fontSize: 11,
         }}>
-          Couldn't reach the server: {error}. Showing pack list anyway — installs will retry on click.
+          {state === 'error'
+            ? `Couldn't reach the server: ${error}. Showing pack list anyway — installs will retry on click.`
+            : `Install failed: ${error}`}
         </div>
       )}
 
