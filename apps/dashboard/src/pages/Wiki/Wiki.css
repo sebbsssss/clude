@@ -305,6 +305,11 @@ html.dark .wk-app {
   opacity: 0.6;
 }
 .wk-iconbtn--text {
+  /* Override the fixed 30x30 from .wk-iconbtn so the text content sizes the
+     button naturally. Without these the "PACKS · N" label overflows the
+     square box and visually bleeds into the adjacent search input. */
+  width: auto;
+  height: auto;
   display: inline-flex;
   align-items: center;
   gap: 6px;
