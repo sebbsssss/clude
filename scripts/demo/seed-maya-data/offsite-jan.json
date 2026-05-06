@@ -1,0 +1,100 @@
+[
+  {
+    "type": "episodic",
+    "content": "Snowstorm hit I-80 Monday morning. Sebastien, Ari, half the team stuck in Sacramento until 2pm. Rebooked shuttle twice. Anya and I ate a $4k catering bill for the missed breakfast.",
+    "summary": "I-80 snowstorm delayed offsite start by 6 hours",
+    "event_date": "2026-01-20",
+    "importance": 0.62
+  },
+  {
+    "type": "semantic",
+    "content": "Sebastien made the call: we're narrowing ICP to mid-market AI ops teams (500-2500 headcount, $5M-50M ARR). Acme and Initech fit; Globex is too enterprise-heavy, Wayne Industries too small-cap.",
+    "summary": "B2B focus narrowed to mid-market AI ops segment, Jan 2026",
+    "event_date": "2026-01-20",
+    "importance": 0.88
+  },
+  {
+    "type": "episodic",
+    "content": "Lina pitched three product roadmap tracks for Q1/Q2: multi-agent orchestration, vector store optimization, and dashboard UX. Ari flagged that multi-agent needs 8 weeks minimum; we cut it to Q2.",
+    "summary": "Roadmap prioritization: dashboard UX and vector store in Q1",
+    "event_date": "2026-01-20",
+    "importance": 0.71
+  },
+  {
+    "type": "episodic",
+    "content": "Devon and James (hired March, still ramping) paired on sprint plan architecture. James asked good questions about Snowflake schema. Devon's mentoring is working—no handoff friction so far.",
+    "summary": "James ramping well; Devon's onboarding structure paying off",
+    "event_date": "2026-01-21",
+    "importance": 0.48
+  },
+  {
+    "type": "episodic",
+    "content": "Anya presented Q1 burn: $890k ops, $340k cloud (AWS/Snowflake/Voyage AI), $215k external (consulting). Priya flagged hiring costs for H1 at $620k. Sebastien approved headcount plan for four new eng roles.",
+    "summary": "Q1 budget lock: $2.07M spend, four new eng roles approved",
+    "event_date": "2026-01-21",
+    "importance": 0.79
+  },
+  {
+    "type": "episodic",
+    "content": "Jenny walked through design system refresh. Moved from Figma to internal component library (still hosted in Figma, but versioned in GitHub). Cut design-to-eng handoff time from 3 days to 1.",
+    "summary": "Design system refresh reduces handoff latency to 1 day",
+    "event_date": "2026-01-21",
+    "importance": 0.54
+  },
+  {
+    "type": "episodic",
+    "content": "Marcus reported CS metrics: Acme contract renewal at 110% NRR, Initech expansion $340k→$620k. Globex churn risk flagged (API latency complaints in DataDog; Devon's team already investigating).",
+    "summary": "Acme/Initech strong; Globex latency issue needs immediate triage",
+    "event_date": "2026-01-21",
+    "importance": 0.73
+  },
+  {
+    "type": "procedural",
+    "content": "Offsite decision logging: all strategic calls documented in Notion by end of day. Sebastien owns strategy doc; Anya owns budget/headcount decisions; I own operational timeline. GitHub issues created for all roadmap items within 24hr of offsite close. Linear is lagging—will migrate tracking to GitHub by Feb 1.",
+    "summary": "Post-offsite documentation workflow: Notion, GitHub, no Linear",
+    "event_date": "2026-01-21",
+    "importance": 0.82
+  },
+  {
+    "type": "episodic",
+    "content": "Tom asked about career growth. Offered him mentorship from Ari and path to mid-level by Q3 if he ships two major features cleanly. He seemed relieved—was worried about being bottlenecked.",
+    "summary": "Tom growth conversation: mid-level track if Q1/Q2 execution solid",
+    "event_date": "2026-01-22",
+    "importance": 0.41
+  },
+  {
+    "type": "semantic",
+    "content": "Sales/GTM decision: pivot away from broad-market approach. No more SDR cold calls. Focus entirely on inbound + warm intros from Sebastien's network. Budget saved (~$180k/year) reallocated to Product and Eng headcount.",
+    "summary": "GTM shift to warm-inbound only; cut $180k SDR spend",
+    "event_date": "2026-01-22",
+    "importance": 0.85
+  },
+  {
+    "type": "episodic",
+    "content": "Sentry and DataDog alerts during final dinner—Anthropic API hit rate limits. Cloudflare cache misconfigured. Fixed in 20 minutes with Devon monitoring remotely. Noted: need on-call schedule before Q1 launch.",
+    "summary": "API incident during offsite; exposed gaps in incident response",
+    "event_date": "2026-01-22",
+    "importance": 0.58
+  },
+  {
+    "type": "episodic",
+    "content": "1Password audit flagged 14 shared secrets across team. Anya and Priya will enforce rotation by Feb 15. I told them to add it to onboarding checklist—Tom didn't know vaults were company policy.",
+    "summary": "Secrets hygiene audit; rotation deadline Feb 15",
+    "event_date": "2026-01-22",
+    "importance": 0.51
+  },
+  {
+    "type": "self_model",
+    "content": "Three days of wall-to-wall alignment drained me. I prefer async—offsite felt chaotic despite careful planning. But watching the team cohere around ICP narrowing was worth it. Anya's logistics + my ops planning prevented worse disaster than the snowstorm. Note to self: build 2hr buffer into future offsites. Also realized I hate re-explaining context—will enforce Notion docs harder next cycle.",
+    "summary": "Offsites drain me; async-first preference reinforced. Logistics win.",
+    "event_date": "2026-01-22",
+    "importance": 0.67
+  },
+  {
+    "type": "semantic",
+    "content": "H1 2026 strategic priorities locked: (1) ICP penetration—land three new mid-market logos by June; (2) Product stability—zero customer-facing incidents post-launch; (3) Eng headcount—scale to 18 (from 12); (4) Cloud cost optimization—target 15% reduction in AWS/Snowflake spend.",
+    "summary": "H1 2026 strategy: ICP focus, stability, scale, cost efficiency",
+    "event_date": "2026-01-22",
+    "importance": 0.91
+  }
+]

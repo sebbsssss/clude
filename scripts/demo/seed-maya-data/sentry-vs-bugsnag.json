@@ -1,0 +1,100 @@
+[
+  {
+    "type": "episodic",
+    "content": "Ari flagged Sentry vs Bugsnag decision in standup. Devon chimed in immediately—Sentry's dashboard is faster, integrates cleaner with our stack. Bugsnag cheaper ($19k vs $26k), but neither wanted to defend it.",
+    "summary": "Ari and Devon push for Sentry over Bugsnag.",
+    "event_date": "2026-02-10",
+    "importance": 0.45
+  },
+  {
+    "type": "semantic",
+    "content": "Sentry pricing: $26k/year at our event volume. Bugsnag: $19k. $7k delta is real but small relative to engineering productivity loss if team fights tooling they dislike.",
+    "summary": "Sentry $26k vs Bugsnag $19k annual cost.",
+    "event_date": "2026-02-10",
+    "importance": 0.75
+  },
+  {
+    "type": "episodic",
+    "content": "Asked Ari for a written comparison. He sent a Notion doc by EOD listing DX friction points with Bugsnag's API response times and alert routing. Devon added backend-specific context on noise filtering.",
+    "summary": "Ari and Devon document Sentry vs Bugsnag tradeoffs.",
+    "event_date": "2026-02-11",
+    "importance": 0.55
+  },
+  {
+    "type": "semantic",
+    "content": "Key evaluation criteria: alert latency (Sentry wins), integrations (tie), team familiarity (Sentry—used it at Anthropic), and noise filtering (Sentry's grouping algorithm stronger).",
+    "summary": "Sentry wins on latency, grouping, and team experience.",
+    "event_date": "2026-02-11",
+    "importance": 0.8
+  },
+  {
+    "type": "procedural",
+    "content": "When evaluating error tracking tools, always get engineering lead + at least one senior IC input before pricing comparison. DX friction compounds. Run a 2-week trial if possible; Sentry offers 30-day free tier.",
+    "summary": "Error tracking eval: engineer input before cost analysis.",
+    "event_date": "2026-02-12",
+    "importance": 0.7
+  },
+  {
+    "type": "episodic",
+    "content": "Sent RFC draft to Sebastien, Anya, Ari with recommendation for Sentry. Noted $7k premium justified by reduced debugging time—rough math: if Bugsnag's friction costs 40 eng-hours/year, it's actually more expensive.",
+    "summary": "Wrote RFC recommending Sentry; productivity ROI case.",
+    "event_date": "2026-02-13",
+    "importance": 0.6
+  },
+  {
+    "type": "semantic",
+    "content": "Sebastien's approval threshold for tool spend is 'does it unblock or accelerate core work.' Sentry's faster alert latency + team comfort = unblock. Budget approval is usually fast if you hit that frame.",
+    "summary": "Sebastien approves tools that unblock core work.",
+    "event_date": "2026-02-13",
+    "importance": 0.65
+  },
+  {
+    "type": "episodic",
+    "content": "Anya asked for total cost impact on 2026 burn. Sentry $26k is <0.7% of monthly spend; Bugsnag saves $583/mo but introduces unknown friction cost. She signed off same day.",
+    "summary": "Anya approves Sentry cost; negligible burn impact.",
+    "event_date": "2026-02-16",
+    "importance": 0.5
+  },
+  {
+    "type": "semantic",
+    "content": "Tool decisions below $30k/year should be led by engineering DX, not procurement. Cost sensitivity above $50k. Clude's burn is high enough that false economy (cheap tool, bad UX) is expensive.",
+    "summary": "Sub-$30k tools: prioritize DX over cost.",
+    "event_date": "2026-02-16",
+    "importance": 0.85
+  },
+  {
+    "type": "procedural",
+    "content": "Document tool decisions in a single RFC. Include: evaluation criteria, tradeoff matrix, cost comparison, and productivity impact estimate. Link to Linear issue. Avoids re-explaining.",
+    "summary": "Tool RFCs need criteria, tradeoffs, cost, impact.",
+    "event_date": "2026-02-17",
+    "importance": 0.75
+  },
+  {
+    "type": "episodic",
+    "content": "Devon mentioned he'd already set up Sentry trial on his local env. Ran sample error ingestion, confirmed dashboard felt 'genuinely fast.' Small but the kind of signal that matters when you're about to commit $26k.",
+    "summary": "Devon validates Sentry performance in trial.",
+    "event_date": "2026-02-18",
+    "importance": 0.4
+  },
+  {
+    "type": "semantic",
+    "content": "When engineering lead + senior IC converge on a tool choice early, it's often worth trusting that signal. Ari and Devon aren't precious about tooling; they're pragmatic. If they both prefer Sentry, friction they perceive is real.",
+    "summary": "Convergence from Ari + Devon signals real preference.",
+    "event_date": "2026-02-19",
+    "importance": 0.7
+  },
+  {
+    "type": "self_model",
+    "content": "I tend to over-document tool decisions. It feels wasteful until someone new joins or we revisit it 6 months later. The RFC + cost memo on this Sentry choice took 2 hours; it'll save 30 min of re-explanation per person. Worth it.",
+    "summary": "Documentation feels wasteful until it saves time later.",
+    "event_date": "2026-02-20",
+    "importance": 0.55
+  },
+  {
+    "type": "episodic",
+    "content": "Approved Sentry contract. Ari handling onboarding next week. Sent async note to team: 'We're moving to Sentry. Config goes in main branch. Ari owns migration, expect alerts live by Friday.' No meeting needed.",
+    "summary": "Sentry approved; async rollout plan sent.",
+    "event_date": "2026-02-22",
+    "importance": 0.65
+  }
+]

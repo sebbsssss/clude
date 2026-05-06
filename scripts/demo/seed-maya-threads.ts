@@ -1,0 +1,503 @@
+// Narrative threads for Maya Okonkwo, Operations Manager at Clude.
+// Each thread expands via Claude into ~20 realistic memories with variation
+// in type/importance/event_date. Aim: ~1000 total memories spanning Nov 8
+// 2025 → May 5 2026. Topics chosen so wiki-pack keyword routing fires
+// correctly (Workspace + Compliance + Sales pack rules).
+
+export interface Thread {
+  id: string;
+  title: string;
+  startDate: string; // ISO YYYY-MM-DD
+  endDate: string;
+  count: number;
+  // Light scaffolding — Claude expands the rest.
+  premise: string;
+  // Mix of memory types (must sum to count when distributed)
+  mix: { episodic: number; semantic: number; procedural: number; self_model: number; introspective: number };
+  // Pack-keyword anchors so autoCategorize routes them to the right wiki topic
+  keywordHints: string[];
+  // A few highlights per thread get pushed on-chain in the commit phase
+  highlightCount: number;
+}
+
+const PERSONA = `Maya Okonkwo. Operations Manager at Clude (a 60-person SaaS company building cognitive memory for AI agents). She's been there 18 months, reports to founder/CEO Sebastien. Teammates referenced often: Ari (Eng Lead), Anya (Finance/Ops Director), Lina (Product), Jenny (Design), Devon (Senior Backend), Priya (HR/Recruiting), Marcus (CS Lead), James (Senior Backend, hired Mar 2026), Tom (Junior Eng). Customers/prospects: Acme Corp, Initech, Globex, Wayne Industries. Vendors: Snowflake, Linear, Notion, Slack, DataDog, Sentry, AWS, Cloudflare, Voyage AI, Anthropic, GitHub, 1Password, Figma. Maya's voice is dry, precise, slightly weary; she values async writing, hates re-explaining context, and is meticulous about decisions getting documented.`;
+
+const MIX = {
+  EPISODIC_HEAVY: { episodic: 14, semantic: 4, procedural: 1, self_model: 1, introspective: 0 },
+  DECISION_HEAVY: { episodic: 6, semantic: 10, procedural: 3, self_model: 1, introspective: 0 },
+  PROCESS_HEAVY: { episodic: 4, semantic: 5, procedural: 9, self_model: 2, introspective: 0 },
+  REFLECTION: { episodic: 2, semantic: 3, procedural: 1, self_model: 8, introspective: 6 },
+};
+
+export const PERSONA_BLURB = PERSONA;
+
+export const THREADS: Thread[] = [
+  // ─── Vendor / Procurement ───────────────────────────────────────
+  {
+    id: 'snowflake-renewal',
+    title: 'Snowflake Q1 renewal negotiation',
+    startDate: '2025-11-12', endDate: '2026-01-31', count: 24,
+    premise: 'Snowflake AE Marcus pushes 22% renewal increase. Maya pushes back with usage data showing 15% YoY decrease. Multi-call negotiation Nov-Jan ending in flat renewal + 2-year commit for predictable spend.',
+    mix: MIX.DECISION_HEAVY,
+    keywordHints: ['snowflake', 'renewal', 'contract', 'pricing', 'subscription', 'billing tier'],
+    highlightCount: 3,
+  },
+  {
+    id: 'linear-renewal',
+    title: 'Linear contract renewal (annual seat-based)',
+    startDate: '2025-12-01', endDate: '2025-12-15', count: 12,
+    premise: 'Linear renewal — straightforward, but Eng team grew 18→27 so seat math changes. Anya wants to push for prepaid 2yr discount.',
+    mix: MIX.DECISION_HEAVY,
+    keywordHints: ['linear', 'renewal', 'subscription', 'per-seat', 'pricing'],
+    highlightCount: 1,
+  },
+  {
+    id: 'notion-enterprise',
+    title: 'Notion Enterprise upgrade evaluation',
+    startDate: '2026-01-08', endDate: '2026-01-28', count: 18,
+    premise: 'Compliance asked for SAML SSO + audit logs in Notion → forces Enterprise tier ($24/user vs $10). Decision: upgrade in Q1, line-item the cost in compliance budget.',
+    mix: MIX.DECISION_HEAVY,
+    keywordHints: ['notion', 'sso', 'audit log', 'compliance', 'pricing', 'subscription'],
+    highlightCount: 2,
+  },
+  {
+    id: 'datadog-vs-newrelic',
+    title: 'DataDog vs New Relic vendor evaluation',
+    startDate: '2026-02-03', endDate: '2026-02-24', count: 22,
+    premise: 'Observability tooling RFP. Ari\'s team did a 2-week bake-off. DataDog wins on UX + integrations, New Relic on price. Decision: DataDog, $48k/yr, signed Feb 24.',
+    mix: MIX.DECISION_HEAVY,
+    keywordHints: ['datadog', 'observability', 'evaluation', 'rfc', 'design doc', 'api design'],
+    highlightCount: 2,
+  },
+  {
+    id: 'aws-reserved',
+    title: 'AWS reserved instance + savings plan commitment',
+    startDate: '2026-03-04', endDate: '2026-03-20', count: 16,
+    premise: 'AWS spend forecasting — Ari + Devon model 12mo workload, recommend $180k 1yr savings plan + RI for RDS. Saves 38% vs on-demand.',
+    mix: MIX.DECISION_HEAVY,
+    keywordHints: ['aws', 'savings plan', 'reserved', 'spend', 'forecasting', 'pricing'],
+    highlightCount: 2,
+  },
+  {
+    id: 'slack-enterprise',
+    title: 'Slack Enterprise Grid migration',
+    startDate: '2026-04-07', endDate: '2026-04-30', count: 18,
+    premise: 'SOC2 audit drove need for Slack Enterprise Grid (audit logs, eDiscovery, retention controls). Migration is 3 weeks of pain — channel mapping, app re-installs.',
+    mix: MIX.PROCESS_HEAVY,
+    keywordHints: ['slack', 'sso', 'audit log', 'compliance', 'evidence', 'soc2'],
+    highlightCount: 2,
+  },
+  {
+    id: 'sentry-vs-bugsnag',
+    title: 'Sentry vs Bugsnag — error tracking choice',
+    startDate: '2026-02-10', endDate: '2026-02-22', count: 14,
+    premise: 'Error tracking tool decision. Ari + Devon prefer Sentry (better DX, faster). Cost: $26k vs Bugsnag $19k. Pick Sentry, justify on dev productivity.',
+    mix: MIX.DECISION_HEAVY,
+    keywordHints: ['sentry', 'evaluation', 'rfc', 'design doc', 'api design'],
+    highlightCount: 1,
+  },
+  {
+    id: 'voyage-contract',
+    title: 'Voyage AI embedding contract',
+    startDate: '2026-03-10', endDate: '2026-03-25', count: 12,
+    premise: 'Voyage AI volume-tier contract — Clude\'s embedding usage scaled, AE offers 30% off list for 12mo prepay. Anya signs $42k.',
+    mix: MIX.DECISION_HEAVY,
+    keywordHints: ['voyage', 'contract', 'embedding', 'pricing', 'subscription'],
+    highlightCount: 1,
+  },
+  {
+    id: 'cloudflare-waf',
+    title: 'Cloudflare WAF rollout',
+    startDate: '2026-03-12', endDate: '2026-03-26', count: 14,
+    premise: 'Cloudflare WAF + bot management deployed in front of clude.io after auth-migration incident. Rules tuned over 2 weeks.',
+    mix: MIX.PROCESS_HEAVY,
+    keywordHints: ['cloudflare', 'waf', 'security', 'audit', 'evidence', 'soc2'],
+    highlightCount: 1,
+  },
+  {
+    id: 'github-enterprise',
+    title: 'GitHub Enterprise renewal + saml',
+    startDate: '2026-01-14', endDate: '2026-01-28', count: 12,
+    premise: 'GitHub Enterprise renewal coincides with SAML SSO requirement from compliance. Sebastien signs.',
+    mix: MIX.DECISION_HEAVY,
+    keywordHints: ['github', 'sso', 'saml', 'renewal', 'compliance'],
+    highlightCount: 1,
+  },
+  {
+    id: 'figma-renewal',
+    title: 'Figma renewal — design seats only',
+    startDate: '2026-04-14', endDate: '2026-04-25', count: 10,
+    premise: 'Figma renewal. Jenny argues for keeping Dev Mode on; Anya wants to drop it ($15/seat × 25 eng). Compromise: keep for staff+ engineers only.',
+    mix: MIX.DECISION_HEAVY,
+    keywordHints: ['figma', 'renewal', 'pricing', 'per-seat', 'subscription'],
+    highlightCount: 1,
+  },
+  {
+    id: '1password-renewal',
+    title: '1Password team plan + provisioning',
+    startDate: '2026-02-12', endDate: '2026-02-22', count: 10,
+    premise: '1Password annual + SCIM provisioning enabled for offboarding hygiene. SOC2 evidence requires.',
+    mix: MIX.DECISION_HEAVY,
+    keywordHints: ['1password', 'sso', 'provisioning', 'audit', 'soc2', 'evidence'],
+    highlightCount: 1,
+  },
+
+  // ─── Hiring ──────────────────────────────────────────────────────
+  {
+    id: 'james-hire',
+    title: 'James — Senior Backend hire',
+    startDate: '2026-02-09', endDate: '2026-03-12', count: 22,
+    premise: 'Sourced senior backend engineer "James". Took offer Mar 12. Strong on systems design, pushed back on a SQL design decision in onsite — team liked that. Comp $215k base + 0.4% equity.',
+    mix: MIX.EPISODIC_HEAVY,
+    keywordHints: ['james', 'candidate', 'interview', 'phone screen', 'onsite', 'offer', 'hire'],
+    highlightCount: 2,
+  },
+  {
+    id: 'sales-ae-hire',
+    title: 'Sales AE hire — pipeline urgency',
+    startDate: '2026-03-02', endDate: '2026-04-22', count: 22,
+    premise: 'First Sales AE. Sourced 60, phone-screened 14, onsite 4, offered 1 (Theo, ex-Snowflake). Joined Apr 22. Compensation: $140k OTE 50/50.',
+    mix: MIX.EPISODIC_HEAVY,
+    keywordHints: ['theo', 'sales', 'candidate', 'interview', 'onsite', 'offer', 'hire'],
+    highlightCount: 2,
+  },
+  {
+    id: 'cs-lead',
+    title: 'Customer Success Lead hire',
+    startDate: '2026-03-09', endDate: '2026-04-10', count: 18,
+    premise: 'CS Lead — Marcus joined Apr 10. Background: Vanta CS Lead 2yr, before that Algolia. Owns Acme/Initech/Globex post-sales.',
+    mix: MIX.EPISODIC_HEAVY,
+    keywordHints: ['marcus', 'cs', 'candidate', 'interview', 'onsite', 'hire', 'champion'],
+    highlightCount: 1,
+  },
+  {
+    id: 'designer-hire',
+    title: 'Senior Designer hire',
+    startDate: '2026-04-01', endDate: '2026-04-30', count: 16,
+    premise: 'Designer search to support Jenny. 3 finalists, offered to "Yuki" (ex-Linear). Pending close.',
+    mix: MIX.EPISODIC_HEAVY,
+    keywordHints: ['yuki', 'designer', 'candidate', 'interview', 'phone screen', 'onsite', 'offer'],
+    highlightCount: 1,
+  },
+  {
+    id: 'compliance-lead',
+    title: 'Compliance Lead hire (for SOC2 audit)',
+    startDate: '2026-03-04', endDate: '2026-03-28', count: 18,
+    premise: 'Compliance Lead "Yara" — joined just-in-time for SOC2 Type II kickoff. Pre-Vanta auditor experience. Owns evidence collection + auditor relationship.',
+    mix: MIX.EPISODIC_HEAVY,
+    keywordHints: ['yara', 'compliance', 'candidate', 'interview', 'hire', 'soc2', 'audit'],
+    highlightCount: 2,
+  },
+  {
+    id: 'eng-manager',
+    title: 'Eng Manager loop (declined offer)',
+    startDate: '2026-02-04', endDate: '2026-02-26', count: 14,
+    premise: 'EM candidate "Priya O." onsite went well, but she declined our offer for a Stripe role. Hard lesson on comp competitiveness.',
+    mix: MIX.EPISODIC_HEAVY,
+    keywordHints: ['priya', 'manager', 'candidate', 'interview', 'onsite', 'offer'],
+    highlightCount: 1,
+  },
+  {
+    id: 'marketing-director',
+    title: 'Marketing Director (pre-Series A push)',
+    startDate: '2026-04-08', endDate: '2026-04-30', count: 14,
+    premise: 'Marketing Director search. Top of funnel for Series A. Sourced via Sequoia operator network.',
+    mix: MIX.EPISODIC_HEAVY,
+    keywordHints: ['marketing', 'candidate', 'interview', 'phone screen', 'hire'],
+    highlightCount: 1,
+  },
+  {
+    id: 'intern-cohort',
+    title: 'Summer 2026 intern cohort',
+    startDate: '2026-03-03', endDate: '2026-04-15', count: 14,
+    premise: '5 eng interns from Stanford + Cal. Maya runs scheduling + onboarding logistics with Devon as anchor.',
+    mix: MIX.PROCESS_HEAVY,
+    keywordHints: ['intern', 'candidate', 'interview', 'onsite', 'team'],
+    highlightCount: 1,
+  },
+
+  // ─── OKR / Planning ─────────────────────────────────────────────
+  {
+    id: 'q4-2025-closeout',
+    title: 'Q4 2025 closeout — what shipped, what slipped',
+    startDate: '2025-12-15', endDate: '2025-12-30', count: 16,
+    premise: 'Q4 retrospective. Shipped: dashboard wiki, mobile app v1, Privy auth migration. Slipped: chain commit batching, Voyage migration. Sebastien presents to whole team.',
+    mix: MIX.DECISION_HEAVY,
+    keywordHints: ['q4', 'roadmap', 'sprint plan', 'retro', 'priority', 'team'],
+    highlightCount: 2,
+  },
+  {
+    id: 'q1-okr',
+    title: 'Q1 2026 OKR draft + finalization',
+    startDate: '2025-12-08', endDate: '2026-01-12', count: 24,
+    premise: 'Q1 OKRs: SOC2 Type II ready, $4M ARR, 3 enterprise wins, hosted-dream cycle automated. Anya pushes back on $4M target as too aggressive.',
+    mix: MIX.DECISION_HEAVY,
+    keywordHints: ['q1', 'okr', 'roadmap', 'quarter', 'sprint plan', 'priority'],
+    highlightCount: 3,
+  },
+  {
+    id: 'board-q1',
+    title: 'Board prep + board meeting March',
+    startDate: '2026-03-04', endDate: '2026-03-22', count: 16,
+    premise: 'Board deck for Mar 22 meeting. ARR $3.4M (under target), SOC2 on track, hiring on track. Series A discussion postponed.',
+    mix: MIX.EPISODIC_HEAVY,
+    keywordHints: ['board', 'investor', 'pitch', 'roadmap', 'q1'],
+    highlightCount: 2,
+  },
+  {
+    id: 'q2-okr',
+    title: 'Q2 2026 OKR draft',
+    startDate: '2026-04-08', endDate: '2026-04-30', count: 18,
+    premise: 'Q2 OKRs: hit SOC2 Type II report, $5.5M ARR, ship Clude Chat v2, Series A close. Lina disagrees with Chat v2 priority — too soon.',
+    mix: MIX.DECISION_HEAVY,
+    keywordHints: ['q2', 'okr', 'roadmap', 'quarter', 'sprint plan', 'priority'],
+    highlightCount: 2,
+  },
+  {
+    id: 'offsite-jan',
+    title: 'Annual planning offsite, Tahoe Jan 20-22',
+    startDate: '2026-01-20', endDate: '2026-01-22', count: 14,
+    premise: 'Tahoe offsite. 3 days. Strategy: B2B-first, narrow ICP. Maya + Anya owned logistics. Snowstorm caused half-day delay.',
+    mix: MIX.EPISODIC_HEAVY,
+    keywordHints: ['offsite', 'team', 'roadmap', 'sprint plan'],
+    highlightCount: 2,
+  },
+
+  // ─── Compliance / SOC2 ─────────────────────────────────────────
+  {
+    id: 'soc2-kickoff',
+    title: 'SOC2 Type II audit kickoff',
+    startDate: '2026-02-04', endDate: '2026-02-20', count: 18,
+    premise: 'SOC2 Type II audit kickoff with Prescient Assurance. 6mo observation window starts. Yara owns evidence cycles.',
+    mix: MIX.DECISION_HEAVY,
+    keywordHints: ['soc2', 'audit', 'audit log', 'evidence', 'compliance', 'control test'],
+    highlightCount: 3,
+  },
+  {
+    id: 'evidence-sprint',
+    title: 'Evidence collection sprint',
+    startDate: '2026-02-21', endDate: '2026-03-22', count: 26,
+    premise: 'Monthly evidence cycles for SOC2. Access reviews, change management proofs, security training records. Yara + Maya wrangle ~40 controls.',
+    mix: MIX.PROCESS_HEAVY,
+    keywordHints: ['evidence', 'audit', 'audit log', 'soc2', 'control test', 'compliance evidence'],
+    highlightCount: 2,
+  },
+  {
+    id: 'vendor-soc2',
+    title: 'Vendor SOC2 audit (subprocessors)',
+    startDate: '2026-03-09', endDate: '2026-03-26', count: 16,
+    premise: 'Subprocessor list audit — chase down SOC2 reports for AWS, Anthropic, Voyage, Privy, Supabase. Anthropic\'s report came late.',
+    mix: MIX.PROCESS_HEAVY,
+    keywordHints: ['soc2', 'audit', 'evidence', 'compliance', 'vendor', 'subprocessor'],
+    highlightCount: 1,
+  },
+  {
+    id: 'privacy-policy',
+    title: 'Privacy policy + DPA update for SOC2 + GDPR',
+    startDate: '2026-02-16', endDate: '2026-03-04', count: 14,
+    premise: 'Legal updated privacy policy + DPA template for SOC2 + GDPR. Customers signed DPAs in March wave.',
+    mix: MIX.DECISION_HEAVY,
+    keywordHints: ['privacy', 'gdpr', 'dpa', 'pii', 'policy', 'data handling', 'compliance'],
+    highlightCount: 1,
+  },
+  {
+    id: 'customer-audit-log-asks',
+    title: 'Customer audit-log requests (recurring)',
+    startDate: '2025-11-15', endDate: '2026-04-25', count: 22,
+    premise: 'Recurring asks from enterprise customers for audit logs / data subject requests / regulator inquiries. ~3 per month. Pattern: most resolve with existing memory_audit_log table.',
+    mix: MIX.PROCESS_HEAVY,
+    keywordHints: ['audit log', 'audit', 'attribution', 'flagged', 'regulator', 'subpoena', 'data request'],
+    highlightCount: 2,
+  },
+  {
+    id: 'hipaa-prospect',
+    title: 'HIPAA inquiry from enterprise prospect',
+    startDate: '2026-04-08', endDate: '2026-04-22', count: 14,
+    premise: 'Healthcare prospect "Wayne Health" asked for HIPAA BAA. We\'re not HIPAA-ready. Yara drafts roadmap, decision: pursue Q3, deal slips to Q3.',
+    mix: MIX.DECISION_HEAVY,
+    keywordHints: ['hipaa', 'compliance', 'baa', 'audit', 'evidence', 'regulator'],
+    highlightCount: 2,
+  },
+
+  // ─── Customer Escalations / Sales ────────────────────────────
+  {
+    id: 'acme-churn-save',
+    title: 'Acme Corp churn risk + save',
+    startDate: '2025-12-08', endDate: '2026-01-22', count: 20,
+    premise: 'Acme threatened churn over auth performance. Maya + Marcus + Devon ran 3 calls + custom load testing. Saved with renewal + 6mo discount.',
+    mix: MIX.EPISODIC_HEAVY,
+    keywordHints: ['acme', 'deal', 'opportunity', 'champion', 'objection', 'follow up'],
+    highlightCount: 3,
+  },
+  {
+    id: 'initech-expansion',
+    title: 'Initech expansion deal',
+    startDate: '2026-03-04', endDate: '2026-04-12', count: 18,
+    premise: 'Initech wants to add 80 seats + Memory Packs. AE (Theo, just hired) closes Apr 12. $186k expansion.',
+    mix: MIX.EPISODIC_HEAVY,
+    keywordHints: ['initech', 'deal', 'opportunity', 'expansion', 'close date', 'champion'],
+    highlightCount: 2,
+  },
+  {
+    id: 'globex-pipeline',
+    title: 'Globex enterprise pipeline (multi-call)',
+    startDate: '2026-01-12', endDate: '2026-04-25', count: 22,
+    premise: 'Globex — 6mo enterprise sales cycle. Stage moves slow, biggest blocker is SOC2 + procurement. Champion: Mei (CTO). Close target Q3.',
+    mix: MIX.EPISODIC_HEAVY,
+    keywordHints: ['globex', 'deal', 'opportunity', 'mql', 'sql', 'champion', 'sponsor', 'stage'],
+    highlightCount: 2,
+  },
+  {
+    id: 'soc2-buy-blockers',
+    title: 'SOC2 as buy-blocker — multiple deals',
+    startDate: '2026-03-04', endDate: '2026-04-30', count: 18,
+    premise: 'Several enterprise deals stalled pending SOC2 Type II report. Pattern memo to Sebastien: "no SOC2 evidence, no deployment" — ~5 deals worth $750k.',
+    mix: MIX.DECISION_HEAVY,
+    keywordHints: ['soc2', 'audit', 'evidence', 'deal', 'objection', 'compliance', 'sql', 'champion'],
+    highlightCount: 2,
+  },
+  {
+    id: 'pricing-debate',
+    title: 'Per-seat vs per-token pricing debate',
+    startDate: '2026-02-04', endDate: '2026-02-26', count: 16,
+    premise: 'Anya wants per-seat pricing (predictable, finance-friendly). Sebastien wants per-token (aligned with usage). Active disagreement, decision pending.',
+    mix: MIX.DECISION_HEAVY,
+    keywordHints: ['pricing', 'per-seat', 'per-token', 'subscription', 'billing tier', 'rfc'],
+    highlightCount: 2,
+  },
+  {
+    id: 'customer-feedback',
+    title: 'Customer feedback synthesis (recurring CR work)',
+    startDate: '2025-11-15', endDate: '2026-04-30', count: 20,
+    premise: 'Recurring customer interview pattern. Maya synthesizes monthly. Anya\'s framing: "I want X" usually means "I want to feel Y". Audit logs = recurring buy-blocker.',
+    mix: MIX.DECISION_HEAVY,
+    keywordHints: ['customer call', 'interview', 'feedback', 'user research', 'persona', 'objection'],
+    highlightCount: 2,
+  },
+
+  // ─── Incidents / Postmortems ─────────────────────────────────
+  {
+    id: 'auth-migration-incident',
+    title: 'Auth migration outage Feb 11',
+    startDate: '2026-02-11', endDate: '2026-02-18', count: 16,
+    premise: 'Auth rollout failed at 2:14am Feb 11 — fallback path didn\'t preserve org_id. 11min rollback. Ari owned RCA. Postmortem published Feb 14.',
+    mix: MIX.PROCESS_HEAVY,
+    keywordHints: ['auth', 'incident', 'outage', 'rca', 'postmortem', 'audit log', 'rfc'],
+    highlightCount: 2,
+  },
+  {
+    id: 'solana-rpc-rate-limit',
+    title: 'Solana RPC rate limit incident',
+    startDate: '2026-03-14', endDate: '2026-03-20', count: 12,
+    premise: 'Solana mainnet RPC started 429ing during chain commit pipeline. Ari + Devon migrated to Helius dedicated. Cost +$200/mo. Memory commits caught up.',
+    mix: MIX.PROCESS_HEAVY,
+    keywordHints: ['solana', 'rpc', 'incident', 'outage', 'rca', 'postmortem'],
+    highlightCount: 1,
+  },
+  {
+    id: 'dashboard-leak',
+    title: 'Dashboard cross-account memory leak (May 4)',
+    startDate: '2026-05-04', endDate: '2026-05-05', count: 12,
+    premise: 'Linked-wallet adoption bug — new email signups inherited unrelated memories if a wallet was active in browser at signup. Hotfix shipped same day. Phase 2 import flow filed.',
+    mix: MIX.PROCESS_HEAVY,
+    keywordHints: ['privy', 'auth', 'incident', 'hotfix', 'postmortem', 'audit log', 'security'],
+    highlightCount: 3,
+  },
+  {
+    id: 'embedding-429s',
+    title: 'Embedding pipeline 429 backpressure',
+    startDate: '2026-03-12', endDate: '2026-03-22', count: 12,
+    premise: 'Voyage embedding API 429s during nightly compaction. Devon added exponential backoff + nightly reservation tier purchase.',
+    mix: MIX.PROCESS_HEAVY,
+    keywordHints: ['voyage', 'embedding', 'incident', 'rca', 'postmortem'],
+    highlightCount: 1,
+  },
+  {
+    id: 'commit-backlog',
+    title: 'Memory commit chain backlog',
+    startDate: '2026-04-04', endDate: '2026-04-15', count: 12,
+    premise: 'Chain commit queue grew 8K behind during high write volume. Ari batched commits via merkle root. Backlog cleared by Apr 12.',
+    mix: MIX.PROCESS_HEAVY,
+    keywordHints: ['solana', 'commit', 'incident', 'rca', 'postmortem', 'audit'],
+    highlightCount: 1,
+  },
+
+  // ─── Internal Process / Team ────────────────────────────────
+  {
+    id: 'no-meeting-tuesdays',
+    title: 'No-meeting Tuesdays experiment',
+    startDate: '2025-11-12', endDate: '2026-02-26', count: 16,
+    premise: 'Maya championed no-meeting Tuesdays. Worked Q4. Stalled Q1 due to SOC2 sync demands. Decision Feb 26: revive with stronger enforcement.',
+    mix: MIX.DECISION_HEAVY,
+    keywordHints: ['team', 'process', 'standup', 'sprint', 'retro', 'design doc'],
+    highlightCount: 2,
+  },
+  {
+    id: 'async-writing',
+    title: 'Async-first writing culture',
+    startDate: '2025-11-15', endDate: '2026-04-30', count: 18,
+    premise: 'Maya pushes culture: decisions get a written doc, no slack-only decisions. Reinforced after a few meeting-only choices got re-litigated.',
+    mix: MIX.PROCESS_HEAVY,
+    keywordHints: ['team', 'process', 'design doc', 'rfc', 'standup', 'retro'],
+    highlightCount: 1,
+  },
+  {
+    id: 'eng-retros',
+    title: 'Monthly engineering retros',
+    startDate: '2025-11-28', endDate: '2026-04-30', count: 18,
+    premise: 'Monthly eng retros. Themes: too many midnight deploys, test coverage at 43%, deploy fails, Slack vs Linear churn.',
+    mix: MIX.PROCESS_HEAVY,
+    keywordHints: ['retro', 'team', 'process', 'sprint', 'standup', '1:1'],
+    highlightCount: 2,
+  },
+  {
+    id: 'product-friday',
+    title: 'Product Friday demos (weekly)',
+    startDate: '2025-11-14', endDate: '2026-04-25', count: 18,
+    premise: 'Friday product demo cadence. Started Nov, paused over holidays, resumed Jan. Highlight reels become external content.',
+    mix: MIX.PROCESS_HEAVY,
+    keywordHints: ['demo', 'rehearsal', 'team', 'process'],
+    highlightCount: 1,
+  },
+  {
+    id: '1on1-cadence',
+    title: '1:1 cadence + format updates',
+    startDate: '2025-11-12', endDate: '2026-04-30', count: 14,
+    premise: 'Maya runs 1:1s with Anya, Marcus, Yara. Format: written prep + 25min sync. Reinforced quarterly.',
+    mix: MIX.PROCESS_HEAVY,
+    keywordHints: ['1:1', 'team', 'process'],
+    highlightCount: 1,
+  },
+
+  // ─── Self-Model + Introspective ─────────────────────────────
+  {
+    id: 'maya-style',
+    title: 'Maya\'s working style + preferences',
+    startDate: '2025-11-12', endDate: '2026-04-30', count: 16,
+    premise: 'Maya\'s self-model: prefers async + written, hates re-explaining, is meticulous, doesn\'t enjoy surprise meetings, runs hot when org context is missing.',
+    mix: MIX.REFLECTION,
+    keywordHints: ['team', 'process', 'standup', '1:1'],
+    highlightCount: 0,
+  },
+  {
+    id: 'maya-year-review',
+    title: 'Maya\'s mid-year reflection',
+    startDate: '2026-04-25', endDate: '2026-04-30', count: 12,
+    premise: 'End-Apr reflection: what got better, what\'s still hard. Notes: vendor consolidation worked. SOC2 was harder than expected. Hiring is now her best skill.',
+    mix: MIX.REFLECTION,
+    keywordHints: ['retro', 'team', 'process'],
+    highlightCount: 1,
+  },
+  {
+    id: 'maya-introspective',
+    title: 'Maya\'s introspective patterns (dream-cycle output)',
+    startDate: '2025-12-15', endDate: '2026-04-30', count: 14,
+    premise: 'Periodic introspective notes from Clude\'s dream cycle running on Maya\'s memory: patterns it notices about her work, contradictions it surfaces, suggestions.',
+    mix: { episodic: 0, semantic: 2, procedural: 0, self_model: 4, introspective: 8 },
+    keywordHints: ['team', 'process'],
+    highlightCount: 1,
+  },
+];
+
+// Sanity check: thread counts sum to ~1000
+export const TOTAL_COUNT = THREADS.reduce((a, t) => a + t.count, 0);

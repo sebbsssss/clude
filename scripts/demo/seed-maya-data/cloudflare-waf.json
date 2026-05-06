@@ -1,0 +1,100 @@
+[
+  {
+    "type": "episodic",
+    "content": "Sebastien pulled me into his office at 2pm Thursday to discuss the auth-migration fallout. We'd seen 47 failed login attempts from the same IP block targeting /api/v1/auth/token. Linear ticket #8234 had been sitting in triage for 6 hours.",
+    "summary": "Auth migration incident triggers security review",
+    "event_date": "2026-03-12",
+    "importance": 0.58
+  },
+  {
+    "type": "semantic",
+    "content": "Cloudflare WAF + bot management is mandatory for clude.io before next customer audit. Acme Corp's SOC2 questionnaire explicitly asks for DDoS mitigation and rate-limiting. We're not passing without this.",
+    "summary": "WAF required for SOC2 compliance and Acme audit",
+    "event_date": "2026-03-12",
+    "importance": 0.82
+  },
+  {
+    "type": "procedural",
+    "content": "To enable Cloudflare WAF: 1) Update DNS CNAME records in Route53 (www.clude.io → points to CF), 2) Configure managed rulesets in CF dashboard (OWASP Core, Bot Management), 3) Set log drain to DataDog for visibility, 4) Test via curl against staging first.",
+    "summary": "Cloudflare WAF setup checklist for clude.io",
+    "event_date": "2026-03-13",
+    "importance": 0.71
+  },
+  {
+    "type": "episodic",
+    "content": "Ari flagged that our rate-limit rules were too aggressive—legitimate mobile clients from Globex were getting 429s. We'd set max 30 req/min per IP. He asked if I wanted to whitelist their subnet or relax the window.",
+    "summary": "Rate-limit rules blocking Globex mobile traffic",
+    "event_date": "2026-03-14",
+    "importance": 0.45
+  },
+  {
+    "type": "procedural",
+    "content": "WAF rule tuning process: 1) Monitor DataDog dashboard for block rate, 2) Review Cloudflare Analytics for false positives, 3) Adjust sensitivity on OWASP rules (MySQL injection, XSS) incrementally, 4) Get Ari approval before pushing to prod, 5) Communicate changes to Marcus (CS) in case customers report issues.",
+    "summary": "Standard WAF tuning workflow with data review",
+    "event_date": "2026-03-14",
+    "importance": 0.75
+  },
+  {
+    "type": "semantic",
+    "content": "Bot Management tier costs $200/month and catches credential-stuffing attacks. Given the auth incident, it's worth the spend. Anya approved it within our security budget ($8k annual).",
+    "summary": "Bot Management cost-benefit: approved at $200/mo",
+    "event_date": "2026-03-15",
+    "importance": 0.68
+  },
+  {
+    "type": "episodic",
+    "content": "Devon found that our /api/health endpoint was returning 403 Forbidden under the new WAF rules. Turned out the OWASP rule set was flagging the health-check User-Agent as suspicious. Exempted it via Cloudflare custom rule.",
+    "summary": "Health-check endpoint blocked by overzealous WAF rules",
+    "event_date": "2026-03-17",
+    "importance": 0.52
+  },
+  {
+    "type": "procedural",
+    "content": "Document all WAF exceptions in Linear. Format: rule name, exemption reason, affected endpoint, approval date, reviewer. Keeps audit trail clean. Exception log lives in clude-infra repo under /security/waf-exceptions.md.",
+    "summary": "WAF exception documentation standard",
+    "event_date": "2026-03-17",
+    "importance": 0.76
+  },
+  {
+    "type": "self_model",
+    "content": "I hate re-explaining why security decisions matter to engineers. This rollout forced me to document everything async in Notion so Ari and Devon could absorb context without 5 sync meetings. It worked.",
+    "summary": "Learned to lean on async docs to avoid re-explaining",
+    "event_date": "2026-03-18",
+    "importance": 0.54
+  },
+  {
+    "type": "semantic",
+    "content": "Cloudflare WAF blocks are logged to DataDog with rule ID, IP, path, and action. Evidence trail matters for SOC2 audits. Marcus needs this data to respond to customer security questions.",
+    "summary": "WAF logs to DataDog for compliance and support",
+    "event_date": "2026-03-19",
+    "importance": 0.79
+  },
+  {
+    "type": "episodic",
+    "content": "Initech's security team ran a pen-test and hit a 403 on their API calls. Turned out they were using an old User-Agent string. I whitelisted their subnet range (203.0.113.0/24) after they provided evidence of ownership.",
+    "summary": "Initech pen-test blocked; whitelisted after verification",
+    "event_date": "2026-03-20",
+    "importance": 0.48
+  },
+  {
+    "type": "procedural",
+    "content": "To whitelist a customer subnet in Cloudflare: 1) Request CIDR range via Linear ticket, 2) Verify ownership (check DNS records or signed agreement), 3) Create IP allowlist rule in CF dashboard, 4) Tag with customer name and ticket ID, 5) Notify Marcus to document in customer security profiles.",
+    "summary": "Customer subnet whitelist procedure",
+    "event_date": "2026-03-21",
+    "importance": 0.74
+  },
+  {
+    "type": "episodic",
+    "content": "Anya asked if Cloudflare charges scale with request volume. I checked the invoice: flat $200/mo for bot management, WAF included in standard plan. No per-request fees. That's a relief given we do ~12M API reqs/day.",
+    "summary": "Cloudflare pricing confirmed flat-rate for scale",
+    "event_date": "2026-03-23",
+    "importance": 0.41
+  },
+  {
+    "type": "self_model",
+    "content": "I used to think ops was about firefighting. This WAF rollout taught me that documenting decisions upfront (rules, exceptions, rationales) prevents 10 firefights later. Meticulous beats reactive.",
+    "summary": "Operations is documentation + proactive tuning",
+    "event_date": "2026-03-26",
+    "importance": 0.62
+  }
+]

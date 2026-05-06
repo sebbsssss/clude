@@ -1,0 +1,94 @@
+[
+  {
+    "type": "semantic",
+    "content": "Clude's primary vendors & costs (as of Jan 2026): Snowflake ($18K/mo), AWS ($12K/mo), Anthropic API ($8K/mo), DataDog ($3.2K/mo), Cloudflare ($2.1K/mo). Renewal dates staggered; Snowflake due Mar 15, AWS rolling. Anya owns vendor management, I track strategic renewals.",
+    "summary": "Core vendor stack & monthly burn breakdown",
+    "event_date": "2025-12-15",
+    "importance": 0.78
+  },
+  {
+    "type": "introspective",
+    "content": "Noticed I schedule 1:1s with Sebastien for Fridays, then reschedule 60% of the time. Pattern: I avoid them when anxious about budget or headcount numbers. This is counterproductive—he's going to find out anyway, and I'm burning his time. Need to front-load hard conversations.",
+    "summary": "Avoidance pattern with Sebastien—reschedule 1:1s when anxious",
+    "event_date": "2025-12-17",
+    "importance": 0.61
+  },
+  {
+    "type": "self_model",
+    "content": "I work best in async, written format. Real-time Slack debates drain me fast. Ari once said I 'go quiet in meetings then write a 2-page rebuttal'. That's accurate. My strength is synthesis & documentation; I should lean into that, not fight it.",
+    "summary": "Async communicator; synthesis over real-time debate",
+    "event_date": "2025-12-22",
+    "importance": 0.68
+  },
+  {
+    "type": "introspective",
+    "content": "Reviewed my calendar for Q4: 47% of my time was 'urgent' unplanned work. Most was junior engineer onboarding questions that could've been in Notion. I'm being a bottleneck. Assigned Tom's questions to Ari instead; he seemed annoyed, but it's the right move.",
+    "summary": "Bottleneck pattern: junior questions → need better docs",
+    "event_date": "2026-01-08",
+    "importance": 0.71
+  },
+  {
+    "type": "introspective",
+    "content": "Anya flagged that I push back on every budget request by 20-30%, then approve it anyway 3 weeks later. It creates uncertainty for the team. She's right. I default to 'no' when first asked because I'm afraid of overspending, but I'm just delaying the decision and signaling distrust.",
+    "sample_context": "Finance review meeting",
+    "summary": "Default-no decision pattern creates false scarcity",
+    "event_date": "2026-01-14",
+    "importance": 0.73
+  },
+  {
+    "type": "semantic",
+    "content": "Acme Corp (largest customer, $45K MRR, 6-month contract) renewal decision point: Feb 28, 2026. They've asked for 40% discount if we commit to custom reporting. ROI calc: cost of dev = ~$22K; if we lose them it's $270K revenue loss. Sebastien & Lina own the call, but I need to track timeline.",
+    "summary": "Acme renewal logic: custom work vs. retention math",
+    "event_date": "2026-01-20",
+    "importance": 0.84
+  },
+  {
+    "type": "self_model",
+    "content": "I have low tolerance for incomplete information. If a decision doesn't have data, I either delay it or rewrite the brief. Lina finds this helpful; Ari sometimes finds it pedantic. Sebastien's neutral. It's my strength and my bottleneck—need to know when 'good enough' is enough.",
+    "summary": "High bar for data completeness; can slow decisions",
+    "event_date": "2026-02-04",
+    "importance": 0.65
+  },
+  {
+    "type": "introspective",
+    "content": "Dream cycle surfaced: I've been in Ops 8 years, always working for founders. I optimize for 'founder success' over 'team clarity'. Sebastien makes a call, I execute without re-socializing it. This works until it doesn't—team discovers the decision via side effect. Started asking Sebastien if I should async-announce his decisions first.",
+    "summary": "Operator bias: over-index on founder intent, under-explain",
+    "event_date": "2026-02-18",
+    "importance": 0.72
+  },
+  {
+    "type": "introspective",
+    "content": "Priya asked if I was 'okay'—my Slack responses are one-word lately, calendar is booked 6am-8pm. I said 'busy season', but it's been 4 months. I'm running on fumes and it's showing. Need to actually delegate or reset expectations, not just complain to my memory system.",
+    "summary": "Burnout creeping in; one-word responses, overbooked",
+    "event_date": "2026-03-05",
+    "importance": 0.69
+  },
+  {
+    "type": "introspective",
+    "content": "James (hired mid-March) asked for ops decision framework doc. I told him 'it's all context-dependent'. He looked confused. That's not useful. I've never written down how I decide. Spent 2 hours building a real framework with Anya. Turns out I had one; I just never articulated it. Need to do this for all key processes.",
+    "summary": "Implicit process knowledge isn't scalable; need docs",
+    "event_date": "2026-03-17",
+    "importance": 0.75
+  },
+  {
+    "type": "introspective",
+    "content": "Caught myself in a pattern: when stressed, I review vendor contracts or re-audit permissions instead of addressing the actual problem (headcount planning for H2). I use 'ops work' as a productivity escape hatch. Dream flagged this as avoidance. Scheduled a hard conversation with Sebastien about hiring, forced it to calendar lock.",
+    "summary": "Under stress, retreat into admin work; avoid strategy",
+    "event_date": "2026-04-02",
+    "importance": 0.7
+  },
+  {
+    "type": "self_model",
+    "content": "I trust written commitments over verbal ones. If Sebastien says 'yes' in a meeting, I don't fully believe it until there's a Slack message or email. This serves me (catches backtracking) but it also signals distrust. Team reads it as me not being aligned or being paranoid. Starting to document decisions *immediately* in writing, then asking 'did I capture that right?'",
+    "summary": "Trust written > verbal; pattern of re-confirming",
+    "event_date": "2026-04-15",
+    "importance": 0.68
+  },
+  {
+    "type": "introspective",
+    "content": "Ari shipped a major backend refactor without running it past me first. I was irritated—ops should have been consulted (tooling impact, rollout risk). But I realized I never said that. I assumed he knew. Sent him a short process doc: 'changes affecting observability/deploy → ops sync first'. He appreciated the clarity. I was mad at absence of telepathy.",
+    "summary": "Expect implicit alignment; need to make process explicit",
+    "event_date": "2026-04-28",
+    "importance": 0.67
+  }
+]

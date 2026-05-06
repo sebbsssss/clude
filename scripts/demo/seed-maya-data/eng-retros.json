@@ -1,0 +1,128 @@
+[
+  {
+    "type": "episodic",
+    "content": "Nov retro: Ari flagged 7 deploys past midnight in Oct alone. Devon and James both pushing prod changes at 2am. Sebastien said 'unacceptable' but didn't assign ownership. No action item assigned.",
+    "summary": "Oct midnight deploys flagged, no owner assigned",
+    "event_date": "2025-11-28",
+    "importance": 0.45
+  },
+  {
+    "type": "semantic",
+    "content": "Test coverage at 43% is our hard floor. Anything below 45% fails CI. Ari wants 65% by Q2 2026. Current velocity won't get us there without dedicated sprint time.",
+    "summary": "Test coverage baseline 43%, target 65% by Q2",
+    "event_date": "2025-12-05",
+    "importance": 0.72
+  },
+  {
+    "type": "procedural",
+    "content": "Created deploy checklist post-incident (Dec 3 Cloudflare routing failed). All deploys now require: 2 reviewers, staging smoke test pass, DataDog alert check, Slack notification 30min before. No exceptions.",
+    "summary": "Deploy checklist: 2 reviewers, smoke tests, alerts, notification",
+    "event_date": "2025-12-08",
+    "importance": 0.88
+  },
+  {
+    "type": "procedural",
+    "content": "Retro process formalized: async feedback in Linear board by Wed 5pm, synchronous discussion Fri 10am, decisions doc updated by EOD Fri. Ari owns facilitation. Rotate note-taker monthly.",
+    "summary": "Monthly retro cadence: async Wed, sync Fri, doc by EOD",
+    "event_date": "2025-12-12",
+    "importance": 0.65
+  },
+  {
+    "type": "episodic",
+    "content": "Dec retro: test coverage dropped to 41% after James's batch job refactor. Ari said new code has zero tests. James apologized, committed to writing tests. But no deadline set. Anya asked why we're not tracking this in sprints.",
+    "summary": "Coverage dropped to 41%, batch refactor untested",
+    "event_date": "2025-12-19",
+    "importance": 0.58
+  },
+  {
+    "type": "semantic",
+    "content": "Deploy failures root causes: 1) env var mismatches (Snowflake creds), 2) schema migrations not rolled back, 3) Sentry alerts not configured pre-deploy. Ari tracking in Linear board 'Deploy Safety'.",
+    "summary": "Three deploy failure categories identified and tracked",
+    "event_date": "2025-12-22",
+    "importance": 0.75
+  },
+  {
+    "type": "procedural",
+    "content": "Mandatory deploy slot rule: deploys only 9am-3pm UTC Mon-Fri. Anything outside that requires Sebastien approval + on-call engineer present. Pushes it in Linear and blocks calendar. Effective Jan 6.",
+    "summary": "Deploy window: 9am-3pm UTC Mon-Fri, exception approval required",
+    "event_date": "2026-01-09",
+    "importance": 0.82
+  },
+  {
+    "type": "self_model",
+    "content": "I notice I'm the only one documenting retro decisions async. Ari leads discussion but doesn't write them down. Devon and James assume 'someone else' is tracking. I need to enforce owner-per-action or stop attending.",
+    "summary": "I'm over-owning retro documentation. Need to delegate.",
+    "event_date": "2026-01-15",
+    "importance": 0.51
+  },
+  {
+    "type": "episodic",
+    "content": "Jan standup: Tom admitted he doesn't understand our test patterns. No one else stepped up to mentor. Ari said 'it's on the wiki' but wiki is 8 months old. Added to retro agenda.",
+    "summary": "Tom lost on testing patterns, wiki out of date",
+    "event_date": "2026-01-20",
+    "importance": 0.42
+  },
+  {
+    "type": "procedural",
+    "content": "Test coverage SLA: each story must ship with ≥70% coverage on new code. Code review template now includes coverage check. Blocked 2 PRs in Jan for non-compliance. Communicated in all-hands.",
+    "summary": "New code must hit 70% coverage, enforced in reviews",
+    "event_date": "2026-01-27",
+    "importance": 0.79
+  },
+  {
+    "type": "semantic",
+    "content": "Linear vs Slack churn problem: team discusses retro items in Slack threads, decisions get lost. Switched to async Linear board for all meta-decisions. Ari resisted initially ('too formal'), now uses it daily.",
+    "summary": "Linear board replaced Slack for retro tracking",
+    "event_date": "2026-02-03",
+    "importance": 0.68
+  },
+  {
+    "type": "episodic",
+    "content": "Feb retro: midnight deploy count down to 2 (from 7 in Oct). Ari acknowledged the window rule worked. But 4 deploys still failed—all env var issues despite the checklist. Anya asked if we need infra code review.",
+    "summary": "Deploys at window, but 4 failed on env config",
+    "event_date": "2026-02-21",
+    "importance": 0.55
+  },
+  {
+    "type": "procedural",
+    "content": "Created env var validation script: runs pre-deploy, checks Snowflake/AWS/Anthropic creds against template. Integrated into CI. No manual checks needed. Deployed Feb 18, zero env failures since.",
+    "summary": "Env validation script blocks bad deploys automatically",
+    "event_date": "2026-02-28",
+    "importance": 0.85
+  },
+  {
+    "type": "semantic",
+    "content": "Root cause of Linear/Slack churn: no single source of truth. Retro decisions were in Slack, action items in Linear, status updates in standup notes. Consolidated all to Linear 'Retro Decisions' project in Feb.",
+    "summary": "Single source of truth for retro items: Linear",
+    "event_date": "2026-03-07",
+    "importance": 0.73
+  },
+  {
+    "type": "episodic",
+    "content": "Mar retro: James pushed back on coverage target ('70% is arbitrary'). Devon agreed. Ari defended it with Anthropic's evals showing 68%+ coverage = 3x fewer production bugs. No pushback after.",
+    "summary": "Coverage target justified by Anthropic evals, accepted",
+    "event_date": "2026-03-21",
+    "importance": 0.48
+  },
+  {
+    "type": "self_model",
+    "content": "After 6 months of retros, I see the pattern: we solve the same problems twice because we don't review past decisions. Started keeping a 'retro evergreen' doc that surfaces 3-month-old items. It's working.",
+    "summary": "Tracking recurring issues with evergreen doc",
+    "event_date": "2026-03-28",
+    "importance": 0.61
+  },
+  {
+    "type": "procedural",
+    "content": "Retro decision tracking: all items now have owner, due date, and Slack ping reminder 3 days before. Ari responsible for review cadence. 92% of Q1 items closed on time. Feb baseline was 34%.",
+    "summary": "Retro items tracked with owners, 92% closure rate",
+    "event_date": "2026-04-08",
+    "importance": 0.81
+  },
+  {
+    "type": "episodic",
+    "content": "Apr retro: test coverage hit 57%. Ari called out James for drilling it hard with Tom. Dev velocity steady. No midnight deploys in Apr. Sebastien asked why we don't ship like this every month. Ari didn't answer.",
+    "summary": "Coverage 57%, zero midnight deploys, velocity stable",
+    "event_date": "2026-04-25",
+    "importance": 0.52
+  }
+]

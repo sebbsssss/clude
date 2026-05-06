@@ -1,0 +1,86 @@
+[
+  {
+    "type": "episodic",
+    "content": "Anya flagged Linear renewal coming due Dec 15. Current contract: 18 seats @ $4.5k/yr. Eng headcount now 27 (added James in Mar, Tom in Sept). She's pushing for 2yr prepaid to lock in better rate before pricing tier shifts.",
+    "summary": "Linear renewal due; seat count jumped 18→27, Anya pitches 2yr prepaid",
+    "event_date": "2025-12-01",
+    "importance": 0.72
+  },
+  {
+    "type": "semantic",
+    "content": "Linear pricing: per-seat annual model. Standard discount for 2yr prepay is ~15–18%. At 27 seats, renewal cost ~$12.15k/yr. Prepaid 2yr would be ~$20.7k upfront (assuming 16% discount). Need to confirm Linear's current rate card.",
+    "summary": "Linear 2yr prepay discount typically 15–18%; 27 seats = $20.7k est.",
+    "event_date": "2025-12-01",
+    "importance": 0.68
+  },
+  {
+    "type": "procedural",
+    "content": "For subscription renewal decisions: (1) Gather current seat/usage count, (2) Request vendor quote for 1yr & multi-yr options, (3) Run approval with Finance & Eng Lead, (4) Document decision in Linear ticket w/ cost justification, (5) Execute before contract lapse.",
+    "summary": "Renewal workflow: audit seats → quote → approvals → doc → execute",
+    "event_date": "2025-12-02",
+    "importance": 0.71
+  },
+  {
+    "type": "episodic",
+    "content": "Ari raised concern in Ops standup: some junior eng (Tom) still onboarding, doesn't need full seat yet. Anya immediately noted we're being conservative—can flex down to 26 if Tom's not actively using Linear. Pushing estimate to mid-week once clarified.",
+    "summary": "Ari notes Tom (junior) maybe doesn't need active seat; estimate defer pending clarification",
+    "event_date": "2025-12-03",
+    "importance": 0.48
+  },
+  {
+    "type": "semantic",
+    "content": "Clude engineering team composition as of Dec 2025: Ari (Lead), Devon (Senior Backend), James (Senior Backend, hired Mar 2026), Tom (Junior Eng, hired Sept 2025), + ~22 others across infra/frontend. Seat allocation decisions should involve Ari + Anya sign-off.",
+    "summary": "Eng team: Ari lead, Devon + James senior, Tom junior; 27 total headcount",
+    "event_date": "2025-12-03",
+    "importance": 0.62
+  },
+  {
+    "type": "episodic",
+    "content": "Sent Linear renewal inquiry Dec 5 with seat count (26–27 pending Tom clarification), asked for 1yr & 2yr quotes. Also requested early-bird discount if we commit before Dec 10. Linear CSM (Sarah) usually turnarounds in 24–48h.",
+    "summary": "Requested Linear quotes (1yr & 2yr) Dec 5; CSM Sarah 24–48h typical turnaround",
+    "event_date": "2025-12-05",
+    "importance": 0.55
+  },
+  {
+    "type": "semantic",
+    "content": "Vendor turnaround expectations: Snowflake (72h, complex), Linear (24–48h), Notion (48h), AWS (variable). For time-sensitive renewals, always request early-bird pricing window. Document CSM contact in Vendor Relationships doc.",
+    "summary": "Typical vendor quote turnarounds; early-bird windows reduce pressure",
+    "event_date": "2025-12-05",
+    "importance": 0.64
+  },
+  {
+    "type": "episodic",
+    "content": "Tom confirmed he's using Linear actively (backlog grooming). We're locked at 27 seats. Linear quote arrived: 1yr @ $12.15k, 2yr @ $20.52k (15.5% discount). Anya wants to loop Sebastien before committing to 2yr prepay given cash runway.",
+    "summary": "Linear quote: 1yr $12.15k, 2yr $20.52k (15.5%); needs Sebastien sign-off",
+    "event_date": "2025-12-08",
+    "importance": 0.78
+  },
+  {
+    "type": "semantic",
+    "content": "Multi-year prepay decision framework: (1) Monthly cash burn vs. runaway, (2) Likelihood of team growth/shrink in 2yr window, (3) Vendor lock-in risk, (4) Discount ROI. For tools like Linear, 2yr commitment is low-risk if headcount stable.",
+    "summary": "Multi-yr prepay: weigh burn, headcount stability, lock-in, discount ROI",
+    "event_date": "2025-12-08",
+    "importance": 0.73
+  },
+  {
+    "type": "episodic",
+    "content": "Sebastien approved 2yr Linear prepay (Dec 10). Rationale: $2.7k savings vs. 1yr, headcount unlikely to shrink, Linear integral to Eng workflow. Anya will execute payment, I'm tagging in Linear ticket + Notion (vendor tracker). Contract renewal complete by Dec 12.",
+    "summary": "Sebastien approved 2yr Linear prepay; $2.7k savings, payment Dec 10–12",
+    "event_date": "2025-12-10",
+    "importance": 0.81
+  },
+  {
+    "type": "procedural",
+    "content": "Post-renewal documentation: (1) Update Notion Vendor Relationships with new contract end date (Dec 2027), (2) Create Linear ticket tagged 'renewal' with cost, discount %, team size for future reference, (3) Alert Finance calendar 11mo before renewal to avoid surprise.",
+    "summary": "Post-renewal: update Notion vendor tracker, log Linear ticket, set remind calendar",
+    "event_date": "2025-12-11",
+    "importance": 0.67
+  },
+  {
+    "type": "self_model",
+    "content": "I prefer to lock in multi-year deals when discount ROI is clear and team headcount stable. Reduces decision friction, saves cash, avoids renewal-crisis scramble. But I always get Finance + CEO buy-in on cash impact first—learned hard way that prepay can strain runway if not coordinated.",
+    "summary": "Multi-yr prepay decisions: I favor them when stable + clear ROI, always Finance sync",
+    "event_date": "2025-12-12",
+    "importance": 0.69
+  }
+]

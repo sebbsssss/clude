@@ -1,0 +1,93 @@
+[
+  {
+    "type": "episodic",
+    "content": "Ari flagged cross-account memory bleed at 11:47 AM: new signups with active wallets in browser were inheriting unrelated user memories from Snowflake. Confirmed 47 affected accounts across Acme and Initech. Sebastien immediately approved hotfix priority.",
+    "summary": "Wallet-linked memory leak discovered; 47 accounts exposed",
+    "event_date": "2026-05-04",
+    "importance": 0.78
+  },
+  {
+    "type": "semantic",
+    "content": "Root cause: signup flow didn't isolate auth context when wallet was active. Session token inheritance bug in Devon's connection pooling layer meant new user memory vectors bound to previous wallet owner's embedding space.",
+    "summary": "Wallet auth context leaked to new signup sessions via pooling",
+    "event_date": "2026-05-04",
+    "importance": 0.82
+  },
+  {
+    "type": "procedural",
+    "content": "On cross-account auth incidents: always pull audit logs from Anthropic API calls first (not Sentry), then cross-ref wallet IDs in Linear against timestamp ranges. Notion security dashboard auto-flags anomalies but manual spot-check is faster.",
+    "summary": "Cross-account auth incidents: audit Anthropic logs, then wallet IDs",
+    "event_date": "2026-05-04",
+    "importance": 0.71
+  },
+  {
+    "type": "episodic",
+    "content": "Devon shipped hotfix at 3:22 PM same day—isolated signup auth context by adding wallet scope check pre-embedding. James reviewed in 18 min. Deployed to prod 4:01 PM. Anya monitored for rollback risk; none triggered.",
+    "summary": "Hotfix shipped and deployed same day; no rollback needed",
+    "event_date": "2026-05-04",
+    "importance": 0.68
+  },
+  {
+    "type": "semantic",
+    "content": "Clude memory import philosophy: new users should never be privy to prior wallet activity. Auth isolation must happen at vectorization layer, not application layer, because Voyage AI embeddings are stateless.",
+    "summary": "Memory import: auth isolation required at embedding layer",
+    "event_date": "2026-05-04",
+    "importance": 0.75
+  },
+  {
+    "type": "procedural",
+    "content": "Postmortem filing process: Anya opens Linear ticket, I write 2-para summary (incident window, impact count, fix deployed), Ari adds technical detail, Sebastien approves before notifying Wayne Industries and Globex. Keep timeline precise.",
+    "summary": "Postmortem: Linear ticket, 2-para summary, tech detail, CEO approval",
+    "event_date": "2026-05-04",
+    "importance": 0.68
+  },
+  {
+    "type": "self_model",
+    "content": "I've learned I'm more useful when I audit the incident myself rather than wait for Ari to summarize. 15-min deep dive into DataDog and Sentry logs saves 40 min of clarifying questions later. My patience for re-explaining is extremely low.",
+    "summary": "Self: audit incidents first, summarize myself—saves context-switching",
+    "event_date": "2026-05-04",
+    "importance": 0.52
+  },
+  {
+    "type": "episodic",
+    "content": "Priya flagged customer comms risk: Initech has 12 affected users, Wayne Industries 8. Marcus drafted disclosure email (sent 6:15 PM). Sebastien decided against credit, but offered 2 months free Cloudflare add-on for affected users.",
+    "summary": "Customer comms sent; 20 total affected users; Cloudflare credit offered",
+    "event_date": "2026-05-04",
+    "importance": 0.71
+  },
+  {
+    "type": "semantic",
+    "content": "Phase 2 import flow: when users import prior wallet memories, they must explicitly consent per memory chunk. Lina and Jenny are designing UX. This prevents silent inheritance and gives us an audit log of what was imported when.",
+    "summary": "Phase 2: explicit per-memory consent on import + audit logging",
+    "event_date": "2026-05-05",
+    "importance": 0.79
+  },
+  {
+    "type": "procedural",
+    "content": "When filing design tickets with Jenny for auth UX: always specify the security constraint first (e.g., 'user must see memory source before confirming import'), then let her propose the pattern. She dislikes being asked for solutions without problem context.",
+    "summary": "Auth UX tickets to Jenny: security constraint first, then design",
+    "event_date": "2026-05-05",
+    "importance": 0.58
+  },
+  {
+    "type": "self_model",
+    "content": "I dislike when incidents get reported to me third-hand. Ari→Anya→me is slower and loses technical detail. I need to be looped into Sentry/DataDog alerts directly, even if it means more noise. Context loss costs more than alert volume.",
+    "summary": "Self: need direct incident alerts, not relayed summaries",
+    "event_date": "2026-05-05",
+    "importance": 0.54
+  },
+  {
+    "type": "procedural",
+    "content": "Hotfix validation checklist: (1) Ari's code review + approval, (2) 10-min soak in staging with real Snowflake data, (3) Anya monitors first 2 hours post-deploy for error rate spikes in DataDog, (4) Customer comms sent within 6 hours of prod.",
+    "summary": "Hotfix validation: review, soak, monitor, comms within 6h",
+    "event_date": "2026-05-05",
+    "importance": 0.73
+  },
+  {
+    "type": "episodic",
+    "content": "Anya sent finance impact estimate: 47 affected users × 3-month average contract value ($8.4k) = $396k at-risk. Sebastien approved the Cloudflare comp (estimated $4.2k cost). Filed as Q2 incident reserve.",
+    "summary": "$396k contract risk; $4.2k comp approved, filed as reserve",
+    "event_date": "2026-05-05",
+    "importance": 0.65
+  }
+]

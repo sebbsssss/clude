@@ -1,0 +1,86 @@
+[
+  {
+    "type": "episodic",
+    "content": "Devon flagged Voyage embedding API returning 429s during nightly compaction at ~2am UTC. Started around Mar 10, affecting memory persistence for all active agents. Hit rate tier was at 85K req/day; Voyage's burst limit ~500/min.",
+    "summary": "Voyage 429s during nightly compaction—burst limit hit",
+    "event_date": "2026-03-12",
+    "importance": 0.72
+  },
+  {
+    "type": "semantic",
+    "content": "Voyage pricing tiers: burst limit scales with plan. Standard tier caps at 500 req/min, Professional at 2K req/min. We're on Standard; compaction spike hits ~800/min. Cost difference $1200→$3800/mo. Devon recommended nightly reservation tier purchase instead.",
+    "summary": "Voyage tier capacity and cost tradeoffs",
+    "event_date": "2026-03-12",
+    "importance": 0.78
+  },
+  {
+    "type": "procedural",
+    "content": "When Voyage embedding API returns 429: implement exponential backoff starting at 2s, max jitter ±20%, cap at 5 retries. Devon added this to embedding_worker.py. Also stagger batch submissions across 3-min windows instead of dumping all at once.",
+    "summary": "Implement exponential backoff for 429s; stagger batches",
+    "event_date": "2026-03-12",
+    "importance": 0.85
+  },
+  {
+    "type": "episodic",
+    "content": "Anya asked if we should buy Professional tier or absorb backoff latency. Compaction normally takes 90min; with backoff, could stretch to 3.5hr, impacting agent memory freshness. Devon estimated implementation at 4 hours.",
+    "summary": "Devon 4-hr backoff fix vs $2.6K/mo tier upgrade decision",
+    "event_date": "2026-03-13",
+    "importance": 0.68
+  },
+  {
+    "type": "semantic",
+    "content": "Memory compaction runs nightly at 2am UTC, batching ~45K embeddings. Without throttling, hits burst limit consistently. Initiated by cron, processes via embedding_worker on three dedicated pods. Acme & Initech see stale memory if delayed >4hr.",
+    "summary": "Nightly compaction: 45K embeddings, 2am UTC, burst sensitive",
+    "event_date": "2026-03-13",
+    "importance": 0.82
+  },
+  {
+    "type": "procedural",
+    "content": "Approved Devon's approach: implement exponential backoff + purchase Voyage nightly reservation tier ($350/mo for guaranteed 3K req/min 2am-3am window). Backoff as fallback only. Took effect night of Mar 14.",
+    "summary": "Approved backoff + $350/mo Voyage reservation tier",
+    "event_date": "2026-03-14",
+    "importance": 0.88
+  },
+  {
+    "type": "episodic",
+    "content": "Checked DataDog at 2:45am Mar 15. Voyage requests completing in 1.2s avg, no 429s. Devon's backoff + reservation tier working. Compaction finished 98min—normal. Flagged to Sebastien that incident resolved.",
+    "summary": "Incident resolved: 429s gone, compaction back to baseline",
+    "event_date": "2026-03-15",
+    "importance": 0.64
+  },
+  {
+    "type": "semantic",
+    "content": "Exponential backoff math: start 2s, multiply by 1.5 per retry, ±20% jitter, max 320s (5th retry). Theoretically handles transient 429s without DDoS-ing Voyage. Tested locally; Devon verified logic against Anthropic backoff spec.",
+    "summary": "Exponential backoff: 2s→320s, 1.5x multiplier, ±20% jitter",
+    "event_date": "2026-03-16",
+    "importance": 0.75
+  },
+  {
+    "type": "procedural",
+    "content": "Log all 429 incidents to Sentry with retry count, elapsed time, and batch ID. Monitor tail latency percentile on embedding_worker via DataDog (p99). If p99 >4min, escalate to Ari. Check weekly on Mondays.",
+    "summary": "Monitor: Sentry for 429s, DataDog p99 latency, weekly review",
+    "event_date": "2026-03-16",
+    "importance": 0.8
+  },
+  {
+    "type": "self_model",
+    "content": "I keep insisting on async RCA docs so I don't have to re-explain to Sebastien or Anya later. This time, Devon wrote two paragraphs in Linear ticket; saved 20min of repeat explanation. Wins like this compound.",
+    "summary": "Async docs reduce context re-explaining—Devon did it right",
+    "event_date": "2026-03-18",
+    "importance": 0.58
+  },
+  {
+    "type": "episodic",
+    "content": "Ran second nightly compaction successfully Mar 21. Voyage reservation tier auto-scaled to 3.1K req/min at 2am. No backoff triggered. Lina confirmed Initech & Wayne agents reporting fresh memory state. Cost impact: +$350/mo recurring.",
+    "summary": "Reservation tier holding; Initech & Wayne memory freshness restored",
+    "event_date": "2026-03-21",
+    "importance": 0.71
+  },
+  {
+    "type": "self_model",
+    "content": "Voyage incident reminded me: we're now at a scale where API burst limits matter. Compaction is synchronous to agent freshness. Margins are tighter than I assumed. Need to model capacity differently—not just per-agent, but per-batch. Ari should own this.",
+    "summary": "At 60-person scale, synchronous batch limits matter; rethink capacity model",
+    "event_date": "2026-03-22",
+    "importance": 0.61
+  }
+]

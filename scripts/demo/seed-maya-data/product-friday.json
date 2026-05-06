@@ -1,0 +1,121 @@
+[
+  {
+    "type": "episodic",
+    "content": "Lina pitched the memory-pruning feature in our first Friday demo. Ari raised concerns about latency on large agent states; we agreed to benchmark against Snowflake before committing to the roadmap.",
+    "summary": "First Product Friday demo; memory-pruning pitched, latency concerns flagged.",
+    "event_date": "2025-11-14",
+    "importance": 0.48
+  },
+  {
+    "type": "semantic",
+    "content": "Product Friday format: 30 min, Lina runs it, Ari/Devon demo, Jenny presents design work, rest Q&A. Intended cadence is weekly Fridays 2–2:30pm PT. Content strategy: highlight reels become external case studies or blog posts.",
+    "summary": "Product Friday structure and content strategy established.",
+    "event_date": "2025-11-14",
+    "importance": 0.72
+  },
+  {
+    "type": "procedural",
+    "content": "For each Product Friday: Lina sets agenda by Wednesday EOD in a Linear doc, Devon/Ari confirm demo readiness by Thursday 5pm, Jenny preps one design slide deck, I coordinate Slack reminder and track external content plan with Marcus for CS.",
+    "summary": "Weekly pre-demo checklist: agenda, readiness confirm, design prep, comms.",
+    "event_date": "2025-11-21",
+    "importance": 0.68
+  },
+  {
+    "type": "procedural",
+    "content": "Established that demo recordings live in a shared Clude Google Drive folder (Demos > YYYY > MM_Demo_Name), with public YouTube unlisted links posted in #announcements within 2 hours of recording. James (new hire) will handle editing starting March.",
+    "summary": "Demo recording workflow: Drive storage, unlisted YouTube links, 2hr SLA.",
+    "event_date": "2025-11-28",
+    "importance": 0.65
+  },
+  {
+    "type": "episodic",
+    "content": "Devon showed the new vector embedding optimization that cut latency 40% vs. Voyage AI baseline. Acme Corp is testing it; Marcus said their feedback is positive so far but we need the demo to lock in a renewal discussion.",
+    "summary": "Devon demoed vector optimization; Acme Corp pilot feedback pending.",
+    "event_date": "2025-12-05",
+    "importance": 0.58
+  },
+  {
+    "type": "semantic",
+    "content": "Post-demo content strategy: Lina picks 2–3 'highlight reel' moments, Jenny cuts a 60–90 second clip, Marcus writes a 1-paragraph customer angle for LinkedIn/blog. This pipeline starts after demo, content ships within 5 days for velocity.",
+    "summary": "Highlight reel → LinkedIn/blog content pipeline, 5-day SLA.",
+    "event_date": "2025-12-12",
+    "importance": 0.7
+  },
+  {
+    "type": "procedural",
+    "content": "If a demo overruns or feature isn't ready: Lina must notify me by Thursday 5pm, I notify Sebastien same day, and we either reschedule to the following Friday or swap in a backup segment (usually product updates or roadmap Q&A). No ad-hoc cancellations.",
+    "summary": "Demo readiness escalation: notify by Thu 5pm, reschedule or swap.",
+    "event_date": "2026-01-09",
+    "importance": 0.75
+  },
+  {
+    "type": "episodic",
+    "content": "Resumed Product Fridays post-holidays. Ari demoed multi-agent orchestration prototype; Tom asked how it handles conflict resolution. Ari said it's on the backlog, but the question was sharp enough that Lina added it to the sprint priorities for Q1.",
+    "summary": "Multi-agent orchestration demo; Tom's conflict Q pushed sprint priority.",
+    "event_date": "2026-01-17",
+    "importance": 0.52
+  },
+  {
+    "type": "procedural",
+    "content": "When external prospects (Initech, Globex, Wayne Industries) attend a demo, coordinate with Marcus 5 days prior so he can brief them on Clude roadmap context. I validate attendee list with Lina by Wednesday EOD; no surprises on Friday.",
+    "summary": "Prospect demo protocol: 5-day notice, Marcus brief, attendee validation.",
+    "event_date": "2026-01-24",
+    "importance": 0.69
+  },
+  {
+    "type": "semantic",
+    "content": "Why we do Product Friday: (1) keeps shipping cadence visible to the whole team, (2) catches integration issues early via live demo, (3) builds narrative for external storytelling, (4) gives junior engineers (Tom) safe space to ask questions. Trade-off: 30 min context-switching cost every Friday.",
+    "summary": "Product Friday purpose: shipping visibility, QA, narrative, junior growth.",
+    "event_date": "2026-02-07",
+    "importance": 0.78
+  },
+  {
+    "type": "self_model",
+    "content": "I've realized I need to stay 10 steps ahead of these demos or they slip. Lina's good at creative direction but not timeline discipline. I now own the scheduling and escalation path, which means I buffer every deadline by 48 hours and keep a running checklist in a Notion database—it's the only way async clarity works at this org.",
+    "summary": "Demo timeline ownership requires 48-hr buffer + Notion database.",
+    "event_date": "2026-02-21",
+    "importance": 0.61
+  },
+  {
+    "type": "episodic",
+    "content": "James (hired March) recorded his first demo segment—agent memory invalidation on context drift. Quality was solid; Jenny noted the screen recording needed captions. By end of March, captions become standard in all demo video output.",
+    "summary": "James' first demo recording; captions mandated for accessibility.",
+    "event_date": "2026-03-14",
+    "importance": 0.44
+  },
+  {
+    "type": "procedural",
+    "content": "Establish demo dry-run: Ari/Devon/James record a full walkthrough 48 hours before Friday, I watch it async and flag (1) technical glitches, (2) unclear explanations, (3) timing gaps. Feedback goes back within 12 hours so they can iterate. Live demo is then the 'best version'.",
+    "summary": "Dry-run protocol: record 48hr prior, async review, 12-hr feedback SLA.",
+    "event_date": "2026-03-21",
+    "importance": 0.73
+  },
+  {
+    "type": "episodic",
+    "content": "Anya flagged that Product Fridays were bleeding into finance reviews on Fridays. I shifted demos to 2pm sharp and capped them at 28 minutes (was 30). Anya now has a 2:45pm block clear for budgeting calls with Sebastien.",
+    "summary": "Adjusted demo time to 2pm, 28-min cap for finance coordination.",
+    "event_date": "2026-04-04",
+    "importance": 0.5
+  },
+  {
+    "type": "semantic",
+    "content": "Demo metrics we track: (1) attendance headcount by department, (2) content pieces shipped (LinkedIn, blog, case study), (3) customer action items (renewals, feature requests tied to specific demos), (4) team morale via async Slack poll post-demo. We report monthly to Sebastien.",
+    "summary": "Demo KPIs: attendance, content output, customer actions, morale.",
+    "event_date": "2026-04-11",
+    "importance": 0.71
+  },
+  {
+    "type": "procedural",
+    "content": "For demos involving unreleased features (embargoed until a press date): Lina and I document the embargo in Linear with a hard lift date, all attendees sign a mental NDA reminder in the Slack thread, and Marcus coordinates with comms/PR on press timing. No slip-ups with Anthropic or Cloudflare partnerships.",
+    "summary": "Embargoed feature protocol: Linear tracking, NDA reminder, PR sync.",
+    "event_date": "2026-04-18",
+    "importance": 0.76
+  },
+  {
+    "type": "self_model",
+    "content": "I hate re-explaining the demo cadence. I've now created a living Notion 'Demo Playbook' that covers format, roles, escalation paths, content strategy, and metrics. New hires (like James) read it once and stop asking questions. This is the ops move I should have done week one.",
+    "summary": "Created Demo Playbook in Notion to kill context re-explanation.",
+    "event_date": "2026-04-25",
+    "importance": 0.67
+  }
+]

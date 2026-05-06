@@ -1,0 +1,121 @@
+[
+  {
+    "type": "episodic",
+    "content": "Sebastien flagged Initech expansion opportunity in standup: they want 80 seats + Memory Packs, potentially $186k ARR. Asked me to coordinate with Theo (new AE) and Marcus on customer success alignment.",
+    "summary": "Sebastien flags Initech 80-seat expansion opportunity",
+    "event_date": "2026-03-04",
+    "importance": 0.72
+  },
+  {
+    "type": "episodic",
+    "content": "First call with Theo about Initech deal structure. He's still ramping but asks solid questions on contract timeline and renewal terms. Sent him the Memory Packs pricing sheet and last Initech quarterly review notes.",
+    "summary": "Onboarded Theo on Initech deal context and materials",
+    "event_date": "2026-03-05",
+    "importance": 0.58
+  },
+  {
+    "type": "semantic",
+    "content": "Initech has a 5-seat-per-quarter expansion pattern. Their usage spike correlates with new product launches. Memory Packs (batch retrieval, semantic search) fit their retrieval-heavy workflows.",
+    "summary": "Initech expansion typically ties to product launches",
+    "event_date": "2026-03-06",
+    "importance": 0.68
+  },
+  {
+    "type": "episodic",
+    "content": "Marcus reported Initech's retention score is 98% but support tickets up 12% (mostly onboarding). Recommended Memory Packs as force-multiplier for their team size jump. Aligned CS plan with Theo's close target of April 12.",
+    "summary": "Marcus flags support spike; CS readiness tied to close date",
+    "event_date": "2026-03-10",
+    "importance": 0.65
+  },
+  {
+    "type": "episodic",
+    "content": "Anya requested deal economics breakdown: margin on 80 seats + packs, CAC payback, churn risk. I modeled three scenarios (60/80/100 seats) and sent her the spreadsheet. Deal at 80 seats keeps LTV:CAC above 3:1.",
+    "summary": "Modeled deal economics for finance review",
+    "event_date": "2026-03-12",
+    "importance": 0.62
+  },
+  {
+    "type": "episodic",
+    "content": "Initech champion (Sarah Chen, CTO) asked for customization on Memory Pack retention window. Lina and I flagged it as scope-creep risk; offered standard configs instead. Theo to handle negotiation.",
+    "summary": "Initech CTO requested customization; pushed back to standard",
+    "event_date": "2026-03-15",
+    "importance": 0.7
+  },
+  {
+    "type": "procedural",
+    "content": "For expansion deals >$100k, always sequence: (1) champion align on use case, (2) finance sign-off on pricing, (3) CS onboarding readiness check, (4) contract legal review, (5) close. Prevents surprises in final stretch.",
+    "summary": "Five-step expansion deal process documented",
+    "event_date": "2026-03-18",
+    "importance": 0.88
+  },
+  {
+    "type": "episodic",
+    "content": "Theo sent draft contract to Initech. Included standard SLA, no custom retention window (per earlier scope decision). Expected signature by Mar 28 per his timeline. Flagged legal review for Mar 25.",
+    "summary": "Contract sent to Initech; legal review scheduled",
+    "event_date": "2026-03-20",
+    "importance": 0.64
+  },
+  {
+    "type": "episodic",
+    "content": "Sarah Chen (Initech CTO) called with pricing question on Memory Packs at 80-seat volume. Theo already had answer: $12/seat/mo instead of standard $18. I approved the discount tier; margin still healthy at 68%.",
+    "summary": "Approved volume discount on Memory Packs for Initech",
+    "event_date": "2026-03-24",
+    "importance": 0.73
+  },
+  {
+    "type": "semantic",
+    "content": "Large expansion deals (60+ seats) typically face 2-week signature delays post-draft. Budget for one internal loop + one legal revision. Initech pacing normally—no red flags.",
+    "summary": "Large deals typically see ~2-week signing buffer",
+    "event_date": "2026-03-26",
+    "importance": 0.61
+  },
+  {
+    "type": "episodic",
+    "content": "Legal flagged two clauses in Initech contract: data retention indemnity and IP warranty language. Standard Clude position holds. Theo to push back; expected sign-off by April 2.",
+    "summary": "Legal review complete; standard negotiation points flagged",
+    "event_date": "2026-03-28",
+    "importance": 0.66
+  },
+  {
+    "type": "episodic",
+    "content": "Priya asked if Initech expansion means hiring timeline shifts. Told her to hold: Ari's eng roadmap still pending their actual adoption pace. Don't want to pre-hire for a 186k deal that could slip.",
+    "summary": "Advised Priya against preemptive hiring for Initech",
+    "event_date": "2026-04-01",
+    "importance": 0.58
+  },
+  {
+    "type": "episodic",
+    "content": "Theo reported Initech legal accepted IP warranty language with minor carve-out. Contract now with procurement for final sign. Expected close by April 10–12 per original timeline.",
+    "summary": "Initech legal cleared; final procurement review underway",
+    "event_date": "2026-04-05",
+    "importance": 0.71
+  },
+  {
+    "type": "self_model",
+    "content": "I notice I'm more confident in expansion deal execution than new logo sales. The known customer, existing usage data, and champion relationship remove ambiguity. Routine process work suits me better than sales uncertainty.",
+    "summary": "More comfortable with expansion than new business",
+    "event_date": "2026-04-08",
+    "importance": 0.52
+  },
+  {
+    "type": "episodic",
+    "content": "Theo sent signed Initech contract at 2 PM on April 12. $186k expansion confirmed: 80 seats + Memory Packs, 24-month renewal. Revenue recognized Q2 2026. Marcus to kick off onboarding immediately.",
+    "summary": "Initech deal closed April 12; $186k ARR confirmed",
+    "event_date": "2026-04-12",
+    "importance": 0.95
+  },
+  {
+    "type": "episodic",
+    "content": "Updated Sebastien and exec team on close. Theo executed well given ramp timeline. Initech onboarding starts Monday with Marcus and Jenny (UI customization for 80 seats). James (new backend hire) will support volume scaling if needed.",
+    "summary": "Briefed exec team; onboarding plan confirmed",
+    "event_date": "2026-04-12",
+    "importance": 0.79
+  },
+  {
+    "type": "semantic",
+    "content": "New AE ramp-time on existing customer deals: ~3 weeks to handle contract + close competently. Theo handled Initech without re-explaining product or champion relationship. Reduces ops burden significantly.",
+    "summary": "New AEs can close existing customer deals in 3 weeks",
+    "event_date": "2026-04-12",
+    "importance": 0.64
+  }
+]

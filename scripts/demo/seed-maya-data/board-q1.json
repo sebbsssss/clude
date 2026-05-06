@@ -1,0 +1,114 @@
+[
+  {
+    "type": "episodic",
+    "content": "Sebastien asked for board deck outline by EOW. ARR $3.4M vs $3.8M target. Told him we're documenting the miss in customer retention, not hiding it.",
+    "summary": "Board deck kickoff; ARR shortfall $400k",
+    "event_date": "2026-03-04",
+    "importance": 0.72
+  },
+  {
+    "type": "semantic",
+    "content": "Board members: Sequoia partner (lead), Accel, founder reserves. Series A deferred to Q2 pending SOC2 and unit econ clarity.",
+    "summary": "Board composition and Series A timeline",
+    "event_date": "2026-03-04",
+    "importance": 0.68
+  },
+  {
+    "type": "episodic",
+    "content": "Anya flagged VAR model assumes 110% net retention; actual is 94%. Needs reframing in deck as 'cohort stabilization underway.' Acme churn spike still unexplained.",
+    "summary": "NRR 94% vs model assumption; Acme churn issue",
+    "event_date": "2026-03-05",
+    "importance": 0.78
+  },
+  {
+    "type": "episodic",
+    "content": "Lina presented roadmap: Q1 embedding caching, Q2 multi-agent features. Board will push for timeline on enterprise features. Told her to expect 'why not now' questions.",
+    "summary": "Q1–Q2 roadmap review; enterprise features pressure",
+    "event_date": "2026-03-05",
+    "importance": 0.65
+  },
+  {
+    "type": "procedural",
+    "content": "Board deck template: 10 slides max. Slide 1 = mission/traction, 2–3 = metrics, 4 = unit econ, 5 = risks, 6 = hiring plan, 7 = cap table, 8 = ask. Always lead with what changed since last update.",
+    "summary": "Clude board deck structure and rhythm",
+    "event_date": "2026-03-05",
+    "importance": 0.62
+  },
+  {
+    "type": "episodic",
+    "content": "SOC2 audit on track for March 20. Cloudflare and DataDog configs reviewed. One Sentry access policy needs tightening but low risk.",
+    "summary": "SOC2 Type II audit nearly complete",
+    "event_date": "2026-03-06",
+    "importance": 0.58
+  },
+  {
+    "type": "episodic",
+    "content": "Hiring: James (Senior Backend) started Mar 3. Tom ramping on service auth. Priya says Q1 target (3 hires) still achievable if we close 1 design candidate by end of month.",
+    "summary": "Q1 hiring 2/3 complete; design slot open",
+    "event_date": "2026-03-07",
+    "importance": 0.52
+  },
+  {
+    "type": "episodic",
+    "content": "Marcus reported Wayne Industries POC stalling. Initech moving forward. Globex contract review by legal—no blockers yet. Asked Marcus to get POC outcomes doc to Sebastien by Wed for board context.",
+    "summary": "Customer pipeline status: 1 stall, 2 progressing",
+    "event_date": "2026-03-10",
+    "importance": 0.71
+  },
+  {
+    "type": "episodic",
+    "content": "Ari flagged Voyage AI integration delays (their API changes). Pushed back delivery from late Q1 to mid-Q2. Board will ask—prepping 'supplier dependency' slide for deck.",
+    "summary": "Voyage AI integration slips; Q2 now",
+    "event_date": "2026-03-10",
+    "importance": 0.69
+  },
+  {
+    "type": "self_model",
+    "content": "I hate re-explaining burn and runway to investors who should've read the last update. This deck needs to be 'what changed,' not a repeat. If Sebastien wants narrative, it goes in speaker notes, not slides.",
+    "summary": "Investor comms pet peeve; prioritize delta",
+    "event_date": "2026-03-11",
+    "importance": 0.48
+  },
+  {
+    "type": "episodic",
+    "content": "Deck draft complete. Sebastien wants three scenarios: base case ($4.2M ARR by EOY), upside (early Series A traction), downside (extended runway, reduced hiring). Spending tomorrow red-teaming the base case with Anya.",
+    "summary": "Three-scenario modeling for board",
+    "event_date": "2026-03-12",
+    "importance": 0.74
+  },
+  {
+    "type": "semantic",
+    "content": "Clude's investor thesis: reduce RAG hallucination through fine-grained memory updates. Board cares about TAM clarity and why we own it vs Anthropic or Voyage.",
+    "summary": "Core investor pitch and competitive moat",
+    "event_date": "2026-03-12",
+    "importance": 0.75
+  },
+  {
+    "type": "episodic",
+    "content": "Jenny delivered new brand materials for board deck. Sequoia partner likes modern look. Asked for one edit: remove the 'cognitive agents' tag line—too buzzwordy. Reframed as 'reliable agent memory.'",
+    "summary": "Brand refresh; messaging tightened",
+    "event_date": "2026-03-14",
+    "importance": 0.41
+  },
+  {
+    "type": "episodic",
+    "content": "Acme Corp churn: Maya reached out directly. Their use case shifted post-acquisition. Offered free pilot on new workload. Sebastien aware—not hiding from board, but also not leading with it.",
+    "summary": "Acme churn root cause + remediation plan",
+    "event_date": "2026-03-17",
+    "importance": 0.76
+  },
+  {
+    "type": "episodic",
+    "content": "Board deck final review with Sebastien, Anya, Lina. Q: why not push harder on enterprise sales? A: Initech and Globex deals still ramping; Wayne Industries needs post-pilot win before we scale CS. Deck notes this dependency.",
+    "summary": "Board readiness; enterprise sales reality check",
+    "event_date": "2026-03-19",
+    "importance": 0.73
+  },
+  {
+    "type": "episodic",
+    "content": "Board meeting March 22. Sequoia partner asked about Anthropic partnership—clarified we're a customer, not a dependent. Series A conversation moved to May pending Q2 metrics. Retention trending up (good signal for next update).",
+    "summary": "Board meeting recap; Series A to May; retention improving",
+    "event_date": "2026-03-22",
+    "importance": 0.81
+  }
+]

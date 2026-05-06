@@ -1,0 +1,128 @@
+[
+  {
+    "type": "episodic",
+    "content": "Sebastien kicked off Q2 planning with Lina, Ari, Anya, and me. Outlined four OKRs: SOC2 Type II audit, $5.5M ARR, Chat v2 ship, Series A close. Lina visibly tensed on Chat v2—flagged it as premature.",
+    "summary": "Q2 OKR kickoff; Lina disputes Chat v2 priority",
+    "event_date": "2026-04-08",
+    "importance": 0.82
+  },
+  {
+    "type": "semantic",
+    "content": "SOC2 Type II requires 6 months of control evidence. Audit window starts June; report delivery in late September. This is blocking Series A conversations. Non-negotiable.",
+    "summary": "SOC2 Type II timeline: 6-month evidence window, Sept delivery",
+    "event_date": "2026-04-09",
+    "importance": 0.88
+  },
+  {
+    "type": "episodic",
+    "content": "Coffee 1:1 with Lina before she spiraled further. She thinks Chat v2 roadmap steals resources from stability work. Wants to defer to Q3. I asked if this was a resourcing or strategy call—she said both.",
+    "summary": "Lina pushes back: Chat v2 destabilizes product, defer to Q3",
+    "event_date": "2026-04-10",
+    "importance": 0.75
+  },
+  {
+    "type": "semantic",
+    "content": "Current ARR is $4.1M. Q2 target is $5.5M—$1.4M uplift. Acme upsell ($400K), Initech net-new ($350K), Globex expansion ($280K), Wayne Industries pilot ($200K), remaining from smaller accounts and retention buffers.",
+    "summary": "$5.5M Q2 ARR: $1.4M growth, sources identified by customer",
+    "event_date": "2026-04-11",
+    "importance": 0.9
+  },
+  {
+    "type": "procedural",
+    "content": "When a roadmap dispute hits strategy vs. resourcing: first separate the claims (get them async on Linear), then run a 30-min decision meeting with product, eng, and exec sponsor only. No circular Slack.",
+    "summary": "Roadmap dispute process: async claim separation, exec decision meeting",
+    "event_date": "2026-04-12",
+    "importance": 0.72
+  },
+  {
+    "type": "episodic",
+    "content": "Ari and Anya met with me to model Chat v2 eng load. Estimated 2 senior (Devon, James) + 1 junior (Tom) for 8 weeks. That's 30% of backend capacity. Stability work takes ~40%. Margin is thin.",
+    "summary": "Chat v2 burn: 30% backend, leaves 30% buffer—tight",
+    "event_date": "2026-04-15",
+    "importance": 0.68
+  },
+  {
+    "type": "semantic",
+    "content": "Chat v2 is customer-requested (Acme, Globex), but demand signal is soft. No contractual commitment tied to ship date. Lina's stability concern is real: we had 3 outages Q1, two traced to feature debt.",
+    "summary": "Chat v2 demand soft; stability debt from Q1 outages is acute",
+    "event_date": "2026-04-16",
+    "importance": 0.79
+  },
+  {
+    "type": "episodic",
+    "content": "Sebastien asked me to facilitate Chat v2 decision. I prepped: drafted Linear doc with trade-offs (ARR impact, eng load, technical risk), asked Lina and Ari to add crisp positions by EOD Thursday.",
+    "summary": "Tasked to facilitate Chat v2 decision, async doc method",
+    "event_date": "2026-04-17",
+    "importance": 0.73
+  },
+  {
+    "type": "semantic",
+    "content": "Series A close is dependent on: $5.5M ARR hit, SOC2 Type II audit in flight, $30M+ valuation readiness, Sequoia/Accel intro pipeline live. Anya owns cap table; Sebastien owns investor relations.",
+    "summary": "Series A success factors: ARR, SOC2, valuation, investor pipeline",
+    "event_date": "2026-04-18",
+    "importance": 0.87
+  },
+  {
+    "type": "procedural",
+    "content": "For quarterly OKR tracking: set review cadence (bi-weekly ops review with Anya), assign single DRI per OKR, post red/yellow/green status in Notion by Monday COB. One doc, no duplicate reporting.",
+    "summary": "OKR tracking: bi-weekly review, single DRI, Notion status, async-first",
+    "event_date": "2026-04-19",
+    "importance": 0.68
+  },
+  {
+    "type": "episodic",
+    "content": "Lina's Linear comment: Chat v2 scope is 40% larger than June roadmap suggested. She'd uncovered feature creep in design. Ari estimated that pushes eng to 12 weeks, not 8. Sebastien called a sync for Monday.",
+    "summary": "Chat v2 scope creep: 40% larger, 12 weeks, not 8",
+    "event_date": "2026-04-21",
+    "importance": 0.81
+  },
+  {
+    "type": "semantic",
+    "content": "Clude's runway is 18 months at burn. Series A close by Q3 end is soft requirement (not contractual), but extended runway means less pressure on subsequent fundraising. SOC2 + ARR are the hardest gates.",
+    "summary": "Runway: 18mo at current burn; Series A timing is flexible but preferred",
+    "event_date": "2026-04-22",
+    "importance": 0.74
+  },
+  {
+    "type": "episodic",
+    "content": "Sebastien decision call: Chat v2 ships Q2, but scope reduces by 30% (v2.0 core, defer real-time collab to v2.1). This keeps eng load manageable, still lands on Acme/Globex roadmap. Lina accepted, contingent on stability sprint in parallel.",
+    "summary": "Chat v2 Q2 approved: scoped down 30%, parallel stability sprint required",
+    "event_date": "2026-04-23",
+    "importance": 0.87
+  },
+  {
+    "type": "self_model",
+    "content": "I notice I'm most useful when I move disputes async-first, separate claims, and create a single source of truth. I hate re-explaining, and this method prevents it. Sebastien trusts this process now.",
+    "summary": "My strength: async clarity, single sources of truth, preventing re-work",
+    "event_date": "2026-04-24",
+    "importance": 0.61
+  },
+  {
+    "type": "semantic",
+    "content": "Q2 OKR priorities ranked: (1) SOC2 Type II (gates Series A), (2) $5.5M ARR (same), (3) Chat v2 (customer commitment, revenue tie-in), (4) Series A close (outcome, not input). Ops owns 1 + 2; Lina owns 3.",
+    "summary": "Q2 OKR ranked: SOC2 > ARR > Chat v2 > Series A (outcome)",
+    "event_date": "2026-04-25",
+    "importance": 0.85
+  },
+  {
+    "type": "episodic",
+    "content": "Updated quarterly sprint plan: 4 two-week sprints (Apr 27–May 11, May 12–26, May 27–Jun 9, Jun 10–23). Ari's eng allocates 35% Chat v2, 40% stability/scaling, 15% ops/tooling, 10% buffer. Posted in Notion.",
+    "summary": "Q2 sprint plan locked: 4x 2-week cycles, eng allocation defined",
+    "event_date": "2026-04-28",
+    "importance": 0.76
+  },
+  {
+    "type": "semantic",
+    "content": "Clude's quarterly rhythm: Ops review (bi-weekly Tue 2pm), eng standup (daily async Linear), product roadmap sync (weekly Thu), exec check-in (weekly Fri). OKR reviews anchor to ops review. All async-first, sync only if unresolved.",
+    "summary": "Q2 cadence: Ops review bi-weekly, roadmap sync weekly, OKR reviews integrated",
+    "event_date": "2026-04-29",
+    "importance": 0.64
+  },
+  {
+    "type": "episodic",
+    "content": "Closed Q2 OKR doc. Sebastien signed off. Shared to team with one-pager: 4 OKRs, 4 key results per OKR, DRIs assigned, sprint plan linked, review cadence clear. No ambiguity left standing.",
+    "summary": "Q2 OKRs finalized and communicated; one-pager published",
+    "event_date": "2026-04-30",
+    "importance": 0.78
+  }
+]

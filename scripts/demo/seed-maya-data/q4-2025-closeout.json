@@ -1,0 +1,114 @@
+[
+  {
+    "type": "episodic",
+    "content": "Sebastien called standup to discuss Q4 slip list. Dashboard wiki shipped on time; mobile v1 GA'd Dec 10. Chain commit batching pushed to Q1—Ari needs Devon and James aligned on sharding logic first. Voyage migration blocked by their API rate limits.",
+    "summary": "Q4 retro: wiki & mobile shipped, batching & Voyage slipped",
+    "event_date": "2025-12-15",
+    "importance": 0.62
+  },
+  {
+    "type": "semantic",
+    "content": "Dashboard wiki went live Dec 9. Solves the recurring 'where do I find customer setup docs' problem. Built by Jenny + Lina's team over 6 weeks. Already seeing reduced CS tickets (~12% drop in first week). Integrated with Notion backend via Cloudflare Workers.",
+    "summary": "Dashboard wiki shipped; reduced support load by ~12%",
+    "event_date": "2025-12-15",
+    "importance": 0.72
+  },
+  {
+    "type": "episodic",
+    "content": "Anya flagged in finance sync: Q4 customer spend is tracking $2.1M ARR, up from $1.8M in Oct. Acme and Initech both expanding seats. Privy migration (completed Dec 12) reduced auth token costs by ~$8k/month—small win, compounds.",
+    "summary": "Q4 revenue tracking $2.1M ARR; Privy auth saves $8k/mo",
+    "event_date": "2025-12-16",
+    "importance": 0.58
+  },
+  {
+    "type": "semantic",
+    "content": "Privy to Anthropic API key migration finished Dec 12. Coordinated by Ari + Devon over 3 sprints. Zero downtime cutover on production—rolled out to Acme, Initech, Globex in phased 48-hour windows. 1Password vault updated; no customer-facing incidents.",
+    "summary": "Privy auth migration complete; zero-downtime production cutover",
+    "event_date": "2025-12-16",
+    "importance": 0.78
+  },
+  {
+    "type": "procedural",
+    "content": "Created post-launch checklist for future GA releases after mobile v1 rollout. Steps: (1) verify DataDog alerts firing, (2) CS notifies key 3 accounts 24h before, (3) Marcus logs all support tickets for first 72h in Linear retro tag, (4) Sentry error threshold confirmed <0.5% error rate for 48h.",
+    "summary": "GA launch checklist: monitoring, CS comms, ticket tracking, errors",
+    "event_date": "2025-12-17",
+    "importance": 0.71
+  },
+  {
+    "type": "episodic",
+    "content": "Mobile v1 shipped to App Store + Play Store Dec 10. Jenny's design team crushed it—accessibility score 94/100. Tom led the junior eng work; caught two edge cases in offline mode before release. Globex signed up to beta test v2 features in Jan.",
+    "summary": "Mobile v1 GA; high accessibility score; Globex committing to v2 beta",
+    "event_date": "2025-12-18",
+    "importance": 0.55
+  },
+  {
+    "type": "semantic",
+    "content": "Chain commit batching didn't ship. Root cause: batching logic depends on shard routing that Devon and James still debating architecture for. Moved to Q1 sprint plan with hard date of Feb 1 to avoid another slip. Ari flagged this as dependency risk for Voyage work.",
+    "summary": "Chain batching slipped to Q1; shard routing blocker identified",
+    "event_date": "2025-12-19",
+    "importance": 0.75
+  },
+  {
+    "type": "self_model",
+    "content": "I'm noticing I'm frustrated by preventable slips—chain batching was on roadmap since August. Should've forced the architecture decision in Oct. Lesson: push contested tech decisions earlier, even if it means brief team friction. Async docs help but don't replace real alignment conversations.",
+    "summary": "Preventable slips frustrate me; need earlier architecture decisions",
+    "event_date": "2025-12-19",
+    "importance": 0.48
+  },
+  {
+    "type": "episodic",
+    "content": "Priya shared hiring plan for 2026: 4 backend engineers, 1 product designer, 1 sales eng. Budget approved by Sebastien yesterday. Ari requested mid-level backend (30–50% more senior than Tom) to unblock architecture decisions faster. First recruiter call scheduled for Jan 5.",
+    "summary": "2026 hiring plan approved: 4 backend, 1 design, 1 sales eng",
+    "event_date": "2025-12-22",
+    "importance": 0.67
+  },
+  {
+    "type": "semantic",
+    "content": "Voyage AI migration stalled. Their free tier rate limits hit us at ~5k requests/day; we're at 7k. Upgrade costs $2.4k/mo but contracts lock us in 2 years. Evaluating Anthropic's batch API as fallback (cheaper, higher latency acceptable for async jobs). Decision deferred to Jan strategy call.",
+    "summary": "Voyage rate limits force costly upgrade or Anthropic pivot",
+    "event_date": "2025-12-23",
+    "importance": 0.81
+  },
+  {
+    "type": "procedural",
+    "content": "Documented Q4 closeout process for next cycle: (1) Retro doc filled by Lina + Ari by Dec 14, (2) Finance closeout by Anya by Dec 20, (3) Sebastien presents to full 60-person team by Dec 23, (4) Maya compiles lessons doc by Jan 2. This prevents last-minute scramble.",
+    "summary": "Q4 closeout repeatable process: retro → finance → all-hands → lessons",
+    "event_date": "2025-12-23",
+    "importance": 0.69
+  },
+  {
+    "type": "episodic",
+    "content": "Sebastien presented Q4 closeout to whole team on Dec 23. Mood was positive—wiki and mobile hit. Acknowledged chain batching slip, blamed bad architecture alignment (not team performance). Mentioned Wayne Industries now in late-stage evaluation; deal could close by mid-Jan.",
+    "summary": "All-hands Q4 review: shipped well, owned slips, Wayne deal pending",
+    "event_date": "2025-12-23",
+    "importance": 0.64
+  },
+  {
+    "type": "semantic",
+    "content": "Q4 shipped 3 major items (dashboard wiki, mobile v1, Privy migration). Slipped 2 (chain commit batching, Voyage migration). Root causes: (1) architecture decisions delayed, (2) vendor constraints (Voyage rate limits). Q1 priority: force tech decisions by sprint start, evaluate vendor alternatives earlier.",
+    "summary": "Q4 summary: 3 shipped, 2 slipped; early tech & vendor decisions needed",
+    "event_date": "2025-12-24",
+    "importance": 0.85
+  },
+  {
+    "type": "episodic",
+    "content": "Lina raised in retro: should we build Voyage abstraction layer to swap backends faster? Could've bought us 2 weeks if implemented in Sept. Too late for Q4, but Ari agreed to add to Q1 sprint plan. GitHub issue created (tracked in Linear as INFRA-847).",
+    "summary": "Proposed vendor abstraction layer for faster backend swaps",
+    "event_date": "2025-12-26",
+    "importance": 0.52
+  },
+  {
+    "type": "semantic",
+    "content": "Dashboard wiki metrics: 847 views in first 14 days, 89% unique session completion rate. CS load down ~12% on setup/config questions. ROI clear. Jenny's team + Lina's product planning model worked well—cross-functional async docs + two weekly syncs. Template for future high-impact projects.",
+    "summary": "Wiki success: high engagement, CS load reduction, repeatable model",
+    "event_date": "2025-12-27",
+    "importance": 0.73
+  },
+  {
+    "type": "episodic",
+    "content": "Anya sent year-end cash position: $4.2M runway at current burn (~$280k/mo). Q4 revenue beat internal forecast by $180k. With Wayne deal in pipeline (est. $400k/yr if closes), we're in solid shape. Hiring plan sustainable without external funding.",
+    "summary": "Year-end cash position strong; hiring plan viable without new funding",
+    "event_date": "2025-12-29",
+    "importance": 0.69
+  }
+]

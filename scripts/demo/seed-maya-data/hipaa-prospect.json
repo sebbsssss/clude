@@ -1,0 +1,100 @@
+[
+  {
+    "type": "episodic",
+    "content": "Wayne Health's procurement contact Elena Reyes asked for HIPAA BAA on the discovery call. Sebastien nodded at me across the video; we both knew we weren't ready. Deal size ~$180k ARR if we move fast.",
+    "summary": "Wayne Health BAA request on discovery call",
+    "event_date": "2026-04-08",
+    "importance": 0.62
+  },
+  {
+    "type": "semantic",
+    "content": "HIPAA BAA (Business Associate Agreement) is a legal contract required when a vendor processes PHI (Protected Health Information) on behalf of a covered entity. We do not have one; drafting + audit would take 8–12 weeks minimum.",
+    "summary": "HIPAA BAA definition and timeline estimate",
+    "event_date": "2026-04-08",
+    "importance": 0.81
+  },
+  {
+    "type": "episodic",
+    "content": "Post-call sync with Sebastien and Anya. He wanted to pursue it; Anya said we need legal review of our infrastructure (Snowflake, AWS, Anthropic integrations) first. Agreed to get Yara to draft a roadmap by EOW.",
+    "summary": "Immediate post-call decision: commission HIPAA roadmap",
+    "event_date": "2026-04-08",
+    "importance": 0.68
+  },
+  {
+    "type": "semantic",
+    "content": "HIPAA compliance requires: audit trails, encryption at rest/in transit, access controls, business continuity plans, vendor attestations. Our current stack (Snowflake, AWS, DataDog, Sentry) has pieces but no unified audit evidence or signed BAAs from all vendors.",
+    "summary": "HIPAA compliance scope across our tech stack",
+    "event_date": "2026-04-09",
+    "importance": 0.85
+  },
+  {
+    "type": "procedural",
+    "content": "Process for vendor BAA collection: (1) Identify all vendors that touch agent memory data. (2) Send templated BAA request to each. (3) Document signed BAA in 1Password vault under Compliance > BAA Signed. (4) Anya tracks status in Linear. Do not proceed with prospect until all in place.",
+    "summary": "Vendor BAA collection workflow",
+    "event_date": "2026-04-09",
+    "importance": 0.78
+  },
+  {
+    "type": "episodic",
+    "content": "Yara sent draft HIPAA roadmap: Phase 1 (Apr–May) legal + vendor audit $15k. Phase 2 (Jun–Jul) code changes + encryption $45k. Phase 3 (Aug) third-party audit $22k. Total cost ~$82k, completion late August. Sebastien flagged it in Slack: 'Aggressive but doable if we prioritize.'",
+    "summary": "Yara's HIPAA roadmap: $82k, completion late Aug",
+    "event_date": "2026-04-11",
+    "importance": 0.74
+  },
+  {
+    "type": "semantic",
+    "content": "Wayne Health deal value ($180k ARR) vs. HIPAA roadmap cost ($82k) is favorable long-term, but Q2 cash flow impact is real. Anya noted we'd need to absorb cost or negotiate Phase 1 with prospect. Sebastien leaning toward 'eat it and position for market.'",
+    "summary": "Financial case for HIPAA: deal value vs. roadmap cost",
+    "event_date": "2026-04-11",
+    "importance": 0.72
+  },
+  {
+    "type": "episodic",
+    "content": "Ari flagged in eng standup: we log agent memory operations in DataDog but don't tag PHI-sensitive traces. Required for audit. He estimated 3 sprints (6 weeks) to instrument properly. Added to Yara's Phase 2.",
+    "summary": "Ari: PHI audit logging gap requires 6-week fix",
+    "event_date": "2026-04-14",
+    "importance": 0.59
+  },
+  {
+    "type": "semantic",
+    "content": "Our decision: pursue HIPAA compliance in Q3 (target completion Aug 31). Deal with Wayne Health moves to Q3 close. This preserves Q2 runway, de-risks roadmap execution, and positions us credibly for other healthcare prospects (Initech also nosing around regulated verticals).",
+    "summary": "Q3 HIPAA roadmap decision, Wayne Health deal slip",
+    "event_date": "2026-04-15",
+    "importance": 0.89
+  },
+  {
+    "type": "episodic",
+    "content": "Called Elena at Wayne Health to deliver the message. She was unsurprised—said their procurement team expected 90+ days anyway. Requested we confirm roadmap milestones by April 30 and monthly exec updates. Added her to a Google Doc for transparency. She appreciated the clarity.",
+    "summary": "Communicated Q3 timeline to Wayne Health, no pushback",
+    "event_date": "2026-04-16",
+    "importance": 0.58
+  },
+  {
+    "type": "procedural",
+    "content": "Documentation template for compliance decisions: (1) Date and stakeholders. (2) Decision statement (what, when, cost). (3) Assumptions. (4) Open risks. (5) Next milestone + owner. File in Notion under Company > Compliance Decisions. Sebastien signs off. This becomes our audit trail.",
+    "summary": "Compliance decision documentation procedure",
+    "event_date": "2026-04-17",
+    "importance": 0.76
+  },
+  {
+    "type": "semantic",
+    "content": "Regulator risk: if we process PHI without BAA and audit, we expose the prospect to CMS/HHS penalties. This is why enterprise healthcare won't move without evidence of compliance. BAA signature + audit trail are table stakes, not nice-to-haves.",
+    "summary": "Regulatory risk: PHI processing without BAA/audit",
+    "event_date": "2026-04-18",
+    "importance": 0.87
+  },
+  {
+    "type": "self_model",
+    "content": "I've learned that enterprise compliance asks hit like gravity once revenue scales to regulated verticals. I now assume every healthcare/fintech prospect will ask for audit evidence. Building compliance-first is cheaper than retrofitting. Sebastien's been reactive; I need to be proactive with roadmaps.",
+    "summary": "Compliance-first thinking for enterprise motion",
+    "event_date": "2026-04-19",
+    "importance": 0.68
+  },
+  {
+    "type": "episodic",
+    "content": "Sent formal memo to exec team: Wayne Health HIPAA roadmap approved, $82k Q2–Q3 spend, 8 owners assigned (Yara, Ari, Devon, James, Anya, Priya, Marcus, myself). Milestone review every two weeks. Slack confirmation from Sebastien within 30 min: 'Good. Crisp and clear.'",
+    "summary": "Formal HIPAA roadmap memo to exec team",
+    "event_date": "2026-04-22",
+    "importance": 0.71
+  }
+]

@@ -1,0 +1,100 @@
+[
+  {
+    "type": "episodic",
+    "content": "Sebastien approved 5-intern cohort budget ($85K total stipends + housing). Devon volunteered to be technical anchor for onboarding. Kickoff scheduled for June 2.",
+    "summary": "Summer intern cohort approved, budget locked, Devon as tech lead.",
+    "event_date": "2026-03-03",
+    "importance": 0.58
+  },
+  {
+    "type": "semantic",
+    "content": "Stanford pipeline preferred: strong ML foundations, already familiar with vector DBs. Cal candidates good for backend. Target: 3 Stanford, 2 Cal. Ari confirmed he'd interview all 5.",
+    "summary": "Intern sourcing strategy: Stanford for ML/vectors, Cal for backend.",
+    "event_date": "2026-03-05",
+    "importance": 0.72
+  },
+  {
+    "type": "procedural",
+    "content": "Onboarding checklist: Linear ticket template created (1Password + GitHub access by day 1, DataDog metrics intro day 2, Clude codebase walkthrough day 3). Devon owns day-1 standup. Priya handling paperwork.",
+    "summary": "Intern onboarding checklist and 3-day ramp structure documented.",
+    "event_date": "2026-03-08",
+    "importance": 0.81
+  },
+  {
+    "type": "episodic",
+    "content": "First round interviews: Aisha (Stanford, NLP focus) crushed it. Carlos (Cal, distributed systems) solid but slow on System Design. Zoe (Stanford) asked smart questions about Voyage AI integration. Marcus sat in on two calls—useful for CS alignment.",
+    "summary": "Round 1 interviews complete; Aisha and Zoe standout candidates.",
+    "event_date": "2026-03-12",
+    "importance": 0.45
+  },
+  {
+    "type": "semantic",
+    "content": "Intern housing: Apartments.com + local Stanford housing office both overpriced ($1800–2100/mo). Decided to negotiate company housing stipend ($1500/mo flat rate) + interns find their own. Saves ~$15K vs. company-booked.",
+    "summary": "Housing budget strategy: stipend model vs. company booking, saves 15K.",
+    "event_date": "2026-03-14",
+    "importance": 0.68
+  },
+  {
+    "type": "procedural",
+    "content": "Created Notion page for intern project assignments. Week 1: Snowflake query optimization (Aisha). Week 2: Sentry alerting enhancement (Carlos). Week 3+: TBD based on Ari's roadmap. Update weekly, link to Linear epics.",
+    "summary": "Intern project assignment framework in Notion, 3-week ramp.",
+    "event_date": "2026-03-18",
+    "importance": 0.76
+  },
+  {
+    "type": "episodic",
+    "content": "Ari flagged Tom's availability conflict (family trip mid-June). Rescheduled his start to June 16. Updated intern cohort start matrix. No budget impact but timing matters for onboarding pairs.",
+    "summary": "Tom's start date pushed to June 16 due to conflict.",
+    "event_date": "2026-03-22",
+    "importance": 0.38
+  },
+  {
+    "type": "self_model",
+    "content": "Running intern program is logistical work I don't hate—spreadsheets, checklists, clear ownership. But explaining same context to 5 people repeatedly drains me. Documentation saves my sanity. Will insist on it.",
+    "summary": "Prefer systems + docs over repeated explanations for interns.",
+    "event_date": "2026-03-25",
+    "importance": 0.54
+  },
+  {
+    "type": "procedural",
+    "content": "Onsite interview day (March 28): Rent meeting room at Cloudflare office (walking distance). Lunch budget: $120 (catering via Notion order form). Ari + Anya + Devon conducting technical + culture interviews. Debrief same day, decisions by March 29.",
+    "summary": "Onsite interview logistics and decision timeline locked.",
+    "event_date": "2026-03-26",
+    "importance": 0.83
+  },
+  {
+    "type": "episodic",
+    "content": "Onsite day: Aisha demo'd vector search prototype (impressive). Raj (Cal candidate) nervous but technically sound on AWS architecture. Zoe asked about equity for interns—Anya will research tier. All 5 candidates viable.",
+    "summary": "Onsite interviews completed; all 5 candidates viable, Aisha strongest.",
+    "event_date": "2026-03-28",
+    "importance": 0.62
+  },
+  {
+    "type": "semantic",
+    "content": "Intern equity offer: Non-ISO options, vesting 1 yr cliff, 0.02–0.04% pool. Anya negotiated with Sebastien. Not negotiable per candidate but disclosed upfront. James (hired March) got 0.03% as baseline.",
+    "summary": "Intern equity structure: 0.02–0.04%, 1-year cliff, disclosed upfront.",
+    "event_date": "2026-04-01",
+    "importance": 0.85
+  },
+  {
+    "type": "procedural",
+    "content": "Onboarding day checklist automated: Priya creates Slack DM chain for each intern 24 hrs before start. Day 1: laptop + badge at 9am. Devon sends codebase Figma walkthrough link day before. James paired with Raj (similar backend interests). Avoids duplicate explanations.",
+    "summary": "Automated onboarding workflow: async docs, pairing strategy, Slack chain.",
+    "event_date": "2026-04-03",
+    "importance": 0.87
+  },
+  {
+    "type": "self_model",
+    "content": "Realized I've gotten better at delegating—Priya owns paperwork, Devon owns tech, I own schedule + docs. Don't need to be in every room. Still weary but less frantic.",
+    "summary": "Delegation and compartmentalization reducing my overhead.",
+    "event_date": "2026-04-08",
+    "importance": 0.51
+  },
+  {
+    "type": "procedural",
+    "content": "Final checklist for June 2 kickoff: GitHub org access pre-granted. 1Password vault created. Anthropic API credits allocated ($500/intern for experiments). GitHub Actions CI tutorial linked. All async, completed by June 1.",
+    "summary": "Pre-kickoff technical setup: access, API credits, async tutorials.",
+    "event_date": "2026-04-15",
+    "importance": 0.79
+  }
+]

@@ -1,0 +1,170 @@
+[
+  {
+    "type": "episodic",
+    "content": "Sebastien opened Q1 planning with ambitious target: $4M ARR, SOC2 Type II, 3 enterprise wins, hosted-dream automation. Anya's face went tight. She didn't push back immediately—that's not her style—but I could see the math wasn't landing.",
+    "summary": "Q1 OKR kickoff: $4M ARR target announced",
+    "event_date": "2025-12-08",
+    "importance": 0.62
+  },
+  {
+    "type": "semantic",
+    "content": "Q1 2026 OKR structure: Revenue ($4M ARR), Security (SOC2 Type II completion), Sales (3 enterprise logos), Product (hosted-dream cycle fully automated). Four pillars, all interconnected for customer trust & scalability.",
+    "summary": "Q1 OKRs: revenue, security, sales, product automation",
+    "event_date": "2025-12-08",
+    "importance": 0.88
+  },
+  {
+    "type": "semantic",
+    "content": "SOC2 Type II readiness requires 6+ months of control evidence. Initech deal is contingent on it. Timeline is tight but feasible if audit kicks off mid-December and we document everything religiously through May.",
+    "summary": "SOC2 Type II timeline: Dec start, May completion for Initech",
+    "event_date": "2025-12-09",
+    "importance": 0.81
+  },
+  {
+    "type": "episodic",
+    "content": "Anya pulled me into a 1:1 before the full ops sync. She said $4M is 'aggressive to the point of fantasy' given churn last quarter and Initech's 90-day eval period. She's not wrong, but Sebastien is betting on Q1 being our inflection.",
+    "summary": "Anya flags $4M target as unrealistic; churn & Initech delays cited",
+    "event_date": "2025-12-10",
+    "importance": 0.71
+  },
+  {
+    "type": "semantic",
+    "content": "Enterprise sales cycle at Clude: 60–90 days average. 3 wins in 13 weeks requires 2–3 deals already in late-stage negotiation (Initech is one; Globex and Wayne in qualification). Timeframe is tight but not impossible if discovery goes clean.",
+    "summary": "Enterprise sales cycle 60–90d; 3 wins needs deals in flight",
+    "event_date": "2025-12-10",
+    "importance": 0.75
+  },
+  {
+    "type": "procedural",
+    "content": "When pushing back on OKRs, always bring numbers (churn rate, pipeline conversion, historical actuals) and scenarios (best case, realistic, downside). Never lead with 'too hard.' Frame as risk mitigation for exec credibility.",
+    "summary": "How to challenge OKRs: data first, framing as risk mgmt",
+    "event_date": "2025-12-10",
+    "importance": 0.68
+  },
+  {
+    "type": "episodic",
+    "content": "Lina mentioned hosted-dream is still 40% manual. Ari estimated 8–10 weeks to full automation if Tom and James don't get pulled into other work. That's cutting it close for Q1 if we want it done by end of March.",
+    "summary": "Hosted-dream automation at 40%; 8–10w to complete if unblocked",
+    "event_date": "2025-12-11",
+    "importance": 0.58
+  },
+  {
+    "type": "semantic",
+    "content": "Hosted-dream automation is a force multiplier: reduces CS support tickets by ~30%, shortens onboarding from 2 weeks to 5 days, unblocks GTM for mid-market. It's not optional for $4M ARR—it's the bottleneck.",
+    "summary": "Hosted-dream automation: 30% ticket reduction, 5d onboarding",
+    "event_date": "2025-12-11",
+    "importance": 0.79
+  },
+  {
+    "type": "semantic",
+    "content": "Anya's main concern with $4M: Q4 2025 actual was $2.8M. Growth rate needed is ~43% QoQ. Historical Clude QoQ growth is 18–25%. $3.5M is defensible; $4M requires either a mega-deal or 60% close rate in mid-market (not our track record).",
+    "summary": "$4M needs 43% QoQ growth; historical is 18–25%",
+    "event_date": "2025-12-12",
+    "importance": 0.85
+  },
+  {
+    "type": "episodic",
+    "content": "Anya sent a Slack doc titled 'Q1 ARR Scenarios' with three columns: Base ($3.2M), Realistic ($3.6M), Stretch ($4.1M). She didn't say it directly, but the subtext was clear: we should commit to Realistic, not Stretch. Sebastien hasn't responded yet.",
+    "summary": "Anya submits three ARR scenarios; argues for $3.6M realistic case",
+    "event_date": "2025-12-13",
+    "importance": 0.73
+  },
+  {
+    "type": "procedural",
+    "content": "For OKR escalation, always document the opposing view in writing first. That way, if targets get overridden, there's a paper trail showing ops flagged the risk. Protects everyone later.",
+    "summary": "Document dissent on OKRs in writing to create accountability trail",
+    "event_date": "2025-12-13",
+    "importance": 0.72
+  },
+  {
+    "type": "semantic",
+    "content": "Acme Corp's contract renews in February; they're likely to expand 2.5x if hosted-dream lands. Initech closes in late January (60-day eval ends mid-Jan, but legal review adds 2–3 weeks). Globex is still in discovery. These three represent $1.2M of the $4M target.",
+    "summary": "Key deals: Acme expansion, Initech Jan close, Globex discovery",
+    "event_date": "2025-12-15",
+    "importance": 0.82
+  },
+  {
+    "type": "episodic",
+    "content": "Sebastien replied to Anya's scenarios: 'Let's target $4M but measure via Realistic ($3.6M) milestones.' It's a compromise that looks good on paper but doesn't actually resolve the tension. He wants both ambition and insurance.",
+    "summary": "Sebastien: target $4M but use $3.6M milestones (compromise doesn't hold)",
+    "event_date": "2025-12-16",
+    "importance": 0.65
+  },
+  {
+    "type": "semantic",
+    "content": "Quarterly roadmap priority order: (1) SOC2 audit setup (customer gating), (2) hosted-dream automation (sales gating), (3) enterprise sales execution (revenue gating). No reordering without exec alignment; changing priority mid-quarter kills momentum.",
+    "summary": "Q1 priority stack: SOC2, automation, sales. Fixed order.",
+    "event_date": "2025-12-16",
+    "importance": 0.84
+  },
+  {
+    "type": "episodic",
+    "content": "Jenny flagged that design work for hosted-dream UI is 70% done but blocked on backend API contracts. Ari says contracts won't finalize until Tom finishes data-model refactor (2 weeks). Design → Backend → Integration feedback loop is our bottleneck, not effort.",
+    "summary": "Hosted-dream blocked: design waiting on backend API contracts",
+    "event_date": "2025-12-17",
+    "importance": 0.59
+  },
+  {
+    "type": "semantic",
+    "content": "SOC2 Type II audit vendor: We're going with Vanta (not big4). Cost is $35K for engagement + $8K monthly monitoring. Snowflake, AWS, Cloudflare, DataDog, Sentry, GitHub, 1Password, Figma all in compliance scope. Voyage AI and Anthropic (API deps) will need attestations.",
+    "summary": "SOC2 audit: Vanta ($35K + $8K/mo), 9 vendors in scope",
+    "event_date": "2025-12-18",
+    "importance": 0.76
+  },
+  {
+    "type": "procedural",
+    "content": "Before finalizing quarterly OKRs, always run dependency map: which goals unblock which, where are the serial blockers? For Q1, SOC2 audit unblocks Initech, automation unblocks mid-market expansion. Both feed revenue.",
+    "summary": "Map OKR dependencies before committing to targets",
+    "event_date": "2025-12-18",
+    "importance": 0.71
+  },
+  {
+    "type": "episodic",
+    "content": "Priya mentioned James (hired Mar 2026) will start ramping in Q1, but he won't be fully productive until Q2. Tom is already stretched thin. We're betting on automation win with the team we have now, not the team we'll have mid-quarter.",
+    "summary": "James onramp delayed; automation timeline assumes current team",
+    "event_date": "2025-12-20",
+    "importance": 0.61
+  },
+  {
+    "type": "semantic",
+    "content": "Q1 sprint plan: Weeks 1–4 (SOC2 kickoff, automation sprint 1), Weeks 5–8 (audit execution, automation sprint 2, Initech go-live), Weeks 9–13 (compliance finalization, automation hardening, enterprise closures). No margin for >2-week delays.",
+    "summary": "Q1 sprint structure: SOC2 audit runs 13w, automation 10w, sales execution parallel",
+    "event_date": "2025-12-20",
+    "importance": 0.79
+  },
+  {
+    "type": "episodic",
+    "content": "Anya and I did a final sync before OKR lock-in. She agreed to commit to $4M publicly if Sebastien approved a 'go/no-go review' at week 6 (mid-February) where we reset if pipeline stalled. Sebastien agreed. It's a safety valve, not insurance.",
+    "summary": "Week 6 go/no-go review approved as $4M OKR exit ramp",
+    "event_date": "2025-12-22",
+    "importance": 0.74
+  },
+  {
+    "type": "self_model",
+    "content": "I keep trying to find the middle ground between Anya's caution and Sebastien's ambition. But the tension is real, and my job is to make sure we name it clearly (which we did) so decisions land as conscious choices, not surprises. That's all I can do.",
+    "summary": "My role: surface tensions explicitly, then execute against chosen path",
+    "event_date": "2025-12-23",
+    "importance": 0.68
+  },
+  {
+    "type": "semantic",
+    "content": "Final Q1 OKRs locked 2025-12-29: $4M ARR (Realistic checkpoint $3.6M week 6), SOC2 Type II audit 75% complete, 3 enterprise wins (Initech, Acme expansion, one of Globex/Wayne), hosted-dream automation 90% done. All cross-functional owners assigned.",
+    "summary": "Q1 OKRs finalized with week 6 checkpoint and owner accountability",
+    "event_date": "2025-12-29",
+    "importance": 0.91
+  },
+  {
+    "type": "episodic",
+    "content": "First week of Q1 (Jan 6–10): SOC2 auditor kicked off interviews, automated 60% of hosted-dream ready for testing, Initech eval entered final 30 days. Everything is moving as planned. For now.",
+    "summary": "Q1 week 1 execution: SOC2 live, automation on track, Initech final stretch",
+    "event_date": "2026-01-10",
+    "importance": 0.52
+  },
+  {
+    "type": "semantic",
+    "content": "Q1 success definition (agreed): SOC2 report delivered, hosted-dream <5% manual intervention, Initech + 2 others signed, $3.6M ARR confirmed by end of week 8. $4M is credible only if all three hit and no churn. Week 6 will tell.",
+    "summary": "Q1 success = SOC2, automation, 3 deals, $3.6M confirmed",
+    "event_date": "2026-01-12",
+    "importance": 0.87
+  }
+]

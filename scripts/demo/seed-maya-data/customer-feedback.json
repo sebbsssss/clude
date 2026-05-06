@@ -1,0 +1,142 @@
+[
+  {
+    "type": "episodic",
+    "content": "Called Acme Corp procurement lead (Sarah Chen) about audit logging gaps. She flagged that their compliance officer won't sign off without immutable event trails. This is blocking a $180K annual contract.",
+    "summary": "Acme Corp: audit logs blocking $180K deal",
+    "event_date": "2025-11-17",
+    "importance": 0.68
+  },
+  {
+    "type": "semantic",
+    "content": "Pattern: when customers say 'we need better audit trails,' they usually mean 'we need to prove governance to our legal/compliance teams so we feel safe deploying this in prod.' Audit logs aren't a feature—they're a permission slip.",
+    "summary": "Audit logs = customer safety/governance validation, not feature",
+    "event_date": "2025-11-18",
+    "importance": 0.82
+  },
+  {
+    "type": "episodic",
+    "content": "Synthesized November feedback from 4 customer interviews (Acme, Initech, Globex, Wayne Industries). Common thread: all cite audit/compliance as top 3 blocker. Wrote 2-pager for Sebastien + Lina.",
+    "summary": "Nov synthesis: audit logs mentioned by 4/4 customers",
+    "event_date": "2025-11-22",
+    "importance": 0.75
+  },
+  {
+    "type": "procedural",
+    "content": "Monthly customer feedback loop: (1) book 4–5 calls 2nd–3rd week, (2) record + transcribe, (3) Wednesday synthesis doc (async for Lina/Sebastien), (4) tag blockers/personas in Linear. Takes ~6 hrs/month. Calendar reminder on the 10th.",
+    "summary": "Process: book→record→synthesize→tag (2nd–3rd week each month)",
+    "event_date": "2025-11-20",
+    "importance": 0.71
+  },
+  {
+    "type": "episodic",
+    "content": "Anya pointed out in standup: Initech's CFO wanted 'faster ROI visibility'—but actually wanted reassurance that implementation wouldn't derail their Q1 roadmap. Reframed our pitch to them accordingly.",
+    "summary": "Initech CFO's real concern: implementation risk, not speed",
+    "event_date": "2025-12-02",
+    "importance": 0.59
+  },
+  {
+    "type": "semantic",
+    "content": "Anya's insight holds: 'I want X' is usually 'I want to feel Y.' Globex said 'we need better integrations'—really meant 'we need to feel confident we won't be locked in.' Shapes how we pitch.",
+    "summary": "Customer requests mask emotional needs (security, control, speed)",
+    "event_date": "2025-12-03",
+    "importance": 0.79
+  },
+  {
+    "type": "episodic",
+    "content": "Wayne Industries CSM escalated: their data team wants SLA guarantees on query latency. Marcus confirmed we can't commit <2sec for 99th percentile at scale. This is a real gap, not perception.",
+    "summary": "Wayne Industries: SLA request legitimate, not overblown",
+    "event_date": "2025-12-09",
+    "importance": 0.72
+  },
+  {
+    "type": "semantic",
+    "content": "Audit logs + SLA guarantees are two sides of the same coin: enterprise buyers want proof that our system is mature enough to bet prod workloads on. Both are 'maturity proxies,' not nice-to-haves.",
+    "summary": "Audit logs & SLAs = maturity signals for enterprise risk tolerance",
+    "event_date": "2025-12-10",
+    "importance": 0.85
+  },
+  {
+    "type": "episodic",
+    "content": "December feedback call with Globex (3 attendees: procurement, eng, product). They praised onboarding but said data residency questions stalled their legal review by 2 weeks. Not our fault, but we should have FAQ.",
+    "summary": "Globex: data residency questions delayed legal review",
+    "event_date": "2025-12-16",
+    "importance": 0.54
+  },
+  {
+    "type": "procedural",
+    "content": "When synthesizing feedback, always map to persona + blocker (in Linear label format 'persona:finance' / 'blocker:audit-logs'). Makes it searchable for Lina/Sebastien. Takes extra 10 min, worth it.",
+    "summary": "Tag feedback: persona + blocker in Linear (searchable)",
+    "event_date": "2025-12-11",
+    "importance": 0.68
+  },
+  {
+    "type": "episodic",
+    "content": "Called Acme Corp again (late Jan). Sarah Chen now says compliance sign-off still pending but audit log roadmap from our last call 'moved the needle.' Deal now ETA March vs. blocked. Progress.",
+    "summary": "Acme Corp: audit log roadmap commitment unblocked deal",
+    "event_date": "2026-01-28",
+    "importance": 0.73
+  },
+  {
+    "type": "semantic",
+    "content": "Customer interviews often reveal timing mismatch: we say 'audit logs in Q2,' they hear 'we don't care about your January deadline.' Solution: be explicit about what 'Q2' means for their budget cycle.",
+    "summary": "Timing objections often stem from misaligned calendar expectations",
+    "event_date": "2026-01-29",
+    "importance": 0.76
+  },
+  {
+    "type": "episodic",
+    "content": "Initech product lead flagged that they're comparing us to Anthropic's memory layer. We don't compete directly, but it signals they're evaluating embedded vs. standalone. Noted for Lina.",
+    "summary": "Initech: competitive concern re embedded memory solutions",
+    "event_date": "2026-02-10",
+    "importance": 0.61
+  },
+  {
+    "type": "semantic",
+    "content": "Competitive pressure is low across customer base, but Anthropic/Voyage AI are mentioned as 'what if we just use their API?' Differentiation: we're persistence layer, they're embedding models. Message needs tightening.",
+    "summary": "Perception gap: customers conflate embedding models with memory",
+    "event_date": "2026-02-11",
+    "importance": 0.78
+  },
+  {
+    "type": "episodic",
+    "content": "February synthesis: 5 calls (Acme, Initech, Globex, Wayne Industries, + new prospect Cyberdyne). Cyberdyne asked about multi-tenant data isolation. Valid question; Devon flagged it's handled but poorly documented.",
+    "summary": "Feb feedback: multi-tenant isolation docs gap identified",
+    "event_date": "2026-02-19",
+    "importance": 0.64
+  },
+  {
+    "type": "procedural",
+    "content": "After each monthly synthesis, send 15-min async video walkthrough to Sebastien (not just doc). Context sticks better. Lina watches async too. Use Loom, link in Slack. Saves 30 min of sync meetings.",
+    "summary": "Post-synthesis: async Loom walkthrough to Sebastien/Lina",
+    "event_date": "2026-02-20",
+    "importance": 0.69
+  },
+  {
+    "type": "episodic",
+    "content": "Wayne Industries escalated: they want us to fund on-premise deployment pilot ($50K cost). Anya flagged this is outside our commercial model. I told them Q3 timeline, but relationship risk is real.",
+    "summary": "Wayne Industries: on-prem request out of scope, relationship strained",
+    "event_date": "2026-03-04",
+    "importance": 0.67
+  },
+  {
+    "type": "self_model",
+    "content": "Realized I dread the synthesis work when feedback is contradictory (audit logs vs. speed) because I want customers to have a clear ask. But ambiguity is real; my job is to *name* the tension, not resolve it for product.",
+    "summary": "I resist documenting customer ambiguity; need to reframe as signal",
+    "event_date": "2026-03-12",
+    "importance": 0.62
+  },
+  {
+    "type": "semantic",
+    "content": "Enterprise personas (finance, legal, engineering) have misaligned priorities. Finance wants ROI proof + SLAs. Legal wants audit trails + compliance. Engineering wants low ops burden. All three must sign off. Shape messaging to each.",
+    "summary": "Multi-stakeholder sign-off requires persona-specific messaging",
+    "event_date": "2026-03-13",
+    "importance": 0.88
+  },
+  {
+    "type": "episodic",
+    "content": "Late April: Acme Corp deal closed at $180K annual (signed ~4 weeks after audit log roadmap commit). Marcus said onboarding is smooth. This validates the 'audit logs = permission slip' hypothesis.",
+    "summary": "Acme Corp: $180K closed after audit log roadmap commit",
+    "event_date": "2026-04-30",
+    "importance": 0.79
+  }
+]

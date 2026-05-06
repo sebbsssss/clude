@@ -1,0 +1,100 @@
+[
+  {
+    "type": "episodic",
+    "content": "Legal (external counsel) dropped revised privacy policy + DPA template in Notion on Monday. 47 pages total. Anya flagged three sections needed Sebastien sign-off before customer rollout.",
+    "summary": "Legal delivered privacy policy & DPA template",
+    "event_date": "2026-02-16",
+    "importance": 0.62
+  },
+  {
+    "type": "semantic",
+    "content": "SOC2 audit requires written DPA covering data handling, sub-processor disclosure, breach notification SLAs, and PII retention limits. Non-negotiable for Wayne Industries contract.",
+    "summary": "SOC2 mandates DPA with PII & breach clauses",
+    "event_date": "2026-02-16",
+    "importance": 0.88
+  },
+  {
+    "type": "procedural",
+    "content": "Process: Legal drafts → Anya + Sebastien review → Priya notifies relevant customers of DPA availability → CS (Marcus) tracks signature + storage in Linear. Async review window: 5 business days max.",
+    "summary": "DPA review & customer signature workflow",
+    "event_date": "2026-02-17",
+    "importance": 0.79
+  },
+  {
+    "type": "episodic",
+    "content": "Sebastien blocked 1 hour Wed morning to review DPA language. Asked why GDPR Section 7 didn't explicitly mention Anthropic as sub-processor. Valid—fixed it same day.",
+    "summary": "Sebastien flagged missing sub-processor disclosure",
+    "event_date": "2026-02-19",
+    "importance": 0.58
+  },
+  {
+    "type": "semantic",
+    "content": "GDPR compliance requires explicit customer consent for cross-border data transfer to AWS US regions. Voyage AI embedding calls also need processor agreement. Updated policy reflects both.",
+    "summary": "GDPR cross-border & sub-processor consent rules",
+    "event_date": "2026-02-19",
+    "importance": 0.91
+  },
+  {
+    "type": "episodic",
+    "content": "Anya caught that initial DPA had 30-day breach notification window. Acme Corp's security team wants 24-hour SLA. Negotiated middle ground: 24 hours to acknowledge, 72 hours to full disclosure.",
+    "summary": "Acme forced tighter breach notification terms",
+    "event_date": "2026-02-21",
+    "importance": 0.61
+  },
+  {
+    "type": "semantic",
+    "content": "PII data handling policy: customer data encrypted at rest (Cloudflare + AWS KMS), TLS 1.3 in transit. Dev team (Ari, Devon) signs off on control implementation. Annual audit via DataDog/Sentry logs.",
+    "summary": "Encryption & monitoring standards for customer PII",
+    "event_date": "2026-02-21",
+    "importance": 0.85
+  },
+  {
+    "type": "self_model",
+    "content": "I've now documented three policy rollouts (usage T&Cs, privacy, DPA). Pattern: legal always underestimates customer friction. Build 2-week buffer into timelines, not 1 week.",
+    "summary": "Legal rollouts need 2-week customer negotiation slack",
+    "event_date": "2026-02-24",
+    "importance": 0.52
+  },
+  {
+    "type": "episodic",
+    "content": "Priya sent DPA + privacy policy to 12 current customers + 4 warm prospects on Feb 24. Marcus set up tracking sheet. By Friday, Acme + Initech signed. Wayne Industries requested 3 amendments.",
+    "summary": "Customer DPA signature wave started",
+    "event_date": "2026-02-24",
+    "importance": 0.67
+  },
+  {
+    "type": "procedural",
+    "content": "DPA signature storage: signed PDFs go to 1Password vault (backup in Notion page w/ signature date + customer name). Marcus responsible for 30-day follow-up on unsigned. Quarterly audit of coverage.",
+    "summary": "Signed DPA filing & follow-up process",
+    "event_date": "2026-02-25",
+    "importance": 0.73
+  },
+  {
+    "type": "episodic",
+    "content": "Wayne Industries legal team redlined DPA hard on data retention + deletion timelines. Wanted 90-day deletion SLA instead of 1 year. Escalated to Sebastien; he approved 6-month compromise to close deal.",
+    "summary": "Wayne Industries negotiated shorter data retention",
+    "event_date": "2026-02-28",
+    "importance": 0.64
+  },
+  {
+    "type": "semantic",
+    "content": "GDPR Article 28 requires processor (Clude) to document sub-processors in writing. Current list: Anthropic (LLM), Voyage AI (embeddings), AWS (infra), Snowflake (analytics). Updates require 30-day customer notice.",
+    "summary": "GDPR sub-processor notification & documentation rules",
+    "event_date": "2026-03-01",
+    "importance": 0.89
+  },
+  {
+    "type": "episodic",
+    "content": "Globex Corp asked if we retain training data from their conversations. Checked w/ Ari: no—model inference only, logs deleted after 90 days. Updated DPA language to reflect. Customer signed by EOD.",
+    "summary": "Globex resolved data retention concern",
+    "event_date": "2026-03-03",
+    "importance": 0.59
+  },
+  {
+    "type": "semantic",
+    "content": "Clude's policy: no PII used for model training or internal analytics. Data segregated by customer in Snowflake. Cloudflare WAF + Sentry alerting flag suspicious access patterns. Quarterly penetration test via third party.",
+    "summary": "Data segregation & access control standards",
+    "event_date": "2026-03-04",
+    "importance": 0.87
+  }
+]

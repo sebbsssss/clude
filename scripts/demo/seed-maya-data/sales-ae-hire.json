@@ -1,0 +1,142 @@
+[
+  {
+    "type": "episodic",
+    "content": "Sebastien flagged sales bottleneck in exec standup: pipeline stalled, Acme and Initech both waiting on response times. Need first AE yesterday. Told him I'd have JD + sourcing plan by EOW.",
+    "summary": "CEO pressure on sales hiring urgency",
+    "event_date": "2026-03-02",
+    "importance": 0.62
+  },
+  {
+    "type": "semantic",
+    "content": "Sales AE role definition (locked): 100% outbound, target enterprise segment ($50k+ ACV). Base $140k, commission 50/50 split. Quota year 1: $800k net new ARR. Report to me until we hire VP Sales.",
+    "summary": "First AE role spec and compensation structure",
+    "event_date": "2026-03-03",
+    "importance": 0.88
+  },
+  {
+    "type": "episodic",
+    "content": "Posted JD on LinkedIn, AngelList, told Ari to ask his network. Priya sent 8 inbound CVs same day—pool looks thin on SaaS sales experience. Agreed to widen to mid-market AE backgrounds.",
+    "summary": "AE sourcing kicks off, initial CV screening",
+    "event_date": "2026-03-04",
+    "importance": 0.48
+  },
+  {
+    "type": "episodic",
+    "content": "Phone screen with candidate #3 (Sarah, ex-HubSpot): talked product/market fit, she asked good questions on our ICP. Moved to next round. Also rejected candidate #2 for weak discovery skills.",
+    "summary": "Sarah advances from initial screening round",
+    "event_date": "2026-03-06",
+    "importance": 0.52
+  },
+  {
+    "type": "episodic",
+    "content": "Reached 60 sourced candidates by EOD. Priya says 14 phone screens scheduled through Mar 15. Anya asked if hiring freeze risk—reassured her Sebastien wants this done before Q2 planning.",
+    "summary": "Candidate pipeline at 60, screening schedule locked",
+    "event_date": "2026-03-09",
+    "importance": 0.55
+  },
+  {
+    "type": "episodic",
+    "content": "Phone screen with Theo (ex-Snowflake, 6yr tenure). Sold Snowflake storage to Wayne Industries—knows our customer. Asked smart questions on onboarding process. Definitely moving to onsite.",
+    "summary": "Theo impresses in phone screen, advances to onsite",
+    "event_date": "2026-03-11",
+    "importance": 0.7
+  },
+  {
+    "type": "episodic",
+    "content": "Completed 14 phone screens. 4 candidates advancing: Theo, Sarah, Marcus (ex-Gong), Dev (ex-Stripe). Rejected 10 for weak qualification skills or unrealistic comp expectations.",
+    "summary": "14 screens done, 4 finalists locked for onsites",
+    "event_date": "2026-03-15",
+    "importance": 0.68
+  },
+  {
+    "type": "procedural",
+    "content": "Onsite interview loop: 30min exec chat (Sebastien), 45min product deep-dive (Lina), 45min customer scenario role-play (me), 30min comp/culture chat (Priya). Half day, async feedback form due within 24h.",
+    "summary": "AE onsite process and interview panel structure",
+    "event_date": "2026-03-16",
+    "importance": 0.8
+  },
+  {
+    "type": "episodic",
+    "content": "Theo onsite went very well. Sebastien noted 'knows our product ecosystem.' Lina said he asked about integration roadmap—rare. My role-play: nailed discovery on Wayne Industries use case. Waiting on others.",
+    "summary": "Theo onsite completed, strong signals",
+    "event_date": "2026-03-18",
+    "importance": 0.65
+  },
+  {
+    "type": "episodic",
+    "content": "Sarah onsite: stumbled on product details, asked Lina 3x for clarification. Sebastien was polite but cool. Feedback form: 'bright but needs ramp time.' Probably not it.",
+    "summary": "Sarah onsite underperforms on product knowledge",
+    "event_date": "2026-03-20",
+    "importance": 0.48
+  },
+  {
+    "type": "episodic",
+    "content": "Marcus (ex-Gong) and Dev (ex-Stripe) onsites completed. Marcus aggressive in role-play, felt pushy. Dev solid but quiet—Lina worried about assertiveness in customer calls. Both decent, Theo still ahead.",
+    "summary": "Marcus and Dev onsites: adequate but not standout",
+    "event_date": "2026-03-22",
+    "importance": 0.52
+  },
+  {
+    "type": "semantic",
+    "content": "Onsite debrief consensus (Sebastien, me, Priya): Theo is clear winner. 10yr sales exp, Snowflake pedigree, knows enterprise buyers, product curiosity. Marcus too aggressive for early-stage culture. Dev too passive.",
+    "summary": "Hiring committee agrees Theo is best candidate",
+    "event_date": "2026-03-23",
+    "importance": 0.85
+  },
+  {
+    "type": "episodic",
+    "content": "Sebastien wanted to move fast. I drafted offer letter (140k + 50/50 commission), called Theo same day. He had another offer pending but liked our product vision. Asked for 48h to decide.",
+    "summary": "Offer extended to Theo, decision pending",
+    "event_date": "2026-03-24",
+    "importance": 0.7
+  },
+  {
+    "type": "episodic",
+    "content": "Theo accepted offer. Start date Apr 22 (4-week notice at Snowflake). Sent onboarding checklist to James/Devon (onboard buddy setup), Lina (product training plan), Marcus (customer intro list).",
+    "summary": "Theo accepts offer, Apr 22 start date confirmed",
+    "event_date": "2026-03-26",
+    "importance": 0.72
+  },
+  {
+    "type": "episodic",
+    "content": "Slack thread: Anya asked about sales ops tools setup (CRM, territory config). Told her Linear is our source of truth for deals for now, but we should evaluate Salesforce before Theo ramps up. Noted for post-hire.",
+    "summary": "Sales ops infrastructure gap identified pre-hire",
+    "event_date": "2026-03-29",
+    "importance": 0.58
+  },
+  {
+    "type": "self_model",
+    "content": "Hiring process exposed my impatience. Wanted Theo signed by mid-March, but onsite staggered across 4 days killed momentum. Next hire: compress decision window to 5 days max. Also: I need to stop re-explaining candidate context in Slack—document everything in shared memo.",
+    "summary": "Reflection on hiring process inefficiency and communication",
+    "event_date": "2026-04-01",
+    "importance": 0.61
+  },
+  {
+    "type": "episodic",
+    "content": "Theo's first week prep: Lina booked 5x product deep-dives, Marcus prepped customer intros (Acme, Initech, Globex), I set up 1:1 schedule. Sent him Notion doc with customer profiles + deal context. Radio silence from him—normal.",
+    "summary": "Theo onboarding plan locked, materials distributed",
+    "event_date": "2026-04-15",
+    "importance": 0.55
+  },
+  {
+    "type": "episodic",
+    "content": "Theo's first day (Apr 22). Sebastien gave founder narrative, I walked pipeline status (3 active deals: Acme stalled 6wks, Initech low engagement, Globex early-stage). He asked to start with Acme outreach immediately.",
+    "summary": "Theo joins, dives into pipeline on day one",
+    "event_date": "2026-04-22",
+    "importance": 0.63
+  },
+  {
+    "type": "episodic",
+    "content": "Theo sent 6 outreach emails to Acme stakeholders by EOD (found 2 new contact names via LinkedIn). Marcus said he moved faster than expected. Good sign. Scheduled his first Friday customer call with Initech buyer.",
+    "summary": "Theo's first week: aggressive outreach and customer scheduling",
+    "event_date": "2026-04-25",
+    "importance": 0.59
+  },
+  {
+    "type": "semantic",
+    "content": "Key lesson from hire: enterprise SaaS needs sales AE 3-6 months sooner than we thought. Pipeline decay was real—Acme got cold, Initech stalled. Theo's presence already unblocking conversations. Flag for Sebastien: plan next hire (SDR or second AE) by Q3.",
+    "summary": "Sales coverage gap was underestimated, plan succession",
+    "event_date": "2026-04-28",
+    "importance": 0.78
+  }
+]

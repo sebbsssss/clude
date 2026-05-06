@@ -1,0 +1,156 @@
+[
+  {
+    "type": "episodic",
+    "content": "Acme Corp audit request came in Friday 9am—Wayne Industries regulatory inquiry from the week before already resolved via memory_audit_log export. Marcus routed both to me. Pattern forming.",
+    "summary": "Acme audit request; pattern emerging",
+    "event_date": "2025-11-15",
+    "importance": 0.42
+  },
+  {
+    "type": "semantic",
+    "content": "Enterprise customers (Acme, Wayne, Initech) are increasingly requesting audit logs for compliance. Most queries resolve with existing memory_audit_log table; rarely need custom export.",
+    "summary": "Audit log requests are standard enterprise ask",
+    "event_date": "2025-11-17",
+    "importance": 0.72
+  },
+  {
+    "type": "procedural",
+    "content": "When audit request arrives: (1) check Linear for prior similar request, (2) pull data from memory_audit_log table, (3) validate timestamps match customer claim, (4) send to Marcus for delivery. Takes ~2 hours.",
+    "summary": "Standard audit log fulfillment workflow",
+    "event_date": "2025-11-18",
+    "importance": 0.88
+  },
+  {
+    "type": "procedural",
+    "content": "All audit exports must be timestamped and logged in Notion audit-request tracker. Include customer name, request date, resolution date, and whether flagged for legal review. Anya requires this for SOC2.",
+    "summary": "Document every audit request in Notion",
+    "event_date": "2025-11-20",
+    "importance": 0.85
+  },
+  {
+    "type": "episodic",
+    "content": "Initech data subject request landed Wednesday. Took 90 minutes to extract—their agent had 47k memory entries. Devon helped optimize the query. Initech satisfied.",
+    "summary": "Initech DSR: 47k entries, 90min turnaround",
+    "event_date": "2025-12-03",
+    "importance": 0.48
+  },
+  {
+    "type": "semantic",
+    "content": "Data subject requests (DSRs) under GDPR/CCPA are distinct from audit logs. DSRs require customer-specific data only; audits track system-level attribution. Different compliance frameworks apply.",
+    "summary": "DSRs and audits are distinct compliance asks",
+    "event_date": "2025-12-05",
+    "importance": 0.78
+  },
+  {
+    "type": "procedural",
+    "content": "For DSRs: query memory table filtered by customer_id + agent_id, exclude system logs, package as JSON or CSV per customer preference. Always CCing Anya before sending; she flags if legal review needed.",
+    "summary": "DSR extraction procedure with Anya gate",
+    "event_date": "2025-12-07",
+    "importance": 0.82
+  },
+  {
+    "type": "semantic",
+    "content": "Regulators (mostly state attorneys general, one FTC inquiry) ask via customer. We don't receive subpoena directly—customer is intermediary. Response goes through their legal counsel.",
+    "summary": "Regulatory requests flow through customer",
+    "event_date": "2025-12-10",
+    "importance": 0.74
+  },
+  {
+    "type": "episodic",
+    "content": "Wayne Industries escalated a regulator inquiry about agent bias in memory recall. Flagged for Sebastien + Anya. Turned out agent was working as designed; memory_audit_log proved no improper filtering. Resolved in 48 hours.",
+    "summary": "Wayne regulatory inquiry; agent bias claim unfounded",
+    "event_date": "2025-12-15",
+    "importance": 0.61
+  },
+  {
+    "type": "procedural",
+    "content": "When request is flagged as regulator-related: stop normal turnaround, notify Sebastien immediately, copy Anya, preserve all logs in read-only bucket on S3, don't delete anything for 2 years.",
+    "summary": "Escalation protocol for regulatory requests",
+    "event_date": "2025-12-17",
+    "importance": 0.89
+  },
+  {
+    "type": "semantic",
+    "content": "Most audit requests spike in Dec/Jan (year-end compliance cycles) and late Q2 (mid-year reviews). Globex and Initech are predictable callers. Wayne Industries unpredictable but high-friction.",
+    "summary": "Audit request seasonality: Dec/Jan, Q2 spikes",
+    "event_date": "2025-12-22",
+    "importance": 0.65
+  },
+  {
+    "type": "procedural",
+    "content": "Maintain audit-request SLA: acknowledgment within 4 hours, initial data pull within 24h, final delivery within 5 business days. Anything beyond 5 days needs exec approval to delay.",
+    "summary": "Audit request SLAs: 4h ack, 24h pull, 5d delivery",
+    "event_date": "2025-12-29",
+    "importance": 0.86
+  },
+  {
+    "type": "self_model",
+    "content": "I've become the informal audit-request triage person—not formally assigned but everyone routes to me. I'm the only one who remembers the patterns and edge cases. Need to document this better so it's not just in my head.",
+    "summary": "I'm the undocumented audit request owner",
+    "event_date": "2026-01-08",
+    "importance": 0.58
+  },
+  {
+    "type": "episodic",
+    "content": "Globex sent three audit requests on same day for three different agents. Requested attribution breakdown—which human prompts led to which memories. Memory_audit_log didn't have granular prompt mapping. Had to write custom query.",
+    "summary": "Globex triple audit; needed custom attribution",
+    "event_date": "2026-01-22",
+    "importance": 0.55
+  },
+  {
+    "type": "procedural",
+    "content": "If audit request asks for prompt attribution: check if memory_audit_log.source_prompt populated. If sparse, query Voyage AI embedding metadata as fallback. Document which source you used in response.",
+    "summary": "Prompt attribution fallback: embeddings metadata",
+    "event_date": "2026-01-24",
+    "importance": 0.79
+  },
+  {
+    "type": "semantic",
+    "content": "Audit requests that mention 'attribution' are asking for causal chain: how did this memory get created, what was the original input, did system modify it. This is legally defensible only if we have immutable log trail.",
+    "summary": "Attribution requests demand causal chain proof",
+    "event_date": "2026-02-01",
+    "importance": 0.81
+  },
+  {
+    "type": "episodic",
+    "content": "Anya flagged an Initech request for legal review—they asked about deleted memories. We have soft-delete; we preserve the tombstone. Legal said we must disclose both existence and deletion timestamp.",
+    "summary": "Initech deletion query: legal mandated disclosure",
+    "event_date": "2026-02-14",
+    "importance": 0.59
+  },
+  {
+    "type": "procedural",
+    "content": "For deletion queries: include soft-delete records with deletion_timestamp. Never claim data is gone if we have a tombstone. Disclose to customer + copy legal. Sentry logs all deletions anyway.",
+    "summary": "Soft-delete disclosure procedure",
+    "event_date": "2026-02-16",
+    "importance": 0.84
+  },
+  {
+    "type": "semantic",
+    "content": "Acme and Initech (both Fortune 500) treat audit logs as critical: they resell our memory layer to their own end-customers and must satisfy *their* audit obligations. Their requests are high-friction but non-negotiable.",
+    "summary": "Large customers use our audits downstream",
+    "event_date": "2026-03-05",
+    "importance": 0.75
+  },
+  {
+    "type": "episodic",
+    "content": "James (new hire, started Mar) asked why we don't have an audit API endpoint. Good question. I documented the ad-hoc workflow for him. Realized we're doing this manually because no one formalized it early.",
+    "summary": "James questioned lack of audit API; workflow gap exposed",
+    "event_date": "2026-03-18",
+    "importance": 0.52
+  },
+  {
+    "type": "procedural",
+    "content": "Standardize all audit exports: (1) CSV or JSON per request, (2) include data_export_date and request_id in metadata, (3) sign with 1Password key for integrity, (4) compress and upload to time-locked S3 bucket.",
+    "summary": "Audit export standardization + signing protocol",
+    "event_date": "2026-04-02",
+    "importance": 0.87
+  },
+  {
+    "type": "self_model",
+    "content": "I'm frustrated that audit requests are treated as operational triage instead of product. This should be a formal API or self-serve dashboard. I keep saying this to Lina and Sebastien. Pushing for Q3 roadmap inclusion.",
+    "summary": "Audit requests deserve product treatment, not triage",
+    "event_date": "2026-04-25",
+    "importance": 0.63
+  }
+]
