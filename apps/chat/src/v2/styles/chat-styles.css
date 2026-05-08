@@ -2000,3 +2000,140 @@ body {
   color: var(--accent, #c0392b);
   font-size: 11px;
 }
+
+/* =========================================================================
+   Message attachments — image grid + lightbox
+   ========================================================================= */
+.cc-imggrid {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 8px;
+  border-radius: 8px;
+  overflow: hidden;
+  max-width: 480px;
+}
+.cc-imggrid[data-count="1"] { grid-template-columns: 1fr; }
+.cc-imggrid[data-count="2"] { grid-template-columns: 1fr 1fr; }
+.cc-imggrid[data-count="3"],
+.cc-imggrid[data-count="4"] { grid-template-columns: 1fr 1fr; }
+.cc-imggrid[data-count="5"],
+.cc-imggrid[data-count="6"],
+.cc-imggrid[data-count="7"],
+.cc-imggrid[data-count="8"] { grid-template-columns: 1fr 1fr 1fr; }
+.cc-imggrid__cell {
+  border: 0;
+  padding: 0;
+  cursor: zoom-in;
+  background: var(--bg-2, #1f1f1f);
+  aspect-ratio: 1;
+  overflow: hidden;
+}
+.cc-imggrid[data-count="1"] .cc-imggrid__cell {
+  aspect-ratio: auto;
+  max-height: 480px;
+}
+.cc-imggrid__cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.cc-imggrid[data-count="1"] .cc-imggrid__cell img {
+  object-fit: contain;
+  height: auto;
+  max-height: 480px;
+}
+.cc-lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  cursor: zoom-out;
+  padding: 24px;
+}
+.cc-lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+/* =========================================================================
+   Confirm modal
+   ========================================================================= */
+.cc-confirm {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+  padding: 16px;
+}
+.cc-confirm__card {
+  background: var(--bg-1, #1a1a1a);
+  border: 1px solid var(--border-1, rgba(255,255,255,0.1));
+  border-radius: 10px;
+  padding: 20px;
+  max-width: 380px;
+  width: 100%;
+  color: var(--fg-1, #fff);
+}
+.cc-confirm__title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.cc-confirm__body {
+  margin: 0 0 16px;
+  color: var(--fg-2, rgba(255,255,255,0.7));
+  font-size: 13px;
+}
+.cc-confirm__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.cc-confirm__cancel,
+.cc-confirm__confirm {
+  background: transparent;
+  border: 1px solid var(--border-1, rgba(255,255,255,0.15));
+  color: inherit;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.cc-confirm__confirm--destructive {
+  background: #c0392b;
+  border-color: #c0392b;
+  color: #fff;
+}
+.cc-confirm__confirm--destructive:hover { background: #a93226; }
+
+/* =========================================================================
+   Sidebar trash button
+   ========================================================================= */
+.cc-thread-row {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+}
+.cc-thread-row > .cc-thread {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.cc-thread__delete {
+  background: transparent;
+  border: 0;
+  color: var(--fg-2, rgba(255,255,255,0.4));
+  cursor: pointer;
+  padding: 0 8px;
+  font-size: 13px;
+  opacity: 0.5;
+  flex: 0 0 auto;
+}
+.cc-thread__delete:hover { opacity: 1; color: #c0392b; }

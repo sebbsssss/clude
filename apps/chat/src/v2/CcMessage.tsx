@@ -1,5 +1,7 @@
 import type { V2Memory, V2Tokens } from './types';
+import type { AttachmentMeta } from '../lib/types';
 import { CcCitation } from './atoms';
+import { CcImageGrid } from './CcImageGrid';
 
 export interface V2Message {
   id: string;
@@ -9,6 +11,7 @@ export interface V2Message {
   model?: string;
   tokens?: V2Tokens;
   recalled?: V2Memory[];
+  attachments?: AttachmentMeta[];
 }
 
 /**
@@ -50,6 +53,9 @@ export function CcMessage({
         )}
       </div>
       <div className="cc-msg__body">
+        {msg.attachments && msg.attachments.length > 0 && (
+          <CcImageGrid images={msg.attachments} />
+        )}
         {blocks.map((b, i) =>
           b.kind === 'pre' ? (
             <pre key={i}>{b.text}</pre>
