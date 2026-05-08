@@ -6,6 +6,7 @@
  * Memory: Recalls user's memories and injects as context for each conversation turn.
  */
 import { Router, Request, Response, NextFunction } from 'express';
+import { z } from 'zod';
 import { createChatUploadsRouter } from './chat-uploads.routes';
 import { createHash } from 'crypto';
 import { authenticateAgent, authenticateAgentByDid, type AgentRegistration, findOrCreateAgentForWallet, findOrCreateAgentForDid } from '@clude/brain/features/agent-tier';
@@ -34,20 +35,20 @@ const log = createChildLogger('chat-api');
 
 export const CHAT_MODELS = [
   // Open-source models (via OpenRouter)
-  { id: 'kimi-k2-thinking', name: 'Kimi K2 Thinking', openrouterId: OPENROUTER_MODELS['kimi-thinking'], privacy: 'private', context: 256000, default: true, tier: 'free' as const, cost: { input: 0, output: 0 } },
-  { id: 'llama-3.3-70b', name: 'Llama 3.3 70B', openrouterId: OPENROUTER_MODELS['llama-70b'], privacy: 'private', context: 128000, tier: 'pro' as const, cost: { input: 0.20, output: 0.20 } },
-  { id: 'deepseek-v3.2', name: 'DeepSeek V3.2', openrouterId: OPENROUTER_MODELS['deepseek-v3.2'], privacy: 'private', context: 160000, tier: 'pro' as const, cost: { input: 0.20, output: 0.20 } },
-  { id: 'mistral-31-24b', name: 'Mistral 31 24B', openrouterId: OPENROUTER_MODELS['venice-medium'], privacy: 'private', context: 128000, tier: 'pro' as const, cost: { input: 0.15, output: 0.15 } },
-  { id: 'llama-uncensored', name: 'Venice Uncensored', openrouterId: OPENROUTER_MODELS['venice-uncensored'], privacy: 'private', context: 32000, tier: 'pro' as const, cost: { input: 0.15, output: 0.15 } },
-  { id: 'qwen-235b', name: 'Qwen3 235B', openrouterId: OPENROUTER_MODELS['qwen-235b'], privacy: 'private', context: 128000, tier: 'pro' as const, cost: { input: 0.50, output: 0.50 } },
+  { id: 'kimi-k2-thinking', name: 'Kimi K2 Thinking', openrouterId: OPENROUTER_MODELS['kimi-thinking'], privacy: 'private', context: 256000, default: true, tier: 'free' as const, cost: { input: 0, output: 0 }, supportsVision: false },
+  { id: 'llama-3.3-70b', name: 'Llama 3.3 70B', openrouterId: OPENROUTER_MODELS['llama-70b'], privacy: 'private', context: 128000, tier: 'pro' as const, cost: { input: 0.20, output: 0.20 }, supportsVision: false },
+  { id: 'deepseek-v3.2', name: 'DeepSeek V3.2', openrouterId: OPENROUTER_MODELS['deepseek-v3.2'], privacy: 'private', context: 160000, tier: 'pro' as const, cost: { input: 0.20, output: 0.20 }, supportsVision: false },
+  { id: 'mistral-31-24b', name: 'Mistral 31 24B', openrouterId: OPENROUTER_MODELS['venice-medium'], privacy: 'private', context: 128000, tier: 'pro' as const, cost: { input: 0.15, output: 0.15 }, supportsVision: false },
+  { id: 'llama-uncensored', name: 'Venice Uncensored', openrouterId: OPENROUTER_MODELS['venice-uncensored'], privacy: 'private', context: 32000, tier: 'pro' as const, cost: { input: 0.15, output: 0.15 }, supportsVision: false },
+  { id: 'qwen-235b', name: 'Qwen3 235B', openrouterId: OPENROUTER_MODELS['qwen-235b'], privacy: 'private', context: 128000, tier: 'pro' as const, cost: { input: 0.50, output: 0.50 }, supportsVision: false },
   // Frontier models (via OpenRouter)
-  { id: 'claude-opus-4.7', name: 'Claude Opus 4.7', openrouterId: OPENROUTER_MODELS['claude-opus-4.7'], privacy: 'anonymized', context: 1000000, tier: 'pro' as const, cost: { input: 15.00, output: 75.00 } },
-  { id: 'claude-sonnet-4.6', name: 'Claude Sonnet 4.6', openrouterId: OPENROUTER_MODELS['claude-sonnet-4.6'], privacy: 'anonymized', context: 1000000, tier: 'pro' as const, cost: { input: 3.00, output: 15.00 } },
-  { id: 'claude-opus-4.6', name: 'Claude Opus 4.6', openrouterId: OPENROUTER_MODELS['claude-opus-4.6'], privacy: 'anonymized', context: 1000000, tier: 'pro' as const, cost: { input: 15.00, output: 75.00 } },
-  { id: 'gpt-5.5', name: 'GPT-5.5', openrouterId: OPENROUTER_MODELS['gpt-5.5'], privacy: 'anonymized', context: 1000000, tier: 'pro' as const, cost: { input: 2.50, output: 10.00 } },
-  { id: 'gpt-5.4', name: 'GPT-5.4', openrouterId: OPENROUTER_MODELS['gpt-5.4'], privacy: 'anonymized', context: 1000000, tier: 'pro' as const, cost: { input: 2.00, output: 8.00 } },
-  { id: 'grok-4.1-fast', name: 'Grok 4.1 Fast', openrouterId: OPENROUTER_MODELS['grok-4.1'], privacy: 'anonymized', context: 1000000, tier: 'pro' as const, cost: { input: 3.00, output: 15.00 } },
-  { id: 'gemini-3-pro', name: 'Gemini 3 Pro', openrouterId: OPENROUTER_MODELS['gemini-3-pro'], privacy: 'anonymized', context: 198000, tier: 'pro' as const, cost: { input: 1.25, output: 5.00 } },
+  { id: 'claude-opus-4.7', name: 'Claude Opus 4.7', openrouterId: OPENROUTER_MODELS['claude-opus-4.7'], privacy: 'anonymized', context: 1000000, tier: 'pro' as const, cost: { input: 15.00, output: 75.00 }, supportsVision: true },
+  { id: 'claude-sonnet-4.6', name: 'Claude Sonnet 4.6', openrouterId: OPENROUTER_MODELS['claude-sonnet-4.6'], privacy: 'anonymized', context: 1000000, tier: 'pro' as const, cost: { input: 3.00, output: 15.00 }, supportsVision: true },
+  { id: 'claude-opus-4.6', name: 'Claude Opus 4.6', openrouterId: OPENROUTER_MODELS['claude-opus-4.6'], privacy: 'anonymized', context: 1000000, tier: 'pro' as const, cost: { input: 15.00, output: 75.00 }, supportsVision: true },
+  { id: 'gpt-5.5', name: 'GPT-5.5', openrouterId: OPENROUTER_MODELS['gpt-5.5'], privacy: 'anonymized', context: 1000000, tier: 'pro' as const, cost: { input: 2.50, output: 10.00 }, supportsVision: true },
+  { id: 'gpt-5.4', name: 'GPT-5.4', openrouterId: OPENROUTER_MODELS['gpt-5.4'], privacy: 'anonymized', context: 1000000, tier: 'pro' as const, cost: { input: 2.00, output: 8.00 }, supportsVision: true },
+  { id: 'grok-4.1-fast', name: 'Grok 4.1 Fast', openrouterId: OPENROUTER_MODELS['grok-4.1'], privacy: 'anonymized', context: 1000000, tier: 'pro' as const, cost: { input: 3.00, output: 15.00 }, supportsVision: false },
+  { id: 'gemini-3-pro', name: 'Gemini 3 Pro', openrouterId: OPENROUTER_MODELS['gemini-3-pro'], privacy: 'anonymized', context: 198000, tier: 'pro' as const, cost: { input: 1.25, output: 5.00 }, supportsVision: true },
 ];
 
 const DEFAULT_MODEL = CHAT_MODELS.find(m => (m as any).default)?.id || 'kimi-k2-thinking';
@@ -62,22 +63,23 @@ interface BYOKModelDef {
   provider: BYOKProviderName;
   providerModelId: string;
   context: number;
+  supportsVision: boolean;
 }
 
 const BYOK_MODELS: BYOKModelDef[] = [
-  { id: 'byok-claude-sonnet-4.6', name: 'Claude Sonnet 4.6', provider: 'anthropic', providerModelId: 'claude-sonnet-4-6', context: 200000 },
-  { id: 'byok-claude-opus-4.6',   name: 'Claude Opus 4.6',   provider: 'anthropic', providerModelId: 'claude-opus-4-6',   context: 200000 },
-  { id: 'byok-gpt-5.4',           name: 'GPT-5.4',           provider: 'openai',    providerModelId: 'gpt-5.4',                     context: 1000000 },
-  { id: 'byok-gpt-4.1',           name: 'GPT-4.1 (Coding)',  provider: 'openai',    providerModelId: 'gpt-4.1',                     context: 1000000 },
-  { id: 'byok-o3',                name: 'o3',                 provider: 'openai',    providerModelId: 'o3',                          context: 200000 },
-  { id: 'byok-gemini-3.1-pro',    name: 'Gemini 3.1 Pro',    provider: 'google',    providerModelId: 'gemini-3.1-pro-preview', context: 2000000 },
-  { id: 'byok-gemini-2.5-pro',    name: 'Gemini 2.5 Pro',    provider: 'google',    providerModelId: 'gemini-2.5-pro',        context: 1000000 },
-  { id: 'byok-grok-3',            name: 'Grok 3',            provider: 'xai',       providerModelId: 'grok-3',                      context: 131072 },
-  { id: 'byok-deepseek-v3',       name: 'DeepSeek V3',       provider: 'deepseek',  providerModelId: 'deepseek-chat',               context: 64000 },
-  { id: 'byok-deepseek-r1',       name: 'DeepSeek R1',       provider: 'deepseek',  providerModelId: 'deepseek-reasoner',           context: 64000 },
-  { id: 'byok-minimax-m2.1',      name: 'MiniMax-M2.1',      provider: 'minimax',   providerModelId: 'MiniMax-M2.1',                context: 204800 },
-  { id: 'byok-minimax-m2.1-fast', name: 'MiniMax-M2.1 Fast', provider: 'minimax',   providerModelId: 'MiniMax-M2.1-highspeed',      context: 204800 },
-  { id: 'byok-minimax-m2',        name: 'MiniMax-M2',        provider: 'minimax',   providerModelId: 'MiniMax-M2',                  context: 204800 },
+  { id: 'byok-claude-sonnet-4.6', name: 'Claude Sonnet 4.6', provider: 'anthropic', providerModelId: 'claude-sonnet-4-6', context: 200000,  supportsVision: true },
+  { id: 'byok-claude-opus-4.6',   name: 'Claude Opus 4.6',   provider: 'anthropic', providerModelId: 'claude-opus-4-6',   context: 200000,  supportsVision: true },
+  { id: 'byok-gpt-5.4',           name: 'GPT-5.4',           provider: 'openai',    providerModelId: 'gpt-5.4',           context: 1000000, supportsVision: true },
+  { id: 'byok-gpt-4.1',           name: 'GPT-4.1 (Coding)',  provider: 'openai',    providerModelId: 'gpt-4.1',           context: 1000000, supportsVision: true },
+  { id: 'byok-o3',                name: 'o3',                 provider: 'openai',    providerModelId: 'o3',                context: 200000,  supportsVision: true },
+  { id: 'byok-gemini-3.1-pro',    name: 'Gemini 3.1 Pro',    provider: 'google',    providerModelId: 'gemini-3.1-pro-preview', context: 2000000, supportsVision: true },
+  { id: 'byok-gemini-2.5-pro',    name: 'Gemini 2.5 Pro',    provider: 'google',    providerModelId: 'gemini-2.5-pro',    context: 1000000, supportsVision: true },
+  { id: 'byok-grok-3',            name: 'Grok 3',            provider: 'xai',       providerModelId: 'grok-3',            context: 131072,  supportsVision: false },
+  { id: 'byok-deepseek-v3',       name: 'DeepSeek V3',       provider: 'deepseek',  providerModelId: 'deepseek-chat',     context: 64000,   supportsVision: false },
+  { id: 'byok-deepseek-r1',       name: 'DeepSeek R1',       provider: 'deepseek',  providerModelId: 'deepseek-reasoner', context: 64000,   supportsVision: false },
+  { id: 'byok-minimax-m2.1',      name: 'MiniMax-M2.1',      provider: 'minimax',   providerModelId: 'MiniMax-M2.1',      context: 204800,  supportsVision: false },
+  { id: 'byok-minimax-m2.1-fast', name: 'MiniMax-M2.1 Fast', provider: 'minimax',   providerModelId: 'MiniMax-M2.1-highspeed', context: 204800, supportsVision: false },
+  { id: 'byok-minimax-m2',        name: 'MiniMax-M2',        provider: 'minimax',   providerModelId: 'MiniMax-M2',        context: 204800,  supportsVision: false },
 ];
 
 function resolveBYOKModel(modelId: string): BYOKModelDef | null {
@@ -100,6 +102,7 @@ export function getAvailableChatModels() {
       cost: { input: 0, output: 0 },
       requiresByok: true,
       byokProvider: m.provider,
+      supportsVision: m.supportsVision,
     })),
   ];
 }
@@ -671,7 +674,7 @@ export function chatRoutes(): Router {
   router.post('/conversations', async (req: Request, res: Response) => {
     try {
       const chatReq = req as ChatRequest;
-      const { title, model } = req.body;
+      const { title, model, id: clientId } = req.body;
 
       if (!chatReq.ownerWallet) {
         log.error({ headers: Object.keys(req.headers) }, 'Create conversation: ownerWallet not set after auth');
@@ -686,19 +689,36 @@ export function chatRoutes(): Router {
         modelId = DEFAULT_MODEL;
       }
 
+      let conversationIdOverride: string | undefined;
+      if (clientId !== undefined) {
+        const parsed = z.string().uuid().safeParse(clientId);
+        if (!parsed.success) {
+          res.status(400).json({ error: 'id must be a UUID' });
+          return;
+        }
+        conversationIdOverride = parsed.data;
+      }
+
+      const insertRow: Record<string, unknown> = {
+        owner_wallet: chatReq.ownerWallet,
+        title: title || null,
+        model: modelId,
+      };
+      if (conversationIdOverride) insertRow.id = conversationIdOverride;
+
       const db = getDb();
       const { data, error } = await db
         .from('chat_conversations')
-        .insert({
-          owner_wallet: chatReq.ownerWallet,
-          title: title || null,
-          model: modelId,
-        })
+        .insert(insertRow)
         .select()
         .single();
 
       if (error) {
         log.error({ err: error, ownerWallet: chatReq.ownerWallet, model: modelId }, 'Failed to create conversation');
+        if (error.code === '23505') {
+          res.status(409).json({ error: 'Conversation id already exists', code: '23505' });
+          return;
+        }
         const reason = error.code === '42P01' ? 'Chat table not found — database may need reinitialization'
           : error.code === '23502' ? `Missing required field: ${error.message}`
           : error.code === '42501' ? 'Database permission denied — check RLS policies'
