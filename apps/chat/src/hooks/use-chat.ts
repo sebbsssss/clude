@@ -3,7 +3,7 @@ import { useChat as useAIChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { useAuthContext } from './AuthContext';
 import { api } from '../lib/api';
-import type { CludeChatMessage, ChatMessageMetadata, SettledMessage, StreamingState, MessageCost, GreetingMeta } from '../lib/types';
+import type { CludeChatMessage, ChatMessageMetadata, SettledMessage, StreamingState, MessageCost, GreetingMeta, AttachmentMeta } from '../lib/types';
 import type { Message } from '../lib/types';
 
 // Re-export types that consumers need
@@ -176,6 +176,7 @@ export function useChat() {
     content: string,
     conversationIdOrPromise: string | null | Promise<string | null>,
     model: string,
+    attachments?: AttachmentMeta[],
   ) => {
     if (!authenticated) {
       return sendGuestMessage(content);
@@ -196,7 +197,7 @@ export function useChat() {
     aiSendMessage(
       { text: content },
       {
-        body: { model, content, conversationId },
+        body: { model, content, conversationId, attachments: attachments ?? [] },
       },
     );
   }, [authenticated, cortexKey, aiSendMessage, sendGuestMessage]);
@@ -223,7 +224,7 @@ export function useChat() {
       id: m.id,
       role: m.role as 'user' | 'assistant',
       parts: [{ type: 'text' as const, text: m.content }],
-      metadata: { memory_ids: m.memory_ids },
+      metadata: { memory_ids: m.memory_ids, attachments: m.attachments },
     })));
     setGuestMessages([]);
   }, [setAiMessages]);
@@ -234,7 +235,7 @@ export function useChat() {
         id: m.id,
         role: m.role as 'user' | 'assistant',
         parts: [{ type: 'text' as const, text: m.content }],
-        metadata: { memory_ids: m.memory_ids },
+        metadata: { memory_ids: m.memory_ids, attachments: m.attachments },
       })),
       ...prev,
     ]);
@@ -264,6 +265,7 @@ export function useChat() {
       receipt: meta?.receipt,
       isGreeting: meta?.isGreeting,
       greetingMeta: meta?.greetingMeta,
+      attachments: meta?.attachments,
     };
   });
 
