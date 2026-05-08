@@ -814,7 +814,14 @@ export function chatRoutes(): Router {
       const hasMore = (msgRaw?.length ?? 0) > limit;
       const messages = (msgRaw ?? []).slice(0, limit).reverse(); // chronological order
 
-      res.json({ ...conversation, messages, hasMore });
+      const messagesWithUrls = await Promise.all(
+        messages.map(async (m: any) => ({
+          ...m,
+          attachments: m.attachments ? await attachWithSignedUrls(m.attachments) : null,
+        })),
+      );
+
+      res.json({ ...conversation, messages: messagesWithUrls, hasMore });
     } catch (err) {
       log.error({ err }, 'Get conversation error');
       res.status(500).json({ error: 'Failed to get conversation' });
@@ -840,6 +847,21 @@ export function chatRoutes(): Router {
       if (!conversation) {
         res.status(404).json({ error: 'Conversation not found' });
         return;
+      }
+
+      // Clean up storage objects under the conversation's prefix (non-fatal)
+      try {
+        const prefix = `${chatReq.ownerWallet}/${conversationId}`;
+        const { data: objs, error: listErr } = await db.storage.from('cc-images').list(prefix);
+        if (listErr) {
+          log.warn({ err: listErr, conversationId }, 'storage list failed (non-fatal)');
+        } else if (objs && objs.length > 0) {
+          const paths = objs.map((o: any) => `${prefix}/${o.name}`);
+          const { error: rmErr } = await db.storage.from('cc-images').remove(paths);
+          if (rmErr) log.warn({ err: rmErr, conversationId }, 'storage cleanup failed (non-fatal)');
+        }
+      } catch (e) {
+        log.warn({ err: e, conversationId }, 'storage cleanup threw (non-fatal)');
       }
 
       const { error } = await db
