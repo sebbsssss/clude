@@ -6,6 +6,7 @@
  * Memory: Recalls user's memories and injects as context for each conversation turn.
  */
 import { Router, Request, Response, NextFunction } from 'express';
+import { createChatUploadsRouter } from './chat-uploads.routes';
 import { createHash } from 'crypto';
 import { authenticateAgent, authenticateAgentByDid, type AgentRegistration, findOrCreateAgentForWallet, findOrCreateAgentForDid } from '@clude/brain/features/agent-tier';
 import { requirePrivyAuth } from '@clude/brain/auth/privy-auth';
@@ -541,6 +542,7 @@ export function chatRoutes(): Router {
 
   // All routes below require auth
   router.use(chatAuth);
+  router.use('/uploads', createChatUploadsRouter());
 
   // POST /greet — instant personalized greeting (no LLM call — pure data)
   router.post('/greet', async (req: Request, res: Response) => {
