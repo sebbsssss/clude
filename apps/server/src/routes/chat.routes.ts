@@ -21,6 +21,11 @@ import { config } from '@clude/shared/config';
 import { detectTemporalConstraints, matchMemoriesTemporal } from '@clude/brain/experimental/temporal-bonds';
 import { generateQueryEmbedding, isEmbeddingEnabled } from '@clude/shared/core/embeddings';
 import { isOpenRouterEnabled, getOpenRouterConfig, OPENROUTER_MODELS } from '@clude/shared/core/openrouter-client';
+import {
+  validateAttachmentPath,
+  attachWithSignedUrls,
+  type AttachmentMeta,
+} from '../lib/chat-attachments';
 import { streamText, smoothStream } from 'ai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
@@ -872,6 +877,21 @@ export function chatRoutes(): Router {
         return;
       }
 
+      // Parse and validate attachments
+      const attachmentSchema = z.object({
+        storage_path: z.string(),
+        mime: z.enum(['image/png', 'image/jpeg', 'image/webp', 'image/gif']),
+        width: z.number().int().nonnegative(),
+        height: z.number().int().nonnegative(),
+        size_bytes: z.number().int().positive(),
+      });
+      const attachmentsParse = z.array(attachmentSchema).max(8).safeParse(req.body.attachments ?? []);
+      if (!attachmentsParse.success) {
+        res.status(400).json({ error: 'Invalid attachments' });
+        return;
+      }
+      const resolvedAttachments: AttachmentMeta[] = attachmentsParse.data;
+
       const db = getDb();
 
       // 1+2. Validate conversation + rate limit IN PARALLEL (independent DB queries)
@@ -937,6 +957,30 @@ export function chatRoutes(): Router {
         }
       }
 
+      // Path prefix validation for attachments
+      for (const a of resolvedAttachments) {
+        if (!validateAttachmentPath(a.storage_path, chatReq.ownerWallet!, conversationId)) {
+          res.status(400).json({ error: 'Invalid attachment path' });
+          return;
+        }
+      }
+
+      // Vision gate — reject attachments if the selected model doesn't support images
+      if (resolvedAttachments.length > 0) {
+        const supportsVision = !!(selectedModel as any)?.supportsVision || !!byokModel?.supportsVision;
+        if (!supportsVision) {
+          res.status(400).json({ error: 'Selected model does not support images' });
+          return;
+        }
+      }
+
+      // Existence check via signed-URL mint (also reused later for the LLM)
+      const signedAttachments = await attachWithSignedUrls(resolvedAttachments);
+      if (signedAttachments.some(s => !s.url)) {
+        res.status(400).json({ error: 'Attachment not found in storage' });
+        return;
+      }
+
       // 4+5. Start memory recall IMMEDIATELY (doesn't need user message in DB),
       //       insert user message in parallel, then load history alongside recall.
       //       skipExpansion=true avoids a 500-3000ms LLM call for query expansion.
@@ -981,6 +1025,7 @@ export function chatRoutes(): Router {
           conversation_id: conversationId,
           role: 'user',
           content,
+          attachments: resolvedAttachments.length ? resolvedAttachments : null,
         })
         .select('id')
         .single();
@@ -1076,12 +1121,25 @@ export function chatRoutes(): Router {
       const modelDef = CHAT_MODELS.find(m => m.id === modelId);
       const maxTokens = isBYOK ? 16384 : (modelDef?.tier === 'pro' ? 16384 : 8192);
 
+      const aiMessages = messagesArray.map((m, _idx) => ({
+        role: m.role as 'system' | 'user' | 'assistant',
+        content: m.content as any, // may be overwritten below for image parts
+      }));
+
+      // Inject image content parts into the last user message
+      if (resolvedAttachments.length > 0 && aiMessages.length > 0) {
+        const last = aiMessages[aiMessages.length - 1];
+        if (last.role === 'user') {
+          last.content = [
+            ...signedAttachments.map(s => ({ type: 'image' as const, image: s.url })),
+            { type: 'text' as const, text: last.content as string },
+          ] as any;
+        }
+      }
+
       const result = streamText({
         model: llmModel,
-        messages: messagesArray.map(m => ({
-          role: m.role as 'system' | 'user' | 'assistant',
-          content: m.content,
-        })),
+        messages: aiMessages,
         maxOutputTokens: maxTokens,
         temperature: 0.7,
         abortSignal: abortController.signal,
