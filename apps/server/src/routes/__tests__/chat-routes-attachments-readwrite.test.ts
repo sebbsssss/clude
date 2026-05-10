@@ -177,7 +177,7 @@ describe('DELETE /api/chat/conversations/:id clears storage', () => {
   });
 
   it('survives storage remove failure with 200', async () => {
-    removeMock.mockResolvedValueOnce({ data: null, error: { message: 'boom' } });
+    removeMock.mockResolvedValueOnce({ data: null, error: { message: 'boom' } } as any);
 
     const res = await withAuth(
       request(buildApp()).delete(`/api/chat/conversations/${CONV}`)
