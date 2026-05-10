@@ -209,7 +209,7 @@ export function CcChat({
   const composerConvId = activeId ?? pendingConvId ?? '';
 
   const visionModel = useMemo(
-    () => !!(models.find((m) => m.id === model) as any)?.supportsVision,
+    () => !!models.find((m) => m.id === model)?.supportsVision,
     [models, model],
   );
 

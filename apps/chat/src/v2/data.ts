@@ -22,6 +22,7 @@ export function toV2Model(m: ChatModel): V2Model {
     tag: m.tier.toUpperCase(),
     free: m.tier === 'free',
     default: m.default,
+    supportsVision: m.supportsVision,
   };
 }
 
