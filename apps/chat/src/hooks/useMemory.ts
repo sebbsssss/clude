@@ -18,7 +18,7 @@ export function useMemory() {
     setLoading(true);
     Promise.all([
       api.getMemoryStats().catch(() => null),
-      api.getRecentMemories(20).catch(() => []),
+      api.getRecentMemories().catch(() => []),
     ]).then(([s, r]) => {
       setStats(s);
       setRecent(r);
@@ -29,7 +29,7 @@ export function useMemory() {
     const result = await api.importMemoryPack(pack);
     const [s, r] = await Promise.all([
       api.getMemoryStats().catch(() => null),
-      api.getRecentMemories(20).catch(() => []),
+      api.getRecentMemories().catch(() => []),
     ]);
     setStats(s);
     setRecent(r);
