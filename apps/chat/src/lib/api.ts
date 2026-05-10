@@ -1,4 +1,4 @@
-import type { ChatModel, Conversation, Message, MemoryStats, MemorySummary, CompoundMarketsResponse, CompoundAccuracy, CompoundTimeline, MarketCategory, MarketDetailResponse, CompoundPredictionsResponse, BYOKProvider } from './types';
+import type { ChatModel, Conversation, Message, MemoryStats, MemorySummary, CompoundMarketsResponse, CompoundAccuracy, CompoundTimeline, MarketCategory, MarketDetailResponse, CompoundPredictionsResponse, BYOKProvider, AttachmentMeta } from './types';
 
 const API_BASE = '';
 
@@ -129,11 +129,34 @@ class ChatAPI {
     await this.readSSE(res, onChunk, (data) => onDone(data?.remaining));
   }
 
-  async createConversation(model?: string): Promise<Conversation> {
+  async createConversation(model?: string, id?: string): Promise<Conversation> {
     return this.fetchJson(`${API_BASE}/api/chat/conversations`, {
       method: 'POST',
-      body: JSON.stringify({ model }),
+      body: JSON.stringify({ model, ...(id ? { id } : {}) }),
     });
+  }
+
+  async uploadChatImage(file: File, conversationId: string): Promise<AttachmentMeta> {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('conversation_id', conversationId);
+    const headers: Record<string, string> = {};
+    if (this.cortexKey) headers['Authorization'] = `Bearer ${this.cortexKey}`;
+    // Do NOT set Content-Type; the browser will set the multipart boundary.
+    const res = await fetch(`${API_BASE}/api/chat/uploads/image`, {
+      method: 'POST',
+      headers,
+      body: fd,
+    });
+    if (res.status === 401 && this.cortexKey) {
+      this.authExpiredCallback?.();
+      throw new AuthExpiredError();
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body as any)?.error || `Upload failed (${res.status})`);
+    }
+    return res.json();
   }
 
   async listConversations(limit = 50): Promise<Conversation[]> {

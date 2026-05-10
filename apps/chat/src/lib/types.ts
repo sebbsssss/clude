@@ -2,6 +2,17 @@ export type MemoryType = 'episodic' | 'semantic' | 'procedural' | 'self_model';
 export type ModelTier = 'free' | 'pro';
 export type ModelPrivacy = 'private' | 'anonymized';
 
+export type AttachmentMime = 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';
+
+export interface AttachmentMeta {
+  storage_path: string;
+  url: string;
+  mime: AttachmentMime;
+  width: number;
+  height: number;
+  size_bytes: number;
+}
+
 // --- Cost/token types (moved from use-chat.ts) ---
 
 export interface MessageCost {
@@ -54,6 +65,7 @@ export interface ChatMessageMetadata {
   // Greeting-specific
   isGreeting?: boolean;
   greetingMeta?: GreetingMeta;
+  attachments?: AttachmentMeta[];
 }
 
 export type CludeChatMessage = UIMessage<ChatMessageMetadata>;
@@ -74,6 +86,7 @@ export interface SettledMessage {
   readonly receipt?: MessageReceipt;
   readonly isGreeting?: boolean;
   readonly greetingMeta?: GreetingMeta;
+  readonly attachments?: AttachmentMeta[];
 }
 
 export interface StreamingState {
@@ -96,6 +109,7 @@ export interface ChatModel {
   cost: { input: number; output: number };
   requiresByok?: boolean;
   byokProvider?: BYOKProvider;
+  supportsVision?: boolean;
 }
 
 export interface Conversation {
@@ -115,6 +129,7 @@ export interface Message {
   content: string;
   model?: string;
   memory_ids?: number[];
+  attachments?: AttachmentMeta[];
   created_at: string;
 }
 

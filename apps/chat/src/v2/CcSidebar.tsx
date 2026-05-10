@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { CcWordmark } from './atoms';
 import { V2_THREAD_GROUPS } from './data';
 import type { V2Thread } from './types';
+import { CcConfirmModal } from './CcConfirmModal';
 
 function shortWallet(addr: string): string {
   if (addr.length <= 10) return addr;
@@ -15,6 +16,7 @@ export function CcSidebar({
   onNewChat,
   onSelect,
   onLogout,
+  onDelete,
 }: {
   user: { name?: string; email?: string } | null;
   walletAddress: string | null;
@@ -22,7 +24,10 @@ export function CcSidebar({
   onNewChat: () => void;
   onSelect: (id: string) => void;
   onLogout: () => void;
+  onDelete: (id: string) => void;
 }) {
+  const [pendingDelete, setPendingDelete] = useState<V2Thread | null>(null);
+
   const grouped = V2_THREAD_GROUPS.map((g) => ({
     ...g,
     items: threads.filter((t) => t.group === g.id),
@@ -59,16 +64,24 @@ export function CcSidebar({
             <div key={g.id}>
               <div className="cc-side__group">{g.label}</div>
               {g.items.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  className={`cc-thread ${t.active ? 'is-active' : ''}`}
-                  onClick={() => onSelect(t.id)}
-                >
-                  <span className="cc-thread__dot" />
-                  <span className="cc-thread__title">{t.title}</span>
-                  <span className="cc-thread__meta">{t.meta}</span>
-                </button>
+                <div key={t.id} className="cc-thread-row">
+                  <button
+                    type="button"
+                    className={`cc-thread ${t.active ? 'is-active' : ''}`}
+                    onClick={() => onSelect(t.id)}
+                  >
+                    <span className="cc-thread__dot" />
+                    <span className="cc-thread__title">{t.title}</span>
+                    <span className="cc-thread__meta">{t.meta}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="cc-thread__delete"
+                    aria-label={`Delete conversation ${t.title}`}
+                    title="Delete conversation"
+                    onClick={(e) => { e.stopPropagation(); setPendingDelete(t); }}
+                  >🗑</button>
+                </div>
               ))}
             </div>
           ))
@@ -116,6 +129,15 @@ export function CcSidebar({
           </button>
         )}
       </div>
+      <CcConfirmModal
+        open={!!pendingDelete}
+        title="Delete this conversation?"
+        body="This can't be undone."
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => { if (pendingDelete) onDelete(pendingDelete.id); setPendingDelete(null); }}
+        onCancel={() => setPendingDelete(null)}
+      />
     </aside>
   );
 }

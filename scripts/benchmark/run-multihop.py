@@ -343,6 +343,8 @@ def run_one(dataset_key: str, n: int, client: OpenAI, retriever: str = "clude") 
     }
 
     suffix = f"_{retriever}" if retriever != "clude" else ""
+    if globals().get("_TAG"):
+        suffix += f"_{globals()['_TAG']}"
     out_path = OUT_DIR / f"{dataset_key}_n{len(items)}{suffix}_results.json"
     out_path.write_text(json.dumps({
         "dataset": dataset_key,
@@ -364,7 +366,13 @@ def main():
     p.add_argument("--dataset", choices=["hotpot", "2wiki", "musique", "all"], required=True)
     p.add_argument("--n", type=int, default=25, help="Samples per dataset")
     p.add_argument("--retriever", choices=["clude", "bm25"], default="clude", help="Memory backend")
+    p.add_argument("--tag", type=str, default="", help="Suffix added to output filename (e.g. 'emb', 'sonnet')")
+    p.add_argument("--reader-model", dest="reader_model", type=str, default="", help="Override answer LLM (default: gpt-4o-mini)")
     args = p.parse_args()
+    if args.reader_model:
+        global OPENAI_MODEL
+        OPENAI_MODEL = args.reader_model
+    globals()["_TAG"] = args.tag
 
     # .env load (simple)
     env_path = REPO_ROOT / ".env"
