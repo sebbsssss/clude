@@ -8,6 +8,7 @@ import { useMemory } from '../hooks/useMemory';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { api } from '../lib/api';
 import type { SettledMessage } from '../hooks/use-chat';
+import type { AttachmentMeta } from '../lib/types';
 
 // Heavy modal — pulls in @solana/web3.js + @solana/pay + framer-motion.
 // Lazy-load so it doesn't bloat the main v2 bundle until the user opts in.
@@ -90,6 +91,7 @@ function toV2Message(m: SettledMessage, recalledById: Map<number, V2Memory>): V2
           }
         : undefined,
     recalled,
+    attachments: m.attachments,
   };
 }
 
@@ -117,6 +119,7 @@ export function CcChat({
     activeId,
     createConversation,
     selectConversation,
+    deleteConversation,
   } = useConversations();
   const memHook = useMemory();
   const isMobile = useIsMobile();
@@ -135,6 +138,7 @@ export function CcChat({
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [showCitations, setShowCitations] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [pendingConvId, setPendingConvId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -196,6 +200,19 @@ export function CcChat({
     if (auth.walletAddress) setWalletAddress(auth.walletAddress);
   }, [auth.walletAddress]);
 
+  // Pre-allocate a conversation id for uploads before the conversation exists.
+  useEffect(() => {
+    if (!activeId && !pendingConvId) setPendingConvId(crypto.randomUUID());
+    if (activeId && pendingConvId) setPendingConvId(null);
+  }, [activeId, pendingConvId]);
+
+  const composerConvId = activeId ?? pendingConvId ?? '';
+
+  const visionModel = useMemo(
+    () => !!(models.find((m) => m.id === model) as any)?.supportsVision,
+    [models, model],
+  );
+
   // Build the sidebar thread list from real conversations.
   const threads = useMemo<V2Thread[]>(() => {
     return conversations.map((c) => ({
@@ -256,7 +273,7 @@ export function CcChat({
   }, [settled]);
 
   const handleSend = useCallback(
-    async (text: string) => {
+    async (text: string, attachments: AttachmentMeta[]) => {
       if (isStreaming || !model) return;
       // Block Pro-model sends with insufficient balance — open top-up instead.
       // Same wallet-readiness guard as the model picker: if the embedded wallet
@@ -273,13 +290,14 @@ export function CcChat({
         return;
       }
       if (!activeId) {
-        const promise = createConversation(model);
-        await sendMessage(text, promise, model);
+        const idToUse = pendingConvId ?? crypto.randomUUID();
+        const promise = createConversation(model, idToUse);
+        await sendMessage(text, promise, model, attachments);
       } else {
-        await sendMessage(text, activeId, model);
+        await sendMessage(text, activeId, model, attachments);
       }
     },
-    [activeId, createConversation, sendMessage, model, models, balanceUsdc, walletReady, isStreaming],
+    [activeId, pendingConvId, createConversation, sendMessage, model, models, balanceUsdc, walletReady, isStreaming],
   );
 
   const handleNewChat = useCallback(async () => {
@@ -287,6 +305,18 @@ export function CcChat({
     switchedRef.current = null;
     await createConversation(model);
   }, [createConversation, model]);
+
+  const handleDeleteConversation = useCallback(async (id: string) => {
+    try {
+      await deleteConversation(id);
+      if (id === activeId) {
+        switchedRef.current = null;
+        // No automatic new-chat — user can pick another thread or click + New
+      }
+    } catch (err) {
+      console.error('Failed to delete conversation', err);
+    }
+  }, [deleteConversation, activeId]);
 
   const layout = isMobile ? 'sidebar-none' : 'sidebar-left';
   const showSidebar = !isMobile;
@@ -318,6 +348,7 @@ export function CcChat({
             selectConversation(id).then(loadMessages).catch(() => {});
           }}
           onLogout={() => auth.logout()}
+          onDelete={handleDeleteConversation}
         />
       )}
 
@@ -360,7 +391,12 @@ export function CcChat({
             )}
           </div>
         </div>
-        <CcComposer onSend={handleSend} disabled={isStreaming} />
+        <CcComposer
+          onSend={handleSend}
+          disabled={isStreaming}
+          vision={visionModel}
+          conversationId={composerConvId}
+        />
       </div>
 
       {memoryOpen && (

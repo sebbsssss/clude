@@ -24,8 +24,9 @@ export function useConversations() {
       .finally(() => setLoading(false));
   }, [authenticated]);
 
-  const createConversation = useCallback(async (model: string): Promise<string> => {
-    const conv = await api.createConversation(model);
+  const createConversation = useCallback(async (model: string, presetId?: string): Promise<string> => {
+    const id = presetId ?? crypto.randomUUID();
+    const conv = await api.createConversation(model, id);
     setConversations((prev) => [conv, ...prev]);
     setActiveId(conv.id);
     return conv.id;

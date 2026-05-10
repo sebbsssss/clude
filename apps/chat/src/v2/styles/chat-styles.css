@@ -1898,3 +1898,242 @@ body {
 .cc-mobile .cc-onb { padding: 24px 16px 48px; }
 .cc-mobile .cc-onb__h1 { font-size: 26px; }
 .cc-mobile .cc-onb__panel { padding: 18px; }
+
+/* =========================================================================
+   Composer attachments — image upload thumbnail strip
+   ========================================================================= */
+.cc-attstrip {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 8px 10px 0;
+  margin: 0;
+  list-style: none;
+}
+.cc-attstrip__tile {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-2, #2a2a2a);
+  border: 1px solid var(--border-1, rgba(255,255,255,0.1));
+}
+.cc-attstrip__img,
+.cc-attstrip__placeholder {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.cc-attstrip__placeholder {
+  background: linear-gradient(135deg, #2a2a2a, #3a3a3a);
+}
+.cc-attstrip__tile--uploading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+}
+.cc-attstrip__spinner {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: cc-attstrip-spin 0.8s linear infinite;
+}
+@keyframes cc-attstrip-spin {
+  to { transform: rotate(360deg); }
+}
+.cc-attstrip__tile--error {
+  border-color: #c0392b;
+}
+.cc-attstrip__err {
+  position: absolute;
+  bottom: 2px;
+  left: 2px;
+  background: #c0392b;
+  color: #fff;
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: 700;
+}
+.cc-attstrip__remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cc-attstrip__remove:hover { background: rgba(0,0,0,0.85); }
+
+.cc-composer__attach {
+  background: transparent;
+  border: 0;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 6px 8px;
+  color: var(--fg-2, rgba(255,255,255,0.6));
+}
+.cc-composer__attach:hover { color: var(--fg-1, #fff); }
+.cc-composer__attach:disabled { opacity: 0.3; cursor: not-allowed; }
+.cc-composer__box--drag {
+  outline: 2px dashed var(--accent, #4a9eff);
+  outline-offset: 2px;
+}
+.cc-composer__notice {
+  color: var(--accent, #c0392b);
+  font-size: 11px;
+}
+
+/* =========================================================================
+   Message attachments — image grid + lightbox
+   ========================================================================= */
+.cc-imggrid {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 8px;
+  border-radius: 8px;
+  overflow: hidden;
+  max-width: 480px;
+}
+.cc-imggrid[data-count="1"] { grid-template-columns: 1fr; }
+.cc-imggrid[data-count="2"] { grid-template-columns: 1fr 1fr; }
+.cc-imggrid[data-count="3"],
+.cc-imggrid[data-count="4"] { grid-template-columns: 1fr 1fr; }
+.cc-imggrid[data-count="5"],
+.cc-imggrid[data-count="6"],
+.cc-imggrid[data-count="7"],
+.cc-imggrid[data-count="8"] { grid-template-columns: 1fr 1fr 1fr; }
+.cc-imggrid__cell {
+  border: 0;
+  padding: 0;
+  cursor: zoom-in;
+  background: var(--bg-2, #1f1f1f);
+  aspect-ratio: 1;
+  overflow: hidden;
+}
+.cc-imggrid[data-count="1"] .cc-imggrid__cell {
+  aspect-ratio: auto;
+  max-height: 480px;
+}
+.cc-imggrid__cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.cc-imggrid[data-count="1"] .cc-imggrid__cell img {
+  object-fit: contain;
+  height: auto;
+  max-height: 480px;
+}
+.cc-lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  cursor: zoom-out;
+  padding: 24px;
+}
+.cc-lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+/* =========================================================================
+   Confirm modal
+   ========================================================================= */
+.cc-confirm {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+  padding: 16px;
+}
+.cc-confirm__card {
+  background: var(--bg-1, #1a1a1a);
+  border: 1px solid var(--border-1, rgba(255,255,255,0.1));
+  border-radius: 10px;
+  padding: 20px;
+  max-width: 380px;
+  width: 100%;
+  color: var(--fg-1, #fff);
+}
+.cc-confirm__title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.cc-confirm__body {
+  margin: 0 0 16px;
+  color: var(--fg-2, rgba(255,255,255,0.7));
+  font-size: 13px;
+}
+.cc-confirm__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.cc-confirm__cancel,
+.cc-confirm__confirm {
+  background: transparent;
+  border: 1px solid var(--border-1, rgba(255,255,255,0.15));
+  color: inherit;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.cc-confirm__confirm--destructive {
+  background: #c0392b;
+  border-color: #c0392b;
+  color: #fff;
+}
+.cc-confirm__confirm--destructive:hover { background: #a93226; }
+
+/* =========================================================================
+   Sidebar trash button
+   ========================================================================= */
+.cc-thread-row {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+}
+.cc-thread-row > .cc-thread {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.cc-thread__delete {
+  background: transparent;
+  border: 0;
+  color: var(--fg-2, rgba(255,255,255,0.4));
+  cursor: pointer;
+  padding: 0 8px;
+  font-size: 13px;
+  opacity: 0.5;
+  flex: 0 0 auto;
+}
+.cc-thread__delete:hover { opacity: 1; color: #c0392b; }
