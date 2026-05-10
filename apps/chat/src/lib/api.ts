@@ -205,8 +205,13 @@ class ChatAPI {
     return this.fetchJson(`${API_BASE}/api/cortex/stats`);
   }
 
-  async getRecentMemories(limit = 20): Promise<MemorySummary[]> {
-    const data = await this.fetchJson<any>(`${API_BASE}/api/cortex/recent?limit=${limit}`);
+  async getRecentMemories(limit = 50, hours = 168): Promise<MemorySummary[]> {
+    // Defaults are tuned for chat-v2 pre-warm: a week-wide window so users
+    // with seeded or older data see their memory present in the panel from
+    // mount, not just whatever was stored in the last 6h.
+    const data = await this.fetchJson<any>(
+      `${API_BASE}/api/cortex/recent?limit=${limit}&hours=${hours}`,
+    );
     return data.memories || data;
   }
 

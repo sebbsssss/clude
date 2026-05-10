@@ -1,0 +1,121 @@
+[
+  {
+    "type": "episodic",
+    "content": "Sebastien flagged Marcus as potential CS hire during ops standup. Vanta background, 2yr CS lead role, strong retention metrics. Asked me to source refs before formal process. Will need to backfill Acme/Initech/Globex accounts—currently scattered across team.",
+    "summary": "Sebastien identifies Marcus as CS Lead candidate",
+    "event_date": "2026-03-09",
+    "importance": 0.72
+  },
+  {
+    "type": "episodic",
+    "content": "Called Marcus's ref at Vanta (Head of Revenue). Confirmed he owned 15+ mid-market accounts, averaged 18mo expansion cycles, 94% net retention. Left on good terms. She said he'd ask hard questions about our support stack and playbooks.",
+    "summary": "Reference check on Marcus: strong retention, expansion-focused",
+    "event_date": "2026-03-10",
+    "importance": 0.58
+  },
+  {
+    "type": "semantic",
+    "content": "CS hiring criteria for Clude: must own post-sales expansion for SaaS cohort, understand API/infrastructure products (not consumer), track record scaling 8–40 ARR accounts, preference for someone who's lived through product-market transition.",
+    "summary": "CS Lead hiring criteria locked in",
+    "event_date": "2026-03-11",
+    "importance": 0.68
+  },
+  {
+    "type": "episodic",
+    "content": "Anya flagged salary expectation: Marcus asking $155k base + equity. Reviewed comp bands with Priya; we'd been budgeting $140k. Decided to counter at $148k + 0.12% (4yr vest). Cost sits in Q2 ops budget without impact.",
+    "summary": "Negotiated Marcus offer: $148k + 0.12% equity",
+    "event_date": "2026-03-13",
+    "importance": 0.71
+  },
+  {
+    "type": "episodic",
+    "content": "First call with Marcus: 45min. He drilled into our onboarding flow, DataDog integration gaps, and customer segmentation strategy. Asked why we weren't running NPS surveys monthly. No ego—just patterns he'd seen at Algolia. Good sign.",
+    "summary": "Marcus interview: deep questions on ops and customer health",
+    "event_date": "2026-03-16",
+    "importance": 0.64
+  },
+  {
+    "type": "episodic",
+    "content": "Scheduled onsite for Mar 28. Marcus will meet Sebastien, Lina, Ari, and Marcus (our CS Lead—same name, confusing in Slack). Prepared deck covering customer cohorts, expansion potential, current churn drivers. Jenny agreed to walk product roadmap.",
+    "summary": "Onsite scheduled Mar 28 with full cross-functional panel",
+    "event_date": "2026-03-19",
+    "importance": 0.52
+  },
+  {
+    "type": "episodic",
+    "content": "Marcus (candidate) onsite. Sebastien said he challenged our 6-mo customer retention baseline; asked why Acme and Globex had different feature adoption curves. Raised concern about handoff from sales to CS being async-only. Sebastien loved the rigor.",
+    "summary": "Marcus challenges handoff process, impresses Sebastien",
+    "event_date": "2026-03-28",
+    "importance": 0.79
+  },
+  {
+    "type": "episodic",
+    "content": "Ari mentioned Marcus (candidate) understood our Anthropic integration better than expected; quizzed him on token budgets and latency tradeoffs. Said it showed he'd done homework. Lina noted he had specific ideas on feature adoption workflows.",
+    "summary": "Ari and Lina impressed by Marcus's technical depth",
+    "event_date": "2026-03-29",
+    "importance": 0.61
+  },
+  {
+    "type": "episodic",
+    "content": "Debrief with Sebastien post-onsite. Unanimous hire signal. Sebastien said Marcus is 'the champion we've been missing for Acme expansion.' Told him to move fast—Priya said another company was courting him. Offer sent same day.",
+    "summary": "Team consensus: hire Marcus immediately",
+    "event_date": "2026-03-30",
+    "importance": 0.85
+  },
+  {
+    "type": "procedural",
+    "content": "CS Lead onboarding checklist: (1) setup 1Password/GitHub/DataDog/Figma by day 1, (2) attend 2 Acme calls with current Marcus, (3) review Initech expansion plan (Lina owns roadmap thread), (4) Anya walks billing/renewal schedule, (5) first metrics sync with me on day 5.",
+    "summary": "CS Lead onboarding procedural playbook",
+    "event_date": "2026-04-01",
+    "importance": 0.82
+  },
+  {
+    "type": "episodic",
+    "content": "Marcus (new hire) starts Apr 10. Priya scheduled first-week agenda. He's shadowing current Marcus on Acme call Tuesday. Asked me for doc on why we lost Wayne Industries last year—wants to avoid pattern repeat with existing accounts.",
+    "summary": "Marcus officially joins; requests context on Wayne churn",
+    "event_date": "2026-04-07",
+    "importance": 0.68
+  },
+  {
+    "type": "episodic",
+    "content": "Marcus (new) flagged that Acme's usage pattern suggests they're building internal fallback system. Wants to schedule expansion call with their VP before they deepen the build. I set it for Apr 15. This is the kind of early signal we needed.",
+    "summary": "Marcus spots Acme risk; proactively schedules intervention",
+    "event_date": "2026-04-08",
+    "importance": 0.77
+  },
+  {
+    "type": "episodic",
+    "content": "Tom asked Marcus about best practices for handling escalations. Marcus pointed him to Notion doc he created (Vanta playbook adapted). Already shipping process improvements 2 days in. Ari said he's been useful in eng standup too.",
+    "summary": "Marcus shipping process docs, already mentoring junior team",
+    "event_date": "2026-04-09",
+    "importance": 0.56
+  },
+  {
+    "type": "self_model",
+    "content": "Hiring Marcus forced me to be explicit about what CS success looks like at our stage. I usually assume 'good support' is obvious. It isn't. Documenting criteria made the bar real. Also: I hate re-explaining context. Marcus asking for Wayne docs on day 1 made me realize we need a 'churn postmortems' archive.",
+    "summary": "Realized explicit hiring criteria forces clarity on ops",
+    "event_date": "2026-04-09",
+    "importance": 0.71
+  },
+  {
+    "type": "semantic",
+    "content": "CS success metrics for Marcus's first 90 days: hold current NRR >110% across Acme/Initech/Globex, identify 1 expansion upsell per account, reduce escalation resolution time to <24hr, ship 2 playbooks. Post-sales team coordination through weekly syncs with Lina/Ari.",
+    "summary": "90-day success criteria for new CS Lead",
+    "event_date": "2026-04-10",
+    "importance": 0.79
+  },
+  {
+    "type": "episodic",
+    "content": "Sebastien pulled me aside: 'Marcus is going to ask about staffing for CS. We can't have him solo three accounts long-term.' Told him we should plan for CS associate hire in Q3. Put it on ops roadmap with Anya. Budget impact: ~$85k base.",
+    "summary": "Sebastien flags need for CS associate hire by Q3",
+    "event_date": "2026-04-10",
+    "importance": 0.73
+  },
+  {
+    "type": "episodic",
+    "content": "End-of-day Apr 10: Marcus sent Slack thanking the team, said onboarding was 'genuinely well-organized' (surprised me). Already merged into standups. Acme expansion call confirmed for Apr 15 at 2pm. Good start.",
+    "summary": "Marcus settles in; expansion work begins immediately",
+    "event_date": "2026-04-10",
+    "importance": 0.49
+  }
+]

@@ -1,0 +1,170 @@
+[
+  {
+    "type": "episodic",
+    "content": "Snowflake AE Marcus called with renewal proposal: 22% increase ($847K → $1.033M annually). Cited 'market adjustment' and new features. I asked for written justification before discussing further.",
+    "summary": "Snowflake renewal: Marcus proposes 22% increase",
+    "event_date": "2025-11-12",
+    "importance": 0.62
+  },
+  {
+    "type": "semantic",
+    "content": "Snowflake pricing structure at Clude: on-demand compute ($0.40/credit), 1-year prepaid commitment (12% discount), storage tiering. We've been on 1-year prepaid since Apr 2024.",
+    "summary": "Clude's Snowflake contract terms and compute model",
+    "event_date": "2025-11-12",
+    "importance": 0.71
+  },
+  {
+    "type": "episodic",
+    "content": "Pulled Snowflake usage logs from DataDog. Actual consumption down 15% YoY (Oct 2024: 2.1M credits; Oct 2025: 1.79M credits). Devon confirmed query optimization work reduced warehouse spend. Ari noted embeddings pipeline moved to Voyage AI in Q3.",
+    "summary": "Usage analysis: Snowflake consumption down 15% YoY",
+    "event_date": "2025-11-14",
+    "importance": 0.81
+  },
+  {
+    "type": "semantic",
+    "content": "Market context for Snowflake negotiations: Snowflake's own growth has slowed (Q3 ARR guidance miss); vendors aggressive on renewals. Typical pushback threshold at Clude is 8-10% before escalation. Commit length trades off for lower rate.",
+    "summary": "Industry renewal dynamics; Clude's negotiation thresholds",
+    "event_date": "2025-11-14",
+    "importance": 0.68
+  },
+  {
+    "type": "procedural",
+    "content": "When pushback arrives on pricing: (1) gather usage/cost data from DataDog within 48h, (2) schedule async brief with Anya + Ari, (3) draft counter with specific line-items, (4) cc Sebastien if >15% delta. Never engage verbal-only.",
+    "summary": "Process for vendor renewal pushback responses",
+    "event_date": "2025-11-15",
+    "importance": 0.73
+  },
+  {
+    "type": "episodic",
+    "content": "Sent Marcus data-backed counter: 'Usage down 15%, proposing flat renewal at $847K with 2-year commit for certainty.' Marcus balked; asked for call. Told him Tuesday only, async-first shop.",
+    "summary": "Counter-proposal sent to Snowflake: flat + 2yr commit",
+    "event_date": "2025-11-17",
+    "importance": 0.78
+  },
+  {
+    "type": "semantic",
+    "content": "Why 2-year commits matter for vendor negotiations: locks in predictable spend, removes annual renegotiation tax, allows better capacity planning. Snowflake prefers 1yr; we prefer 2yr when flat-lined on price.",
+    "summary": "Strategic value of multi-year commitments in renewals",
+    "event_date": "2025-11-17",
+    "importance": 0.65
+  },
+  {
+    "type": "episodic",
+    "content": "Call with Marcus + Snowflake Solutions Architect (Sarah). Marcus still pushed 18% ($1.00M). Sarah mentioned 'new query optimization features' as justification. I noted we'd already optimized internally; features not relevant to current use case.",
+    "summary": "Snowflake call: Marcus/Sarah defend 18% ask",
+    "event_date": "2025-11-19",
+    "importance": 0.58
+  },
+  {
+    "type": "semantic",
+    "content": "Snowflake's playbook on renewals: cite feature releases, market conditions, infrastructure costs. Reality: most new features unused by SMB/mid-market accounts. Commit length is real leverage; price increases rarely justified by usage.",
+    "summary": "Vendor tactics in SaaS renewals; where real leverage exists",
+    "event_date": "2025-11-19",
+    "importance": 0.72
+  },
+  {
+    "type": "episodic",
+    "content": "Anya pulled AWS spend breakdown. Snowflake is 18% of cloud bill ($847K of $4.7M). If renewal at $1.03M, that's 22% of bill—disproportionate given flat/declining usage. Shared analysis with Sebastien async.",
+    "summary": "Budget impact analysis: Snowflake as % of cloud spend",
+    "event_date": "2025-11-22",
+    "importance": 0.76
+  },
+  {
+    "type": "semantic",
+    "content": "Clude's subscription billing philosophy: avoid creeping increases on legacy vendors. Every 1% above CPI signals renegotiation window. Track vendor spend as % of revenue annually; flag if >15% with declining usage.",
+    "summary": "Internal policy on legacy vendor cost control",
+    "event_date": "2025-11-23",
+    "importance": 0.69
+  },
+  {
+    "type": "episodic",
+    "content": "Marcus sent 'final offer': 12% increase ($947K) on 1-year terms. Included Snowflake discount coupon ($15K) if signed by Dec 15. Obvious pressure tactic. I responded: we're moving slower; not budget-driven.",
+    "summary": "Snowflake's 'final' offer with artificial deadline",
+    "event_date": "2025-11-28",
+    "importance": 0.64
+  },
+  {
+    "type": "procedural",
+    "content": "Handling vendor artificial deadlines: acknowledge in writing but don't move timeline. Respond async within 2 business days. If genuine risk (data loss, service halt), escalate to Sebastien. Most deadline threats are bluff.",
+    "summary": "How to counter vendor deadline pressure",
+    "event_date": "2025-11-28",
+    "importance": 0.74
+  },
+  {
+    "type": "episodic",
+    "content": "Sebastien weighed in async: 'Flat renewal makes sense. Let them sit until new year if needed.' Gave me authority to walk if Snowflake won't move off 10%+ increase. Clear governance avoids phone tag.",
+    "summary": "Sebastien: proceed with flat renewal stance",
+    "event_date": "2025-11-30",
+    "importance": 0.79
+  },
+  {
+    "type": "semantic",
+    "content": "Renewal negotiation timing: vendors push hardest at fiscal year-end (their Q4/year-end target); take longer in Jan. We negotiated through Dec holidays; Snowflake motivated to close by Jan 31 (their FY end).",
+    "summary": "Vendor calendar drives renewal urgency and leverage",
+    "event_date": "2025-12-02",
+    "importance": 0.67
+  },
+  {
+    "type": "episodic",
+    "content": "Nothing heard from Marcus for 10 days post-Dec 15 deadline. Then Dec 28 email: 'Can we talk about a 2-year option at flat renewal?' Clear sign they needed to move. Scheduled async response for Jan 6.",
+    "summary": "Snowflake pivots to 2-year discussion post-deadline",
+    "event_date": "2025-12-28",
+    "importance": 0.81
+  },
+  {
+    "type": "semantic",
+    "content": "Contract mechanics: flat renewal = same unit price/credit structure, no increase to prepaid commitment. 2-year locks Clude in but removes annual negotiation. Trade-off: Snowflake gets certainty, we get predictable spend.",
+    "summary": "Flat renewal + 2-year structure trade-offs",
+    "event_date": "2025-12-29",
+    "importance": 0.72
+  },
+  {
+    "type": "episodic",
+    "content": "Jan 6 response to Marcus: 'Yes to 2-year at flat $847K/yr. Need written terms by Jan 15, sign by Jan 31.' Included redlines on payment schedule (Q1/Q3 split vs. annual upfront). Sent to Anya for vetting.",
+    "summary": "Final counter: flat $847K/yr, 2-year, Jan 31 close",
+    "event_date": "2026-01-06",
+    "importance": 0.83
+  },
+  {
+    "type": "episodic",
+    "content": "Marcus returned draft amendment Jan 13. Snowflake still tried to slip in 3% increase buried in 'annual price adjustment' clause. Anya caught it; I rejected and pointed to flat-renewal language we'd sent.",
+    "summary": "Snowflake attempt to embed hidden price increase",
+    "event_date": "2026-01-13",
+    "importance": 0.74
+  },
+  {
+    "type": "semantic",
+    "content": "Red flags in vendor contracts: 'annual adjustment clause' without hard cap, auto-renewal with 60-day opt-out, tiered compute pricing changes. Always require explicit cap or removal. Snowflake tried it; we've seen this before.",
+    "summary": "Common contract gotchas from Snowflake and peers",
+    "event_date": "2026-01-13",
+    "importance": 0.7
+  },
+  {
+    "type": "episodic",
+    "content": "Final call with Marcus + Snowflake legal Jan 22. Agreed: flat $847K/yr × 2 years ($1.694M total), Q1/Q3 split, no escalation clause. Signed Jan 28. Done.",
+    "summary": "Snowflake renewal finalized: flat $847K/yr, 2yr term",
+    "event_date": "2026-01-22",
+    "importance": 0.87
+  },
+  {
+    "type": "self_model",
+    "content": "I move slower on vendor calls than AEs expect. This is intentional—forces them to clarify in writing, kills bluffing, gives me time to pull data. Impatience costs more than 2 weeks. Sebastien gets this; most people don't.",
+    "summary": "Why I default to async in vendor negotiations",
+    "event_date": "2026-01-28",
+    "importance": 0.68
+  },
+  {
+    "type": "semantic",
+    "content": "Renewal outcome metrics: achieved flat renewal (saved $186K/yr vs. 22% ask); locked 2-year commitment (no 2026 renegotiation); split payments (freed Jan cash flow). Process took 2.5mo but cost ~8h of actual time.",
+    "summary": "Snowflake negotiation: financial and timeline outcomes",
+    "event_date": "2026-01-31",
+    "importance": 0.85
+  },
+  {
+    "type": "procedural",
+    "content": "Post-renewal: (1) log final terms in Linear ticket for renewal tracking, (2) notify Finance of payment schedule, (3) set calendar reminder for Jan 2028 renegotiation window (6mo before expiry), (4) document any usage changes quarterly.",
+    "summary": "Post-signature renewal admin and tracking setup",
+    "event_date": "2026-01-31",
+    "importance": 0.66
+  }
+]

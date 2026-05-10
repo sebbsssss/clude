@@ -1,0 +1,128 @@
+[
+  {
+    "type": "episodic",
+    "content": "Sebastien called a snap meeting about Wayne Industries deal structure. Everyone rehashed the same points two weeks later in Linear. Decision needed a doc first, not a meeting.",
+    "summary": "Wayne Industries deal rehashed in meeting, then renegotiated.",
+    "event_date": "2025-11-15",
+    "importance": 0.52
+  },
+  {
+    "type": "semantic",
+    "content": "All technical decisions at Clude require an RFC (design doc, implementation approach, tradeoffs) posted in Notion before review. No Slack-only decisions. Applies to backend, infra, API changes.",
+    "summary": "RFC requirement for all technical decisions",
+    "event_date": "2025-11-18",
+    "importance": 0.78
+  },
+  {
+    "type": "procedural",
+    "content": "When a decision needs sign-off: author writes 1-page doc in Notion with context, options, recommendation. Tag stakeholders async. 48hr review window before implementation. If urgent, escalate to Sebastien.",
+    "summary": "Async decision doc process: Notion, 48hr review, escalate if urgent",
+    "event_date": "2025-11-20",
+    "importance": 0.82
+  },
+  {
+    "type": "episodic",
+    "content": "Ari and Devon argued in standup about Snowflake schema redesign. Later found out they'd both sketched competing approaches but never wrote them down. Killed 90min of team time.",
+    "summary": "Ari/Devon schema debate revealed lack of written proposals",
+    "event_date": "2025-11-22",
+    "importance": 0.48
+  },
+  {
+    "type": "semantic",
+    "content": "Product changes also need docs: Lina writes brief (user problem, proposed solution, success metric) in Notion. Design (Jenny) and Eng (Ari) review async. Prevents meeting-only pivots that get forgotten.",
+    "summary": "Product brief template for async review before design work",
+    "event_date": "2025-11-25",
+    "importance": 0.75
+  },
+  {
+    "type": "procedural",
+    "content": "Retro notes: if action item emerges, document owner, deadline, success criteria in Linear ticket immediately. Tag in Slack with link. Stops 'we agreed on that' disagreements.",
+    "summary": "Retro action items → Linear ticket + Slack link same day",
+    "event_date": "2025-11-27",
+    "importance": 0.74
+  },
+  {
+    "type": "procedural",
+    "content": "New vendor evaluation (Voyage AI vs. Anthropic embeddings): Anya writes cost/latency/support comparison in shared Notion table. Team reviews, comments async. Decision doc then summarizes choice & rationale.",
+    "summary": "Vendor evaluation process: comparison table, async review, decision doc",
+    "event_date": "2025-12-02",
+    "importance": 0.71
+  },
+  {
+    "type": "episodic",
+    "content": "Priya tried to make a hiring level decision in a 20-person Slack thread. I shut it down, asked for a 2-minute hire profile doc. She was annoyed but complied. Quality improved.",
+    "summary": "Priya's hiring decision moved from Slack to written profile",
+    "event_date": "2025-12-05",
+    "importance": 0.56
+  },
+  {
+    "type": "semantic",
+    "content": "Hiring decisions require: candidate summary, role fit assessment, offer level/equity, start date. Lives in a Notion database. One page. Priya links in Slack after, not before.",
+    "summary": "Hiring decision template in Notion database",
+    "event_date": "2025-12-08",
+    "importance": 0.73
+  },
+  {
+    "type": "self_model",
+    "content": "I've become the async-decision enforcer, which I hate. But watching 6 months of re-work because people 'thought they agreed' has made me obsessive about writing things down. It's my job.",
+    "summary": "I've embraced the role of async decision enforcer",
+    "event_date": "2025-12-10",
+    "importance": 0.61
+  },
+  {
+    "type": "procedural",
+    "content": "Clude's escalation path: Ops asks (me), I ask (Sebastien), Sebastien decides in doc. If someone brings a decision to Sebastien in a meeting without context doc, I intercept and ask for async write-up first.",
+    "summary": "Escalation requires written context before Sebastien weigh-in",
+    "event_date": "2025-12-15",
+    "importance": 0.77
+  },
+  {
+    "type": "episodic",
+    "content": "Initech contract renewal: Marcus sent a 3-msg Slack thread about discounting. I asked for a 1-page proposal (client context, renewal scope, pricing model). He finished in 20min, found an error in his math.",
+    "summary": "Initech renewal moved from Slack chat to written proposal",
+    "event_date": "2025-12-18",
+    "importance": 0.54
+  },
+  {
+    "type": "semantic",
+    "content": "At Clude, 'decision' = anything that affects >2 people, >1 sprint, or >$5k spend. Those get a doc. Smaller calls (debug approach, naming a variable) are live/Slack-only. Threshold matters.",
+    "summary": "Decision threshold: >2 people, >1 sprint, or >$5k spend",
+    "event_date": "2026-01-08",
+    "importance": 0.79
+  },
+  {
+    "type": "procedural",
+    "content": "Quarterly planning: Lina, Ari, Anya write roadmap drafts in Notion (goals, OKRs, dependencies). Team async comments 1 week. Sebastien reviews, amends, publishes. No all-hands meetings for this anymore.",
+    "summary": "Quarterly planning is fully async: Notion drafts, week review window",
+    "event_date": "2026-01-15",
+    "importance": 0.85
+  },
+  {
+    "type": "episodic",
+    "content": "James (hired Mar 2026) asked in standup about DataDog alerting strategy. I told him to check Notion first—he found the design doc Ari wrote 8 months ago. Saved him 2hr of re-explaining.",
+    "summary": "James found existing DataDog doc in Notion before asking",
+    "event_date": "2026-03-20",
+    "importance": 0.44
+  },
+  {
+    "type": "semantic",
+    "content": "Decision docs at Clude have a template: Context (why?), Options, Recommendation, Owner, Deadline, Success Metric. Lives in Notion. Consistency reduces re-litigating old choices.",
+    "summary": "Standardized decision doc template prevents re-litigation",
+    "event_date": "2026-03-25",
+    "importance": 0.8
+  },
+  {
+    "type": "self_model",
+    "content": "6 months in, the culture has shifted. People write first, meet later. I'm no longer re-explaining the AWS architecture to new people every sprint. It's exhausting but working.",
+    "summary": "Async-first culture is working; less re-explaining required",
+    "event_date": "2026-04-22",
+    "importance": 0.68
+  },
+  {
+    "type": "procedural",
+    "content": "When onboarding (Tom, James): first stop is Notion decision archive. Show them 3 examples of 'good' docs (Cloudflare migration, Sentry integration choice, Globex deal terms). They write their own doc by week 2.",
+    "summary": "Onboarding includes Notion decision archive review + write exercise",
+    "event_date": "2026-04-30",
+    "importance": 0.76
+  }
+]

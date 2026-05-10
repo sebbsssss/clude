@@ -1,0 +1,114 @@
+[
+  {
+    "type": "episodic",
+    "content": "2:14am Feb 11 — auth migration rollout failed. Fallback path didn't preserve org_id in session token. 11 minutes to full rollback. Ari declared SEV-1, comms to Acme and Initech within 8min.",
+    "summary": "Auth rollout failed; org_id lost in fallback path",
+    "event_date": "2026-02-11",
+    "importance": 0.78
+  },
+  {
+    "type": "procedural",
+    "content": "When auth incident occurs: (1) Ari or Devon declares SEV level immediately, (2) Marcus notifies top 3 customers within 5min, (3) Sebastien gets pinged via 1Password alert, (4) RCA owner assigned before rollback completes.",
+    "summary": "Auth incident escalation protocol established",
+    "event_date": "2026-02-11",
+    "importance": 0.72
+  },
+  {
+    "type": "episodic",
+    "content": "Ari pinged Slack 2:47am with rollback confirmation. No data loss, session cache refreshed within 3min. Globex reported they didn't notice the gap. Wayne Industries asked for a status page update.",
+    "summary": "Rollback confirmed; minimal customer impact observed",
+    "event_date": "2026-02-11",
+    "importance": 0.45
+  },
+  {
+    "type": "semantic",
+    "content": "Fallback auth path must preserve org_id as immutable claim in JWT. Previous design passed it as mutable session attribute only. This is non-negotiable for multi-tenant consistency.",
+    "summary": "JWT org_id must be immutable claim, not session attr",
+    "event_date": "2026-02-12",
+    "importance": 0.88
+  },
+  {
+    "type": "procedural",
+    "content": "RCA template for auth incidents: include (1) timeline of rollback events, (2) root cause with code refs, (3) what monitoring missed, (4) remediation steps before re-deploy, (5) sign-off from Ari + Devon.",
+    "summary": "RCA template for auth incidents finalized",
+    "event_date": "2026-02-12",
+    "importance": 0.75
+  },
+  {
+    "type": "episodic",
+    "content": "Ari finished RCA draft Feb 12 evening. Root cause: migration script tested in staging with only 1 org. Fallback logic never hit in prod load-test. He noted Tom didn't catch it in code review.",
+    "summary": "RCA draft done; staging didn't catch single-org edge case",
+    "event_date": "2026-02-12",
+    "importance": 0.62
+  },
+  {
+    "type": "semantic",
+    "content": "Staging must mirror prod org structure (min 3 test orgs with cross-org requests). Single-org test suites mask fallback path bugs. This applies to any customer-isolation logic.",
+    "summary": "Staging requires multi-org test scenarios",
+    "event_date": "2026-02-13",
+    "importance": 0.85
+  },
+  {
+    "type": "procedural",
+    "content": "Before any auth rollout: (1) Ari reviews fallback path explicitly, (2) load-test includes org context switching, (3) DataDog alerting on org_id null values in audit log, (4) Sentry dashboard for session validation errors.",
+    "summary": "Pre-auth-rollout checklist with monitoring focus",
+    "event_date": "2026-02-13",
+    "importance": 0.82
+  },
+  {
+    "type": "self_model",
+    "content": "I spend too much time re-explaining why staging coverage matters. This Feb 11 incident proves it cleanly. Need to write a doc so I stop repeating this.",
+    "summary": "Pattern: re-explaining staging scope. Will document once.",
+    "event_date": "2026-02-13",
+    "importance": 0.51
+  },
+  {
+    "type": "episodic",
+    "content": "Postmortem published Feb 14 10am. Sebastien asked about customer comms timeline — Marcus had already sent detailed explanations to Acme, Initech, Globex. Wayne Industries asked for SLA credit; Anya approved $2400.",
+    "summary": "Postmortem published; $2400 credit issued to Wayne",
+    "event_date": "2026-02-14",
+    "importance": 0.68
+  },
+  {
+    "type": "semantic",
+    "content": "For 11-minute outages affecting customer-facing APIs, SLA credits are standard if incident was internal ops error (not vendor/external). $200/min baseline for enterprise; Anya has discretion to adjust.",
+    "summary": "SLA credit policy: $200/min baseline for ops errors",
+    "event_date": "2026-02-14",
+    "importance": 0.79
+  },
+  {
+    "type": "procedural",
+    "content": "Audit log queries for auth incidents: (1) SELECT * FROM session_tokens WHERE org_id IS NULL, (2) check Cloudflare cache hit rate during rollback window, (3) cross-ref Anthropic token usage logs for stuck requests.",
+    "summary": "Audit log queries for auth incident forensics",
+    "event_date": "2026-02-15",
+    "importance": 0.73
+  },
+  {
+    "type": "episodic",
+    "content": "Ari mentioned Feb 15 that James asked good questions in RCA review about why fallback path wasn't feature-gated. Decided all future auth changes require explicit feature flag + gradual rollout (5%, 25%, 100%).",
+    "summary": "James raised feature-flag question; gradual rollout now mandatory",
+    "event_date": "2026-02-15",
+    "importance": 0.55
+  },
+  {
+    "type": "semantic",
+    "content": "RFC for auth changes must include fallback scenario testing and rollback timing. If fallback code can't be tested in staging, the rollout plan itself is suspect.",
+    "summary": "Auth RFC requires fallback scenario testing",
+    "event_date": "2026-02-16",
+    "importance": 0.81
+  },
+  {
+    "type": "procedural",
+    "content": "Post-incident: (1) update Linear with blocking issues before re-deploy, (2) Tom to attend code review sessions on auth until 3 PRs merged, (3) Devon pair with Ari on next auth rollout, (4) Anya audit Sentry budget for increased logging.",
+    "summary": "Follow-up tasks: code review, pairing, monitoring budget",
+    "event_date": "2026-02-17",
+    "importance": 0.76
+  },
+  {
+    "type": "self_model",
+    "content": "The Feb 11 incident felt avoidable but not surprising—we've been scaling fast and cutting corners on staging parity. I'm less frustrated now that we have a concrete RFC template and Tom has clear growth path.",
+    "summary": "Incident felt avoidable; concrete fixes reduce my stress",
+    "event_date": "2026-02-18",
+    "importance": 0.58
+  }
+]

@@ -1,0 +1,114 @@
+[
+  {
+    "type": "episodic",
+    "content": "Ari flagged AWS spend spike in standup—$14.2k last month, up 31% YoY. Devon said new indexing on prod is the culprit. Suggested we model 12-month forward before next board call.",
+    "summary": "AWS spend spike discussed; 12mo forecasting recommended",
+    "event_date": "2026-03-04",
+    "importance": 0.58
+  },
+  {
+    "type": "semantic",
+    "content": "Reserved instances for RDS + compute savings plan combo typically yields 35–42% discount vs on-demand. Worth modeling given current burn. Snowflake contract also up for renewal in Q3.",
+    "summary": "RI + savings plan combo yields 35–42% savings vs on-demand",
+    "event_date": "2026-03-04",
+    "importance": 0.72
+  },
+  {
+    "type": "procedural",
+    "content": "When AWS pricing review needed: (1) get 90-day spend export from DataDog, (2) ask Ari/Devon for 12mo usage forecast by service, (3) run AWS calculator against reserved + savings plan scenarios, (4) doc assumptions in Linear ticket for audit trail.",
+    "summary": "AWS pricing review workflow: DataDog export → forecast → calculator → Linear doc",
+    "event_date": "2026-03-05",
+    "importance": 0.81
+  },
+  {
+    "type": "episodic",
+    "content": "Ari sent forecast model Wed evening—RDS $8.2k/mo baseline, compute $6.8k/mo, other services $4.1k/mo. Assumes 2.3x scaling through Q4. Conservative but plausible given Acme/Initech ramp.",
+    "summary": "Ari's 12mo AWS forecast: $19.1k/mo baseline, 2.3x growth assumed",
+    "event_date": "2026-03-05",
+    "importance": 0.64
+  },
+  {
+    "type": "semantic",
+    "content": "1-year commitment typically requires 30–45 day notice on AWS. 3-year RIs lock in deeper discount (~60%) but risky if we migrate workload. Savings plans more flexible than RIs—cover any compute instance family.",
+    "summary": "1yr AWS commitments need 30–45d notice; savings plans more flexible than RIs",
+    "event_date": "2026-03-06",
+    "importance": 0.68
+  },
+  {
+    "type": "episodic",
+    "content": "Called Anya Thursday afternoon to review Ari's numbers. She eyeballed the $19.1k/mo baseline and said 'feels right given headcount/workload.' Green-lit me to cost-optimize. Asked for final rec by EOD Friday.",
+    "summary": "Anya approved cost-optimization work; wants final rec by Fri",
+    "event_date": "2026-03-06",
+    "importance": 0.59
+  },
+  {
+    "type": "semantic",
+    "content": "AWS RDS: reserved instances for 1yr on db.r6i.2xlarge ~45% cheaper than on-demand. Upfront $4.8k covers ~10mo cost; remaining 2mo on-demand fallback. Works if baseline stable.",
+    "summary": "RDS 1yr RI (db.r6i.2xlarge): 45% savings, $4.8k upfront",
+    "event_date": "2026-03-08",
+    "importance": 0.76
+  },
+  {
+    "type": "episodic",
+    "content": "Devon and I walked through the AWS calculator results Friday morning. He pushed back on 2.3x growth assumption—said indexing optimizations coming in April will flatten compute by 12%. Revised forecast down to 1.8x.",
+    "summary": "Devon questioned growth forecast; revised compute down due to April optimizations",
+    "event_date": "2026-03-08",
+    "importance": 0.62
+  },
+  {
+    "type": "semantic",
+    "content": "For Clude's current infra footprint, optimal strategy: $120k 1yr compute savings plan + $60k RDS RI commitment = $180k total. Saves ~$67k annually vs on-demand. Requires commitment decision by Mar 20.",
+    "summary": "$180k AWS commitment (savings plan + RI) saves $67k/yr; deadline Mar 20",
+    "event_date": "2026-03-10",
+    "importance": 0.89
+  },
+  {
+    "type": "procedural",
+    "content": "Before recommending AWS spend commitment to Sebastien: (1) document assumption set (growth rate, service mix, migration risk), (2) model breakeven scenario if workload drops, (3) list any contract clauses permitting early termination or downgrade.",
+    "summary": "Pre-recommendation checklist: assumptions doc, breakeven model, termination clauses",
+    "event_date": "2026-03-10",
+    "importance": 0.79
+  },
+  {
+    "type": "episodic",
+    "content": "Sent Sebastien the AWS spreadsheet Monday morning—$180k commitment, 38% savings vs on-demand, assumes revised 1.8x growth. Flagged Mar 20 deadline. He asked one question: 'Can we scale down if customer churn happens?' Honest answer: RI/savings plan lock in capacity.",
+    "summary": "Sebastien questioned downside risk if churn; RI/savings plan lock in capacity",
+    "event_date": "2026-03-10",
+    "importance": 0.71
+  },
+  {
+    "type": "semantic",
+    "content": "Clude's customer concentration: Acme 28% ARR, Initech 19%, Globex 14%, Wayne 9%. If Acme churns, workload drops ~$5.2k/mo. RIs non-returnable but can be resold on AWS Marketplace at 60–75% recovery.",
+    "summary": "Key risk: Acme 28% ARR; RI resale recovery ~60–75% if churn occurs",
+    "event_date": "2026-03-12",
+    "importance": 0.75
+  },
+  {
+    "type": "self_model",
+    "content": "I hate re-explaining context. Realized this week I should've documented Ari/Devon's growth assumptions in Linear upfront instead of relying on email. Cost me 3 clarification rounds with Sebastien. Next time: Linear ticket + Notion doc before any spreadsheet.",
+    "summary": "Lesson: doc assumptions in Linear/Notion first, avoid re-explaining via email",
+    "event_date": "2026-03-12",
+    "importance": 0.68
+  },
+  {
+    "type": "episodic",
+    "content": "Anya called Wednesday to confirm ARR forecast overlaps with AWS growth model. She pulled Q2 pipeline: Wayne Industries likely +$180k, Globex +$120k. Bumps baseline workload assumption higher. Told her I'd retro-run numbers if deal closure dates firm.",
+    "summary": "Anya's Q2 pipeline (Wayne +$180k, Globex +$120k) may justify higher AWS commitment",
+    "event_date": "2026-03-12",
+    "importance": 0.61
+  },
+  {
+    "type": "semantic",
+    "content": "AWS savings plan commitment requires 1yr upfront payment or monthly installments. We chose 1yr upfront for Clude's cash position—$120k hit to Q1 but no surprise monthly invoices. Easier for Anya's forecasting.",
+    "summary": "1yr upfront AWS payment ($120k) chosen for cash flow predictability",
+    "event_date": "2026-03-15",
+    "importance": 0.73
+  },
+  {
+    "type": "episodic",
+    "content": "Final rec sent to Sebastien Friday: proceed with $180k 1yr commitment. Attached risk doc—churn downside, March 20 deadline hard stop, RI resale option. He approved verbally. Told Ari to file purchase order with AWS by EOD Mar 17.",
+    "summary": "Sebastien approved $180k AWS commitment; PO deadline Mar 17",
+    "event_date": "2026-03-20",
+    "importance": 0.87
+  }
+]

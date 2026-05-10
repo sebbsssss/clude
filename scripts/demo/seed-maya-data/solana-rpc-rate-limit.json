@@ -1,0 +1,86 @@
+[
+  {
+    "type": "episodic",
+    "content": "Devon flagged Solana mainnet RPC returning 429s at 14:32 UTC. Memory commit pipeline backing up. Ari already investigating with Helius as contingency.",
+    "summary": "Solana RPC rate limit incident detected",
+    "event_date": "2026-03-14",
+    "importance": 0.62
+  },
+  {
+    "type": "semantic",
+    "content": "Solana public RPC endpoints throttle at ~300 req/s. Our chain commit pipeline hits that under load. Helius dedicated nodes remove that bottleneck entirely.",
+    "summary": "Root cause: public RPC throughput ceiling vs pipeline demand",
+    "event_date": "2026-03-14",
+    "importance": 0.78
+  },
+  {
+    "type": "procedural",
+    "content": "When RPC endpoints 429: check current provider's rate limits, confirm pipeline queue depth in DataDog, then evaluate dedicated node cost vs SLA impact. Document the decision.",
+    "summary": "RPC incident response process: monitor → verify → cost-benefit → decide",
+    "event_date": "2026-03-14",
+    "importance": 0.81
+  },
+  {
+    "type": "episodic",
+    "content": "Ari presented Helius migration path to me and Devon at 10am on the 15th. Dedicated node cost: $200/mo. Cutover feasible same day via config swap in Linear.",
+    "summary": "Helius migration scope discussed with Ari",
+    "event_date": "2026-03-15",
+    "importance": 0.55
+  },
+  {
+    "type": "semantic",
+    "content": "Helius RPC pricing: $200/mo for dedicated Solana node includes guaranteed throughput, no rate limiting, and faster failover. Added to AWS monthly bill.",
+    "summary": "Helius cost model and SLA guarantees documented",
+    "event_date": "2026-03-15",
+    "importance": 0.72
+  },
+  {
+    "type": "procedural",
+    "content": "RPC provider migrations: swap endpoint URLs in config → deploy to prod → monitor commit latency for 30min → verify no queue backlog in metrics before marking resolved.",
+    "summary": "Standard RPC failover checklist for future use",
+    "event_date": "2026-03-15",
+    "importance": 0.84
+  },
+  {
+    "type": "episodic",
+    "content": "Helius cutover at 16:45 UTC on the 16th. Commit queue drained within 8min. No customer impact reported. Slack thread marked closed by Ari.",
+    "summary": "Helius migration completed successfully",
+    "event_date": "2026-03-16",
+    "importance": 0.58
+  },
+  {
+    "type": "semantic",
+    "content": "Public RPC limits expose us to traffic spikes. Dedicated nodes are table stakes for production Solana pipelines. Budget this as operational overhead, not occasional expense.",
+    "summary": "Lesson: dedicate RPC provider for blockchain infrastructure",
+    "event_date": "2026-03-17",
+    "importance": 0.75
+  },
+  {
+    "type": "procedural",
+    "content": "Document all vendor migrations and cost deltas in Notion ops wiki under 'Infrastructure Changes'. Include date, provider, reason, monthly cost. Anya reconciles against invoice.",
+    "summary": "Vendor change documentation workflow",
+    "event_date": "2026-03-17",
+    "importance": 0.79
+  },
+  {
+    "type": "self_model",
+    "content": "I keep pushing for async RCAs rather than live postmortems. Ari and Devon prefer written summaries anyway. Less repeat explanations, better for async team.",
+    "summary": "Prefer async postmortems over meetings",
+    "event_date": "2026-03-18",
+    "importance": 0.42
+  },
+  {
+    "type": "semantic",
+    "content": "Memory commit pipeline is critical path. Any RPC latency or rate limit cascades into customer-visible delays. Monitor commit queue depth continuously in DataDog.",
+    "summary": "Memory commits are critical dependency, require dedicated RPC",
+    "event_date": "2026-03-19",
+    "importance": 0.88
+  },
+  {
+    "type": "self_model",
+    "content": "I hate re-explaining why we chose Helius over cheaper alternatives. $200/mo is cheap insurance against another incident. Document it once, reference forever.",
+    "summary": "Cost decisions require once-and-done justification docs",
+    "event_date": "2026-03-20",
+    "importance": 0.48
+  }
+]

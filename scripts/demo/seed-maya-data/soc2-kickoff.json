@@ -1,0 +1,128 @@
+[
+  {
+    "type": "episodic",
+    "content": "Kickoff call with Prescient Assurance at 10am. Auditor assigned is Sarah Chen. 6-month observation window runs Feb 4–Aug 4. She wants weekly sync calls Tuesdays 2pm PT. Scope covers access controls, change management, data security, incident response.",
+    "summary": "SOC2 Type II audit kickoff with Prescient Assurance, Sarah Chen lead",
+    "event_date": "2026-02-04",
+    "importance": 0.82
+  },
+  {
+    "type": "semantic",
+    "content": "SOC2 Type II requires 6 months of continuous evidence collection showing controls work in practice, not just on paper. Type I is point-in-time. We're doing both concurrently. Type II costs ~$18k, Type I ~$6k.",
+    "summary": "SOC2 Type II vs Type I scope and cost model",
+    "event_date": "2026-02-04",
+    "importance": 0.78
+  },
+  {
+    "type": "procedural",
+    "content": "Set up weekly evidence intake process: Yara (assigned by Anya) collects audit logs from DataDog, GitHub, 1Password, Cloudflare, Sentry every Friday EOD. Stores in dedicated Notion database. Sarah reviews monthly.",
+    "summary": "Weekly evidence collection workflow with Yara owning cycles",
+    "event_date": "2026-02-04",
+    "importance": 0.85
+  },
+  {
+    "type": "episodic",
+    "content": "Ari flagged that GitHub audit logs only retain 90 days free. Need to enable Snowflake sink for long-term storage. Estimated setup: 4h for Devon or James. Cost TBD. Added to Q1 infrastructure backlog.",
+    "summary": "GitHub audit log retention gap identified, Snowflake sink required",
+    "event_date": "2026-02-06",
+    "importance": 0.71
+  },
+  {
+    "type": "semantic",
+    "content": "Access control evidence we need: role assignments (GitHub, AWS), provisioning/deprovisioning records, MFA enforcement logs, privileged access logs. 1Password has most of this. AWS CloudTrail covers infra changes.",
+    "summary": "Key access control evidence sources mapped",
+    "event_date": "2026-02-06",
+    "importance": 0.79
+  },
+  {
+    "type": "episodic",
+    "content": "Sebastien asked if SOC2 helps sales. Yes: Acme Corp, Initech, and Globex all have SOC2 requirements in RFPs. Wayne Industries is uncertain but mentioned it in Jan call. Conservative estimate: $200k ARR at risk if we fail.",
+    "summary": "SOC2 tied to $200k+ ARR opportunity across pipeline",
+    "event_date": "2026-02-10",
+    "importance": 0.88
+  },
+  {
+    "type": "semantic",
+    "content": "Change management control test: every production deploy must have Jira ticket → code review → merge → deployment log. Tom's last deploy (Jan 28) had no ticket. Already fixed but Sarah will ask for evidence of retroactive policy enforcement.",
+    "summary": "Change management control requires Jira → review → deploy chain",
+    "event_date": "2026-02-10",
+    "importance": 0.81
+  },
+  {
+    "type": "procedural",
+    "content": "Document control checklist for all audit artifacts: who owns it (Yara/Priya/Devon/Marcus), frequency of update, how it links to control objective, where it lives (Notion tab). Anya review before Sarah sees it.",
+    "summary": "Artifact ownership and tracking template for audit readiness",
+    "event_date": "2026-02-10",
+    "importance": 0.8
+  },
+  {
+    "type": "episodic",
+    "content": "Priya sent employee access policy draft. Covers onboarding (5 days max), offboarding (same day revoke), periodic recertification (quarterly). Needs Sebastien sign-off. Sent for review; he had feedback on contractor language by Feb 13.",
+    "summary": "Access policy drafted, awaiting CEO sign-off on contractor terms",
+    "event_date": "2026-02-12",
+    "importance": 0.68
+  },
+  {
+    "type": "semantic",
+    "content": "Incident response control requires documented procedure + evidence of testing. We have 3 test incidents logged (Dec incident, Jan staging breach, Feb false alarm). Sarah wants to see post-mortems, remediation tickets, timeline proof.",
+    "summary": "Incident response evidence: 3 test cases + post-mortems required",
+    "event_date": "2026-02-12",
+    "importance": 0.77
+  },
+  {
+    "type": "episodic",
+    "content": "Jenny's design files on Figma have admin, editor, viewer roles. Audit scope technically includes design tool access. No PII in Figma but Sarah flagged it as 'out of scope but let's check anyway.' Tom will document Figma admin list by Feb 18.",
+    "summary": "Figma access audit opened as low-priority scope item",
+    "event_date": "2026-02-14",
+    "importance": 0.45
+  },
+  {
+    "type": "semantic",
+    "content": "Vendor management control: Snowflake, Anthropic, Voyage AI process customer data. All have SOC2 certs on file. AWS, Cloudflare, DataDog also certified. Need attestations uploaded to shared Notion. Anya owns vendor file.",
+    "summary": "Vendor SOC2 attestations required; Anya owns file",
+    "event_date": "2026-02-14",
+    "importance": 0.74
+  },
+  {
+    "type": "episodic",
+    "content": "Marcus worried about CS access logs. Customer support tickets sometimes include API keys (bad practice). Happened 3x in past 6mo. Sarah will ask how we detect/prevent. Documented as 'known issue, remediation in progress.' Embarrassing but honest.",
+    "summary": "API key exposure in CS tickets flagged as known weakness",
+    "event_date": "2026-02-17",
+    "importance": 0.74
+  },
+  {
+    "type": "semantic",
+    "content": "Data retention and destruction policy: customer data kept per contract (default 90 days post-termination), then Snowflake PITR deleted after 30d retention. Test destruction logged once per quarter. Sarah will validate Q4 2025 test in first month.",
+    "summary": "Data destruction control requires quarterly test with audit log",
+    "event_date": "2026-02-17",
+    "importance": 0.76
+  },
+  {
+    "type": "procedural",
+    "content": "Before every Tuesday Sarah sync, Yara compiles evidence summary: new logs collected, gaps identified, remediations underway. Template: Control Name | Evidence Collected | Status | Action Items. Send to me 24h before call.",
+    "summary": "Pre-audit-call evidence summary template and timing",
+    "event_date": "2026-02-17",
+    "importance": 0.82
+  },
+  {
+    "type": "self_model",
+    "content": "I hate re-explaining context in meetings. Documentation is everything. This audit will force us to write down what we actually do vs. what we claim. That's good. It's also tedious. Yara is carrying the evidence load; I need to make sure she has air cover and doesn't drown in busy work.",
+    "summary": "Audit documentation investment required; protect Yara from overload",
+    "event_date": "2026-02-18",
+    "importance": 0.61
+  },
+  {
+    "type": "episodic",
+    "content": "Anya and I reviewed Q1 budget impact: evidence storage (Snowflake sink setup), Prescient fees ($18k), internal time (~200h across team). Total ~$32k hard + ~$12k labor. Approved by Sebastien Feb 19. Accounted against 'compliance reserves.'",
+    "summary": "SOC2 Q1 budget locked at $32k hard + $12k labor",
+    "event_date": "2026-02-19",
+    "importance": 0.79
+  },
+  {
+    "type": "semantic",
+    "content": "Sarah's first deep-dive audit log review will be Mar 3. She'll sample 30 days (Feb 4–Mar 4) across all systems. Yara must have clean, indexed evidence by Feb 28. Any gaps found now = time to backfill.",
+    "summary": "First audit log review Mar 3; evidence due Feb 28",
+    "event_date": "2026-02-20",
+    "importance": 0.84
+  }
+]

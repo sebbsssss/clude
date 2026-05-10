@@ -1,0 +1,86 @@
+[
+  {
+    "type": "episodic",
+    "content": "Anya presented vendor consolidation win: cut 14 SaaS subscriptions, saved $47K annually. Moved 90% of ops to Notion, Linear, Slack core. AWS spend down 12% after DevOps cleanup.",
+    "summary": "Vendor consolidation complete: $47K savings, streamlined stack.",
+    "event_date": "2026-04-25",
+    "importance": 0.62
+  },
+  {
+    "type": "semantic",
+    "content": "SOC2 audit timeline slipped 6 weeks. Root cause: Sentry logging gaps + Cloudflare config documentation was missing. Need pre-audit checklist: vendor readiness assessment → config audit → 2-week buffer.",
+    "summary": "SOC2 lessons: vendor readiness + config docs critical, build buffer.",
+    "event_date": "2026-04-26",
+    "importance": 0.84
+  },
+  {
+    "type": "self_model",
+    "content": "Realized hiring pipeline now my highest-ROI work. Priya + I closed 3 offers in 2 weeks (James, Tom, one contract eng). Async recruiting docs saved ~8 hrs of retro context-setting.",
+    "summary": "Best skill: building hiring process. Docs kill context tax.",
+    "event_date": "2026-04-27",
+    "importance": 0.71
+  },
+  {
+    "type": "introspective",
+    "content": "Still weary on compliance. SOC2 felt like 10 weeks of triage vs. strategy. But vendor consolidation felt good—clear ROI, visible process. Suspect I'm energized by optimization, drained by regulation.",
+    "summary": "Energized by ops optimization; drained by compliance work.",
+    "event_date": "2026-04-27",
+    "importance": 0.58
+  },
+  {
+    "type": "episodic",
+    "content": "Retro with Ari, Devon, James: backend infra scaled 40% this Q without hire until March. James' first week was productive—paired on Anthropic integration, no onboarding friction.",
+    "summary": "Ari's team scaled well; James onboarding smooth.",
+    "event_date": "2026-04-28",
+    "importance": 0.45
+  },
+  {
+    "type": "semantic",
+    "content": "Documented hiring playbook: Priya sources → async video screen (async, not sync!) → technical + culture (Ari) → offer + close. No meeting until offer stage. 7-day cycle possible.",
+    "summary": "Hiring playbook: async-first, 7-day close cycle.",
+    "event_date": "2026-04-28",
+    "importance": 0.78
+  },
+  {
+    "type": "introspective",
+    "content": "Marcus asked why CS metrics aren't in dashboard. Realized I've been managing vendors but not exposing ops data to the team. That's a gap—ops should be visible.",
+    "summary": "Missing: ops visibility. Metrics hidden, not shared.",
+    "event_date": "2026-04-28",
+    "importance": 0.64
+  },
+  {
+    "type": "self_model",
+    "content": "18 months in: I'm good at systems (vendor stack, hiring process, budget tracking). Still learning: stakeholder comfort with risk (SOC2 stress = perfectionism), and when to push back vs. absorb.",
+    "summary": "Strength: systems. Gap: risk tolerance and pushback.",
+    "event_date": "2026-04-29",
+    "importance": 0.69
+  },
+  {
+    "type": "procedural",
+    "content": "Standard retro format now: 3 questions async in Notion (what worked, what didn't, what's unclear). Sebastien + team respond. Discuss blockers only. Saves 45 mins, better notes.",
+    "summary": "Async retro format: Notion 3-Q, discuss blockers only.",
+    "event_date": "2026-04-29",
+    "importance": 0.55
+  },
+  {
+    "type": "introspective",
+    "content": "Lina flagged: Acme churn risk if onboarding stays 3 weeks. I'd accepted it; she pushed back. Reminded me that ops work for product, not the reverse. Need to sync intent more.",
+    "summary": "Ops serves product. Avoid optimizing in a vacuum.",
+    "event_date": "2026-04-29",
+    "importance": 0.72
+  },
+  {
+    "type": "self_model",
+    "content": "What got better: team trust. Ari asks me before vendor changes now. Priya's recruiting me for hiring calls. Marcus checking in on CS tools. Six months ago this was transactional.",
+    "summary": "Built trust. Team sees ops as partner, not gatekeeper.",
+    "event_date": "2026-04-30",
+    "importance": 0.73
+  },
+  {
+    "type": "introspective",
+    "content": "Still hard: saying no. SOC2 scope creep happened because I didn't push back on audit firm's 'nice-to-haves'. Cost us 3 weeks. Next vendor engagement, I'm being explicit about scope boundaries.",
+    "summary": "Growth edge: push back on scope creep early.",
+    "event_date": "2026-04-30",
+    "importance": 0.67
+  }
+]

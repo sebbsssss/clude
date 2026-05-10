@@ -1,0 +1,114 @@
+[
+  {
+    "type": "episodic",
+    "content": "Kicked off senior designer search with Jenny and Priya. Role scope: product + brand, 1 level above Jenny, backfill headcount approved in Feb budget. Target: 12-week hire, $160–180k base depending on equity negotiation.",
+    "summary": "Senior designer search initiated with budget approved",
+    "event_date": "2026-04-01",
+    "importance": 0.62
+  },
+  {
+    "type": "semantic",
+    "content": "Senior designer hire fills critical gap: Jenny at capacity on product work, brand asset debt mounting (Figma audit showed 200+ unused components). Hire enables parallel tracks on design system and customer-facing marketing materials.",
+    "summary": "Designer hire justification: capacity + brand debt",
+    "event_date": "2026-04-01",
+    "importance": 0.75
+  },
+  {
+    "type": "episodic",
+    "content": "Priya sent candidate slate: 8 initial prospects. Screened 6 this week. Notes: 2 overqualified (ex-director roles, looking part-time), 1 early-stage burnout signal, 3 solid. Moving 3 to Jenny interview.",
+    "summary": "Initial phone screens: 3 candidates advancing",
+    "event_date": "2026-04-03",
+    "importance": 0.5
+  },
+  {
+    "type": "episodic",
+    "content": "Jenny's feedback on first round: loved candidate #2 (ex-Linear, 8yr exp, strong systems thinking), middling on #1 (good craft, no B2B), passed on #3 (overengineered portfolio). Pushing #2 to onsite.",
+    "summary": "Yuki (ex-Linear) advances to onsite round",
+    "event_date": "2026-04-07",
+    "importance": 0.68
+  },
+  {
+    "type": "episodic",
+    "content": "Onsite scheduled for Yuki: 4/14, morning design critique + lunch with Jenny, afternoon Sebastien + me. Priya prepping candidate brief (Clude stack: Figma, Notion, Linear, Slack; design process doc attached).",
+    "summary": "Yuki onsite confirmed for April 14",
+    "event_date": "2026-04-08",
+    "importance": 0.55
+  },
+  {
+    "type": "episodic",
+    "content": "Sebastien asked about Yuki's comp expectations in 1:1. Priya intel: last package at Linear was $175k + 0.08% equity. We're at $165k offer ceiling for this cycle. Flag for negotiation.",
+    "summary": "Comp gap identified before onsite: $175k vs $165k ceiling",
+    "event_date": "2026-04-09",
+    "importance": 0.58
+  },
+  {
+    "type": "procedural",
+    "content": "Designer onsite workflow: (1) 90min portfolio deep-dive with Jenny before candidate arrives, (2) live design exercise (2hr, open tools), (3) values/process Q&A, (4) team lunch, (5) exec chat. Feedback form due EOD same day.",
+    "summary": "Documented senior designer onsite interview process",
+    "event_date": "2026-04-10",
+    "importance": 0.72
+  },
+  {
+    "type": "episodic",
+    "content": "Yuki onsite happened today. Jenny: 'Design thinking is sharp, asked good questions about our data model. Worried about pace—wants to move slow on decision-making.' Sebastien positive on culture fit. I'm neutral pending full debrief.",
+    "summary": "Yuki onsite: strong design, decision-speed concern flagged",
+    "event_date": "2026-04-14",
+    "importance": 0.68
+  },
+  {
+    "type": "episodic",
+    "content": "Debrief meeting: Jenny +4 (Ari, Sebastien, Anya, me). Consensus: hire her. Ari raised velocity questions but Jenny said 'speed comes with codebase intimacy.' Sebastien: 'Let's move to offer.' Priya to prepare.",
+    "summary": "Hire decision made on Yuki, proceeding to offer",
+    "event_date": "2026-04-15",
+    "importance": 0.8
+  },
+  {
+    "type": "episodic",
+    "content": "Offer drafted: $165k base, 0.06% equity, 4-week onboarding plan (design systems audit weeks 1–2, sprint integration weeks 3–4). Start date: 5/6/26. Priya calling Yuki tomorrow morning.",
+    "summary": "Offer package finalized: $165k, 0.06%, start May 6",
+    "event_date": "2026-04-16",
+    "importance": 0.72
+  },
+  {
+    "type": "episodic",
+    "content": "Priya texted: Yuki counter on equity—asking 0.10%. Wants time to discuss with advisor. Not a hard no. Gave 48-hr window. Anya says 0.08% is max we can stretch without board approval. Waiting on response.",
+    "summary": "Yuki countered equity: 0.10% requested, 48-hr hold",
+    "event_date": "2026-04-17",
+    "importance": 0.65
+  },
+  {
+    "type": "self_model",
+    "content": "I notice I'm less patient with drawn-out negotiations than Sebastien is. Want closure; he sees it as relationship-building. Probably a liability on exec hires. Made note to discuss with Anya.",
+    "summary": "Self-awareness: impatience during offer negotiations",
+    "event_date": "2026-04-18",
+    "importance": 0.45
+  },
+  {
+    "type": "episodic",
+    "content": "Yuki accepted at 0.08% equity split the difference. Signed offer letter came back 4/21. James (new backend hire, started Mar) was on async Slack agreeing design hire solves bottleneck he'd flagged.",
+    "summary": "Yuki accepted offer at 0.08% equity, signed",
+    "event_date": "2026-04-21",
+    "importance": 0.78
+  },
+  {
+    "type": "episodic",
+    "content": "Sent Yuki welcome packet: company handbook (Linear doc), Figma org access, design rituals calendar (design review Tues/Thurs), onboarding checklist. Intro call scheduled 4/28 to walk through first-week priorities.",
+    "summary": "Onboarding materials sent, intro call scheduled 4/28",
+    "event_date": "2026-04-23",
+    "importance": 0.5
+  },
+  {
+    "type": "semantic",
+    "content": "Lessons learned from Yuki hire: (1) Ex-big-company designers negotiate equity hard; budget 0.08–0.10% for senior hires. (2) Speed concerns from eng lead worth taking seriously—onboarding plan should address. (3) Async offer feedback form cuts debrief time 30%.",
+    "summary": "Designer hire lessons: equity expectations, eng concerns, async docs",
+    "event_date": "2026-04-25",
+    "importance": 0.82
+  },
+  {
+    "type": "episodic",
+    "content": "Drafted hiring recap memo for Sebastien: Yuki starts 5/6, design systems audit first sprint, Jenny mentors onboarding. No surprises. Flagged next gap: content/web design (copywriting, landing pages). Priya to scope in May.",
+    "summary": "Hiring recap sent; flagged next design hire for pipeline",
+    "event_date": "2026-04-29",
+    "importance": 0.55
+  }
+]

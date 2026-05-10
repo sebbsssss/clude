@@ -120,13 +120,18 @@ export async function initDatabase(): Promise<void> {
           is_active BOOLEAN DEFAULT TRUE,
           metadata JSONB DEFAULT '{}',
           owner_wallet TEXT,
-          privy_did TEXT
+          privy_did TEXT,
+          email TEXT
         );
+
+        -- Backfill: older deployments may have agent_keys without the email column.
+        ALTER TABLE agent_keys ADD COLUMN IF NOT EXISTS email TEXT;
 
         CREATE INDEX IF NOT EXISTS idx_agent_keys_api_key ON agent_keys(api_key);
         CREATE INDEX IF NOT EXISTS idx_agent_keys_owner ON agent_keys(owner_wallet);
         CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_keys_owner_unique ON agent_keys(owner_wallet) WHERE owner_wallet IS NOT NULL;
         CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_keys_privy_did ON agent_keys(privy_did) WHERE privy_did IS NOT NULL;
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_keys_email ON agent_keys(email) WHERE email IS NOT NULL AND is_active = true;
 
         -- Cortex recall performance: owner_wallet scoped queries
         CREATE INDEX IF NOT EXISTS idx_cortex_owner_recall ON memories(owner_wallet, decay_factor DESC, created_at DESC);

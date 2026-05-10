@@ -1,0 +1,72 @@
+[
+  {
+    "type": "episodic",
+    "content": "Jenny flagged in Slack that dropping Figma Dev Mode would kill design-eng collaboration. She'd pushed back hard on the cost-cutting angle, saying handoff friction alone would tank velocity.",
+    "summary": "Jenny argues keeping Figma Dev Mode for eng collaboration",
+    "event_date": "2026-04-14",
+    "importance": 0.5
+  },
+  {
+    "type": "semantic",
+    "content": "Figma renewal is due 2026-05-15. Current spend: $15/seat × 25 engineers with Dev Mode access = $375/mo. Anya's ask: drop Dev Mode entirely, save $4.5k/year. Jenny counters: kills real-time design-code sync.",
+    "summary": "Figma Dev Mode costs $375/mo across 25 eng seats; renewal in May",
+    "event_date": "2026-04-15",
+    "importance": 0.75
+  },
+  {
+    "type": "episodic",
+    "content": "Caught Anya and Jenny talking past each other in standup. Anya was fixated on line-item savings; Jenny kept saying 'you don't get it, it's not just UI.' Needed to step in and table it for async.",
+    "summary": "Anya and Jenny at odds over Dev Mode necessity vs. cost",
+    "event_date": "2026-04-16",
+    "importance": 0.4
+  },
+  {
+    "type": "procedural",
+    "content": "When renewal disagreements arise: (1) get cost baseline and exact user count in writing from Finance, (2) map actual usage by role/team, (3) ask product lead + eng lead separately why they need it, (4) propose tiered access before full cuts.",
+    "summary": "Renewal negotiation playbook: cost baseline → usage map → role-based proposal",
+    "event_date": "2026-04-17",
+    "importance": 0.68
+  },
+  {
+    "type": "semantic",
+    "content": "Dev Mode pricing: Figma charges per-seat on Professional plan. Our 25 eng seats at $15/seat/mo = standard Figma Professional tier. Anya's proposal saves $4.5k/year but assumes zero productivity loss.",
+    "summary": "Figma per-seat cost structure and annual savings math",
+    "event_date": "2026-04-18",
+    "importance": 0.62
+  },
+  {
+    "type": "episodic",
+    "content": "Lina weighed in via Notion doc: 'Dev Mode is table stakes for anything we ship to Acme/Initech—they watch design implementation.' That pushed things. Anya didn't dispute it, just sighed.",
+    "summary": "Lina: Dev Mode is customer-facing requirement for enterprise deals",
+    "event_date": "2026-04-21",
+    "importance": 0.55
+  },
+  {
+    "type": "semantic",
+    "content": "Compromise decision: keep Figma Dev Mode for staff+ engineers only (Ari, Devon, James, Tom = 4 seats). Drop it for remaining 21 eng seats. Cost: $60/mo instead of $375/mo. Saves ~$3.8k/year, keeps design-eng sync for core builders.",
+    "summary": "Staff+ engineers keep Dev Mode; juniors/mid-level drop it ($3.8k/yr save)",
+    "event_date": "2026-04-22",
+    "importance": 0.82
+  },
+  {
+    "type": "self_model",
+    "content": "I notice I default to 'table it for async' when there's friction, which works but sometimes delays the decision. In this case, waiting for Lina's input actually helped—she reframed it from cost to customer impact. Lesson: sometimes the slowdown clarifies things.",
+    "summary": "Maya's note on async delay: slowness sometimes clarifies frames",
+    "event_date": "2026-04-23",
+    "importance": 0.45
+  },
+  {
+    "type": "procedural",
+    "content": "After renewal deal closes: document the seat tier decision in 1Password shared vault under 'SaaS Subscriptions' so Anya, Priya, and future ops person don't re-argue this. Include rationale (design-eng velocity + customer expectations).",
+    "summary": "Post-renewal: document tiered seat decisions in shared vault with rationale",
+    "event_date": "2026-04-24",
+    "importance": 0.65
+  },
+  {
+    "type": "episodic",
+    "content": "Sent renewal approval to Sebastien with the staff+ tier plan. He replied in 2 min: 'Good call, keeps Jenny and Ari happy without bleeding cash.' Renewal locked for 2026-05-15.",
+    "summary": "Sebastien approves tiered Dev Mode plan; renewal confirmed for May",
+    "event_date": "2026-04-25",
+    "importance": 0.58
+  }
+]

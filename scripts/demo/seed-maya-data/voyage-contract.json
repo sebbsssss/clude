@@ -1,0 +1,86 @@
+[
+  {
+    "type": "episodic",
+    "content": "Ari flagged Voyage embedding costs climbing to $8.2k/month. We're at 120M tokens/week—contract renewal coming up. Asked Anya to explore volume tiers before we auto-renew.",
+    "summary": "Voyage costs escalating; Anya to investigate volume discounts",
+    "event_date": "2026-03-10",
+    "importance": 0.58
+  },
+  {
+    "type": "semantic",
+    "content": "Voyage AI volume pricing: 30% discount on list rate for 12-month prepay commitment. Our usage tier qualifies ($42k annual prepay vs. ~$98k on-demand). Standard SaaS move—lock in runway predictability.",
+    "summary": "Voyage 30% volume discount available for 12mo prepay",
+    "event_date": "2026-03-11",
+    "importance": 0.72
+  },
+  {
+    "type": "episodic",
+    "content": "Voyage AE sent contract with 30% terms. Anya reviewed, flagged no hidden egress fees or rate-lock clauses post-year-one. Clean deal. Sent to Sebastien for sign-off on $42k outlay.",
+    "summary": "Voyage contract clean; awaiting Sebastien approval on $42k",
+    "event_date": "2026-03-12",
+    "importance": 0.52
+  },
+  {
+    "type": "semantic",
+    "content": "Decision: prepay vendor contracts when discount > 20% and usage is stable for 12mo+ forecast. Voyage fits. Locks cash flow certainty and avoids monthly negotiation drift.",
+    "summary": "Prepay contracts when >20% discount + 12mo stable forecast",
+    "event_date": "2026-03-13",
+    "importance": 0.68
+  },
+  {
+    "type": "procedural",
+    "content": "When vendor contract arrives: (1) Finance does rate/terms audit, (2) Ops checks SLA/support clauses, (3) CEO approves >$30k spend, (4) file signed copy in shared drive under Vendor/[Name]/Current. Voyage contract cycle: 2 days.",
+    "summary": "Vendor contract approval workflow and filing process",
+    "event_date": "2026-03-14",
+    "importance": 0.75
+  },
+  {
+    "type": "episodic",
+    "content": "Sebastien approved Voyage prepay. Anya signed $42k contract on 2026-03-15. Covers 120M tokens/week through Q1 2027. Gave us ~2 week buffer before we'd hit any overage thresholds at current usage slope.",
+    "summary": "Anya signed Voyage $42k prepay contract; covers through Q1 2027",
+    "event_date": "2026-03-15",
+    "importance": 0.61
+  },
+  {
+    "type": "semantic",
+    "content": "Embedding cost per 1M tokens from Voyage: ~$0.035 on list, ~$0.0245 prepaid. Our monthly volume ~480M = $11.76k on-demand, $11.76k→$8.2k prepaid. Margin gain: ~$3.5k/month ops efficiency.",
+    "summary": "Voyage pricing structure: $0.035 list, $0.0245 prepaid",
+    "event_date": "2026-03-16",
+    "importance": 0.79
+  },
+  {
+    "type": "self_model",
+    "content": "I default to 'prepay when you can forecast' because month-to-month with vendors is just debt-by-another-name—you lose leverage, margin, and headspace. Prepay is boring but it's the move.",
+    "summary": "I favor prepay contracts for cash flow predictability",
+    "event_date": "2026-03-17",
+    "importance": 0.54
+  },
+  {
+    "type": "episodic",
+    "content": "Devon asked if embedding contract covers the new Wayne Industries pilot (200M tokens/week estimate). Checked with Anya—$42k prepay has 150M soft cap per month; pilot might overage. Will renegotiate in May if they sign.",
+    "summary": "Wayne Industries pilot may breach Voyage monthly cap; renegotiate May",
+    "event_date": "2026-03-20",
+    "importance": 0.64
+  },
+  {
+    "type": "semantic",
+    "content": "Vendor contracts need re-baselining quarterly. Usage grows 15–20%/quarter. Voyage deal assumed 120M tokens/week static; if Initech or Wayne close, we'll hit 180M+ in Q2. Early renegotiation cost-effective vs. overage penalties.",
+    "summary": "Usage grows 15–20%/qtr; rebaseline vendor contracts quarterly",
+    "event_date": "2026-03-21",
+    "importance": 0.73
+  },
+  {
+    "type": "procedural",
+    "content": "To track vendor prepay status: (1) Add contract to Notion Vendor Registry with renewal date, (2) set Slack reminder 60 days pre-expiry, (3) loop Anya and Ari on usage trend vs. contract cap. Voyage: expires 2027-03-15.",
+    "summary": "Vendor prepay tracking: Notion + Slack reminder + stakeholder loop",
+    "event_date": "2026-03-22",
+    "importance": 0.71
+  },
+  {
+    "type": "episodic",
+    "content": "Anya sent post-signature summary to Sebastien, Ari, me. Voyage prepay locks Q1–Q4 2026 embedding budget at $42k (vs. ~$98k on-demand trajectory). Freed up ~$56k for hiring or AWS. Cleanest vendor move this quarter.",
+    "summary": "Voyage prepay saves ~$56k vs on-demand; budget flexibility gained",
+    "event_date": "2026-03-25",
+    "importance": 0.65
+  }
+]
