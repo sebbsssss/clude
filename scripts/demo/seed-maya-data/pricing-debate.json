@@ -1,0 +1,114 @@
+[
+  {
+    "type": "episodic",
+    "content": "Anya sent a pricing model spreadsheet at 2:14pm showing per-seat tiers: Starter $299/mo (3 seats), Pro $799/mo (10 seats), Enterprise custom. She noted predictability aids forecasting. Sebastien hasn't replied yet.",
+    "summary": "Anya proposes per-seat pricing model with three tiers",
+    "event_date": "2026-02-04",
+    "importance": 0.48
+  },
+  {
+    "type": "semantic",
+    "content": "Per-seat pricing locks revenue by headcount; per-token scales with actual usage. Finance prefers seats (budgeting clarity). Product/engineering worry seats cap growth if customers add users but don't increase token spend.",
+    "summary": "Core tension: seats = budgeting predictability vs. tokens = usage alignment",
+    "event_date": "2026-02-04",
+    "importance": 0.72
+  },
+  {
+    "type": "episodic",
+    "content": "Sebastien said in standup: 'I want pricing that doesn't penalize power users. A seat model feels like 2010.' Lina nodded; Anya stayed quiet. Decision deferred to next Thursday meeting.",
+    "summary": "Sebastien rejects per-seat; Lina aligns with usage-based thinking",
+    "event_date": "2026-02-05",
+    "importance": 0.62
+  },
+  {
+    "type": "procedural",
+    "content": "When pricing debates arise, always document the core assumption each stakeholder is protecting: finance = cash predictability, product = customer lock-in avoidance, CEO = margin protection. Gets revisited. Write it down the same day.",
+    "summary": "Protocol: surface and document assumptions in pricing disagreements",
+    "event_date": "2026-02-05",
+    "importance": 0.58
+  },
+  {
+    "type": "semantic",
+    "content": "Acme Corp (our biggest customer, $40k ARR) would hit 12 users by Q2. Under Anya's per-seat model at $80/seat, that's $11.5k/mo. They currently use ~2.1M tokens/mo; per-token at $0.004/k tokens = $8.4k/mo. Anya's model wins here.",
+    "summary": "Per-seat model favors Clude on Acme's growth trajectory",
+    "event_date": "2026-02-06",
+    "importance": 0.69
+  },
+  {
+    "type": "episodic",
+    "content": "Anya came to my desk with her laptop. 'Look, we're at $1.2M ARR. Per-seat gets us to $1.8M by EOY if we land 3 more mid-market deals. Per-token keeps us flatter.' She was visibly stressed about guidance.",
+    "summary": "Anya crunches numbers; per-seat scenario shows 50% upside vs. per-token",
+    "event_date": "2026-02-10",
+    "importance": 0.56
+  },
+  {
+    "type": "semantic",
+    "content": "Per-token pricing risks: customers will optimize token usage (compression, caching, model selection), eroding revenue. Per-seat risks: customers stay on free tier longer or negotiate for user bundling. Both have leakage vectors.",
+    "summary": "Both models have hidden erosion mechanisms; pure comparison misleading",
+    "event_date": "2026-02-10",
+    "importance": 0.75
+  },
+  {
+    "type": "procedural",
+    "content": "Before any pricing decision at Clude: run sensitivity on top 5 customers with actual usage data. Forecast 12-month revenue under both models. Share results in one doc; note which model breaks ties. No re-running the math later.",
+    "summary": "Pricing decision SOP: model top 5 customers, 12-month forecast, one source of truth",
+    "event_date": "2026-02-11",
+    "importance": 0.68
+  },
+  {
+    "type": "episodic",
+    "content": "Lina said in Slack: 'If we're per-seat, we have to cap token usage or customers will max out and complain.' Anya replied: 'That's a support nightmare.' Sebastien said nothing. Both points are valid. Deadlock feeling real.",
+    "summary": "Product constraint: per-seat + uncapped tokens = broken unit economics",
+    "event_date": "2026-02-12",
+    "importance": 0.65
+  },
+  {
+    "type": "semantic",
+    "content": "Initech (prospect, $30k/mo budget) is deciding between us and Voyage AI. Their usage pattern is bursty (research sprints). Per-token punishes them badly on spike months; per-seat would let them absorb variance without billing shock.",
+    "summary": "Per-seat favors bursty usage; per-token punishes variance",
+    "event_date": "2026-02-13",
+    "importance": 0.71
+  },
+  {
+    "type": "episodic",
+    "content": "Sebastien asked me in 1:1: 'What's the right answer?' I said: 'Hybrid. Per-seat base + overage tokens at $0.002/k above the tier allowance. Sebastien got quiet, then: 'Write that up. Friday. One page.'",
+    "summary": "Sebastien opens door to hybrid model; requests RFC by Friday",
+    "event_date": "2026-02-17",
+    "importance": 0.74
+  },
+  {
+    "type": "semantic",
+    "content": "Hybrid per-seat + token overage model: Starter $299/mo (3 seats, 500k tokens/mo), Pro $799/mo (10 seats, 2M tokens/mo), overages $0.002/k. Balances Anya's predictability need with Sebastien's usage alignment + Lina's customer fairness concern.",
+    "summary": "Hybrid pricing bridges all three stakeholder concerns",
+    "event_date": "2026-02-17",
+    "importance": 0.82
+  },
+  {
+    "type": "self_model",
+    "content": "I realized I dislike pricing debates because they have no 'right answer'—only tradeoffs that lock in for 18 months. I respond by documenting assumptions hard and pushing for small bets (pilots, grandfathering). It delays consensus but reduces regret.",
+    "summary": "Maya's approach: doc assumptions, pilot changes, accept delayed closure",
+    "event_date": "2026-02-18",
+    "importance": 0.51
+  },
+  {
+    "type": "episodic",
+    "content": "Anya read my hybrid RFC. 'Token overages will be a support drain.' Sebastien said: 'Less than a pure per-seat hard cap. Run the Acme and Initech scenarios.' Anya agreed to model it. Finally moving.",
+    "summary": "Anya accepts hybrid model; modeling begins on key accounts",
+    "event_date": "2026-02-19",
+    "importance": 0.64
+  },
+  {
+    "type": "semantic",
+    "content": "Decision rule agreed: if hybrid model shows <5% revenue difference vs. per-seat on top 10 customers, adopt it. If overage support overhead exceeds 2 hours/week, revert to pure per-seat. Testable, reversible.",
+    "summary": "Hybrid model adopted with success metrics and reversion clause",
+    "event_date": "2026-02-26",
+    "importance": 0.79
+  },
+  {
+    "type": "semantic",
+    "content": "Pricing locked: Starter $299/mo (3 seats, 500k tokens), Pro $799/mo (10 seats, 2M tokens), Enterprise custom. Overages $0.002/k tokens. Grandfathered existing customers on old terms for 12 months. Rollout: Q1 2026.",
+    "summary": "Hybrid pricing model finalized and scheduled for Q1 rollout",
+    "event_date": "2026-02-26",
+    "importance": 0.88
+  }
+]

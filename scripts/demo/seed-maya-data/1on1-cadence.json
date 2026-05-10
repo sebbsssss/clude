@@ -1,0 +1,100 @@
+[
+  {
+    "type": "episodic",
+    "content": "Anya flagged that our AWS spend hit $47k in Oct, up 18% QoQ. Proposed moving non-prod to spot instances. I approved and told her to loop Devon + Ari into implementation plan by EOW.",
+    "summary": "AWS cost spike flagged; spot instance migration approved.",
+    "event_date": "2025-11-12",
+    "importance": 0.58
+  },
+  {
+    "type": "semantic",
+    "content": "1:1 format is: async written prep 24h before sync (owner writes 3-4 bullets on wins/blockers), then 25min video. No meeting notes—owner writes recap same day. Reinforced quarterly w/ all 1:1 partners.",
+    "summary": "Standard 1:1 format: async prep + 25min sync + recap.",
+    "event_date": "2025-11-15",
+    "importance": 0.72
+  },
+  {
+    "type": "procedural",
+    "content": "When 1:1 partner misses async prep, don't reschedule—send Slack reminder 18h before sync with link to doc. If still blank 30min before call, make notes yourself on what you want to cover and flag the pattern in recap.",
+    "summary": "Procedure for unprepared 1:1: reminder, self-note, pattern flag.",
+    "event_date": "2025-11-18",
+    "importance": 0.65
+  },
+  {
+    "type": "procedural",
+    "content": "Before quarterly cadence reinforcement (Jan, Apr, Jul, Oct): audit all 1:1 recap docs for gaps, tag missing summaries, send template refresh to all partners. Takes ~90min.",
+    "summary": "Quarterly 1:1 audit: check recaps, send template refresh.",
+    "event_date": "2025-12-01",
+    "importance": 0.68
+  },
+  {
+    "type": "episodic",
+    "content": "Marcus asked if CS 1:1s could shift from Wed to Tue because Acme Corp product calls moved. I approved, updated Slack workflow to reflect. Reminded him async prep still due Mon 5pm.",
+    "summary": "CS 1:1 shifted Tue; prep deadline stays Mon 5pm.",
+    "event_date": "2025-12-10",
+    "importance": 0.42
+  },
+  {
+    "type": "semantic",
+    "content": "Yara is Maya's 1:1 partner (started Nov 2025). Yara's role: PMs + comms. 1:1 rhythm: every other Thu. Yara tends to prep late but recaps are thorough.",
+    "summary": "Yara: PM + comms lead, Thu 1:1s, slow prep, good recaps.",
+    "event_date": "2025-12-12",
+    "importance": 0.51
+  },
+  {
+    "type": "self_model",
+    "content": "I resent explaining the same process twice. When someone doesn't read the recap or asks a question already covered, I get sharp. Need to own that—maybe send proactive 'last 3 recaps summary' quarterly instead of assuming people review.",
+    "summary": "Tendency to get sharp when context repeats; need proactive summaries.",
+    "event_date": "2026-01-08",
+    "importance": 0.61
+  },
+  {
+    "type": "procedural",
+    "content": "Recap structure: start w/ blockers cleared, then wins, then forward priorities. Blockers go bold. If any item touches >1 function (e.g., eng + design), @-tag those leads. Max 150 words. Timestamp the recap.",
+    "summary": "Recap format: blockers first, wins, priorities, cross-function tags.",
+    "event_date": "2026-01-15",
+    "importance": 0.74
+  },
+  {
+    "type": "episodic",
+    "content": "Anya's 1:1 (Jan 22): flagged that Notion integration for finance docs is brittle. We agreed to test Airtable in Feb, budget $2k for trial. I noted it in her recap and asked her to own the RFP.",
+    "summary": "Finance docs system trial: Airtable RFP, $2k budget, Feb timeline.",
+    "event_date": "2026-01-22",
+    "importance": 0.55
+  },
+  {
+    "type": "semantic",
+    "content": "Marcus (CS Lead) 1:1 partners with Maya. Rhythm: weekly Tue 10am. Marcus owns customer escalations + onboarding. Prep quality varies; recaps are crisp when he prepares.",
+    "summary": "Marcus: weekly Tue CS 1:1s, variable prep, solid recaps.",
+    "event_date": "2026-02-03",
+    "importance": 0.52
+  },
+  {
+    "type": "procedural",
+    "content": "If a blocker resurfaces 2+ times in recaps, schedule a separate 45min working session w/ relevant stakeholders. Note in recap: 'Blocker flagged 3x—session scheduled [date].' Don't let it drift.",
+    "summary": "Recurring blockers trigger dedicated working sessions.",
+    "event_date": "2026-02-18",
+    "importance": 0.71
+  },
+  {
+    "type": "episodic",
+    "content": "Q1 cadence reinforcement sent Jan 2. Yara missed two recaps in Feb; I called her on it, she apologized and blamed project crunch. We added a 'skip protocol' to the template for overload weeks.",
+    "summary": "Q1 reinforcement; added skip protocol for high-pressure weeks.",
+    "event_date": "2026-02-26",
+    "importance": 0.48
+  },
+  {
+    "type": "self_model",
+    "content": "I lean on async because I can't repeat context. I'm more patient with people who prepare thoroughly even if they're blunt. Realize I'm probably harder on partners who wing it + apologize after.",
+    "summary": "Async-first bias; less tolerant of unprepared wing-it approaches.",
+    "event_date": "2026-03-10",
+    "importance": 0.59
+  },
+  {
+    "type": "procedural",
+    "content": "Monthly: pull 1:1 recap tags (cross-function items) and forward to relevant leads by 1st of month. This surfaces systemic blockers that need executive visibility. File in shared Notion db under 'Ops Blocker Log'.",
+    "summary": "Monthly: aggregate cross-func blockers, file in Ops Blocker Log.",
+    "event_date": "2026-04-01",
+    "importance": 0.69
+  }
+]

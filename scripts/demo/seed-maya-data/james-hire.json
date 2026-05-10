@@ -1,0 +1,156 @@
+[
+  {
+    "type": "episodic",
+    "content": "Ari flagged James's GitHub profile during backend hiring push. Strong systems design work, particularly around distributed caching. Pulled him into initial screening list.",
+    "summary": "Ari identified James as backend candidate via GitHub",
+    "event_date": "2026-02-09",
+    "importance": 0.42
+  },
+  {
+    "type": "episodic",
+    "content": "Scheduled phone screen with James for Feb 18. Ari prepped talking points on our query optimization challenges. James apparently worked at scale before.",
+    "summary": "James phone screen scheduled for Feb 18",
+    "event_date": "2026-02-10",
+    "importance": 0.35
+  },
+  {
+    "type": "episodic",
+    "content": "Phone screen with James went 45 min, ran long. Asked tough questions about our embedding pipeline bottleneck. He identified two potential refactors immediately. Ari was impressed.",
+    "summary": "James phone screen: strong on pipeline architecture",
+    "event_date": "2026-02-18",
+    "importance": 0.58
+  },
+  {
+    "type": "semantic",
+    "content": "James has production experience scaling systems to 100M+ events/day. Previously at infrastructure team at mid-stage fintech. Comfortable with Postgres, Redis, event streaming. No Python, but picks up languages fast.",
+    "summary": "James background: fintech infra, event streaming, scale",
+    "event_date": "2026-02-19",
+    "importance": 0.72
+  },
+  {
+    "type": "episodic",
+    "content": "Coordinated onsite for James on Mar 2. Scheduled with Ari (systems design deep dive), Devon (architecture review), Jenny (casual lunch, culture fit), Lina (product context).",
+    "summary": "James onsite scheduled Mar 2, four-person panel",
+    "event_date": "2026-02-24",
+    "importance": 0.5
+  },
+  {
+    "type": "episodic",
+    "content": "Anya asked about James's comp expectations in prep. He said $200-230k base range, open on equity if upside clear. Flagged he's currently in backfill period, loose timeline.",
+    "summary": "James comp expectations: $200-230k base, flexible equity",
+    "event_date": "2026-02-25",
+    "importance": 0.48
+  },
+  {
+    "type": "episodic",
+    "content": "Mar 2 onsite. James pushed back on Devon's proposed SQL denormalization schema for agent state snapshots—too brittle, suggested event sourcing pattern instead. Team respected the critique. Not a pushover.",
+    "summary": "James onsite: questioned SQL design, advocated for events",
+    "event_date": "2026-03-02",
+    "importance": 0.68
+  },
+  {
+    "type": "episodic",
+    "content": "Debrief with Ari, Devon, Lina after James's onsite. All three thumbs up. Ari: 'He'll push back, which we need.' Devon: 'Knows what he doesn't know.' Lina liked his product intuition.",
+    "summary": "Post-onsite debrief: unanimous positive signals",
+    "event_date": "2026-03-03",
+    "importance": 0.62
+  },
+  {
+    "type": "episodic",
+    "content": "Drafted offer for James: $215k base, 0.4% equity, 4-year vest. Sent to Anya for approval before extending. Positioned senior IC track, not management.",
+    "summary": "James offer: $215k base, 0.4% equity, 4yr vest",
+    "event_date": "2026-03-04",
+    "importance": 0.7
+  },
+  {
+    "type": "semantic",
+    "content": "Decision: 0.4% equity for James reflects senior backend level and market rate for Series B SaaS. 0.3% would've felt tight given his seniority and what we've offered recent hires.",
+    "summary": "0.4% equity justified by seniority and market",
+    "event_date": "2026-03-04",
+    "importance": 0.78
+  },
+  {
+    "type": "episodic",
+    "content": "Extended offer to James via email. Gave him until Mar 10 EOD to decide. Emphasized timeline to onboard before Q2 roadmap crunch. No pressure, but signal the urgency.",
+    "summary": "Offer extended to James, decision deadline Mar 10",
+    "event_date": "2026-03-05",
+    "importance": 0.55
+  },
+  {
+    "type": "episodic",
+    "content": "James asked for 24hr extension on offer decision. Mentioned competing offer from Stripe, but told them he wanted to think through Clude's product vision fit. Granted extension to Mar 11.",
+    "summary": "James requested extension due to competing Stripe offer",
+    "event_date": "2026-03-09",
+    "importance": 0.65
+  },
+  {
+    "type": "episodic",
+    "content": "James accepted offer Mar 12, 2pm. Asked to start Apr 1 for short notice period at current employer. Requested onboarding focus on system architecture, not intro docs. Smart self-direction.",
+    "summary": "James accepted offer, starts Apr 1, wants arch deep-dive",
+    "event_date": "2026-03-12",
+    "importance": 0.75
+  },
+  {
+    "type": "episodic",
+    "content": "Notified Ari, Devon, Lina that James accepted. Ari immediately blocked calendar for Apr 1-3 systems design sessions. Devon volunteered to prep codebase walkthrough.",
+    "summary": "Team notified of James acceptance, onboarding blocked",
+    "event_date": "2026-03-12",
+    "importance": 0.5
+  },
+  {
+    "type": "procedural",
+    "content": "When assessing senior backend candidates: (1) check GitHub for systems work first, (2) phone screen on specific infrastructure problem, (3) onsite should include architecture debate, not just trivia, (4) cultural signal is intellectual honesty, pushback = good.",
+    "summary": "Senior backend hiring process crystallized from James search",
+    "event_date": "2026-03-12",
+    "importance": 0.81
+  },
+  {
+    "type": "semantic",
+    "content": "James's pushback on SQL schema in onsite—event sourcing counter-proposal—is now reference point for 'the kind of thinking we want.' Mentioned it to Priya for future senior IC interviews.",
+    "summary": "James's arch critique sets bar for senior IC rigor",
+    "event_date": "2026-03-12",
+    "importance": 0.73
+  },
+  {
+    "type": "episodic",
+    "content": "Anya asked about James's start-date payroll. Confirmed Apr 1 is firm. Priya to set up equipment order, Slack access, GitHub org. Tom will do basic infra onboarding.",
+    "summary": "Payroll and admin setup confirmed for James Apr 1 start",
+    "event_date": "2026-03-12",
+    "importance": 0.4
+  },
+  {
+    "type": "self_model",
+    "content": "James hiring took 32 days start-to-accept. Faster than usual, helped by Ari's sourcing and team's speed to consensus. Realized I don't loop in enough on competitive offers—should ask candidates earlier, adjust timeline if needed.",
+    "summary": "James hire was fast; need better competitive offer intel",
+    "event_date": "2026-03-12",
+    "importance": 0.58
+  },
+  {
+    "type": "episodic",
+    "content": "Slack note to Sebastien: James confirmed, starts Apr 1, $215k base, 0.4%, strong fit on systems design. Mentioned he flagged SQL schema risk in onsite—good signal he'll improve codebase thinking.",
+    "summary": "Updated Sebastien on James acceptance and onsite impression",
+    "event_date": "2026-03-12",
+    "importance": 0.62
+  },
+  {
+    "type": "episodic",
+    "content": "Moved James into 'Active Hires' spreadsheet. Flagged for Q1 board update: senior backend slot filled, now open to evaluate frontend/data roles for Q2 hiring.",
+    "summary": "James tracked in hiring pipeline, frontend next",
+    "event_date": "2026-03-13",
+    "importance": 0.45
+  },
+  {
+    "type": "semantic",
+    "content": "Stripe competing offer for James means market is tight for senior backend talent. If we want to close faster next time, need offers within 24-48hrs of interview loop, or risk losing to bigger players.",
+    "summary": "Stripe competition signals need for faster offer turnaround",
+    "event_date": "2026-03-12",
+    "importance": 0.72
+  },
+  {
+    "type": "episodic",
+    "content": "Added James to Apr all-hands slide deck under 'New Team Members.' Ari prepping brief tech intro (no spoilers on system work yet). First day landing pad: systems docs, codebase tour, then deep dives.",
+    "summary": "James added to all-hands, Apr 1 onboarding deck underway",
+    "event_date": "2026-03-13",
+    "importance": 0.35
+  }
+]

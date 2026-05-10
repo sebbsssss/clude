@@ -249,11 +249,13 @@ export function CcChat({
   }, [settled]);
 
   const recalledMemories = useMemo<V2Memory[]>(() => {
+    // Only memories the assistant actually pulled into the most recent reply
+    // count as "recalled". Pre-first-reply this is empty by design — the pill
+    // surfaces the stored total instead so the user sees memory presence
+    // without us pretending something was recalled.
     const hits = recent.filter((m) => lastAssistantRecalledIds.has(m.id));
-    if (hits.length > 0) return hits.map(toV2Memory);
-    // Fallback while no assistant reply yet: show the newest few memories as "recalled".
-    return recentV2.slice(0, Math.min(4, recentV2.length));
-  }, [recent, lastAssistantRecalledIds, recentV2]);
+    return hits.map(toV2Memory);
+  }, [recent, lastAssistantRecalledIds]);
 
   const backgroundMemories = useMemo<V2Memory[]>(() => {
     const recalledSet = new Set(recalledMemories.map((m) => m.id));
@@ -372,6 +374,7 @@ export function CcChat({
           <div className="cc-scroll__inner">
             <CcMemoryPill
               recalledCount={recalledMemories.length}
+              storedCount={memHook.stats?.total ?? 0}
               onOpen={() => setMemoryOpen(true)}
             />
             {v2Messages.map((m) => (

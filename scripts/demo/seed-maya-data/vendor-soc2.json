@@ -1,0 +1,114 @@
+[
+  {
+    "type": "episodic",
+    "content": "Anya flagged that we're missing SOC2 reports from five vendors on our subprocessor list: AWS, Anthropic, Voyage AI, Privy, Supabase. She'd pulled the compliance checklist for Q1 and marked them red. This is blocking our own SOC2 renewal.",
+    "summary": "Anya identified 5 missing vendor SOC2 reports",
+    "event_date": "2026-03-09",
+    "importance": 0.62
+  },
+  {
+    "type": "semantic",
+    "content": "Subprocessor SOC2 audit is critical path for customer trust. Acme Corp explicitly requested evidence of vendor compliance in their recent contract negotiation. Missing reports = can't close larger deals.",
+    "summary": "SOC2 vendor reports required for customer contracts",
+    "event_date": "2026-03-10",
+    "importance": 0.78
+  },
+  {
+    "type": "procedural",
+    "content": "Process: request SOC2 from vendor via official support channel, reference contract clause 7.2 (data protection obligations), give 5-day SLA. If no response, escalate to Anya for vendor relationship leverage. Document all requests in Linear ticket.",
+    "summary": "Vendor SOC2 request workflow: support → clause ref → escalate",
+    "event_date": "2026-03-10",
+    "importance": 0.81
+  },
+  {
+    "type": "procedural",
+    "content": "AWS SOC2 Type II report accessible via AWS Artifact portal—no separate request needed. Download directly, verify signature date (must be within 12 months), store in 1Password vault under 'Vendor Compliance.' Check annual renewal date: 2026-12-15.",
+    "summary": "AWS SOC2 via Artifact portal; expires 2026-12-15",
+    "event_date": "2026-03-10",
+    "importance": 0.84
+  },
+  {
+    "type": "episodic",
+    "content": "Called Voyage AI support directly on Mar 11. Their compliance officer is Rajesh Patel (rajesh@voyage.ai). He said their SOC2 is in 'final audit phase' and will be ready by Mar 20. I noted the deadline in Linear and set a follow-up alarm.",
+    "summary": "Voyage AI SOC2 ready by Mar 20 (Rajesh Patel)",
+    "event_date": "2026-03-11",
+    "importance": 0.55
+  },
+  {
+    "type": "procedural",
+    "content": "For SaaS vendors (Anthropic, Voyage, Supabase), always request SOC2 Type II with at least 6-month attestation period. Type I reports are insufficient for enterprise customers. Verify attestation dates cover our contract period.",
+    "summary": "Require SOC2 Type II with 6+ month attestation",
+    "event_date": "2026-03-11",
+    "importance": 0.79
+  },
+  {
+    "type": "semantic",
+    "content": "Anthropic is critical subprocessor (LLM inference). Their compliance posture directly impacts our customer commitments. Late reports from them are higher risk than commodity vendors like Supabase.",
+    "summary": "Anthropic compliance status higher priority than others",
+    "event_date": "2026-03-12",
+    "importance": 0.82
+  },
+  {
+    "type": "episodic",
+    "content": "Sent formal SOC2 request to Anthropic's compliance email (compliance@anthropic.com) on Mar 12. Reference: our enterprise agreement, clause 3.4. Expected response within 5 days. Marked red in Linear, assigned to Anya as backup.",
+    "summary": "Anthropic SOC2 requested; compliance@anthropic.com",
+    "event_date": "2026-03-12",
+    "importance": 0.68
+  },
+  {
+    "type": "self_model",
+    "content": "I hate chasing vendors for docs. It's async theater—they ignore the first request, respond late to the second. But it's non-negotiable for enterprise sales. I need to document every attempt so when they *finally* send it, we have proof of diligence.",
+    "summary": "Vendor chasing is tedious but essential for audit trail",
+    "event_date": "2026-03-12",
+    "importance": 0.48
+  },
+  {
+    "type": "procedural",
+    "content": "Store all vendor SOC2 reports in shared 1Password vault: 'Compliance/Vendor_SOC2' folder. Name files as: '[VENDOR]_SOC2_[REPORT_DATE]_[ATTESTATION_END_DATE].pdf'. Include metadata: received date, expiration, signatory info.",
+    "summary": "SOC2 filing: 1Password vault with standardized naming",
+    "event_date": "2026-03-13",
+    "importance": 0.76
+  },
+  {
+    "type": "episodic",
+    "content": "Privy support came back immediately (Mar 14) saying they're a data processor, not infrastructure provider, so they don't have SOC2. They pointed to their DPA instead. Anya confirmed that's acceptable; we'll use DPA as evidence for that line item.",
+    "summary": "Privy: processor status; DPA substitutes for SOC2",
+    "event_date": "2026-03-14",
+    "importance": 0.59
+  },
+  {
+    "type": "procedural",
+    "content": "Vendor compliance matrix: SOC2 required for infra/processing (AWS, Anthropic, Voyage, Supabase). DPA acceptable for data processors (Privy, Cloudflare). Update matrix monthly and send summary to Sebastien and Anya by end of quarter.",
+    "summary": "Compliance matrix: SOC2 vs. DPA rules by vendor type",
+    "event_date": "2026-03-14",
+    "importance": 0.8
+  },
+  {
+    "type": "episodic",
+    "content": "Anthropic finally responded on Mar 24—three days after the deadline. Report is current (attestation ends 2026-09-30). They cited 'unusually high demand' for their compliance docs. I'm noting this for future negotiation leverage with Sebastien.",
+    "summary": "Anthropic SOC2 arrived late (Mar 24); attestation ends Sep 2026",
+    "event_date": "2026-03-24",
+    "importance": 0.65
+  },
+  {
+    "type": "semantic",
+    "content": "Late vendor compliance reports create timeline risk. If Anthropic hadn't responded by our audit deadline, we'd have had to disclose an outstanding item to our auditors. That's a finding, even if low-risk.",
+    "summary": "Late SOC2 reports create audit findings; schedule buffer",
+    "event_date": "2026-03-24",
+    "importance": 0.75
+  },
+  {
+    "type": "procedural",
+    "content": "Set SOC2 renewal reminders 90 days before expiration. Voyage (expires Apr 2027), Anthropic (Sep 2026), AWS (Dec 2026), Supabase (need to confirm). Assign to whoever owns vendor relationships that quarter. Add to compliance calendar.",
+    "summary": "SOC2 renewal tracking: 90-day advance reminders",
+    "event_date": "2026-03-26",
+    "importance": 0.77
+  },
+  {
+    "type": "self_model",
+    "content": "This audit taught me: vendor compliance is a persistent operational function, not a one-time task. I need to build systems so we don't scramble next quarter. Anya and I should divide ownership—her on financial/DPA vendors, me on infra.",
+    "summary": "SOC2 tracking needs systemization; divide ownership",
+    "event_date": "2026-03-26",
+    "importance": 0.52
+  }
+]

@@ -1,0 +1,135 @@
+[
+  {
+    "type": "episodic",
+    "content": "Mei from Globex reached out via LinkedIn. Initial convo: they're evaluating cognitive memory solutions for agent workflows. Budget exists, timeline aggressive (wants pilot by Q2). Champion signal strong.",
+    "summary": "Globex CTO Mei initiates contact, signals budget + aggressive timeline",
+    "event_date": "2026-01-12",
+    "importance": 0.68
+  },
+  {
+    "type": "episodic",
+    "content": "First formal call with Mei + her colleague Derek (Procurement). Mei excited about our architecture; Derek immediately asked about SOC2 cert. We don't have it. Told him 4–6 week timeline. Deal stalled there.",
+    "summary": "Globex procurement wall: SOC2 certification required, we're 4–6 weeks out",
+    "event_date": "2026-01-15",
+    "importance": 0.72
+  },
+  {
+    "type": "semantic",
+    "content": "Globex deal blocker: SOC2 Type II cert + compliance questionnaire. All enterprise opportunities this size require it. Recommend we prioritize cert completion—impacts multiple pipelines, not just Globex.",
+    "summary": "SOC2 is systematic blocker for enterprise deals; prioritize immediately",
+    "event_date": "2026-01-16",
+    "importance": 0.85
+  },
+  {
+    "type": "episodic",
+    "content": "Anya flagged Globex in pipeline review. Estimated ACV: $180k/year if pilot converts. Devon assigned to kick off pre-sales technical deepdive with Mei (agents + memory layer architecture).",
+    "summary": "Globex pipeline: $180k ACV, Devon leading technical scoping",
+    "event_date": "2026-01-20",
+    "importance": 0.65
+  },
+  {
+    "type": "procedural",
+    "content": "When managing multi-call enterprise cycles with procurement friction: doc every blocker in Linear issue, tag Anya + Marcus, set weekly async check-in cadence. Prevents context decay and keeps deal visible to exec team.",
+    "summary": "Enterprise deal tracking: Linear + async cadence beats ad-hoc emails",
+    "event_date": "2026-01-22",
+    "importance": 0.75
+  },
+  {
+    "type": "episodic",
+    "content": "Devon + Mei call. Globex's use case: multi-agent orchestration with persistent conversation memory. Devon said architecture fit is 90%+. Mei asked for custom integration plan. Devon committed to draft by Feb 1.",
+    "summary": "Globex technical fit strong; Devon to draft custom integration plan",
+    "event_date": "2026-01-27",
+    "importance": 0.63
+  },
+  {
+    "type": "episodic",
+    "content": "Sebastien asked about Globex in 1-1. Told him SOC2 cert is the hard blocker, not tech. He suggested offering interim compliance statement while we finish audit. Escalated to Anya to explore feasibility.",
+    "summary": "CEO suggests interim compliance statement as SOC2 bridge; Anya investigating",
+    "event_date": "2026-02-03",
+    "importance": 0.7
+  },
+  {
+    "type": "episodic",
+    "content": "Call with Mei + Derek. Devon's integration plan delivered on time. Derek still wants full SOC2 before pilot contract. Also requested reference customer doing similar work. Told him we have 2 (confidential for now).",
+    "summary": "Globex: integration plan delivered, Derek still blocking on SOC2 + refs",
+    "event_date": "2026-02-10",
+    "importance": 0.71
+  },
+  {
+    "type": "episodic",
+    "content": "Anya reported: SOC2 audit at 65% complete. Auditor expects draft report by mid-March. Told Marcus to prep reference calls with Acme + Initech so we're ready if Globex asks (they will).",
+    "summary": "SOC2 audit 65% done, mid-March draft expected; preping refs for Globex",
+    "event_date": "2026-02-17",
+    "importance": 0.62
+  },
+  {
+    "type": "semantic",
+    "content": "Globex sale structure: Mei is technical champion, Derek owns procurement gate. Can't close without both. Mei pushes technical fit; Derek controls compliance risk. Strategy: satisfy Derek on SOC2 + compliance, keep Mei engaged on roadmap.",
+    "summary": "Two-gate model for Globex: champion Mei + gatekeeper Derek require separate plays",
+    "event_date": "2026-02-20",
+    "importance": 0.8
+  },
+  {
+    "type": "episodic",
+    "content": "Mei called (unscheduled). Globex exec team pushing hard on timeline. Wants pilot contract signed by end of Q1. Mei's credibility tied to this. Told her: SOC2 draft by March 15, legal review by March 22, contract ready April 1.",
+    "summary": "Mei under pressure for Q1 close; committed to April 1 contract readiness",
+    "event_date": "2026-02-24",
+    "importance": 0.74
+  },
+  {
+    "type": "episodic",
+    "content": "SOC2 auditor delivered draft report March 14 (one day early). Anya fast-tracked legal review. Derek from Globex asked if we could share preliminary findings. Yes, with NDA. Shared draft March 16.",
+    "summary": "SOC2 draft delivered early; shared with Globex under NDA by March 16",
+    "event_date": "2026-03-16",
+    "importance": 0.68
+  },
+  {
+    "type": "episodic",
+    "content": "Derek scheduled security architecture review call after reviewing SOC2 draft. Brought in their own InfoSec lead (Lisa). Call lasted 90 min. Derek seemed satisfied. Said: 'This addresses our major concerns.' Momentum shift visible.",
+    "summary": "Globex security review post-SOC2 draft; Derek signals satisfaction, momentum builds",
+    "event_date": "2026-03-24",
+    "importance": 0.72
+  },
+  {
+    "type": "episodic",
+    "content": "Mei + Derek joint call. Derek: 'Ready to move to contract phase.' Legal team starting procurement review. Derek estimated 2–3 weeks for final approval. Mei asked about pilot scope. Devon to send proposal addendum.",
+    "summary": "Globex moves to contract phase; legal review 2–3 weeks, pilot scope TBD",
+    "event_date": "2026-03-31",
+    "importance": 0.76
+  },
+  {
+    "type": "episodic",
+    "content": "James (new senior backend) assigned to Globex pilot implementation. Anya set budget at $45k for Q2 engineering work. Mei wants 90-day pilot starting May 1. James flagged: needs Priya to hire 1 contractor (vector DB specialist). Done.",
+    "summary": "Globex pilot scoped: $45k budget, May 1 start, James leading, contractor hired",
+    "event_date": "2026-04-08",
+    "importance": 0.69
+  },
+  {
+    "type": "episodic",
+    "content": "Globex legal came back with 47 comments on contract. Most minor; 3 major: data residency clause, IP on fine-tuned models, SLA uptime. Handed to Anya + Sebastien. Anya said: 'Doable, but need to negotiate residency.'",
+    "summary": "Globex legal review: 47 comments, 3 major blockers including data residency",
+    "event_date": "2026-04-15",
+    "importance": 0.73
+  },
+  {
+    "type": "episodic",
+    "content": "Closed negotiations on data residency (Globex wants US-only; we committed Snowflake + AWS regions only). IP clause simplified: we retain model weights, they get deployment rights. Derek approved. Expected signature by April 28.",
+    "summary": "Globex legal resolved; data residency + IP settled, signature end of April",
+    "event_date": "2026-04-22",
+    "importance": 0.77
+  },
+  {
+    "type": "self_model",
+    "content": "This deal taught me: long enterprise cycles aren't just sales friction—they're ops friction. Every week we don't have SOC2 cert, every ambiguous reference, every unsigned contract blocks engineering and recruiting decisions. I need to flag these upstream faster, not wait for CEO 1-1.",
+    "summary": "Lesson: ops visibility on enterprise blockers must drive exec prioritization",
+    "event_date": "2026-04-25",
+    "importance": 0.58
+  },
+  {
+    "type": "semantic",
+    "content": "Globex deal outcome: $180k/year contract signed, 90-day pilot May–July, Q3 renewal decision, $45k implementation cost, legal/procurement took 12 weeks. Root blocker was SOC2 cert, not product fit. Champion (Mei) was crucial for timeline pressure on procurement (Derek).",
+    "summary": "Globex closed: $180k ACV, 90-day pilot, 12-week cycle, SOC2 was real blocker",
+    "event_date": "2026-04-25",
+    "importance": 0.88
+  }
+]

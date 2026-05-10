@@ -1,0 +1,156 @@
+[
+  {
+    "type": "episodic",
+    "content": "Ari kicked off observability tooling RFP in standup. Two-week eval: DataDog vs New Relic. He'll own the bake-off, engineering will test both against production workloads.",
+    "summary": "Ari starts DataDog vs New Relic evaluation",
+    "event_date": "2026-02-03",
+    "importance": 0.58
+  },
+  {
+    "type": "semantic",
+    "content": "DataDog pricing: $48k/yr estimated for our scale. New Relic quote pending but likely higher per-seat model. Cost delta will matter for board approval.",
+    "summary": "DataDog quote $48k/yr vs New Relic TBD",
+    "event_date": "2026-02-03",
+    "importance": 0.72
+  },
+  {
+    "type": "episodic",
+    "content": "Devon and James spent Tuesday morning setting up DataDog sandbox. James had questions about APM config; Devon sorted it. Both noted UI felt cleaner than expected.",
+    "summary": "Devon + James DataDog sandbox setup, UI praise",
+    "event_date": "2026-02-04",
+    "importance": 0.42
+  },
+  {
+    "type": "semantic",
+    "content": "DataDog strength: pre-built Anthropic + AWS integrations. New Relic requires custom API design work for agent instrumentation. Integration depth matters for observability setup time.",
+    "summary": "DataDog integrations vs New Relic custom work",
+    "event_date": "2026-02-04",
+    "importance": 0.69
+  },
+  {
+    "type": "procedural",
+    "content": "When evaluating observability tools, load-test both with 72-hour production traffic samples. Measure: dashboard load latency, alert response time, API query cost per million events.",
+    "summary": "Observability eval: 72h prod test + 3 key metrics",
+    "event_date": "2026-02-05",
+    "importance": 0.81
+  },
+  {
+    "type": "episodic",
+    "content": "Ari sent comparison matrix to Slack. DataDog winning on UX + integrations. New Relic cheaper on licensing but weaker Anthropic integration. Anya flagged cost; I said UX wins outweigh $8k/yr delta.",
+    "summary": "Ari shares matrix: DataDog UX strong, NR cheaper",
+    "event_date": "2026-02-05",
+    "importance": 0.65
+  },
+  {
+    "type": "semantic",
+    "content": "New Relic's API design for custom instrumentation requires 3–4 week implementation. DataDog SDK auto-detects our Python stack. Time-to-value favors DataDog by ~3 weeks.",
+    "summary": "DataDog 3-week faster implementation vs New Relic",
+    "event_date": "2026-02-06",
+    "importance": 0.73
+  },
+  {
+    "type": "episodic",
+    "content": "Tom asked about DataDog pricing tiers in standup. I clarified: we're on Pro tier at $48k/yr; Standard would save ~$18k but loses AI features we need for anomaly detection.",
+    "summary": "Tom asks pricing; Pro tier necessary for AI features",
+    "event_date": "2026-02-07",
+    "importance": 0.35
+  },
+  {
+    "type": "semantic",
+    "content": "DataDog's anomaly detection + forecasting reduces on-call alert noise by ~40% per Ari's test notes. New Relic's alerting is static threshold-based. Operational impact matters beyond cost.",
+    "summary": "DataDog anomaly detection 40% noise reduction vs NR",
+    "event_date": "2026-02-07",
+    "importance": 0.78
+  },
+  {
+    "type": "episodic",
+    "content": "Anya asked for final cost-benefit writeup. I told her I'd have it Friday; Ari needs to finish performance benchmarks first.",
+    "summary": "Anya requests cost-benefit writeup, due Friday",
+    "event_date": "2026-02-10",
+    "importance": 0.4
+  },
+  {
+    "type": "semantic",
+    "content": "New Relic licensing: $29k/yr base but requires additional custom ingestion fees (~$8–12k/yr) for our event volume. DataDog's flat $48k all-inclusive. True cost delta is <$5k if NR adds features later.",
+    "summary": "New Relic true cost $37–41k/yr after custom fees",
+    "event_date": "2026-02-10",
+    "importance": 0.75
+  },
+  {
+    "type": "episodic",
+    "content": "Sebastien asked in 1:1: which tool are we leaning? I said DataDog, UX + integrations beat price on this one. He approved moving to contract review.",
+    "summary": "Sebastien approves DataDog direction in 1:1",
+    "event_date": "2026-02-12",
+    "importance": 0.71
+  },
+  {
+    "type": "procedural",
+    "content": "For vendor RFCs: always include implementation timeline, integration checklist, and 12-month TCO (not just Year 1 licensing). Prevents sticker-shock surprises during onboarding.",
+    "summary": "RFC template: timeline, integrations, 12-mo TCO",
+    "event_date": "2026-02-12",
+    "importance": 0.82
+  },
+  {
+    "type": "semantic",
+    "content": "DataDog integrations available: Anthropic, AWS, Cloudflare, Sentry, GitHub. New Relic requires custom wrappers for 3 of 5. Integration debt matters for ops velocity.",
+    "summary": "DataDog 5/5 native integrations vs New Relic 2/5",
+    "event_date": "2026-02-13",
+    "importance": 0.68
+  },
+  {
+    "type": "episodic",
+    "content": "Legal reviewed DataDog MSA. Three minor red-lines: data retention default (30 days → 90), sub-processor list, and IP indemnity clause. Sent back for standard Clude tweaks.",
+    "summary": "Legal MSA review: 3 red-lines, sent to DataDog",
+    "event_date": "2026-02-17",
+    "importance": 0.52
+  },
+  {
+    "type": "semantic",
+    "content": "Dashboard design in DataDog is drag-drop, instant. New Relic UI requires JSON config or GUI with nested menus. For observability work, UX compounds over time—team uses it daily.",
+    "summary": "DataDog UX compounds: drag-drop vs JSON config",
+    "event_date": "2026-02-17",
+    "importance": 0.71
+  },
+  {
+    "type": "episodic",
+    "content": "Ari sent final eval summary: DataDog wins on usability, integration depth, and anomaly detection. New Relic wins on per-seat cost but requires 3 weeks implementation overhead.",
+    "summary": "Ari final eval: DataDog UX/integrations, NR cheaper",
+    "event_date": "2026-02-19",
+    "importance": 0.68
+  },
+  {
+    "type": "self_model",
+    "content": "I default to choosing tools that reduce context-switching for teams, even if it costs more. DataDog over New Relic felt right because our people spend 2–3 hours/week in observability tooling. UX debt is real debt.",
+    "summary": "I weight team UX + velocity over pure cost",
+    "event_date": "2026-02-19",
+    "importance": 0.63
+  },
+  {
+    "type": "semantic",
+    "content": "DataDog contract signed Feb 24. Onboarding starts Mar 3. Devon + James own implementation. Estimated full instrumentation: 2 weeks. Go-live target: Mar 17.",
+    "summary": "DataDog contract signed, Mar 3 onboarding start",
+    "event_date": "2026-02-24",
+    "importance": 0.84
+  },
+  {
+    "type": "procedural",
+    "content": "Post-vendor-selection: document decision rationale in internal wiki with scoring matrix + rejected options + cost-benefit assumptions. Future audits and re-evals need the context.",
+    "summary": "Post-selection: wiki doc with matrix + assumptions",
+    "event_date": "2026-02-24",
+    "importance": 0.79
+  },
+  {
+    "type": "episodic",
+    "content": "Sent decision summary to Sebastien, Anya, and engineering leads. DataDog wins; full eval details in ops folder. Emphasized 3-week time-to-value vs New Relic's 6+ week custom setup.",
+    "summary": "Decision summary sent, time-to-value key differentiator",
+    "event_date": "2026-02-24",
+    "importance": 0.62
+  },
+  {
+    "type": "semantic",
+    "content": "Why DataDog over New Relic: (1) $5k TCO delta negligible, (2) 3-week faster implementation, (3) native Anthropic + AWS integrations, (4) team feedback on UX consistency. Decision defensible for 18+ months.",
+    "summary": "DataDog decision: cost-neutral, 3-week faster, integrations",
+    "event_date": "2026-02-24",
+    "importance": 0.87
+  }
+]

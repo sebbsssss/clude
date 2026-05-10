@@ -1,0 +1,177 @@
+[
+  {
+    "type": "episodic",
+    "content": "Kickoff with Yara on SOC2 evidence sprint. She's taking access reviews; I'm coordinating with Ari on change management logs. Estimated 40 controls across Feb-Mar cycle.",
+    "summary": "SOC2 evidence sprint kickoff with Yara; 40 controls to wrangle",
+    "event_date": "2026-02-21",
+    "importance": 0.62
+  },
+  {
+    "type": "semantic",
+    "content": "SOC2 control test evidence must include: dated audit logs, change approvals (Linear tickets with Ari sign-off), access review screenshots, training completion records. Missing any one fails the control.",
+    "summary": "SOC2 evidence requirements: logs, approvals, access reviews, training",
+    "event_date": "2026-02-21",
+    "importance": 0.88
+  },
+  {
+    "type": "procedural",
+    "content": "Process: Pull DataDog + Sentry audit logs weekly. Store in Notion audit workspace with timestamps. Cross-reference Linear change IDs. Ari responsible for backend code changes; Devon reviews infra changes.",
+    "summary": "Weekly audit log collection from DataDog/Sentry to Notion workspace",
+    "event_date": "2026-02-21",
+    "importance": 0.78
+  },
+  {
+    "type": "episodic",
+    "content": "Anya flagged that AWS billing exports don't have access logs. Had to request detailed IAM change history from AWS support. Added 3-day lag to evidence pipeline.",
+    "summary": "AWS IAM logs gap discovered; support request adds 3-day delay",
+    "event_date": "2026-02-24",
+    "importance": 0.58
+  },
+  {
+    "type": "semantic",
+    "content": "Cloudflare WAF rule changes count as security infrastructure changes. Must be logged in Linear even if Ari deploys via API. Non-negotiable for control 6.3.",
+    "summary": "Cloudflare WAF changes require Linear tickets for SOC2 6.3",
+    "event_date": "2026-02-24",
+    "importance": 0.81
+  },
+  {
+    "type": "procedural",
+    "content": "Access review workflow: Monthly snapshot of GitHub + 1Password admins. Yara pulls list; Ari + Devon confirm no dormant accounts. Documented in Notion with approver initials and date.",
+    "summary": "Monthly access review: GitHub/1Password admin snapshot with approvals",
+    "event_date": "2026-02-24",
+    "importance": 0.75
+  },
+  {
+    "type": "procedural",
+    "content": "Security training tracking: Priya maintains list in Notion. Every new hire + annual refresh. Screenshots of completion (or Slack DMs if training external). File in audit drive by role.",
+    "summary": "Security training records: Priya owns tracking, screenshots in audit drive",
+    "event_date": "2026-02-28",
+    "importance": 0.73
+  },
+  {
+    "type": "semantic",
+    "content": "Change management evidence gaps cost audit time. If Linear ticket lacks: date approved, approver name, or description of change, it fails control test. Be explicit upfront, not retroactive.",
+    "summary": "Linear change tickets must have: date, approver, description or fail audit",
+    "event_date": "2026-02-28",
+    "importance": 0.85
+  },
+  {
+    "type": "episodic",
+    "content": "James (hired Mar 2026) started; had to fast-track his onboarding security training to add to Feb evidence cycle. Priya scrambled but got it done in 2 days.",
+    "summary": "James onboarding expedited for Feb training evidence cutoff",
+    "event_date": "2026-03-03",
+    "importance": 0.45
+  },
+  {
+    "type": "procedural",
+    "content": "Incident response documentation for audit: Any security event reported via Sentry requires a brief postmortem in Linear, linked to access logs and remediation steps. Owner: Ari or Devon.",
+    "summary": "Incident postmortems required in Linear with access logs for audit trail",
+    "event_date": "2026-03-03",
+    "importance": 0.79
+  },
+  {
+    "type": "semantic",
+    "content": "Vendor access: Voyage AI, Anthropic, Snowflake. Each has dedicated API key, rotated quarterly. Rotation dates + old key deactivation logged in 1Password audit trail. Control 5.2 depends on this.",
+    "summary": "Vendor API keys rotated quarterly; deactivation logged in 1Password",
+    "event_date": "2026-03-07",
+    "importance": 0.82
+  },
+  {
+    "type": "episodic",
+    "content": "Slack audit log export broke mid-cycle. Had to manually reconstruct admin action logs from Slack workspace history. Reached out to Slack support; took 4 days to get clean export.",
+    "summary": "Slack audit export failure; manual reconstruction added 4-day delay",
+    "event_date": "2026-03-07",
+    "importance": 0.52
+  },
+  {
+    "type": "procedural",
+    "content": "Figma design access: Only product + design leads (Lina, Jenny). Quarterly review of workspace members and permissions. Changes documented in Linear ticket. Lina owns sign-off.",
+    "summary": "Figma quarterly access review: Lina/Jenny sign-off, Linear tracked",
+    "event_date": "2026-03-10",
+    "importance": 0.68
+  },
+  {
+    "type": "semantic",
+    "content": "Audit evidence retention: Keep raw logs 24 months. Compiled evidence packages (for each control) stay indefinitely in Notion audit workspace. Deletion is never acceptable.",
+    "summary": "Audit logs kept 24mo; compiled evidence archived indefinitely",
+    "event_date": "2026-03-10",
+    "importance": 0.8
+  },
+  {
+    "type": "self_model",
+    "content": "I hate re-explaining what evidence is needed to Ari or Anya. If I don't write it down in Linear or Notion with explicit requirements, I'll spend 3x time clarifying. Documentation upfront saves my sanity.",
+    "summary": "Written evidence requirements save time vs. verbal clarification loops",
+    "event_date": "2026-03-10",
+    "importance": 0.61
+  },
+  {
+    "type": "procedural",
+    "content": "Weekly evidence checklist: DataDog logs (daily pull), Linear changes (tagged #soc2), access reviews (monthly), training records (monthly), vendor rotations (quarterly). Slack reminder Tuesday 9am.",
+    "summary": "Weekly evidence checklist with reminders; staged by frequency",
+    "event_date": "2026-03-14",
+    "importance": 0.72
+  },
+  {
+    "type": "episodic",
+    "content": "Tom (Junior Eng) pushed a Cloudflare rule without a Linear ticket. Had to walk him through why that's a control failure. Added him to the change management docs asap.",
+    "summary": "Tom missed change mgmt ticket; educated on control requirements",
+    "event_date": "2026-03-14",
+    "importance": 0.48
+  },
+  {
+    "type": "semantic",
+    "content": "Control 7.1 (Third-party risk): Acme, Initech, Globex, Wayne Industries. Each signed BAA. Must log any data access requests in Linear. Yara tracks vendor request log monthly.",
+    "summary": "Vendor data access requests tracked monthly per BAA requirements",
+    "event_date": "2026-03-17",
+    "importance": 0.84
+  },
+  {
+    "type": "procedural",
+    "content": "GitHub security log export: Monthly SSH key adds/removals, org member changes. Ari pulls via GitHub API, formats to CSV, stores in Notion. Matches against Linear access review list.",
+    "summary": "Monthly GitHub audit export compared against access review list",
+    "event_date": "2026-03-17",
+    "importance": 0.76
+  },
+  {
+    "type": "episodic",
+    "content": "Sebastien asked if we'd pass audit in Mar. Honest answer: yes, if Yara and I stay on top of logs this week. One missed collection day tanks 3 controls.",
+    "summary": "Audit readiness hinges on consistent weekly collection discipline",
+    "event_date": "2026-03-19",
+    "importance": 0.59
+  },
+  {
+    "type": "semantic",
+    "content": "Audit evidence chain of custody: Who pulled the log, when, what date range, signed off by whom. Every artifact needs metadata. Sloppy attribution fails control tests.",
+    "summary": "Audit evidence must include: puller, timestamp, date range, approver",
+    "event_date": "2026-03-19",
+    "importance": 0.86
+  },
+  {
+    "type": "procedural",
+    "content": "Notion audit workspace structure: Folder per control (1.1, 2.3, etc.). Subfolders by month. Each month's folder has: evidence artifacts, summary checklist, approver sign-off. Standard across all 40 controls.",
+    "summary": "Notion workspace: control > month > artifacts + checklist + sign-off",
+    "event_date": "2026-03-21",
+    "importance": 0.74
+  },
+  {
+    "type": "self_model",
+    "content": "Compliance is not inspirational. It's tedious, necessary, and failures are invisible until they're catastrophic. I respect the grind because skipping it costs the company trust and revenue.",
+    "summary": "Compliance success is unglamorous discipline, not inspiration",
+    "event_date": "2026-03-21",
+    "importance": 0.67
+  },
+  {
+    "type": "episodic",
+    "content": "Closed out Feb-Mar evidence cycle. 40 controls. 2 minor findings (AWS logs lag, Slack export hiccup). No failed controls. Sent summary to Sebastien and Anya.",
+    "summary": "Feb-Mar SOC2 evidence cycle closed; 2 minor findings, no failures",
+    "event_date": "2026-03-22",
+    "importance": 0.65
+  },
+  {
+    "type": "semantic",
+    "content": "SOC2 is continuous, not annual. Every month we collect. Every quarter we review. Every incident we log. Evidence gaps compound fast. Consistency matters more than perfection.",
+    "summary": "SOC2 is continuous monthly collection, not a once-a-year event",
+    "event_date": "2026-03-22",
+    "importance": 0.89
+  }
+]

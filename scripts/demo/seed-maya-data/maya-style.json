@@ -1,0 +1,114 @@
+[
+  {
+    "type": "episodic",
+    "content": "Ari flagged in eng standup that Snowflake query costs spiked 40% YoY. Root cause: vector embedding pipeline running unoptimized on staging. Anya will audit monthly spend; I'm owning vendor review process.",
+    "summary": "Snowflake costs spiked 40%. Ari identified unoptimized embeddings.",
+    "event_date": "2025-11-12",
+    "importance": 0.62
+  },
+  {
+    "type": "self_model",
+    "content": "Sebastien scheduled 3 back-to-back 1:1s with zero notice. I was deep in Q4 budget. Texted him after: 'async first unless urgent.' He acknowledged. Reset: calendar blocked for async blocks now.",
+    "summary": "Push back on surprise meetings. Establish async-first default.",
+    "event_date": "2025-11-15",
+    "importance": 0.71
+  },
+  {
+    "type": "semantic",
+    "content": "Decision: Switched from Notion to Linear for ops tracking. Reason: Notion queries were stale, Linear integrates with GitHub/eng workflows. Cost ~$2k/yr. Documented decision in Slack thread #ops-tooling.",
+    "summary": "Migrated ops tracking from Notion to Linear.",
+    "event_date": "2025-11-18",
+    "importance": 0.68
+  },
+  {
+    "type": "introspective",
+    "content": "Realized I got sharp with Jenny in async feedback. She'd missed context from an earlier Lina/Marcus discussion. I wrote a 2-min video walkthrough instead of repeating myself. Felt patronizing. Need better org memory.",
+    "summary": "Frustration when re-explaining. Video helps; still drains me.",
+    "event_date": "2025-11-22",
+    "importance": 0.54
+  },
+  {
+    "type": "self_model",
+    "content": "Anya asked me to join a vendor call with Anthropic unprepped. I declined, said 'send me a one-pager first.' She bristled initially, then said it saved us because I caught licensing ambiguity she'd missed.",
+    "summary": "Prep first. No cold calls. Prevents wasted cycles.",
+    "event_date": "2025-11-29",
+    "importance": 0.73
+  },
+  {
+    "type": "introspective",
+    "content": "Marcus needed Q1 hiring plan for CS. I gave him a spreadsheet instead of a meeting. He said it was clearer than 3 previous sync convos combined. Validated my async preference again.",
+    "summary": "Written artifacts > meetings. Clearer, reusable.",
+    "event_date": "2025-12-05",
+    "importance": 0.59
+  },
+  {
+    "type": "procedural",
+    "content": "Process established: all decisions ≥ $5k require written proposal (Linear ticket, 3-line rationale, stakeholder approval). Sebastien, Anya, and Lina sign off async. Reduces decision lag by ~3 days.",
+    "summary": "Decision gate: written proposal + async sign-off for $5k+.",
+    "event_date": "2025-12-12",
+    "importance": 0.81
+  },
+  {
+    "type": "episodic",
+    "content": "Tom shipped a Sentry integration without telling DevOps. Alerts went haywire. Took 2 hours to trace. Debrief: communicated in eng Slack, got buried. I added 'ops-critical changes' Slack channel + weekly async digest.",
+    "summary": "Tom's Sentry change broke visibility. Formalized notification process.",
+    "event_date": "2025-12-19",
+    "importance": 0.65
+  },
+  {
+    "type": "self_model",
+    "content": "Priya asked me to interview a recruiting candidate. I said no—not my function. But I wrote her a note on what ops candidates should know about our infra. Boundaries + value add.",
+    "summary": "Say no clearly. Help where you own the skill.",
+    "event_date": "2026-01-09",
+    "importance": 0.67
+  },
+  {
+    "type": "semantic",
+    "content": "AWS bill analysis: Cloudflare DDoS protection redundant with AWS Shield Advanced. Consolidating saves $8.5k/yr. Documented in Anya's cost ledger. Action: migrate rules by Feb 15.",
+    "summary": "Cloudflare + AWS Shield overlap. Cutting Cloudflare.",
+    "event_date": "2026-01-16",
+    "importance": 0.72
+  },
+  {
+    "type": "introspective",
+    "content": "Caught myself about to schedule a 30-min sync to discuss an Acme Corp contract issue. Stopped. Wrote a 200-word async brief instead. Anya replied in 4 hours with solution. Why do I ever default to meetings?",
+    "summary": "Muscle memory: reach for sync. Async faster. Why?",
+    "event_date": "2026-01-23",
+    "importance": 0.58
+  },
+  {
+    "type": "self_model",
+    "content": "Devon asked why I document every vendor decision. I said: 'So in 6 months when you ask again, I don't re-explain. So Sebastien doesn't re-decide.' He said I sound like he's broken. Maybe I am. But it works.",
+    "summary": "Meticulous documentation = no re-work. Sounds mean. Is efficient.",
+    "event_date": "2026-02-06",
+    "importance": 0.69
+  },
+  {
+    "type": "introspective",
+    "content": "James onboarded last week. Anya scheduled 4 sync sessions with him. I intervened: 'Use the ops wiki + async Q&A.' He's progressing faster than Tom. Feels validated, but also cold. Wondering if I've optimized myself into isolation.",
+    "summary": "Efficiency can feel isolating. James succeeding anyway.",
+    "event_date": "2026-02-13",
+    "importance": 0.61
+  },
+  {
+    "type": "semantic",
+    "content": "Initiated vendor audit: 27 active accounts. Consolidation targets: DataDog + Sentry overlap (observability), GitHub + 1Password (identity). Potential savings $14.2k/yr. Presented to Anya. Greenlit for March.",
+    "summary": "27 vendors audited. $14.2k savings via consolidation.",
+    "event_date": "2026-02-27",
+    "importance": 0.79
+  },
+  {
+    "type": "episodic",
+    "content": "Lina asked in Slack why we switched Linear. I realized I'd never told Product. She felt out of loop. Sent her full decision doc retroactively. She said it was fine, but I felt the sting. Better comms needed upstream.",
+    "summary": "Lina unaware of Linear migration. Comms gap.",
+    "event_date": "2026-03-14",
+    "importance": 0.64
+  },
+  {
+    "type": "self_model",
+    "content": "Sebastien said in 1:1 'you're the most organized person I know, but sometimes you're hard to reach.' Hit me. I'm efficient and defensive. Async protects me from interruption *and* from connection. Working on balance.",
+    "summary": "Efficiency can become a wall. Sebastien noticed.",
+    "event_date": "2026-04-30",
+    "importance": 0.76
+  }
+]

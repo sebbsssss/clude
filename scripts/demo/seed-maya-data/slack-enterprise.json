@@ -1,0 +1,128 @@
+[
+  {
+    "type": "episodic",
+    "content": "Sebastien called emergency ops meeting. SOC2 audit findings came back: Slack retention policies non-compliant, no eDiscovery capability, audit logs insufficient. Enterprise Grid mandatory by May 15 for audit sign-off.",
+    "summary": "SOC2 audit flags Slack compliance gaps—Grid migration now critical path",
+    "event_date": "2026-04-07",
+    "importance": 0.82
+  },
+  {
+    "type": "semantic",
+    "content": "Enterprise Grid cost: $12.50/user/month vs. $8/user/month Pro. 60 people = $300/mo increase, ~$3.6K annually. Anya approved under compliance capex, not OpEx.",
+    "summary": "Slack Enterprise Grid costs $300/month incremental; compliance capex approved",
+    "event_date": "2026-04-07",
+    "importance": 0.71
+  },
+  {
+    "type": "procedural",
+    "content": "Create inventory: list all active Slack workspaces (3: main, eng-private, customer-success), all installed apps (21 total), custom integrations (6: Linear, GitHub, DataDog, Sentry, Notion, 1Password), and org-chart-mapped channel owners.",
+    "summary": "Inventory all Slack assets before Grid migration begins",
+    "event_date": "2026-04-08",
+    "importance": 0.78
+  },
+  {
+    "type": "semantic",
+    "content": "Enterprise Grid gives: centralized audit logs (90-day retention min), eDiscovery API, SSO enforcement option, workspace-level retention policies, compliance exports. These satisfy SOC2 Appendix A (audit trail requirement).",
+    "summary": "Grid enables SOC2-compliant audit logs, eDiscovery, retention controls",
+    "event_date": "2026-04-08",
+    "importance": 0.85
+  },
+  {
+    "type": "episodic",
+    "content": "Ari and Devon pushed back on Sunday afternoon Slack cutover. Ari said: 'We need Monday night, not weekend.' Rescheduled full migration to Monday 2026-04-14, 6pm–11pm PT. Async comms only that evening.",
+    "summary": "Rescheduled migration window to Monday night after eng push-back",
+    "event_date": "2026-04-09",
+    "importance": 0.64
+  },
+  {
+    "type": "procedural",
+    "content": "Step 1: Export all channel data, user lists, and permission matrix from Pro plan before cutover. Use Slack's native export tool (runs 4–6 hours). Store in AWS S3 with Cloudflare backup. Verify checksums post-export.",
+    "summary": "Export Slack data pre-cutover to S3 with verification",
+    "event_date": "2026-04-09",
+    "importance": 0.83
+  },
+  {
+    "type": "semantic",
+    "content": "Channel mapping rule: eng-* channels stay public (for onboarding evidence), customer channels move to private (eDiscovery sensitive), #general + #announcements stay open. Retention: 7 years default, 2 years for DMs (SOC2 req).",
+    "summary": "Channel classification and retention policies for Grid config",
+    "event_date": "2026-04-10",
+    "importance": 0.79
+  },
+  {
+    "type": "procedural",
+    "content": "Re-approve all 21 apps in Enterprise Grid app directory. DataDog and Sentry need OAuth re-auth (old tokens invalidated). Linear and GitHub require new workspace tokens. Test each in staging workspace first.",
+    "summary": "Re-authorize and test all apps in Grid staging environment",
+    "event_date": "2026-04-11",
+    "importance": 0.81
+  },
+  {
+    "type": "episodic",
+    "content": "Jenny reported design Figma embeds broke in test Grid. Root cause: old Figma app version incompatible with Grid. Updated to v3.2, re-added to workspace. Jenny confirmed embeds working again by 3pm.",
+    "summary": "Figma app broke in Grid test; fixed with v3.2 update",
+    "event_date": "2026-04-11",
+    "importance": 0.55
+  },
+  {
+    "type": "procedural",
+    "content": "Document migration runbook: (1) Pause all outbound integrations 30min pre-cutover, (2) Freeze channels at T-15min, (3) Switch workspace on Grid, (4) Verify audit logs visible in admin console, (5) Reactivate apps in sequence. Ari owns execution; I own validation.",
+    "summary": "Create detailed migration runbook with role assignments",
+    "event_date": "2026-04-12",
+    "importance": 0.87
+  },
+  {
+    "type": "semantic",
+    "content": "Slack Enterprise Grid contract locked: 3-year commit, $3.6K/year, 10% discount applied (Anya negotiated). Billing effective May 1 (Pro charges prorated through April 30). Renewal date: May 1, 2029.",
+    "summary": "Grid contract: 3yr commit, $3.6K/yr with 10% discount, renewal 2029",
+    "event_date": "2026-04-13",
+    "importance": 0.73
+  },
+  {
+    "type": "episodic",
+    "content": "Sunday before cutover, Priya asked if migration would affect onboarding sequences for new hires. We created temp #onboarding-archive channel on old workspace, migrated new-hire checklists. James (hired March) and Tom confirmed they could still access historical context.",
+    "summary": "Preserved onboarding docs; new hires can still reference old workspace",
+    "event_date": "2026-04-13",
+    "importance": 0.58
+  },
+  {
+    "type": "procedural",
+    "content": "Hour-by-hour cutover checklist: T-30min (pause webhooks), T-0 (enable Grid workspace), T+5min (verify admin audit log streaming), T+15min (test SSO login), T+30min (restore apps), T+60min (full validation, announce all-clear in #general). If any fail, rollback to backup.",
+    "summary": "Granular cutover timeline with validation gates and rollback plan",
+    "event_date": "2026-04-14",
+    "importance": 0.89
+  },
+  {
+    "type": "episodic",
+    "content": "Migration night 2026-04-14: DataDog app hung during re-auth (rate limit). Devon manually reset integration at 8:47pm, back online by 9:15pm. No customer impact. Logged incident #4729 for post-mortem.",
+    "summary": "DataDog app stalled on cutover; manual reset resolved within 30min",
+    "event_date": "2026-04-14",
+    "importance": 0.68
+  },
+  {
+    "type": "self_model",
+    "content": "I hate context-jumping during migrations. Wrote everything down—runbook, decision log, vendor contacts, rollback steps. When 2am issues hit, team had clarity without asking me questions. This is how I prevent re-explaining.",
+    "summary": "Over-documentation prevents chaos; async clarity is force multiplier",
+    "event_date": "2026-04-14",
+    "importance": 0.72
+  },
+  {
+    "type": "semantic",
+    "content": "Post-cutover validation: audit logs visible in admin console (90-day history accessible), eDiscovery API responding, SSO enforcement enabled for new user invites, retention policies applied to all channels. Evidence captured for SOC2 auditor.",
+    "summary": "Grid deployment validated; audit log and compliance evidence confirmed",
+    "event_date": "2026-04-15",
+    "importance": 0.86
+  },
+  {
+    "type": "procedural",
+    "content": "Decommission old Pro workspace by April 30. Archive all data to S3 (Cloudflare backup), revoke old Slack API tokens, remove old workspace from 1Password. Marcus (CS) notify customers: 'No Slack URL changes, all history migrated.'",
+    "summary": "Decom old workspace: archive, revoke tokens, customer notification",
+    "event_date": "2026-04-22",
+    "importance": 0.77
+  },
+  {
+    "type": "self_model",
+    "content": "This migration felt like herding cats, but the discipline paid off. 21 integrations, zero production outages, audit logs live for SOC2. I learned: inventory early, test staging rigorously, and never assume Slack support knows your context. Write it down.",
+    "summary": "Migration learnings: inventory discipline, staging rigor, async clarity win",
+    "event_date": "2026-04-30",
+    "importance": 0.75
+  }
+]

@@ -73,6 +73,55 @@ function extractSolanaWallets(user: User): string[] {
   return wallets;
 }
 
+/**
+ * Extract a verified email from a Privy user's linked accounts.
+ *
+ * Only returns addresses Privy has stamped `verified_at` on (set after the
+ * magic-link / OTP confirmation). Unverified linked emails are skipped — the
+ * resolver uses email as memory-ownership identity, so trusting an unverified
+ * address would let a user claim another's history by typing their email.
+ */
+function extractVerifiedEmail(user: User): string | null {
+  for (const account of user.linked_accounts) {
+    if (account.type !== 'email') continue;
+    const address = (account as { address?: unknown }).address;
+    if (typeof address !== 'string' || !address.includes('@')) continue;
+    const verifiedAt = (account as { verified_at?: unknown }).verified_at;
+    if (!verifiedAt) continue;
+    return address.trim().toLowerCase();
+  }
+  return null;
+}
+
+// ---- Email cache (DID → verified email) ---- //
+
+interface EmailCacheEntry {
+  email: string | null;
+  ts: number;
+}
+
+const emailCache = new Map<string, EmailCacheEntry>();
+
+function getCachedEmail(did: string): string | null | undefined {
+  const entry = emailCache.get(did);
+  if (!entry) return undefined;
+  if (Date.now() - entry.ts > CACHE_TTL_MS) {
+    emailCache.delete(did);
+    return undefined;
+  }
+  emailCache.delete(did);
+  emailCache.set(did, entry);
+  return entry.email;
+}
+
+function setCachedEmail(did: string, email: string | null) {
+  if (emailCache.size >= MAX_CACHE_SIZE) {
+    const oldest = emailCache.keys().next().value;
+    if (oldest !== undefined) emailCache.delete(oldest);
+  }
+  emailCache.set(did, { email, ts: Date.now() });
+}
+
 // ---- Public API ---- //
 
 /**
@@ -123,6 +172,44 @@ export async function resolveWalletsForDid(did: string, idToken?: string): Promi
 export async function didOwnsWallet(did: string, wallet: string, idToken?: string): Promise<boolean> {
   const wallets = await resolveWalletsForDid(did, idToken);
   return wallets.includes(wallet);
+}
+
+/**
+ * Resolve the verified email address for a Privy DID.
+ *
+ * Used by the auth resolver to anchor identity on email rather than wallet,
+ * so the same email always lands on the same agent_keys row regardless of
+ * which embedded wallet Privy provisions across devices/sessions.
+ *
+ * Cached per-DID with the same TTL as the wallet resolver. When `idToken` is
+ * supplied the lookup is local; otherwise it goes through the Privy API.
+ */
+export async function resolveEmailForDid(did: string, idToken?: string): Promise<string | null> {
+  const cached = getCachedEmail(did);
+  if (cached !== undefined) return cached;
+
+  const client = getPrivyClient();
+  if (!client) return null;
+
+  try {
+    let user: User;
+    if (idToken) {
+      try {
+        user = await client.users().get({ id_token: idToken });
+      } catch (err: any) {
+        log.warn({ err: err.message, did }, 'Identity token parse failed (email), falling back to API');
+        user = await client.users()._get(did);
+      }
+    } else {
+      user = await client.users()._get(did);
+    }
+    const email = extractVerifiedEmail(user);
+    setCachedEmail(did, email);
+    return email;
+  } catch (err: any) {
+    log.warn({ err: err.message, did }, 'Failed to resolve email from Privy');
+    return null;
+  }
 }
 
 /**

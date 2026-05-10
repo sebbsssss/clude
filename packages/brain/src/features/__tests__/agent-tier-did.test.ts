@@ -19,6 +19,9 @@ vi.mock('../../auth/privy-wallet-resolver', () => ({
   // we make this throw by default so the flow falls through to step 3
   // (synthetic wallet). Individual tests can override via mockEnsurePrivyWallet.
   ensurePrivySolanaWalletForDid: vi.fn().mockRejectedValue(new Error('test: privy provisioning disabled')),
+  // Email resolution: default null so the email-anchored adoption path is a
+  // no-op for existing tests. Tests targeting that branch override per-case.
+  resolveEmailForDid: vi.fn().mockResolvedValue(null),
 }));
 
 import { getDb } from '@clude/shared/core/database';

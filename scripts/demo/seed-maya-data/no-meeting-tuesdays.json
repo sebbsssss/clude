@@ -1,0 +1,114 @@
+[
+  {
+    "type": "episodic",
+    "content": "Sebastien signed off on no-meeting Tuesdays pilot in standup. Ari and Anya both nodded; Marcus looked skeptical. Plan: full enforcement starting next week, track calendar blocks in Linear.",
+    "summary": "Sebastien approves no-meeting Tuesdays pilot",
+    "event_date": "2025-11-12",
+    "importance": 0.58
+  },
+  {
+    "type": "semantic",
+    "content": "No-meeting Tuesdays rationale: async Slack + Linear reduce context-switching. Target: 90min uninterrupted deep work minimum per person. Measure via Slack activity delta and engineer velocity.",
+    "summary": "No-meeting Tuesdays core hypothesis and metrics",
+    "event_date": "2025-11-13",
+    "importance": 0.72
+  },
+  {
+    "type": "episodic",
+    "content": "First Tuesday without meetings. Jenny posted 3 design iterations by 11am. Devon shipped backend refactor. Tom asked in Slack why no standup—reminded him it's async-only Tuesdays.",
+    "summary": "First no-meeting Tuesday shows early velocity gains",
+    "event_date": "2025-11-18",
+    "importance": 0.52
+  },
+  {
+    "type": "procedural",
+    "content": "Process for no-meeting Tuesdays enforcement: (1) Maya blocks everyone's calendar at 12:01am Monday. (2) Anya auto-declines conflicting invites. (3) Slack reminder pinned in #engineering. (4) Retro every 2 weeks to flag violations.",
+    "summary": "Enforcement procedure: blocking, auto-decline, reminders, retro",
+    "event_date": "2025-11-19",
+    "importance": 0.68
+  },
+  {
+    "type": "semantic",
+    "content": "Q4 results: no-meeting Tuesdays reduced avg Slack interrupts by 34%. Sprint velocity +12%. Three weeks of clean data. Ari reported engineers felt noticeably less fragmented.",
+    "summary": "Q4 no-meeting Tuesdays metrics: -34% interrupts, +12% velocity",
+    "event_date": "2025-12-16",
+    "importance": 0.78
+  },
+  {
+    "type": "episodic",
+    "content": "Retro on Dec 15: Lina complained Tuesdays blocked product sync with Acme. Anya noted finance needed cross-team alignment. Consensus: worth the friction, but watch Q1 pressures.",
+    "summary": "Q4 retro: friction points flagged but net positive",
+    "event_date": "2025-12-16",
+    "importance": 0.55
+  },
+  {
+    "type": "semantic",
+    "content": "SOC2 audit kicked off Jan 5. Required daily sync calls with Anya, Priya, Devon, Marcus. Compliance timeline non-negotiable: certification needed by March for Globex contract.",
+    "summary": "SOC2 audit drives daily syncs Jan-Mar, Globex contract dependent",
+    "event_date": "2026-01-05",
+    "importance": 0.85
+  },
+  {
+    "type": "episodic",
+    "content": "Jan 14 standup: Sebastien asked if no-meeting Tuesdays still active. Maya admitted Tuesdays have become 'soft guidelines.' Three blocked meetings last week alone for SOC2. Sebastien nodded sympathetically.",
+    "summary": "SOC2 demands erode no-meeting Tuesday enforcement in Jan",
+    "event_date": "2026-01-14",
+    "importance": 0.61
+  },
+  {
+    "type": "semantic",
+    "content": "Q1 pattern: no-meeting Tuesday experiment stalled. Compliance pressure + Initech escalation (contract renewal) + James onboarding created meeting bloat. Tuesdays regressed to 60% adherence by mid-Jan.",
+    "summary": "Q1 stall: SOC2, Initech, onboarding break no-meeting Tuesday",
+    "event_date": "2026-01-20",
+    "importance": 0.75
+  },
+  {
+    "type": "self_model",
+    "content": "Maya's frustration: experiments need protection from operational chaos or they die. Can't half-enforce. Either commit with hard rules + sponsor cover, or admit defeat upfront. This ambiguity wastes everyone's hope.",
+    "summary": "Maya on failed half-measures: experiments need real protection",
+    "event_date": "2026-01-22",
+    "importance": 0.68
+  },
+  {
+    "type": "episodic",
+    "content": "Feb 3 1:1 with Sebastien: Maya pitched resurrection plan. SOC2 daily syncs drop to 3/week starting Feb 10. Globex timeline clarified: cert due Mar 15, not end-March. Window exists to restore Tuesdays.",
+    "summary": "Feb 1:1: SOC2 timeline loosens, revival window opens",
+    "event_date": "2026-02-03",
+    "importance": 0.64
+  },
+  {
+    "type": "procedural",
+    "content": "Revised no-meeting Tuesday enforcement (v2): hard calendar blocks + Anya's auto-decline now applies to founders too. Slack #no-meeting-tuesdays channel for async decision-making. Violations logged publicly weekly.",
+    "summary": "v2 enforcement: founder blocks, public logging, async channel",
+    "event_date": "2026-02-10",
+    "importance": 0.72
+  },
+  {
+    "type": "episodic",
+    "content": "Feb 18 retro: first Tuesday in 3 weeks with real adherence. Jenny shipped design system. Devon fixed Sentry alerts without meetings. Tom asked zero questions in standup because context was async. Clear win.",
+    "summary": "Week 1 revival shows immediate productivity recovery",
+    "event_date": "2026-02-18",
+    "importance": 0.56
+  },
+  {
+    "type": "semantic",
+    "content": "Decision doc filed Feb 26: no-meeting Tuesdays permanent, strong enforcement. Hard blocks for all staff + founders. Async-first for Tuesday decisions. SOC2 syncs rerouted to Mon/Wed/Thu. Globex contract enables this stability.",
+    "summary": "Feb 26 decision: permanent no-meeting Tuesdays, enforced",
+    "event_date": "2026-02-26",
+    "importance": 0.92
+  },
+  {
+    "type": "episodic",
+    "content": "Feb 25 Slack: Ari wrote 'Tuesday feeling like Tuesday again.' Marcus didn't complain about customer context-switching. Anya approved calendar automation spend ($2.4k Outlook integration). Momentum feels real.",
+    "summary": "Team sentiment positive; automation investment approved",
+    "event_date": "2026-02-25",
+    "importance": 0.48
+  },
+  {
+    "type": "semantic",
+    "content": "No-meeting Tuesday lesson: protection requires sponsor cover + external constraint removal. Q4 worked because no hard deadlines. Q1 failed because SOC2 was immovable. Feb works because Globex timeline clarified priorities.",
+    "summary": "Lesson: experiments need sponsor + constraint removal to survive",
+    "event_date": "2026-02-26",
+    "importance": 0.88
+  }
+]

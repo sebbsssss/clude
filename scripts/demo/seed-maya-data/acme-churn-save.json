@@ -1,0 +1,142 @@
+[
+  {
+    "type": "episodic",
+    "content": "Marcus flagged Acme Corp escalation: auth latency hitting 2.3s on their 50k daily agent calls. They're threatening churn unless we fix it in 30 days. Revenue at risk: $180k ARR.",
+    "summary": "Acme Corp churn risk: auth performance degradation",
+    "event_date": "2025-12-08",
+    "importance": 0.92
+  },
+  {
+    "type": "episodic",
+    "content": "First Acme call with Marcus + Devon. Their auth flow blocks vector embedding lookups. Devon identified bottleneck in Snowflake query—no indexed search on agent_id. Promised custom fix by Dec 20.",
+    "summary": "Root cause identified: unindexed Snowflake queries",
+    "event_date": "2025-12-09",
+    "importance": 0.88
+  },
+  {
+    "type": "episodic",
+    "content": "Ari wants to know if Acme's load is typical for our SLA. Told him no—they're 3x our median customer. This is edge case, not regression. Doesn't excuse slow response, but context matters for roadmap.",
+    "summary": "Acme usage 3x median; edge case not regression",
+    "event_date": "2025-12-10",
+    "importance": 0.62
+  },
+  {
+    "type": "semantic",
+    "content": "When a customer threatens churn, get technical root cause + business impact + timeline in first 48h. Don't negotiate renewal until you know if fix is actually feasible.",
+    "summary": "Churn response protocol: diagnosis before negotiation",
+    "event_date": "2025-12-11",
+    "importance": 0.78
+  },
+  {
+    "type": "episodic",
+    "content": "Devon deployed Snowflake index patch to staging. Ran load test simulating Acme's traffic. Auth latency dropped 2.3s → 340ms. Shared results with Marcus for customer call Dec 12.",
+    "summary": "Staging fix ready: 85% latency improvement",
+    "event_date": "2025-12-11",
+    "importance": 0.85
+  },
+  {
+    "type": "episodic",
+    "content": "Second Acme call: Marcus walked them through load test results + deployment plan. Their tech lead (Sarah Chen) seemed satisfied. Still wants SLA amendment though—they want 99.95% uptime guarantee.",
+    "summary": "Customer satisfied on tech; pushing for SLA",
+    "event_date": "2025-12-12",
+    "importance": 0.81
+  },
+  {
+    "type": "episodic",
+    "content": "Anya asked if we can hit 99.95% uptime. Checked with Ari + Devon. Not safely promising on current infra. We do 99.8% baseline. I told Anya: offer 30-day monitor period + escalated support instead.",
+    "summary": "Can't commit 99.95% safely; alternative approach",
+    "event_date": "2025-12-15",
+    "importance": 0.83
+  },
+  {
+    "type": "episodic",
+    "content": "Prep call for third Acme meeting. Sebastien said: if they renew + commit 6mo, we can discount 20% on top of fix. Total deal value becomes $144k if they stay. Worth the margin hit.",
+    "summary": "Renewal incentive: 20% discount + 6mo lock-in",
+    "event_date": "2025-12-17",
+    "importance": 0.87
+  },
+  {
+    "type": "episodic",
+    "content": "Third Acme call: Marcus presented renewal terms + 20% discount. Sarah's objection: they still want uptime guarantee. Counter-offered: 60-day trial SLA at 99.9%, then renegotiate. Acme said they'd discuss internally.",
+    "summary": "Objection: SLA guarantee. Counter: trial period approach",
+    "event_date": "2025-12-18",
+    "importance": 0.84
+  },
+  {
+    "type": "procedural",
+    "content": "When facing customer churn over performance: (1) Isolate root cause in <48h with eng. (2) Build fix + load test against their traffic profile. (3) Demo fix before negotiating terms. (4) Use technical win as leverage for business terms (renewal, lock-in). (5) Don't promise SLAs you can't monitor.",
+    "summary": "Process: diagnose → fix → test → leverage → close",
+    "event_date": "2025-12-19",
+    "importance": 0.79
+  },
+  {
+    "type": "episodic",
+    "content": "Devon + James worked weekend to harden the Snowflake index rollout plan. Added rollback procedures + monitoring on DataDog. Prod deploy scheduled for Jan 2 to minimize risk during holidays.",
+    "summary": "Rollout plan finalized; prod deploy Jan 2",
+    "event_date": "2025-12-20",
+    "importance": 0.72
+  },
+  {
+    "type": "episodic",
+    "content": "Acme came back with verbal yes: they'll renew if prod fix is stable for 2 weeks post-deploy. No SLA amendment, but they're staying. Marcus docs the deal: $144k ARR, 12mo term, effective Jan 1.",
+    "summary": "Acme committed: 2-week validation period post-deploy",
+    "event_date": "2025-12-23",
+    "importance": 0.91
+  },
+  {
+    "type": "self_model",
+    "content": "I'm most effective when there's a credible technical fix + a real business reason to move fast. Acme was salvageable because Devon solved the actual problem. I hate closing deals on promises we can't keep.",
+    "summary": "I work best on substance, not salesmanship",
+    "event_date": "2025-12-27",
+    "importance": 0.68
+  },
+  {
+    "type": "episodic",
+    "content": "Prod deploy Jan 2 went clean. Auth latency stable at 350–420ms under Acme's load. No alerts. Slack'd Marcus to prep final confirmation call for Jan 7 after 5-day observation period.",
+    "summary": "Prod live; monitoring shows stable performance",
+    "event_date": "2026-01-02",
+    "importance": 0.86
+  },
+  {
+    "type": "episodic",
+    "content": "Marcus confirmed with Acme: fix holding strong, no incidents. Sarah asked about follow-up—they want quarterly perf reviews built into renewal. I flagged this for Anya to add to contract template.",
+    "summary": "Acme wants quarterly reviews; add to standard terms",
+    "event_date": "2026-01-07",
+    "importance": 0.74
+  },
+  {
+    "type": "episodic",
+    "content": "Ran postmortem with Ari + Devon + Marcus. Acme's load exposed gaps in our capacity planning. We're adding load test automation for >10k daily agent calls. Won't hit us twice.",
+    "summary": "Postmortem output: new load testing thresholds",
+    "event_date": "2026-01-14",
+    "importance": 0.77
+  },
+  {
+    "type": "semantic",
+    "content": "Champion relationships matter. Sarah Chen at Acme became an ally after we fixed the actual problem, not after we offered discounts. Technical credibility before commercial leverage.",
+    "summary": "Build champion via technical wins, not discounts",
+    "event_date": "2026-01-15",
+    "importance": 0.73
+  },
+  {
+    "type": "episodic",
+    "content": "Acme signed renewal: $144k, 12 months, Jan 2026–Dec 2026. Deal docs + contract closed. Marcus logged in Linear as closed opportunity. Cost us ~$30k in discount but saved the customer.",
+    "summary": "Acme renewal signed: $144k, 12mo term",
+    "event_date": "2026-01-22",
+    "importance": 0.93
+  },
+  {
+    "type": "semantic",
+    "content": "Churn risk timeline: <48h diagnosis, <1 week fix demo, <2 weeks negotiation closure. Anything slower signals deeper misalignment. Keep stakeholders informed daily, not weekly.",
+    "summary": "Churn response cadence: 48h → 1wk → 2wk close",
+    "event_date": "2026-01-22",
+    "importance": 0.81
+  },
+  {
+    "type": "episodic",
+    "content": "Told Sebastien: Acme opportunity was really a retention play, not new revenue. But the discipline applied—root cause first, fix proof second, then terms—is repeatable for real upmarket deals.",
+    "summary": "Process learned from Acme applies to enterprise sales",
+    "event_date": "2026-01-22",
+    "importance": 0.69
+  }
+]

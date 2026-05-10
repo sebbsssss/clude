@@ -1,0 +1,128 @@
+[
+  {
+    "type": "episodic",
+    "content": "Compliance pinged Anya asking for SAML SSO + audit logs in Notion. Anya forwarded to me with 'this is now an ops problem.' Checked Notion pricing: Enterprise is $24/user vs current $10/user Pro.",
+    "summary": "Compliance requests SAML + audit logs; forces Notion Enterprise tier",
+    "event_date": "2026-01-08",
+    "importance": 0.72
+  },
+  {
+    "type": "semantic",
+    "content": "Notion Pro (current tier) has no SAML SSO, no audit logs, no IP restrictions. Enterprise has all three. Non-negotiable for SOC 2 readiness per compliance team.",
+    "summary": "Notion Pro lacks enterprise security features; Enterprise tier required",
+    "event_date": "2026-01-08",
+    "importance": 0.85
+  },
+  {
+    "type": "episodic",
+    "content": "Caught up with Anya on cost. We have ~35 active Notion users. Pro = $350/month. Enterprise = $840/month. Delta = $490/month or $5,880/year. Anya asked 'can compliance fund it?' Not their budget.",
+    "summary": "35 Notion users; upgrade costs $490/mo or $5,880/yr",
+    "event_date": "2026-01-09",
+    "importance": 0.68
+  },
+  {
+    "type": "semantic",
+    "content": "Notion Enterprise audit logs are immutable and ISO 27001 certified. SAML supports JIT provisioning, reducing manual user management. Audit retention minimum 90 days.",
+    "summary": "Enterprise audit logs ISO certified; SAML enables JIT provisioning",
+    "event_date": "2026-01-09",
+    "importance": 0.78
+  },
+  {
+    "type": "episodic",
+    "content": "Slack with Sebastien: 'Notion upgrade is $5.8k annually, non-optional for compliance.' He said 'fine, budget it Q1, move on.' No pushback. Two minutes.",
+    "summary": "Sebastien approved Notion upgrade; budget Q1",
+    "event_date": "2026-01-10",
+    "importance": 0.65
+  },
+  {
+    "type": "procedural",
+    "content": "To upgrade Notion workspace: (1) Contact Notion sales with workspace ID. (2) Request quote for Enterprise tier and SAML setup. (3) Finance processes contract within 3–5 days. (4) Notion enables SAML on backend. (5) Anya configures 1Password as IdP.",
+    "summary": "Notion Enterprise upgrade process: contact sales → quote → contract → enable",
+    "event_date": "2026-01-10",
+    "importance": 0.82
+  },
+  {
+    "type": "semantic",
+    "content": "Clude current SaaS spend: Snowflake ($8k/mo), DataDog ($3.2k/mo), AWS ($12k/mo). Notion upgrade adds $490/mo. Total tooling ~$23.7k/mo. Tracked in Finance sheet, line-item by vendor.",
+    "summary": "Clude SaaS spend ~$23.7k/mo including Notion upgrade",
+    "event_date": "2026-01-10",
+    "importance": 0.71
+  },
+  {
+    "type": "episodic",
+    "content": "Jenny asked why Notion is slow on mobile designs. Explained upgrade is happening Q1 anyway; asked her to flag any workspace issues for Notion sales in the upgrade conversation.",
+    "summary": "Jenny flagged Notion mobile perf; noted for sales escalation",
+    "event_date": "2026-01-13",
+    "importance": 0.35
+  },
+  {
+    "type": "semantic",
+    "content": "Notion SSO implementation: 1Password can act as SAML IdP. Redirect URI = https://clude.notion.so/login. Priya to manage JIT provisioning rules (map Clude email domain to auto-provision Notion accounts).",
+    "summary": "1Password → Notion SAML; Priya manages JIT provisioning",
+    "event_date": "2026-01-13",
+    "importance": 0.73
+  },
+  {
+    "type": "episodic",
+    "content": "Anya pulled FY2026 budget breakdown. Ops allocated $18k for SaaS tools; compliance line is $2.1k. Notion upgrade ($5.88k) doesn't fit either. Created new 'Security Compliance' line item in Q1.",
+    "summary": "Budgeted Notion upgrade as new Q1 security compliance line item",
+    "event_date": "2026-01-14",
+    "importance": 0.69
+  },
+  {
+    "type": "procedural",
+    "content": "Before going live with Notion SSO: (1) Test SAML config in staging (create test workspace). (2) Verify audit logs are being written post-login. (3) Check DataDog integration still pulling Notion workspace metrics. (4) Train CS team (Marcus) on new SSO login flow.",
+    "summary": "Pre-launch checklist: stage SAML, verify audit logs, test DataDog, train CS",
+    "event_date": "2026-01-14",
+    "importance": 0.79
+  },
+  {
+    "type": "episodic",
+    "content": "Priya said onboarding docs need updating; new hires will be auto-provisioned to Notion instead of manual invite. Added task to her backlog, due before go-live. She estimated 2 hours rework.",
+    "summary": "Priya updating onboarding docs for Notion SSO auto-provisioning",
+    "event_date": "2026-01-15",
+    "importance": 0.48
+  },
+  {
+    "type": "semantic",
+    "content": "Notion audit logs capture: user login/logout, document access, permission changes, IP address, timestamp. Retention 90+ days. Required for SOC 2 Type II attestation. Compliance team audits quarterly.",
+    "summary": "Notion audit logs capture login, access, perms; 90-day retention for SOC 2",
+    "event_date": "2026-01-16",
+    "importance": 0.81
+  },
+  {
+    "type": "episodic",
+    "content": "Reached out to Notion sales (sales@notion.so) with workspace ID and asked for Enterprise quote. They responded same day with $24/user, $5,880/year for 35 seats. Quote valid 30 days. Forwarded to Anya.",
+    "summary": "Notion sales provided quote: $24/user, $5,880/year, valid 30 days",
+    "event_date": "2026-01-17",
+    "importance": 0.62
+  },
+  {
+    "type": "self_model",
+    "content": "I'm getting better at not re-explaining compliance requirements to every stakeholder. This time I documented the chain once (SAML → Enterprise → $5.8k) and just shared the link. Saves everyone time, especially me.",
+    "summary": "Documentation reduces re-explanation; I'm more efficient at context-setting",
+    "event_date": "2026-01-20",
+    "importance": 0.54
+  },
+  {
+    "type": "episodic",
+    "content": "Anya processed Notion contract with finance team. Notion sent SAML setup instructions. Handed off to Priya + Anya for 1Password IdP config. Expected live by end of January.",
+    "summary": "Notion contract signed; SAML config handed to Priya/Anya",
+    "event_date": "2026-01-22",
+    "importance": 0.66
+  },
+  {
+    "type": "semantic",
+    "content": "Notion subscription billing: annual prepay saves 15% vs monthly. We're doing annual to lock in $5,880 for FY2026. No mid-year tier downgrades allowed per contract.",
+    "summary": "Annual prepay with Notion locks rate; 15% savings vs monthly",
+    "event_date": "2026-01-23",
+    "importance": 0.61
+  },
+  {
+    "type": "episodic",
+    "content": "Marcus asked about CS impact. Told him SSO means customers won't need Notion seat invites anymore; we manage it via 1Password. Reduces onboarding friction. He was happy.",
+    "summary": "SSO reduces customer onboarding friction; Marcus confirmed CS benefit",
+    "event_date": "2026-01-28",
+    "importance": 0.52
+  }
+]

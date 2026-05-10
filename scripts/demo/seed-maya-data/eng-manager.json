@@ -1,0 +1,100 @@
+[
+  {
+    "type": "episodic",
+    "content": "Ari flagged that Priya O. (EM candidate from Stripe) was coming onsite Feb 10. Asked me to prep interview schedule. Noted she had 8yr management exp at payment infra orgs—exactly what we need.",
+    "summary": "Priya O. onsite scheduled for Feb 10",
+    "event_date": "2026-02-04",
+    "importance": 0.52
+  },
+  {
+    "type": "episodic",
+    "content": "Prepped onsite for Priya O. with Ari, Lina, Jenny. Blocked 3h total: 1h with me on ops/culture, 45min with Ari on eng strategy, 1h15min panel. Sent her a pre-read on our stack (Anthropic, Voyage, Snowflake, DataDog).",
+    "summary": "Organized Priya O. onsite interview schedule",
+    "event_date": "2026-02-06",
+    "importance": 0.48
+  },
+  {
+    "type": "semantic",
+    "content": "Key insight from past failed hires: management candidates from large infra companies (Stripe, Shopify, Twilio) often struggle with early-stage speed & ambiguity. Need to probe for comfort with scrappiness during interviews, not assume tenure = fit.",
+    "summary": "Large-company eng managers may not adapt well to startup pace",
+    "event_date": "2026-02-07",
+    "importance": 0.68
+  },
+  {
+    "type": "episodic",
+    "content": "Priya O. onsite day. She interviewed well—thoughtful on hiring strategy, asked good questions about our Anthropic partnership. Chemistry was solid. Ari said 'strong hire' post-interview. Lina agreed. No red flags.",
+    "summary": "Priya O. onsite went well, team consensus positive",
+    "event_date": "2026-02-10",
+    "importance": 0.61
+  },
+  {
+    "type": "episodic",
+    "content": "Sebastien, Anya, and I finalized offer for Priya O.: $185k base, $45k/yr equity grant (4yr vest), full benefits. Stripe role was reportedly $200k+ but lower equity. We were competitive on total comp, not base.",
+    "summary": "Offer package for Priya O.: $185k base + $45k equity",
+    "event_date": "2026-02-11",
+    "importance": 0.72
+  },
+  {
+    "type": "episodic",
+    "content": "Sent offer to Priya O. via Anya. Noted 5-day response window. I wrote a personal note emphasizing our mission w/ Anthropic, growth trajectory, and her chance to build the eng org from 12 to 25.",
+    "summary": "Delivered offer package with personal note",
+    "event_date": "2026-02-12",
+    "importance": 0.54
+  },
+  {
+    "type": "episodic",
+    "content": "Priya O. requested a call to discuss. I took it on Feb 17. She said Stripe countered with $210k base + $60k equity vesting faster. She was torn but leaning toward staying. Cited certainty + existing relationships.",
+    "summary": "Priya O. disclosed Stripe counter-offer, leaning toward staying",
+    "event_date": "2026-02-17",
+    "importance": 0.75
+  },
+  {
+    "type": "semantic",
+    "content": "Compensation gap lesson: $25k base delta + faster vesting = material advantage for established company. We can't match Stripe dollar-for-dollar, but should have led with equity upside narrative earlier, not after offer.",
+    "summary": "Can't outbid established companies; must lead w/ growth story",
+    "event_date": "2026-02-18",
+    "importance": 0.82
+  },
+  {
+    "type": "episodic",
+    "content": "Checked in w/ Sebastien about counteroffer room. He said no—already at ceiling for EM role without CEO approval. Recommended we move on. Felt like a failure, but his logic was sound.",
+    "summary": "Sebastien declined to counter; authorized moving on",
+    "event_date": "2026-02-19",
+    "importance": 0.68
+  },
+  {
+    "type": "episodic",
+    "content": "Received formal decline from Priya O. on Feb 21. She wrote: 'The opportunity at Clude is genuinely exciting, but the certainty at Stripe + my relationships there made the decision clear.' No anger, just practical.",
+    "summary": "Priya O. formally declined, chose Stripe for stability",
+    "event_date": "2026-02-21",
+    "importance": 0.73
+  },
+  {
+    "type": "self_model",
+    "content": "I'm frustrated we lost a strong candidate to comp, but I'm learning not to take this personally. She made a rational choice. My job is documenting why (lower base salary, equity timing mismatch) so we iterate on future EM recruiting—not that we're broken.",
+    "summary": "Rational candidate loss ≠ personal failure; treat as process input",
+    "event_date": "2026-02-22",
+    "importance": 0.61
+  },
+  {
+    "type": "procedural",
+    "content": "Going forward: (1) Earlier equity conversation in screening, (2) Anya to model total comp vs. likely counteroffers before phone screen, (3) Prep Sebastien on comp band + counter room before each EM candidates gets offers.",
+    "summary": "Updated EM recruiting process post-Priya O. loss",
+    "event_date": "2026-02-23",
+    "importance": 0.88
+  },
+  {
+    "type": "episodic",
+    "content": "Sent recap memo to Ari & Sebastien: Priya O. was strong culture fit, lost to comp. Recommended we (a) budget for $195k+ base for next EM, (b) develop equity narrative before offer, (c) accept we won't beat Stripe/Stripe-adjacent on certainty.",
+    "summary": "Documented loss and 3 process recommendations for EM search",
+    "event_date": "2026-02-24",
+    "importance": 0.79
+  },
+  {
+    "type": "episodic",
+    "content": "Ari asked if we should lower EM bar or keep waiting. I said keep waiting—better to hire the right person later than rush a mediocre fit. He agreed. Back to sourcing next week.",
+    "summary": "Decided to resume focused EM search rather than compromise",
+    "event_date": "2026-02-26",
+    "importance": 0.64
+  }
+]

@@ -2,7 +2,11 @@ import { randomBytes, createHash } from 'crypto';
 import { getDb } from '@clude/shared/core/database';
 import { createChildLogger } from '@clude/shared/core/logger';
 import type { AgentTier } from '../character/agent-tier-modifiers';
-import { resolveWalletsForDid, ensurePrivySolanaWalletForDid } from '../auth/privy-wallet-resolver';
+import {
+  resolveWalletsForDid,
+  ensurePrivySolanaWalletForDid,
+  resolveEmailForDid,
+} from '../auth/privy-wallet-resolver';
 
 const log = createChildLogger('agent-tier');
 
@@ -22,6 +26,7 @@ export interface AgentRegistration {
   metadata: Record<string, unknown>;
   owner_wallet: string | null;
   privy_did: string | null;
+  email: string | null;
 }
 
 export async function authenticateAgent(apiKey: string): Promise<AgentRegistration | null> {
@@ -214,16 +219,55 @@ export async function findOrCreateAgentForWallet(wallet: string): Promise<{ apiK
 
 /**
  * Find or create an agent for a Privy DID.
- * Handles three cases:
- * 1. DID already has an agent → return it
- * 2. DID is new but wallet provided → find/create by wallet, backfill DID
- * 3. DID is new, no wallet (email user) → create with synthetic owner_wallet
+ *
+ * Identity is anchored on EMAIL when one is verified for the DID — this
+ * keeps the same person on the same agent_keys row across devices/sessions
+ * even if Privy provisions a fresh embedded wallet for a new device. Email
+ * is stamped onto every row this function returns when it can be resolved,
+ * so existing rows backfill passively as users log in.
+ *
+ * Order of operations:
+ *  1. DID already has an agent → return it (existing wallet-link / migration paths preserved).
+ *  2. DID is new BUT email matches an existing active row → adopt that row, attach this DID.
+ *  3. DID is new and a wallet was passed → find/create by wallet, backfill DID.
+ *  4. DID is new, no wallet → provision a Privy embedded Solana wallet, create agent.
+ *  5. Last resort → synthetic owner_wallet (Privy unavailable).
  */
+async function stampEmailOnAgent(agentId: string, email: string | null): Promise<void> {
+  if (!email) return;
+  const db = getDb();
+  // Idempotent: only writes when the row's email is null OR differs.
+  const { data: row } = await db
+    .from('agent_keys')
+    .select('email')
+    .eq('agent_id', agentId)
+    .single();
+  if (!row || row.email === email) return;
+  if (row.email && row.email !== email) {
+    log.warn(
+      { agentId, existingEmail: row.email, incomingEmail: email },
+      'Refusing to overwrite agent email with a different verified address',
+    );
+    return;
+  }
+  const { error } = await db
+    .from('agent_keys')
+    .update({ email })
+    .eq('agent_id', agentId);
+  if (error) {
+    log.warn({ agentId, email, err: error.message }, 'Failed to stamp email on agent_keys');
+  }
+}
+
 export async function findOrCreateAgentForDid(
   did: string,
   wallet?: string,
 ): Promise<{ apiKey: string; agentId: string; isNew: boolean; ownerWallet: string }> {
   const db = getDb();
+
+  // Resolve verified email up front (cached, single Privy call). Used for
+  // email-anchored adoption AND for passively backfilling rows on every login.
+  const verifiedEmail = await resolveEmailForDid(did).catch(() => null as string | null);
 
   // 1. Check if DID already has an agent
   const { data: existing } = await db
@@ -239,6 +283,7 @@ export async function findOrCreateAgentForDid(
     if (wallet && existing.owner_wallet && HEX_WALLET_RE.test(existing.owner_wallet) && SOLANA_ADDR_RE.test(wallet)) {
       try {
         await migrateOwnerWallet(existing.owner_wallet, wallet);
+        await stampEmailOnAgent(existing.agent_id, verifiedEmail);
         return {
           apiKey: existing.api_key,
           agentId: existing.agent_id,
@@ -282,6 +327,7 @@ export async function findOrCreateAgentForDid(
               'Migration collision resolved: adopted orphan real-wallet agent',
             );
 
+            await stampEmailOnAgent(realAgent.agent_id, verifiedEmail);
             return {
               apiKey: realAgent.api_key,
               agentId: realAgent.agent_id,
@@ -312,6 +358,7 @@ export async function findOrCreateAgentForDid(
             { did, agentId: existing.agent_id, from: existing.owner_wallet, to: provisioned },
             'Auto-migrated existing email-signup agent to Privy embedded wallet',
           );
+          await stampEmailOnAgent(existing.agent_id, verifiedEmail);
           return {
             apiKey: existing.api_key,
             agentId: existing.agent_id,
@@ -328,12 +375,69 @@ export async function findOrCreateAgentForDid(
       }
     }
 
+    await stampEmailOnAgent(existing.agent_id, verifiedEmail);
     return {
       apiKey: existing.api_key,
       agentId: existing.agent_id,
       isNew: false,
       ownerWallet: existing.owner_wallet,
     };
+  }
+
+  // 1.5. Email-anchored adoption: same email = same agent_keys row, even if
+  //      Privy issues a new DID (e.g. user signed in on a fresh device, or
+  //      we re-registered them via the admin API). Without this, every new
+  //      DID for an existing email gets a fresh embedded wallet and orphans
+  //      the user's prior memory history.
+  if (verifiedEmail) {
+    const { data: emailRow } = await db
+      .from('agent_keys')
+      .select('agent_id, api_key, owner_wallet, privy_did')
+      .eq('email', verifiedEmail)
+      .eq('is_active', true)
+      .limit(1)
+      .single();
+
+    if (emailRow) {
+      if (emailRow.privy_did && emailRow.privy_did !== did) {
+        log.warn(
+          { email: verifiedEmail, incomingDid: did, claimedBy: emailRow.privy_did },
+          'Email already bound to a different active DID — skipping email-anchored adoption',
+        );
+      } else {
+        // Free up the unique idx_agent_keys_privy_did partial index in case
+        // an inactive row still carries this DID (otherwise the stamp below
+        // would collide). is_active=false rows still count under the partial
+        // index because it's WHERE privy_did IS NOT NULL.
+        await db
+          .from('agent_keys')
+          .update({ privy_did: null })
+          .eq('privy_did', did)
+          .neq('agent_id', emailRow.agent_id);
+
+        await db
+          .from('agent_keys')
+          .update({ privy_did: did })
+          .eq('agent_id', emailRow.agent_id);
+
+        log.info(
+          {
+            email: verifiedEmail,
+            did,
+            agentId: emailRow.agent_id,
+            ownerWallet: emailRow.owner_wallet,
+          },
+          'Email-anchored adoption: bound DID to existing agent_keys row',
+        );
+
+        return {
+          apiKey: emailRow.api_key,
+          agentId: emailRow.agent_id,
+          isNew: false,
+          ownerWallet: emailRow.owner_wallet,
+        };
+      }
+    }
   }
 
   // 2. DID not found — if wallet provided, find/create by wallet and backfill DID
@@ -346,6 +450,7 @@ export async function findOrCreateAgentForDid(
       .update({ privy_did: did })
       .eq('agent_id', result.agentId);
 
+    await stampEmailOnAgent(result.agentId, verifiedEmail);
     return { ...result, ownerWallet: wallet };
   }
 
@@ -374,6 +479,7 @@ export async function findOrCreateAgentForDid(
         { did, agentId: result.agentId, wallet: provisionedWallet },
         'Provisioned Privy Solana wallet for new email-signup agent',
       );
+      await stampEmailOnAgent(result.agentId, verifiedEmail);
       return { ...result, ownerWallet: provisionedWallet };
     }
   } catch (err: any) {
@@ -403,5 +509,6 @@ export async function findOrCreateAgentForDid(
 
   log.warn({ agentId, did, ownerWallet: syntheticWallet }, 'Created agent for Privy DID with SYNTHETIC wallet (Privy provisioning unavailable)');
 
+  await stampEmailOnAgent(agentId, verifiedEmail);
   return { apiKey, agentId, isNew: true, ownerWallet: syntheticWallet };
 }

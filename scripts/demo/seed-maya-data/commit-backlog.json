@@ -1,0 +1,86 @@
+[
+  {
+    "type": "episodic",
+    "content": "Ari flagged commit chain backlog hit 8K during Tuesday's write spike. Queue backed up across memory layer. Looked like cascade from Anthropic integration batch.",
+    "summary": "Commit backlog reached 8K on Apr 1 write spike",
+    "event_date": "2026-04-01",
+    "importance": 0.62
+  },
+  {
+    "type": "semantic",
+    "content": "Merkle root batching strategy: group pending commits by hash tree, reduce individual queue operations by ~60%. Ari's approach clusters small writes into atomic blocks. Reduces DB contention significantly.",
+    "summary": "Merkle root batching reduces commit queue pressure by 60%",
+    "event_date": "2026-04-02",
+    "importance": 0.78
+  },
+  {
+    "type": "procedural",
+    "content": "When commit backlog exceeds 5K: check DataDog memory layer metrics (p99 latency, Sentry error rate), then page Ari. If > 10K, trigger incident protocol. Document root cause in Linear ticket before resolving.",
+    "summary": "Commit backlog escalation procedure (5K threshold)",
+    "event_date": "2026-04-02",
+    "importance": 0.81
+  },
+  {
+    "type": "episodic",
+    "content": "Wednesday morning standup: Devon and James both suggested tuning Snowflake write buffer from 2s to 5s intervals. Ari worried about latency trade-off. Decided to test on staging first.",
+    "summary": "Devon & James proposed Snowflake buffer tuning (2s→5s)",
+    "event_date": "2026-04-03",
+    "importance": 0.48
+  },
+  {
+    "type": "procedural",
+    "content": "RCA template for queue incidents: 1) timeline of backlog growth, 2) write volume spike correlation, 3) commit success/failure rates, 4) downstream impact on Acme/Initech, 5) remediation applied, 6) prevention next steps.",
+    "summary": "Incident RCA structure for commit queue events",
+    "event_date": "2026-04-04",
+    "importance": 0.85
+  },
+  {
+    "type": "semantic",
+    "content": "High write volume (>2K ops/min) triggers cascade risk in memory layer. Batch window becomes critical—too narrow risks queue overflow, too wide (>10s) affects agent latency SLA. Sweet spot appears ~5s.",
+    "summary": "Memory layer cascade risk at 2K+ ops/min write rate",
+    "event_date": "2026-04-07",
+    "importance": 0.72
+  },
+  {
+    "type": "procedural",
+    "content": "Monitor commit chain depth weekly via DataDog dashboard (memory.commit_chain_depth metric). Alert if exceeds 12K. Share trend snapshot with Sebastien monthly for capacity planning.",
+    "summary": "Weekly commit chain depth monitoring + monthly capacity review",
+    "event_date": "2026-04-08",
+    "importance": 0.68
+  },
+  {
+    "type": "self_model",
+    "content": "I've defaulted to waiting for Ari to surface technical escalations, but queue incidents need earlier detection. Need to own DataDog dashboard checks 3x daily during high-traffic windows. Can't offload this.",
+    "summary": "Need proactive queue monitoring, not reactive escalations",
+    "event_date": "2026-04-09",
+    "importance": 0.61
+  },
+  {
+    "type": "episodic",
+    "content": "Postmortem on Apr 1 incident: Ari's merkle root batching deployed Thursday night. Backlog dropped from 8.2K to 1.8K by end of day. No customer-facing latency reported, but Initech's async job queue delayed ~90s.",
+    "summary": "Merkle batching deployment cleared 8K backlog by Apr 10",
+    "event_date": "2026-04-10",
+    "importance": 0.71
+  },
+  {
+    "type": "semantic",
+    "content": "Audit findings: commit chain integrity depends on three layers—Linear issue tracking for tickets, Notion doc for decision history, GitHub commits for code. Missing any layer creates blind spot in RCA.",
+    "summary": "Three-layer audit requirement for commit chain integrity",
+    "event_date": "2026-04-11",
+    "importance": 0.75
+  },
+  {
+    "type": "procedural",
+    "content": "Post-incident checklist: 1) Update Linear ticket status, 2) post postmortem summary to #incidents Slack channel within 24h, 3) assign prevention owner, 4) schedule follow-up audit with Anya (Finance) for cost impact review.",
+    "summary": "Post-incident documentation & communication workflow",
+    "event_date": "2026-04-12",
+    "importance": 0.79
+  },
+  {
+    "type": "self_model",
+    "content": "Realized I've been documenting decisions async but not forcing async review cycles on Ari/Devon. Need to set 18h SLA for technical decision sign-offs to avoid cascading delays during crises.",
+    "summary": "Must enforce async decision review SLAs with eng team",
+    "event_date": "2026-04-15",
+    "importance": 0.58
+  }
+]

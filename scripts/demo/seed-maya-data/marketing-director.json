@@ -1,0 +1,100 @@
+[
+  {
+    "type": "episodic",
+    "content": "Sebastien forwarded intro to Sarah Chen via Sequoia operator network. Former CMO at Figma, 8yr tenure, led positioning through Series B→IPO. Available immediately post-vesting cliff. Asking $240K base + equity package TBD.",
+    "summary": "Sarah Chen intro from Sequoia — ex-Figma CMO, available now",
+    "event_date": "2026-04-08",
+    "importance": 0.72
+  },
+  {
+    "type": "semantic",
+    "content": "Marketing Director hire for Series A is blocking top-of-funnel momentum. Acme, Initech, Globex all in pilot stage but no dedicated inbound strategy. Need someone who can build repeatable demand gen while we close seed follow-on. Role should own positioning, analyst relations, content.",
+    "summary": "Marketing Director critical for Series A readiness and pipeline",
+    "event_date": "2026-04-08",
+    "importance": 0.85
+  },
+  {
+    "type": "episodic",
+    "content": "Phone screen with Sarah Chen, 45min. Asked about our Anthropic/Voyage AI integrations, competitive moat vs. pinecone/llamaindex. Pushed back on TAM sizing—wanted to see bottom-up logos, not top-down. Impressed by rigor. Said yes to full loop.",
+    "summary": "Sarah Chen phone screen — sharp on product, wants evidence-based TAM",
+    "event_date": "2026-04-10",
+    "importance": 0.68
+  },
+  {
+    "type": "episodic",
+    "content": "Anya flagged: if we hire Sarah at $240K, that's 3.2% of current burn ($750K/mo ops spend). Lina and Ari both want to sit in interviews. Scheduled panel for Apr 17, 2pm PT. Added Lina, Ari, Anya. Sebastien will close.",
+    "summary": "Sarah Chen full loop scheduled Apr 17 — ops impact flagged",
+    "event_date": "2026-04-11",
+    "importance": 0.61
+  },
+  {
+    "type": "episodic",
+    "content": "Priya sent comp data: B2B SaaS CMOs at $200–280K range depending on stage/geography. Sarah's ask at 75th percentile. Recommended we counter at $210K base + 0.5% equity (refresher vesting 4yr/1yr cliff). Noted her Figma reputation is substantial—risk is overpay, not underpay.",
+    "summary": "Comp benchmark: Sarah at 75th %ile, Priya suggests $210K counter",
+    "event_date": "2026-04-12",
+    "importance": 0.58
+  },
+  {
+    "type": "episodic",
+    "content": "Sarah's interview panel feedback: Lina loved her Figma positioning playbook for dev tools, asked if she'd adapt it. Ari concerned about her lack of hands-on AI/ML depth—worried she'd over-delegate to agency. Anya noted strong financial discipline. Sebastien said 'hire her if comp works.'",
+    "summary": "Panel split: Lina/Anya/Sebastien yes; Ari wants more AI chops",
+    "event_date": "2026-04-17",
+    "importance": 0.73
+  },
+  {
+    "type": "procedural",
+    "content": "Process for next marketing hire: (1) Source via operator networks first (Sequoia, a16z, YC) before search firm. (2) Phone screen must probe product depth & TAM methodology. (3) Panel includes Lina (product fit), Ari (tech credibility), Anya (financial planning). (4) Close conversation owned by Sebastien.",
+    "summary": "Documented: marketing hire sourcing & interview workflow for future",
+    "event_date": "2026-04-18",
+    "importance": 0.65
+  },
+  {
+    "type": "episodic",
+    "content": "Sarah countered our $210K offer with $225K + 0.55% equity. Anya green-lit. Offer sent. Contingent on background check, reference calls with her Figma skip-level (got intro from her manager). Start date: May 13, 2026 (post-vesting cliff settlement).",
+    "summary": "Sarah accepts $225K/$55K equity, starts May 13 post-vesting",
+    "event_date": "2026-04-20",
+    "importance": 0.79
+  },
+  {
+    "type": "episodic",
+    "content": "Reference call with Sarah's Figma skip (Chief Product, ex-Stripe). Said she was 'exceptional at positioning complex infra to design orgs, brutal with underperforming vendors (cut $2M MarTech stack), hired only A-players.' No red flags.",
+    "summary": "Reference: exceptional positioning, vendor discipline, high hiring bar",
+    "event_date": "2026-04-22",
+    "importance": 0.64
+  },
+  {
+    "type": "semantic",
+    "content": "Key assumption we're making with Sarah: she can translate SaaS developer-tools playbook to AI agents space. Positioning will emphasize Clude's edge (Anthropic/Voyage integration, sub-500ms latency) vs. open-source competitors. Need to validate TAM sizing before Series A pitch.",
+    "summary": "Sarah's mandate: apply Figma dev-tools playbook to agent market",
+    "event_date": "2026-04-23",
+    "importance": 0.77
+  },
+  {
+    "type": "episodic",
+    "content": "Slack thread with Sebastien: discussed Sarah's first 90 days. Priorities: (1) position for Series A (Sequoia, Benchmark, GGV). (2) Rebuild analyst relations (Gartner, Forrester gaps). (3) Customer case studies (Acme Corp + Wayne Industries closest to done). (4) Content calendar for DevRel.",
+    "summary": "Sarah's 90-day roadmap: Series A positioning, analyst relations, case studies",
+    "event_date": "2026-04-24",
+    "importance": 0.71
+  },
+  {
+    "type": "episodic",
+    "content": "Onboarding doc created in Notion. Links to: Clude product roadmap (Linear), customer list (HubSpot), AWS/Cloudflare/Sentry dashboards, DataDog metrics, GitHub repos. Set Sarah up with 1Password vault. First day: product deep-dive with Ari, then customer calls with Marcus.",
+    "summary": "Sarah's onboarding prepped: infra access, vendor logins, first-day schedule",
+    "event_date": "2026-04-25",
+    "importance": 0.59
+  },
+  {
+    "type": "self_model",
+    "content": "I noticed I default to async docs + structured due diligence (comp benchmarks, reference calls, structured panel feedback). Makes hiring faster and avoids re-litigating decisions. With Sarah, felt useful—everyone was aligned by offer stage. Will use this template for future hires.",
+    "summary": "I prefer async hiring rigor—avoids re-explaining, speeds decisions",
+    "event_date": "2026-04-26",
+    "importance": 0.54
+  },
+  {
+    "type": "semantic",
+    "content": "Lessons from Sarah hire: (1) Operator networks are faster/better than search firms for early-stage SaaS. (2) Panel format with clear evaluation criteria prevents groupthink. (3) Comp at 75th %ile was right—she countered minimally. (4) Reference calls worth the time; skip-level validates cultural fit.",
+    "summary": "Hiring learnings: networks beat search firms, panel rigor works, pay fairly",
+    "event_date": "2026-04-30",
+    "importance": 0.68
+  }
+]

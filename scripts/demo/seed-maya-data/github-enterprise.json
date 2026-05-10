@@ -1,0 +1,93 @@
+[
+  {
+    "type": "episodic",
+    "content": "Anya flagged GitHub Enterprise renewal due Feb 15—$48k annual. Same week Sebastien got compliance alert: SAML SSO required for SOC 2 audit. Two separate urgencies, same vendor. Told Anya to bundle the renewal conversation with SSO setup to avoid separate implementations.",
+    "summary": "GitHub renewal + SAML SSO compliance requirement converge",
+    "event_date": "2026-01-14",
+    "importance": 0.72
+  },
+  {
+    "type": "semantic",
+    "content": "SAML SSO implementation at Clude: required for SOC 2 attestation. GitHub Enterprise supports SAML natively. Snowflake already SAML-enabled. Notion and Linear don't require it—lower risk. Prioritize GitHub as primary identity federation point for engineering team.",
+    "summary": "SAML SSO requirement drives GitHub Enterprise adoption decision",
+    "event_date": "2026-01-14",
+    "importance": 0.81
+  },
+  {
+    "type": "procedural",
+    "content": "To implement GitHub SAML at Clude: (1) GitHub Account Owner (Sebastien) initiates SAML setup in org settings. (2) Obtain metadata from GitHub, upload to IdP config. (3) Ari coordinates with DevOps (Devon likely) on credential rotation. (4) Test with pilot group before full org rollout.",
+    "summary": "GitHub SAML implementation process checklist",
+    "event_date": "2026-01-15",
+    "importance": 0.78
+  },
+  {
+    "type": "episodic",
+    "content": "Sebastien asked me to handle vendor comms on GitHub renewal. Sent template email to GitHub account manager (Sarah Chen) requesting: (a) renewal quote with SAML SSO enablement included, (b) implementation timeline, (c) volume discount potential given 60-person team.",
+    "summary": "Initiated GitHub Enterprise renewal negotiation with account manager",
+    "event_date": "2026-01-16",
+    "importance": 0.54
+  },
+  {
+    "type": "semantic",
+    "content": "GitHub Enterprise pricing for 60-person team: typically $21/seat/month minimum (Enterprise Cloud) or higher for on-prem. At Clude scale, $48k/year ≈ $40/seat/year. Renewal timing favorable—can negotiate 2-year lock or volume adjustment. SAML is standard feature, no separate cost.",
+    "summary": "GitHub Enterprise cost structure and negotiation context",
+    "event_date": "2026-01-17",
+    "importance": 0.65
+  },
+  {
+    "type": "episodic",
+    "content": "Ari raised concern in standup: SAML rollout will disable direct GitHub passwords. Junior devs (Tom mainly) may resist. Suggested phased rollout—admin + core backend team first, then platform. I made note: Tom's onboarding (Mar 2026) overlaps; James already trained on SSO from prior role.",
+    "summary": "SAML rollout phasing discussion; onboarding timing conflict noted",
+    "event_date": "2026-01-20",
+    "importance": 0.48
+  },
+  {
+    "type": "semantic",
+    "content": "Compliance audit drivers at Clude: SOC 2 Type II scope includes access controls + audit logging. GitHub SAML satisfies 'centralized authentication' requirement. Snowflake + GitHub + Notion combination covers 95% of critical system access. Remaining gap: AWS IAM (Cloudflare handles CDN, separate).",
+    "summary": "SAML closes core compliance gap in audit scope",
+    "event_date": "2026-01-21",
+    "importance": 0.77
+  },
+  {
+    "type": "procedural",
+    "content": "After GitHub SAML goes live, mandatory post-implementation steps: (1) audit all active GitHub org members and remove stale accounts (run quarterly). (2) configure GitHub org permission sync with IdP groups. (3) document SAML certificate renewal schedule (auto-rotate ~3mo before expiry). (4) test emergency access flow if IdP unavailable.",
+    "summary": "Post-SAML GitHub maintenance and monitoring procedures",
+    "event_date": "2026-01-22",
+    "importance": 0.74
+  },
+  {
+    "type": "episodic",
+    "content": "Sarah Chen (GitHub AM) responded: renewal quote $49.2k/year, SAML included no upcharge, live within 2 weeks of contract signature. Asked about 3-year term for discount—offered 8% ($4.7k savings). Brought to Sebastien; he approved $47.5k negotiated price and will sign by Jan 27.",
+    "summary": "GitHub renewal negotiated: $47.5k/year, SAML live by Feb 4",
+    "event_date": "2026-01-23",
+    "importance": 0.81
+  },
+  {
+    "type": "self_model",
+    "content": "I notice I default to bundling vendor conversations (renewal + compliance feature) rather than treating them separately. Anya sometimes wants to handle renewals, Sebastien wants compliance reporting. Better approach: clarify ownership upfront, then coordinate, rather than assume consolidation saves time. It often doesn't—just adds context-switching for others.",
+    "summary": "Tendency to over-consolidate vendor conversations; need clearer handoffs",
+    "event_date": "2026-01-24",
+    "importance": 0.59
+  },
+  {
+    "type": "semantic",
+    "content": "GitHub SAML rollout risks at Clude: (1) IdP outage = locked access to repos (mitigate: emergency local accounts for 2 core admins). (2) onboarding delay if new hire enrollment delayed (Tom's March start—coordinate with Priya). (3) External collaborators (customer integrations) not SAML-bound—manage via personal access tokens. (4) old CI/CD secrets must rotate.",
+    "summary": "GitHub SAML implementation risks and mitigation plan",
+    "event_date": "2026-01-25",
+    "importance": 0.83
+  },
+  {
+    "type": "episodic",
+    "content": "Scheduled kick-off with Ari, Devon, Sarah Chen for Jan 29 to begin GitHub SAML config. Sent prep doc outlining IdP (assume Okta or Auth0) requirements, org structure (15 eng, 10 product/design, 35 other), and phased rollout: Eng + Security first (Feb 1), full org Feb 8.",
+    "summary": "GitHub SAML implementation kick-off scheduled, prep doc sent",
+    "event_date": "2026-01-27",
+    "importance": 0.69
+  },
+  {
+    "type": "semantic",
+    "content": "Clude's SSO landscape post-GitHub: Snowflake (prod analytics), GitHub (repos + CI/CD), Notion (docs), Linear (issue tracking). Cloudflare + AWS remain federated separately. Single IdP now covers access to 3 of 5 critical systems. Remaining: AWS needs IAM roles federated, Cloudflare uses API tokens (lower priority for this cycle).",
+    "summary": "GitHub SAML completes Clude's core SSO consolidation strategy",
+    "event_date": "2026-01-28",
+    "importance": 0.76
+  }
+]

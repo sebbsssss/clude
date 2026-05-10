@@ -1,0 +1,121 @@
+[
+  {
+    "type": "episodic",
+    "content": "Sebastien pulled me into his office Wed morning. SOC2 Type II audit kicks off in 8 weeks. We need a dedicated Compliance Lead yesterday. He's already got a shortlist—ex-Vanta auditor named Yara, plus two other candidates. Asked me to run process by EOW.",
+    "summary": "SOC2 audit timeline locked; Compliance Lead search urgent",
+    "event_date": "2026-03-04",
+    "importance": 0.72
+  },
+  {
+    "type": "episodic",
+    "content": "Scheduled back-to-back interviews for Compliance Lead candidates. Yara (ex-Vanta, 6 yrs audit exp) at 2pm, two others at 4pm and 5:30pm. Asked Priya to pull CVs and send brief bios by noon so I'm not walking in cold.",
+    "summary": "Three Compliance Lead interviews scheduled same day",
+    "event_date": "2026-03-05",
+    "importance": 0.58
+  },
+  {
+    "type": "episodic",
+    "content": "Yara interview: she's done 40+ Type II audits, knows Anthropic's framework, speaks DataDog + Snowflake integration in her sleep. Asked about evidence collection—she immediately named 5 gaps in our current setup. Felt like she was auditing us live.",
+    "summary": "Yara interview revealed concrete compliance gaps",
+    "event_date": "2026-03-05",
+    "importance": 0.68
+  },
+  {
+    "type": "episodic",
+    "content": "Other two candidates: solid generalist backgrounds but neither had hands-on audit scoping. One asked what SOC2 stood for mid-interview. Called Sebastien right after—Yara is the only real fit. He agreed immediately, told me to move fast on offer.",
+    "summary": "Candidates 2 and 3 underqualified; Yara is clear winner",
+    "event_date": "2026-03-05",
+    "importance": 0.65
+  },
+  {
+    "type": "semantic",
+    "content": "Compliance Lead hiring decision: we need someone who understands Type II audit mechanics, can read Vanta/auditor reports, and won't need hand-holding on evidence mapping. Generalist ops experience isn't enough. Yara's Vanta background de-risks the hire significantly.",
+    "summary": "Compliance Lead must have Type II audit experience",
+    "event_date": "2026-03-05",
+    "importance": 0.78
+  },
+  {
+    "type": "episodic",
+    "content": "Offer call with Yara: $85K base, start date March 17 (two weeks notice). She asked about budget for a Vanta subscription—said it'll cut evidence collection time by 60%. I said yes but flagged it with Anya for approval. Yara accepted within 10 minutes.",
+    "summary": "Yara hired at $85K, starts March 17",
+    "event_date": "2026-03-06",
+    "importance": 0.72
+  },
+  {
+    "type": "episodic",
+    "content": "Sent Priya the hire paperwork, CCed Anya on Vanta budget ask ($4,200/yr). Priya confirmed she'll have onboarding docs ready by March 16. Told Anya we need Yara's access to Snowflake, AWS, GitHub, and 1Password day one.",
+    "summary": "Onboarding and access prep underway for Yara",
+    "event_date": "2026-03-07",
+    "importance": 0.52
+  },
+  {
+    "type": "episodic",
+    "content": "Yara's first day. She did a 2-hour walkthrough with Ari and Devon—asked for architecture diagrams, data flow docs, and security policy files. Found that our GitHub org docs are three versions old. Flagged it as high priority for audit prep.",
+    "summary": "Yara identified outdated GitHub docs on day one",
+    "event_date": "2026-03-17",
+    "importance": 0.64
+  },
+  {
+    "type": "episodic",
+    "content": "Yara sent audit prep checklist: 47 items across people, tech, and process. Grouped by risk level. Assigned ownership—Ari for infra, Anya for finance controls, Priya for HR docs, me for ops/vendor mgmt. Timeline is 6 weeks to 'audit-ready' state.",
+    "summary": "Audit prep checklist created with distributed ownership",
+    "event_date": "2026-03-18",
+    "importance": 0.75
+  },
+  {
+    "type": "episodic",
+    "content": "Weekly sync with Yara, Anya, Sebastien. Yara presented gap analysis: access control logs incomplete, password manager audit trail missing, vendor contracts lack SOC2 clauses. Estimated 80 hours to remediate. Sebastien asked if we'd make the May 15 audit start. Yara said 'if we move now.'",
+    "summary": "Audit gaps quantified; May 15 timeline confirmed achievable",
+    "event_date": "2026-03-19",
+    "importance": 0.81
+  },
+  {
+    "type": "procedural",
+    "content": "SOC2 audit evidence tracking process: Yara owns checklist updates (spreadsheet in Notion, daily snapshots). I review status every Monday. Ari, Anya, Priya own task execution; they ping Yara with blockers async via Slack thread. No meetings unless decision needed. Escalate to Sebastien if timeline slips.",
+    "summary": "Async evidence tracking via Notion; weekly Maya review",
+    "event_date": "2026-03-20",
+    "importance": 0.85
+  },
+  {
+    "type": "episodic",
+    "content": "Yara sent vendor security questionnaire template (25 questions on controls, incident history, certifications). We're sending to Snowflake, Voyage AI, Anthropic, AWS, Cloudflare, DataDog, Sentry. She's already chased Snowflake—got their SOC2 cert back same day.",
+    "summary": "Vendor compliance questionnaires deployed",
+    "event_date": "2026-03-21",
+    "importance": 0.6
+  },
+  {
+    "type": "episodic",
+    "content": "Yara flagged a blocker: 1Password audit logs only retain 90 days; audit runs 12 months. Need to archive logs externally now. I asked DataDog if they can ingest 1Password events—Yara will follow up with their integrations team.",
+    "summary": "1Password audit trail gap; DataDog integration being explored",
+    "event_date": "2026-03-24",
+    "importance": 0.68
+  },
+  {
+    "type": "semantic",
+    "content": "Hiring a Compliance Lead with audit background avoided weeks of ramp-up time. Yara walked in knowing what auditors look for; she's proactively finding gaps instead of reactive. Vanta subscription will pay for itself in time saved. This was the right call.",
+    "summary": "Pre-audit experience hire compressed timeline significantly",
+    "event_date": "2026-03-24",
+    "importance": 0.82
+  },
+  {
+    "type": "self_model",
+    "content": "I'm impatient with compliance hiring—tend to pick speed over fit. This time I let Sebastien set the bar and trusted Yara's audit background. It worked. Need to remember: specialized roles need specialized experience. Generic ops doesn't cut it.",
+    "summary": "Learned to trust specialized background over general skills",
+    "event_date": "2026-03-25",
+    "importance": 0.58
+  },
+  {
+    "type": "episodic",
+    "content": "Yara's evidence tracker now has 31 of 47 items marked complete. Ari closed infra gaps, Anya finished access control documentation. Yara's pushing the remaining 16 hard—says we're on track for April 30 audit-ready state.",
+    "summary": "Audit prep at 66% complete, on timeline",
+    "event_date": "2026-03-27",
+    "importance": 0.62
+  },
+  {
+    "type": "episodic",
+    "content": "Sebastien asked if we should tell customers (Acme, Initech, Globex, Wayne Industries) about the SOC2 audit now or wait until certified. Yara recommended waiting until Type II report is final—said early comms cause support questions we can't answer yet. Sebastien agreed. Smart call.",
+    "summary": "Holding customer communication until audit completion",
+    "event_date": "2026-03-28",
+    "importance": 0.71
+  }
+]

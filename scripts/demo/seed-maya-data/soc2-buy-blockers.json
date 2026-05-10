@@ -1,0 +1,128 @@
+[
+  {
+    "type": "episodic",
+    "content": "Acme Corp's procurement team flagged SOC2 Type II as blockers for contract signature. Their CISO won't greenlight $180k deal without evidence. No timeline on when they'd revisit.",
+    "summary": "Acme Corp blocks $180k deal on missing SOC2",
+    "event_date": "2026-03-04",
+    "importance": 0.72
+  },
+  {
+    "type": "semantic",
+    "content": "Pattern emerging: enterprise buyers (>500 headcount) now expect SOC2 Type II before pilots. This wasn't friction 6mo ago. Competitors likely got certified; we're now behind baseline expectation.",
+    "summary": "SOC2 Type II now table-stakes for enterprise deals",
+    "event_date": "2026-03-05",
+    "importance": 0.88
+  },
+  {
+    "type": "episodic",
+    "content": "Lina reported Initech's champion wants to move forward but procurement blocked her. She estimated $220k ACV, 12-month contract. Waiting for SOC2 or they walk to competitor.",
+    "summary": "Initech champion supportive; procurement veto on compliance gap",
+    "event_date": "2026-03-06",
+    "importance": 0.75
+  },
+  {
+    "type": "procedural",
+    "content": "To unblock deals, initiate SOC2 Type II audit: (1) engage external auditor (budget ~$40-60k), (2) implement control documentation across AWS/Snowflake/DataDog, (3) 3-6mo timeline for report delivery.",
+    "summary": "SOC2 Type II audit process: auditor, controls, 6mo runway",
+    "event_date": "2026-03-07",
+    "importance": 0.91
+  },
+  {
+    "type": "semantic",
+    "content": "Sebastien asked for deal impact quantification. Identified 5 stalled opportunities: Acme ($180k), Initech ($220k), Globex ($185k), Wayne Industries ($95k), unnamed prospect ($70k). Total ~$750k ARR at risk.",
+    "summary": "$750k ARR blocked across 5 deals waiting on SOC2",
+    "event_date": "2026-03-10",
+    "importance": 0.92
+  },
+  {
+    "type": "episodic",
+    "content": "Anya called: finance needs SOC2 spend in Q2 budget line. I advised $55k for auditor + ~$20k internal controls implementation + Marcus's team time. She flagged CFO will push back on cost.",
+    "summary": "Anya flagged budget pressure for SOC2 audit costs",
+    "event_date": "2026-03-12",
+    "importance": 0.68
+  },
+  {
+    "type": "semantic",
+    "content": "SOC2 Type II requires 6-month control observation period, meaning earliest report delivery is mid-September 2026. We won't unblock these deals before then unless we find expedited auditor.",
+    "summary": "SOC2 timeline bottleneck: 6mo observation window minimum",
+    "event_date": "2026-03-14",
+    "importance": 0.85
+  },
+  {
+    "type": "self_model",
+    "content": "I've been stuck re-explaining SOC2 context to Sebastien 3x. Need to send him a written pattern memo so I stop repeating myself and he internalizes the deal risk without meetings.",
+    "summary": "Recognizing need for async memo to avoid re-explaining SOC2",
+    "event_date": "2026-03-15",
+    "importance": 0.52
+  },
+  {
+    "type": "episodic",
+    "content": "Drafted memo to Sebastien: 'No SOC2 evidence, no deployment.' Listed 5 deals, timeline constraints, budget ask. He replied same day: 'Approved. Get auditor quotes by end of week.'",
+    "summary": "Sebastien greenlit SOC2 pursuit after memo",
+    "event_date": "2026-03-17",
+    "importance": 0.79
+  },
+  {
+    "type": "procedural",
+    "content": "When screening SOC2 auditors, validate: (1) SaaS audit experience, (2) AWS/Snowflake/Anthropic compliance knowledge, (3) 3-4mo audit timeline feasibility, (4) fixed fee structure.",
+    "summary": "Auditor selection criteria: SaaS, vendor knowledge, timeline, pricing",
+    "event_date": "2026-03-19",
+    "importance": 0.87
+  },
+  {
+    "type": "episodic",
+    "content": "Received 3 auditor proposals. Deloitte quoted $65k (5mo timeline), CliftonLarsonAllen $48k (4mo), and boutique firm $42k (vague on controls). Recommended CLA to Sebastien.",
+    "summary": "Three auditor quotes; recommended CLA for balance of cost/timeline",
+    "event_date": "2026-03-21",
+    "importance": 0.71
+  },
+  {
+    "type": "semantic",
+    "content": "SOC2 audit will require Ari and Devon to document control design for SQL/data access, encryption at rest/transit, access logging in DataDog/Sentry. Engineering time non-negotiable for credible report.",
+    "summary": "Engineering deep involvement required for SOC2 evidence gathering",
+    "event_date": "2026-03-24",
+    "importance": 0.84
+  },
+  {
+    "type": "episodic",
+    "content": "Ari pushed back: 'Controls doc will take 40+ eng hours.' Told him to block it on roadmap now or auditor will delay us. He reluctantly added it to Q2 planning. Tom flagged concern too but deferred to Ari.",
+    "summary": "Ari reluctantly committed 40h eng time to controls documentation",
+    "event_date": "2026-03-26",
+    "importance": 0.67
+  },
+  {
+    "type": "semantic",
+    "content": "Marcus reached out: CS needs to document incident response procedures for SOC2 auditors. Current playbooks are ad-hoc. I told him to formalize and get approval by end of April or audit timeline slips.",
+    "summary": "CS incident response procedures must be formalized for audit",
+    "event_date": "2026-03-28",
+    "importance": 0.79
+  },
+  {
+    "type": "episodic",
+    "content": "Globex's procurement team asked for timeline on SOC2 report delivery. I said mid-September 2026 best case. They countered: can't wait past June for pilot eval. Deal likely dead unless we accelerate.",
+    "summary": "Globex timeline incompatible with SOC2 audit window",
+    "event_date": "2026-04-02",
+    "importance": 0.74
+  },
+  {
+    "type": "semantic",
+    "content": "Identified pattern: buyers under 6-month procurement windows will slip away regardless of SOC2. Future lens: enterprise deals need 9-month runway assumption or expect deal decay.",
+    "summary": "Enterprise deal timeline mismatch with compliance cycles",
+    "event_date": "2026-04-08",
+    "importance": 0.82
+  },
+  {
+    "type": "episodic",
+    "content": "Wayne Industries champion emailed: their audit board changed requirements mid-contract, now demanding SOC2 + HIPAA evidence. I escalated to Sebastien; scope creep risk for $95k deal.",
+    "summary": "Wayne Industries added HIPAA requirement mid-negotiation",
+    "event_date": "2026-04-15",
+    "importance": 0.68
+  },
+  {
+    "type": "procedural",
+    "content": "Moving forward, flag SOC2 gaps in opportunity qualification: ask 'do security reqs exist?' and 'timeline on approval?' at first call. Route to me if yes. Don't waste Lina/Jenny time on deals stuck on compliance.",
+    "summary": "Qualify SOC2/compliance blockers early in deal cycles",
+    "event_date": "2026-04-22",
+    "importance": 0.89
+  }
+]
