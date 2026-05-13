@@ -18,6 +18,8 @@ export interface V2Model {
   /** True for free/open models — swaps the picker dot color. */
   free: boolean;
   default?: boolean;
+  /** Vision-capable: composer shows the image-attach button when true. */
+  supportsVision?: boolean;
 }
 
 export interface V2Memory {
