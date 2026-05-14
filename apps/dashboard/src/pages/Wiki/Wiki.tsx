@@ -4,6 +4,8 @@ import { WikiTab } from './WikiTab';
 import { InboxTab } from './InboxTab';
 import { GraphTab, type GraphLayout } from './GraphTab';
 import { CommandPalette, type WikiTabId } from './CommandPalette';
+import { TodayTab } from './TodayTab';
+import { AskCludePanel } from './AskCludePanel';
 import { useWikiData } from './use-wiki-data';
 import { useTopicArticle } from './use-topic-article';
 import { SHOWCASE_ARTICLES } from './showcase-articles';
@@ -84,7 +86,8 @@ export function Wiki({ showcase = false }: { showcase?: boolean }) {
     }
   };
 
-  const [tab, setTab] = useState<WikiTabId>('wiki');
+  const [tab, setTab] = useState<WikiTabId>('today');
+  const [askOpen, setAskOpen] = useState(false);
   // Default landing is the cross-topic summary view, accessible via a special
   // pill at the head of the topic rail.
   const [activeTopic, setActiveTopic] = useState<string>(SUMMARY_TOPIC_ID);
@@ -92,7 +95,8 @@ export function Wiki({ showcase = false }: { showcase?: boolean }) {
   const activeTopicObj = isSummary ? null : (topics.find((t) => t.id === activeTopic) ?? topics[0] ?? null);
   const topicData = useTopicArticle(activeTopicObj, topics, memories, contradictions);
 
-  const tabDefs: { id: WikiTabId; label: string; icon: string; count: number }[] = [
+  const tabDefs: { id: WikiTabId; label: string; icon: string; count: number | string }[] = [
+    { id: 'today', label: 'Today',     icon: '◉', count: '·' },
     { id: 'wiki',  label: 'Wiki',      icon: '▤', count: topicData.article?.sections.length ?? 0 },
     { id: 'graph', label: 'Brain Map', icon: '◈', count: graph.nodes.length },
     { id: 'inbox', label: 'Inbox',     icon: '↘', count: fragments.filter((f) => f.status === 'pending' || f.status === 'conflict').length },
@@ -103,12 +107,16 @@ export function Wiki({ showcase = false }: { showcase?: boolean }) {
   const [tweaksOpen, setTweaksOpen] = useState(false);
   const tweaksRef = useRef<HTMLDivElement>(null);
 
-  // ⌘K / ctrl-K — open command palette
+  // ⌘K / ctrl-K — command palette · ⌘J / ctrl-J — Ask Clude
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setCmdOpen(true);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        setAskOpen(true);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -172,6 +180,16 @@ export function Wiki({ showcase = false }: { showcase?: boolean }) {
                 <span>Search wiki, fragments…</span>
                 <span className="wk-search__hint">⌘K</span>
               </button>
+              <button
+                type="button"
+                className="wk-ask-btn"
+                onClick={() => setAskOpen(true)}
+                title="Ask Clude"
+              >
+                <span aria-hidden>◈</span>
+                <span>Ask Clude</span>
+                <span className="wk-ask-btn__hint">⌘J</span>
+              </button>
               <div ref={tweaksRef} style={{ position: 'relative' }}>
                 <button
                   className="wk-iconbtn"
@@ -193,6 +211,7 @@ export function Wiki({ showcase = false }: { showcase?: boolean }) {
             </div>
           </div>
 
+          {tab === 'today' && <TodayTab onAsk={() => setAskOpen(true)} />}
           {tab === 'wiki' && isSummary && (
             <SummaryView
               topics={topics}
@@ -245,6 +264,8 @@ export function Wiki({ showcase = false }: { showcase?: boolean }) {
           fragments={fragments}
           articles={SHOWCASE_ARTICLES}
         />
+
+        <AskCludePanel open={askOpen} onClose={() => setAskOpen(false)} />
       </div>
     </div>
   );
