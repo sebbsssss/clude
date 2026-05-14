@@ -82,7 +82,7 @@ export class PmpClient {
 
   // ─────────── internals ───────────
 
-  private buildHeaders(skipAuth = false): HeadersInit {
+  private buildHeaders(skipAuth = false): Record<string, string> {
     const headers: Record<string, string> = {
       Accept: 'application/json',
     };
@@ -104,13 +104,16 @@ export class PmpClient {
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
     const headers = this.buildHeaders(opts.skipAuth);
-    const init: RequestInit = { method, headers, signal: controller.signal };
+    // Use Parameters<typeof fetch> so we don't depend on the DOM-lib's RequestInit
+    // type. Works whether the consumer's tsconfig has DOM or just ES2022.
+    type FetchInit = NonNullable<Parameters<typeof globalThis.fetch>[1]>;
+    const init: FetchInit = { method, headers, signal: controller.signal };
     if (opts.body !== undefined) {
-      (headers as Record<string, string>)['Content-Type'] = 'application/json';
+      headers['Content-Type'] = 'application/json';
       init.body = JSON.stringify(opts.body);
     }
 
-    let res: Response;
+    let res: Awaited<ReturnType<typeof globalThis.fetch>>;
     try {
       res = await this.fetchImpl(url, init);
     } catch (err) {
