@@ -13,7 +13,11 @@
       "@clude/shared": ["../../packages/shared/src"],
       "@clude/shared/*": ["../../packages/shared/src/*"],
       "@clude/brain": ["../../packages/brain/src"],
-      "@clude/brain/*": ["../../packages/brain/src/*"]
+      "@clude/brain/*": ["../../packages/brain/src/*"],
+      "@clude/tokenization": ["../../packages/tokenization/src"],
+      "@clude/tokenization/*": ["../../packages/tokenization/src/*"],
+      "@clude/pmp-sdk": ["../../packages/pmp-sdk/src"],
+      "@clude/pmp-sdk/*": ["../../packages/pmp-sdk/src/*"]
     }
   },
   "include": ["src/**/*"],

@@ -1,0 +1,33 @@
+{
+  "name": "@clude/pmp-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reference TypeScript SDK for PMP (Portable Memory Protocol). Tiny wrappers over DISCOVER / RETRIEVE / VERIFY / CONTRIBUTE plus a chain-side verifier helper. Will publish to npm as @pmp/sdk once the brand domain lands.",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./langchain": {
+      "types": "./dist/adapters/langchain.d.ts",
+      "default": "./dist/adapters/langchain.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@clude/tokenization": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.11",
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.0"
+  }
+}

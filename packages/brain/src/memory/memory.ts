@@ -26,6 +26,7 @@ import {
 import type { MemoryLinkType } from '@clude/shared/utils/constants';
 import { generateImportanceScore } from '@clude/shared/core/claude-client';
 import { writeMemo, isRegistryEnabled, registerMemoryOnChain } from '@clude/shared/core/solana-client';
+import { memoryContentHash } from '@clude/tokenization';
 import { generateEmbedding, generateQueryEmbedding, generateEmbeddings, isEmbeddingEnabled } from '@clude/shared/core/embeddings';
 import {
   autoCategorizeTags,
@@ -473,7 +474,7 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
         encryption_pubkey: shouldEncrypt ? getEncryptionPubkey() : null,
         owner_wallet: ownerWallet || null,
       })
-      .select('id, hash_id')
+      .select('id, hash_id, content, memory_type, owner_wallet, created_at, tags, source, related_user, related_wallet')
       .single();
 
     if (error) {
@@ -497,8 +498,13 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
       source: opts.source,
     });
 
-    // Commit memory to Solana (fire-and-forget)
-    commitMemoryToChain(data.id, opts).catch(err => log.warn({ err }, 'On-chain memory commit failed'));
+    // Commit memory to Solana (fire-and-forget). v0.1: dual-writes the legacy
+    // solana_signature AND the new PMP tokenisation columns (content_hash,
+    // cnft_address, cnft_tx_sig, tokenization_status). v0.2 will drop the legacy
+    // path once verifiers are on PMP exclusively.
+    commitMemoryToChain(data.id, opts, data as MemoryRowForTokenisation).catch(err =>
+      log.warn({ err }, 'On-chain memory commit failed'),
+    );
 
     // Generate embeddings and store fragments (fire-and-forget)
     embedMemory(data.id, opts).catch(err => log.warn({ err }, 'Embedding generation failed'));
@@ -518,14 +524,58 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
 
 // ---- ON-CHAIN COMMIT ---- //
 
-async function commitMemoryToChain(memoryId: number, opts: StoreMemoryOptions): Promise<void> {
-  // Skip mainnet commits for demo memories (they use devnet instead)
-  if (opts.source === 'demo' || opts.source === 'demo-maas' || opts.source === 'locomo-benchmark' || opts.source === 'longmemeval-benchmark') return;
+/**
+ * Subset of memory row fields needed to compute the PMP canonical content
+ * hash. Returned by the post-insert `.select()` in storeMemory().
+ */
+interface MemoryRowForTokenisation {
+  id: number;
+  hash_id: string;
+  content: string;
+  memory_type: MemoryType;
+  owner_wallet: string | null;
+  created_at: string;
+  tags: string[] | null;
+  source: string | null;
+  related_user: string | null;
+  related_wallet: string | null;
+}
 
-  const contentHashBuf = createHash('sha256').update(opts.content).digest();
+const TOKENISATION_SKIP_SOURCES = new Set([
+  'demo',
+  'demo-maas',
+  'locomo-benchmark',
+  'longmemeval-benchmark',
+]);
+
+async function commitMemoryToChain(
+  memoryId: number,
+  opts: StoreMemoryOptions,
+  row: MemoryRowForTokenisation,
+): Promise<void> {
+  // Skip mainnet commits for demo / benchmark memories
+  if (TOKENISATION_SKIP_SOURCES.has(opts.source)) return;
+
+  // 1. Canonical PMP hash — what verifiers will recompute on /v1/memories/:id/verify.
+  //    Hashed over the stored row content (post-truncation / post-encryption) so
+  //    the VERIFY endpoint can recompute from the same bytes it serves to clients.
+  const canonicalHash = memoryContentHash({
+    content: row.content,
+    memory_type: row.memory_type,
+    owner_wallet: row.owner_wallet,
+    created_at: row.created_at,
+    tags: row.tags ?? [],
+    source: row.source,
+    related_user: row.related_user,
+    related_wallet: row.related_wallet,
+  });
+
+  // 2. Chain write — legacy registry program first, memo fallback. The
+  //    registry program still takes a 32-byte content hash; we use the
+  //    canonical hash (same bytes) so on-chain and off-chain agree.
+  const contentHashBuf = Buffer.from(canonicalHash, 'hex');
   let signature: string | null = null;
 
-  // Try on-chain registry first, fall back to memo
   if (isRegistryEnabled()) {
     const encrypted = isEncryptionEnabled();
     signature = await registerMemoryOnChain(
@@ -545,20 +595,39 @@ async function commitMemoryToChain(memoryId: number, opts: StoreMemoryOptions): 
   // spec. Existing on-chain memos are unaffected; only new writes
   // use the new format.
   if (!signature) {
-    const contentHashHex = contentHashBuf.toString('hex');
-    const memo = `clude:v1:sha256:${contentHashHex}`;
+    const memo = `clude:v1:sha256:${canonicalHash}`;
     signature = await writeMemo(memo);
   }
 
-  if (!signature) return;
-
   const db = getDb();
+
+  if (!signature) {
+    // Mark failed so the PMP backfill worker retries later.
+    await db
+      .from('memories')
+      .update({ content_hash: canonicalHash, tokenization_status: 'failed' })
+      .eq('id', memoryId);
+    return;
+  }
+
+  // 3. Dual-write: legacy solana_signature + new PMP columns.
+  //    cnft_address records the registry PDA / memo-prefixed sig so the
+  //    /v1/memories/:id/verify endpoint can return a real attestation.
   await db
     .from('memories')
-    .update({ solana_signature: signature })
+    .update({
+      solana_signature: signature,
+      content_hash: canonicalHash,
+      cnft_address: signature, // PDA-based v0.1 — assetId = tx sig; LightMintClient (v0.2) will use real cNFT mints
+      cnft_tx_sig: signature,
+      cnft_tree: null,
+      cnft_leaf_index: null,
+      tokenization_status: 'minted',
+      tokenized_at: new Date().toISOString(),
+    })
     .eq('id', memoryId);
 
-  log.debug({ memoryId, signature: signature.slice(0, 16) }, 'Memory committed on-chain');
+  log.debug({ memoryId, signature: signature.slice(0, 16) }, 'Memory committed on-chain (PMP + legacy)');
 }
 
 // ---- EMBEDDING & GRANULAR DECOMPOSITION ---- //
