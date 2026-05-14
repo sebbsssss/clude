@@ -16,6 +16,8 @@ import { compoundRoutes } from './compound.routes.js';
 import { memoryRoutes } from './memory.routes.js';
 import { memoryPacksRoutes } from './memory-packs.routes.js';
 import { wikiPacksRoutes } from './wiki-packs.routes.js';
+import { pmpRoutes } from './pmp.routes.js';
+import { pmpPacksRoutes } from './pmp-packs.routes.js';
 import { demoRoutes } from './demo.routes.js';
 import { showcaseRoutes } from './showcase.routes.js';
 import { walletAuthRoutes } from './wallet-auth.routes.js';
@@ -53,6 +55,15 @@ export function mountApiRoutes(app: express.Application): void {
 
   // Memory: stats, list, brain, consciousness, trace, explain, verify, owner, journal, docs-views
   app.use('/api', memoryRoutes());
+
+  // PMP — Portable Memory Protocol v0.1
+  // Public spec-conformant endpoints: DISCOVER, RETRIEVE, VERIFY, CONTRIBUTE.
+  // Mounted at root so URLs match the spec exactly (e.g. /v1/memories).
+  app.use(pmpRoutes());
+
+  // PMP Pack endpoints (spec-reserved for v0.2, implementation shipping early)
+  // POST /v1/packs, GET /v1/packs/:id, /preview, /verify — marketplace surface.
+  app.use(pmpPacksRoutes());
 
   // Memory packs: export, import, smart-export
   app.use('/api/memory-packs', memoryPacksRoutes());
