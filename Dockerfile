@@ -16,6 +16,8 @@ COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY packages/tsconfig/ ./packages/tsconfig/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/memorypack/package.json ./packages/memorypack/
+COPY packages/tokenization/package.json ./packages/tokenization/
+COPY packages/pmp-sdk/package.json ./packages/pmp-sdk/
 COPY packages/brain/package.json ./packages/brain/
 COPY apps/server/package.json ./apps/server/
 COPY apps/workers/package.json ./apps/workers/
@@ -27,6 +29,8 @@ RUN pnpm install --frozen-lockfile
 # Copy source
 COPY packages/shared/ ./packages/shared/
 COPY packages/memorypack/ ./packages/memorypack/
+COPY packages/tokenization/ ./packages/tokenization/
+COPY packages/pmp-sdk/ ./packages/pmp-sdk/
 COPY packages/brain/ ./packages/brain/
 COPY apps/server/ ./apps/server/
 COPY apps/workers/ ./apps/workers/
@@ -34,12 +38,15 @@ COPY apps/chat/ ./apps/chat/
 COPY apps/dashboard/ ./apps/dashboard/
 COPY apps/web/ ./apps/web/
 
-# Build backend (order matters: shared → memorypack → brain → backend)
-# memorypack was added in v0.2 and brain consumes it via workspace:* — the
-# Dockerfile previously skipped it, which broke the lockfile-frozen install
-# step on Railway and silently kept production on the pre-#119 deploy.
+# Build backend (order matters: shared → memorypack → tokenization → pmp-sdk
+# → brain → backend). tokenization + pmp-sdk landed in #169 (PMP v0.1); the
+# Dockerfile previously skipped them, which broke the brain build because
+# brain imports from @clude/tokenization. Same shape as the memorypack bug
+# that froze prod before — keep this section in sync with workspace packages.
 RUN pnpm --filter @clude/shared build
 RUN pnpm --filter @clude/memorypack build
+RUN pnpm --filter @clude/tokenization build
+RUN pnpm --filter @clude/pmp-sdk build
 RUN pnpm --filter @clude/brain build
 RUN pnpm --filter @clude/workers build
 RUN pnpm --filter @clude/server build
@@ -69,6 +76,8 @@ COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY packages/tsconfig/ ./packages/tsconfig/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/memorypack/package.json ./packages/memorypack/
+COPY packages/tokenization/package.json ./packages/tokenization/
+COPY packages/pmp-sdk/package.json ./packages/pmp-sdk/
 COPY packages/brain/package.json ./packages/brain/
 COPY apps/server/package.json ./apps/server/
 COPY apps/workers/package.json ./apps/workers/
@@ -76,6 +85,8 @@ RUN pnpm install --frozen-lockfile --prod
 
 COPY --from=builder /app/packages/shared/dist/ ./packages/shared/dist/
 COPY --from=builder /app/packages/memorypack/dist/ ./packages/memorypack/dist/
+COPY --from=builder /app/packages/tokenization/dist/ ./packages/tokenization/dist/
+COPY --from=builder /app/packages/pmp-sdk/dist/ ./packages/pmp-sdk/dist/
 COPY --from=builder /app/packages/brain/dist/ ./packages/brain/dist/
 COPY --from=builder /app/apps/server/dist/ ./apps/server/dist/
 COPY --from=builder /app/apps/workers/dist/ ./apps/workers/dist/
