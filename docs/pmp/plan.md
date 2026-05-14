@@ -22,7 +22,7 @@
 - **Section 4 schema:** `memory_packs` as content-bundle table (option i)
 
 ### Open (Day 0 decisions)
-- **Domain:** `portablememoryprotocol.org` (canonical, $12/yr at Namecheap) + `pmp.dev` (short, $12/yr Google Domains). Recommend buy both same day.
+- **Domain:** `portablememoryprotocol.com` (canonical, $12/yr at Namecheap) + `pmp.dev` (short, $12/yr Google Domains). Recommend buy both same day.
 - **GitHub org:** `portablememoryprotocol` — clean, create today
 - **Solidity dev:** in-house if available, otherwise contract for ~10 days @ market rate (~$1k–2k/day). If neither path, defer Base to v0.2 and ship Solana-only.
 - **Solana gas:** 0.1 SOL pre-loaded on bot wallet (~$15 at current price, covers ~100k cNFT mints).
@@ -34,7 +34,7 @@
 
 | Task | Owner | Time | Output |
 |---|---|---|---|
-| Buy `portablememoryprotocol.org` + `pmp.dev` | Sebastien | 10 min | Domains registered, DNS pointed at Vercel placeholder |
+| Buy `portablememoryprotocol.com` + `pmp.dev` | Sebastien | 10 min | Domains registered, DNS pointed at Vercel placeholder |
 | Create GitHub org `portablememoryprotocol` | Sebastien | 5 min | Org exists, MIT/Apache license templates configured |
 | Create repos | Sebastien | 15 min | `spec`, `sdk-typescript`, `sdk-python`, `reference-solana`, `reference-evm`, `examples`, `registry`, `site` |
 | Allocate Solana engineer | Sebastien | — | Calendar block: full-time wks 1–2, ~50% wks 3–8 |
@@ -85,7 +85,7 @@ CONTRIBUTE POST /v1/memories               → returns id + receipt
     "asset_id": "<cnft_address>",
     "content_hash": "sha256:...",
     "tx_sig": "...",
-    "verifier_url": "https://api.pmp.dev/v1/memories/mem-abcd1234/verify"
+    "verifier_url": "https://api.portablememoryprotocol.com/v1/memories/mem-abcd1234/verify"
   }
 }
 ```
@@ -96,7 +96,7 @@ CONTRIBUTE POST /v1/memories               → returns id + receipt
 
 ### Phase 2: Solana reference impl (Days 3–4)
 
-**Goal:** All 4 verbs live on `api.pmp.dev`, backed by Clude's existing memory system.
+**Goal:** All 4 verbs live on `api.portablememoryprotocol.com`, backed by Clude's existing memory system.
 
 **Owner:** Solana engineer
 
@@ -130,7 +130,7 @@ CONTRIBUTE POST /v1/memories               → returns id + receipt
 - `examples/langchain-agent/` — runnable example: a LangChain agent using PMP for memory
 - Published to npm as `@pmp/sdk@0.1.0-alpha`
 
-**Acceptance:** `npx degit portablememoryprotocol/examples/langchain-agent && npm i && npm start` runs an agent that DISCOVERs + CONTRIBUTEs against `api.pmp.dev`.
+**Acceptance:** `npx degit portablememoryprotocol/examples/langchain-agent && npm i && npm start` runs an agent that DISCOVERs + CONTRIBUTEs against `api.portablememoryprotocol.com`.
 
 **Risk:** LangChain memory API churn breaks adapter. Mitigation: pin LangChain version in `package.json`, document compatibility matrix.
 
@@ -188,7 +188,7 @@ CONTRIBUTE POST /v1/memories               → returns id + receipt
 
 **Dependencies:** Phase 4
 
-**Acceptance:** SDK works against both `api.pmp.dev` (Solana, Clude) and `evm-ref.pmp.dev` (Base, stub) with no code changes.
+**Acceptance:** SDK works against both `api.portablememoryprotocol.com` (Solana, Clude) and `evm-ref.pmp.dev` (Base, stub) with no code changes.
 
 ### Phase 7: Demo agent + launch materials (Days 11–12)
 
@@ -455,7 +455,7 @@ Reserved entirely for launch fallout — broken links, spec ambiguities surfaced
 - ≥3 ecosystem partner quote-tweets
 
 **T+8 weeks (production single-chain):**
-- 99% uptime on `api.pmp.dev`
+- 99% uptime on `api.portablememoryprotocol.com`
 - ≥1k memories tokenised via PMP
 - ≥3 third-party agents using PMP
 - ≥1 framework PR merged upstream

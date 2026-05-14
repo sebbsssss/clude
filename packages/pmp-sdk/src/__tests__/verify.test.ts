@@ -45,7 +45,7 @@ describe('verifyMemoryHashClientSide', () => {
         tx_sig: 'tx',
         tree_address: null,
         leaf_index: null,
-        verifier_url: 'https://api.pmp.dev/v1/memories/mem-a/verify',
+        verifier_url: 'https://api.portablememoryprotocol.com/v1/memories/mem-a/verify',
       },
     };
     const result = verifyMemoryHashClientSide(withAttestation);

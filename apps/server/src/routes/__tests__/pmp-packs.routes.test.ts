@@ -28,6 +28,17 @@ vi.mock('@clude/shared/core/logger', () => ({
   }),
 }));
 
+// ── Solana client — prevent config load (needs env vars in test) ──
+vi.mock('@clude/shared/core/solana-client', () => ({
+  getConnection: () => ({
+    getParsedTokenAccountsByOwner: vi.fn(),
+  }),
+  writeMemo: vi.fn(),
+  registerMemoryOnChain: vi.fn(),
+  getBotWallet: () => null,
+  isRegistryEnabled: () => false,
+}));
+
 // ── Owner-context passthrough ──
 vi.mock('@clude/shared/core/owner-context', () => ({
   withOwnerWallet: async <T>(_w: string, fn: () => Promise<T>): Promise<T> => fn(),
@@ -112,7 +123,25 @@ vi.mock('../../lib/pda-mint-client.js', () => ({
   getPdaMintClient: () => fakeMint,
 }));
 
+// ── Pack ownership verifier — fake for unit tests, controllable per test ──
+let holdsTokenAnswer: boolean | Error = true;
+const fakeOwnershipVerifier = {
+  holdsPackToken: vi.fn(async () => {
+    if (holdsTokenAnswer instanceof Error) throw holdsTokenAnswer;
+    return holdsTokenAnswer;
+  }),
+};
+vi.mock('../../lib/pack-gate.js', async () => {
+  const real = await vi.importActual<typeof import('../../lib/pack-gate.js')>('../../lib/pack-gate.js');
+  return {
+    ...real,
+    getDefaultPackOwnershipVerifier: () => fakeOwnershipVerifier,
+  };
+});
+
 import { pmpPacksRoutes } from '../pmp-packs.routes.js';
+import nacl from 'tweetnacl';
+import bs58 from 'bs58';
 
 function app() {
   const a = express();
@@ -131,6 +160,8 @@ beforeEach(() => {
   insertCalls = [];
   lastRowsRequested = [];
   fakeMint.reset();
+  holdsTokenAnswer = true;
+  fakeOwnershipVerifier.holdsPackToken.mockClear();
 });
 
 // ─────────── POST /v1/packs ───────────
@@ -472,5 +503,198 @@ describe('GET /v1/packs/:id/verify', () => {
     stepQueue.push({ table: 'memory_packs', data: null });
     const res = await request(app()).get('/v1/packs/pack-nope/verify');
     expect(res.status).toBe(404);
+  });
+});
+
+// ─────────── POST /v1/packs/:id/unlock ───────────
+
+describe('POST /v1/packs/:id/unlock', () => {
+  const leaves = Array.from({ length: 3 }, (_, i) => fakeHash(`u-${i}`));
+  const tree = (() => {
+    // Build same as the route will, so committed root matches.
+    const { buildPackTree } = require('@clude/tokenization');
+    return buildPackTree(leaves);
+  })();
+
+  // Generate a real Solana keypair so we can produce valid Ed25519 signatures.
+  const kp = nacl.sign.keyPair();
+  const walletAddress = bs58.encode(Buffer.from(kp.publicKey));
+
+  function signedUnlock(packId: string, tsSeconds: number): { wallet: string; message: string; signature: string } {
+    const message = `unlock:${packId}:${tsSeconds}`;
+    const sig = nacl.sign.detached(new TextEncoder().encode(message), kp.secretKey);
+    return { wallet: walletAddress, message, signature: bs58.encode(Buffer.from(sig)) };
+  }
+
+  function seedPackForUnlock(packId = 'pack-u', root = tree.root) {
+    stepQueue.push({
+      table: 'memory_packs',
+      data: {
+        pack_id: packId,
+        name: 'U',
+        version: '1.0.0',
+        author_wallet: 'author-wallet',
+        memory_count: leaves.length,
+        merkle_root: root,
+        pack_token_address: 'token-mint-pack-u',
+      },
+    });
+  }
+
+  function seedPackContents(packId = 'pack-u') {
+    stepQueue.push({
+      table: 'memory_pack_contents',
+      data: leaves.map((h, i) => ({ memory_id: 200 + i, leaf_index: i, content_hash: h })),
+    });
+  }
+
+  function seedMemoryHydration() {
+    stepQueue.push({
+      table: 'memories',
+      data: leaves.map((_, i) => ({
+        id: 200 + i,
+        hash_id: `mem-u${i}`,
+        memory_type: 'episodic',
+        content: `content ${i}`,
+        owner_wallet: 'author-wallet',
+        created_at: '2026-05-14T00:00:00Z',
+        tags: [],
+        source: 'chat',
+        related_user: null,
+        related_wallet: null,
+      })),
+    });
+  }
+
+  it('returns 422 when wallet/message/signature missing', async () => {
+    const res = await request(app()).post('/v1/packs/pack-u/unlock').send({});
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('invalid_body');
+  });
+
+  it('returns 404 when pack not found', async () => {
+    stepQueue.push({ table: 'memory_packs', data: null });
+    const now = Math.floor(Date.now() / 1000);
+    const res = await request(app())
+      .post('/v1/packs/pack-missing/unlock')
+      .send(signedUnlock('pack-missing', now));
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 409 when pack is not tokenised yet', async () => {
+    stepQueue.push({
+      table: 'memory_packs',
+      data: {
+        pack_id: 'pack-draft',
+        name: 'd',
+        version: '1.0.0',
+        author_wallet: 'a',
+        memory_count: 0,
+        merkle_root: null,
+        pack_token_address: null,
+      },
+    });
+    const now = Math.floor(Date.now() / 1000);
+    const res = await request(app())
+      .post('/v1/packs/pack-draft/unlock')
+      .send(signedUnlock('pack-draft', now));
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('not_tokenised');
+  });
+
+  it('returns 422 when message pack_id mismatches URL', async () => {
+    seedPackForUnlock('pack-u');
+    const now = Math.floor(Date.now() / 1000);
+    // Sign for a DIFFERENT pack id
+    const body = signedUnlock('pack-OTHER', now);
+    const res = await request(app()).post('/v1/packs/pack-u/unlock').send(body);
+    expect(res.status).toBe(422);
+    expect(res.body.reason).toBe('pack_id_mismatch');
+  });
+
+  it('returns 401 when message timestamp is outside replay window', async () => {
+    seedPackForUnlock('pack-u');
+    const longAgo = Math.floor(Date.now() / 1000) - 3600; // 1 hour stale
+    const res = await request(app())
+      .post('/v1/packs/pack-u/unlock')
+      .send(signedUnlock('pack-u', longAgo));
+    expect(res.status).toBe(401);
+    expect(res.body.reason).toBe('message_expired');
+  });
+
+  it('returns 401 when signature is invalid', async () => {
+    seedPackForUnlock('pack-u');
+    const now = Math.floor(Date.now() / 1000);
+    const message = `unlock:pack-u:${now}`;
+    const res = await request(app())
+      .post('/v1/packs/pack-u/unlock')
+      .send({
+        wallet: walletAddress,
+        message,
+        // 64-byte fake signature
+        signature: bs58.encode(Buffer.alloc(64, 0xab)),
+      });
+    expect(res.status).toBe(401);
+    expect(res.body.reason).toBe('invalid_signature');
+  });
+
+  it('returns 403 when caller does not hold the Pack token', async () => {
+    seedPackForUnlock('pack-u');
+    holdsTokenAnswer = false;
+    const now = Math.floor(Date.now() / 1000);
+    const res = await request(app())
+      .post('/v1/packs/pack-u/unlock')
+      .send(signedUnlock('pack-u', now));
+    expect(res.status).toBe(403);
+    expect(res.body.reason).toBe('not_token_holder');
+  });
+
+  it('returns 503 when on-chain RPC is unavailable', async () => {
+    seedPackForUnlock('pack-u');
+    holdsTokenAnswer = new Error('RPC timeout');
+    const now = Math.floor(Date.now() / 1000);
+    const res = await request(app())
+      .post('/v1/packs/pack-u/unlock')
+      .send(signedUnlock('pack-u', now));
+    expect(res.status).toBe(503);
+    expect(res.body.reason).toBe('rpc_unavailable');
+  });
+
+  it('returns 200 with full memories and Merkle proofs on happy path', async () => {
+    seedPackForUnlock('pack-u');
+    seedPackContents('pack-u');
+    seedMemoryHydration();
+    holdsTokenAnswer = true;
+    const now = Math.floor(Date.now() / 1000);
+
+    const res = await request(app())
+      .post('/v1/packs/pack-u/unlock')
+      .send(signedUnlock('pack-u', now));
+
+    expect(res.status).toBe(200);
+    expect(res.body.pack.id).toBe('pack-u');
+    expect(res.body.pack.merkle_root).toBe(tree.root);
+    expect(res.body.unlocked_by).toBe(walletAddress);
+    expect(res.body.memories).toHaveLength(3);
+
+    // Every revealed memory has a valid Merkle inclusion proof against the root.
+    const { verifyInclusion } = require('@clude/tokenization') as typeof import('@clude/tokenization');
+    for (const m of res.body.memories) {
+      expect(m.memory).not.toBeNull();
+      expect(m.proof.leaf).toBe(m.content_hash);
+      const ok = verifyInclusion(tree.root, {
+        leaf: m.proof.leaf,
+        leafIndex: m.proof.leaf_index,
+        siblings: m.proof.siblings,
+        algorithm: m.proof.algorithm,
+      });
+      expect(ok).toBe(true);
+    }
+
+    // Ownership was actually checked
+    expect(fakeOwnershipVerifier.holdsPackToken).toHaveBeenCalledWith(
+      walletAddress,
+      'token-mint-pack-u',
+    );
   });
 });

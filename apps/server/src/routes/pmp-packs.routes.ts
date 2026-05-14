@@ -5,6 +5,7 @@
  *   GET  /v1/packs/:id                    Retrieve Pack metadata
  *   GET  /v1/packs/:id/preview?count=N    Preview N revealed memories + Merkle proofs
  *   GET  /v1/packs/:id/verify             Public verifier — confirms the on-chain commitment
+ *   POST /v1/packs/:id/unlock             Token-gated full content access
  *
  * Spec status: Pack endpoints are reserved in PMP v0.1 spec §9 and formally
  * arrive in v0.2. We ship them now under /v1/packs because the implementation
@@ -24,6 +25,11 @@ import { requirePrivyAuth, optionalPrivyAuth } from '@clude/brain/auth/privy-aut
 import { withOwnerWallet } from '@clude/shared/core/owner-context';
 import { createChildLogger } from '@clude/shared/core/logger';
 import { getPdaMintClient } from '../lib/pda-mint-client.js';
+import {
+  getDefaultPackOwnershipVerifier,
+  verifyUnlockRequest,
+  type UnlockFailureReason,
+} from '../lib/pack-gate.js';
 import { randomBytes } from 'node:crypto';
 
 const log = createChildLogger('pmp-packs-routes');
@@ -552,5 +558,216 @@ export function pmpPacksRoutes(): Router {
     }
   });
 
+  /**
+   * POST /v1/packs/:id/unlock — token-gated full content access.
+   *
+   * Body: { wallet, message, signature }
+   *   - message must be exactly: `unlock:<pack_id>:<unix_ts_seconds>`
+   *   - signature is base58 Ed25519 over the UTF-8 message bytes
+   *   - wallet is base58 Solana pubkey that produced the signature
+   *
+   * Server verifies signature + replay window + on-chain token holding,
+   * then returns the full memory content for all Pack members, plus their
+   * Merkle inclusion proofs so the client can independently audit each
+   * memory's membership in the Pack.
+   */
+  router.post('/v1/packs/:id/unlock', async (req: Request, res: Response) => {
+    const id = String(req.params.id ?? '');
+    if (!id || id.length > 64) {
+      res.status(422).json({ error: 'invalid_id' } satisfies PackErrorBody);
+      return;
+    }
+
+    const body = req.body ?? {};
+    const wallet = typeof body.wallet === 'string' ? body.wallet : '';
+    const message = typeof body.message === 'string' ? body.message : '';
+    const signature = typeof body.signature === 'string' ? body.signature : '';
+    if (!wallet || !message || !signature) {
+      res.status(422).json({
+        error: 'invalid_body',
+        hint: 'wallet, message, and signature are all required',
+      } satisfies PackErrorBody);
+      return;
+    }
+
+    try {
+      const db = getDb();
+
+      // 1. Load Pack with its token address.
+      const { data: pack, error: packErr } = await db
+        .from('memory_packs')
+        .select('pack_id, name, version, author_wallet, memory_count, merkle_root, pack_token_address')
+        .eq('pack_id', id)
+        .limit(1)
+        .maybeSingle();
+      if (packErr) {
+        log.warn({ err: packErr, id }, 'unlock: pack lookup failed');
+        res.status(500).json({ error: 'unlock_failed' } satisfies PackErrorBody);
+        return;
+      }
+      if (!pack) {
+        res.status(404).json({ error: 'not_found' } satisfies PackErrorBody);
+        return;
+      }
+      const packRow = pack as {
+        pack_id: string;
+        name: string;
+        version: string;
+        author_wallet: string;
+        memory_count: number;
+        merkle_root: string | null;
+        pack_token_address: string | null;
+      };
+      if (!packRow.merkle_root || !packRow.pack_token_address) {
+        res.status(409).json({
+          error: 'not_tokenised',
+          hint: 'pack must be tokenised before it can be unlocked',
+        } satisfies PackErrorBody);
+        return;
+      }
+
+      // 2. Verify caller controls the wallet AND that wallet holds the Pack token.
+      const verifier = getDefaultPackOwnershipVerifier();
+      const verifyResult = await verifyUnlockRequest(
+        {
+          packId: id,
+          packTokenAddress: packRow.pack_token_address,
+          walletAddress: wallet,
+          message,
+          signature,
+        },
+        verifier,
+      );
+      if (!verifyResult.ok) {
+        const status = unlockFailureStatus(verifyResult.reason);
+        res.status(status).json({
+          error: 'unlock_denied',
+          reason: verifyResult.reason,
+          hint: verifyResult.detail,
+        } satisfies PackErrorBody);
+        return;
+      }
+
+      // 3. Pull all Pack contents in tree order.
+      const { data: contentsRaw, error: contentsErr } = await db
+        .from('memory_pack_contents')
+        .select('memory_id, leaf_index, content_hash')
+        .eq('pack_id', id)
+        .order('leaf_index', { ascending: true });
+      if (contentsErr) {
+        log.warn({ err: contentsErr, id }, 'unlock: contents lookup failed');
+        res.status(500).json({ error: 'unlock_failed' } satisfies PackErrorBody);
+        return;
+      }
+      const contents = (contentsRaw ?? []) as Array<{ memory_id: number; leaf_index: number; content_hash: string }>;
+      if (contents.length === 0) {
+        res.status(500).json({
+          error: 'unlock_failed',
+          reason: 'no_contents',
+        } satisfies PackErrorBody);
+        return;
+      }
+
+      // 4. Rebuild the tree so we can issue inclusion proofs alongside each memory.
+      const tree = buildPackTree(contents.map((c) => c.content_hash));
+      if (tree.root !== packRow.merkle_root) {
+        log.error({ id, builtRoot: tree.root, committedRoot: packRow.merkle_root }, 'unlock: rebuilt root mismatches committed root');
+        res.status(500).json({
+          error: 'unlock_failed',
+          reason: 'root_mismatch',
+        } satisfies PackErrorBody);
+        return;
+      }
+
+      // 5. Hydrate full memory content.
+      const { data: memoriesRaw } = await db
+        .from('memories')
+        .select('id, hash_id, memory_type, content, owner_wallet, created_at, tags, source, related_user, related_wallet')
+        .in('id', contents.map((c) => c.memory_id));
+      const memoryById = new Map<number, {
+        id: number;
+        hash_id: string;
+        memory_type: string;
+        content: string;
+        owner_wallet: string | null;
+        created_at: string;
+        tags: string[] | null;
+        source: string | null;
+        related_user: string | null;
+        related_wallet: string | null;
+      }>();
+      for (const m of (memoriesRaw ?? []) as Array<typeof memoryById extends Map<unknown, infer V> ? V : never>) {
+        memoryById.set(m.id, m);
+      }
+
+      // 6. Build the response.
+      const unlocked = contents.map((row) => {
+        const proof = inclusionProof(tree, row.leaf_index);
+        const memory = memoryById.get(row.memory_id);
+        return {
+          memory: memory
+            ? {
+                id: memory.hash_id,
+                type: memory.memory_type,
+                content: memory.content,
+                owner: memory.owner_wallet,
+                created_at: memory.created_at,
+                tags: memory.tags ?? [],
+              }
+            : null,
+          content_hash: row.content_hash,
+          leaf_index: row.leaf_index,
+          proof: {
+            leaf: proof.leaf,
+            leaf_index: proof.leafIndex,
+            siblings: proof.siblings,
+            algorithm: proof.algorithm,
+          },
+        };
+      });
+
+      log.info(
+        { packId: id, holder: verifyResult.walletAddress.slice(0, 8), count: unlocked.length },
+        'pack unlocked',
+      );
+
+      res.json({
+        pack: {
+          id: packRow.pack_id,
+          name: packRow.name,
+          version: packRow.version,
+          author: packRow.author_wallet,
+          memory_count: packRow.memory_count,
+          merkle_root: packRow.merkle_root,
+          pack_token_address: packRow.pack_token_address,
+        },
+        unlocked_by: verifyResult.walletAddress,
+        unlocked_at: new Date().toISOString(),
+        memories: unlocked,
+      });
+    } catch (err) {
+      log.error({ err, id }, 'unlock failed');
+      res.status(500).json({ error: 'unlock_failed' } satisfies PackErrorBody);
+    }
+  });
+
   return router;
+}
+
+function unlockFailureStatus(reason: UnlockFailureReason): number {
+  switch (reason) {
+    case 'malformed_message':
+    case 'pack_id_mismatch':
+    case 'invalid_wallet':
+      return 422;
+    case 'message_expired':
+    case 'invalid_signature':
+      return 401;
+    case 'not_token_holder':
+      return 403;
+    case 'rpc_unavailable':
+      return 503;
+    default:
+      return 400;
+  }
 }
