@@ -1574,6 +1574,18 @@ body {
 .cc-mobile .cc-auth__hero { display: none; }
 .cc-mobile .cc-auth__form { padding: 24px 20px; }
 .cc-mobile .cc-auth__h1 { font-size: 32px; }
+
+/* The auth screen renders outside CcChat (no `.cc-mobile` ancestor), so the
+   mobile rules above never fire on /chat/v2 before sign-in. Mirror them via
+   a media query so the form reflows to one column on phones. */
+@media (max-width: 720px) {
+  .cc-auth { grid-template-columns: 1fr; }
+  .cc-auth__hero { display: none; }
+  .cc-auth__form { padding: 24px 20px; }
+  .cc-auth__h1 { font-size: 32px; }
+  .cc-auth__formhead { flex-wrap: wrap; gap: 12px; }
+  .cc-auth__desc { max-width: 100%; }
+}
 .cc-mobile .cc-topbar__right > *:not(:last-child) { display: none; }
 .cc-mobile .cc-mpick__menu { min-width: 260px; right: -8px; }
 
