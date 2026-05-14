@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Fragment, Topic } from './wiki-data';
 import type { CuratedArticle } from './showcase-articles';
 
-export type WikiTabId = 'wiki' | 'graph' | 'inbox';
+export type WikiTabId = 'today' | 'wiki' | 'graph' | 'inbox';
 
 interface CommandPaletteProps {
   open: boolean;
