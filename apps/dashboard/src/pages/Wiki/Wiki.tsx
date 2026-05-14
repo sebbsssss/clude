@@ -211,7 +211,18 @@ export function Wiki({ showcase = false }: { showcase?: boolean }) {
             </div>
           </div>
 
-          {tab === 'today' && <TodayTab onAsk={() => setAskOpen(true)} />}
+          {tab === 'today' && (
+            <TodayTab
+              memories={memories}
+              contradictions={contradictions}
+              fragments={fragments}
+              topics={topics}
+              source={wiki.source}
+              loading={wiki.loading}
+              onAsk={() => setAskOpen(true)}
+              onTab={setTab}
+            />
+          )}
           {tab === 'wiki' && isSummary && (
             <SummaryView
               topics={topics}

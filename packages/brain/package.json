@@ -45,6 +45,7 @@
     "@anthropic-ai/sdk": "^0.39.0",
     "@clude/memorypack": "workspace:*",
     "@clude/shared": "workspace:*",
+    "@clude/tokenization": "workspace:*",
     "@huggingface/transformers": "^4.1.0",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@openrouter/ai-sdk-provider": "^2.3.3",

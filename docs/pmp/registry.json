@@ -1,0 +1,33 @@
+{
+  "$schema": "https://portablememoryprotocol.org/registry/v1.json",
+  "schema_version": "1",
+  "spec_version": "0.1",
+  "updated_at": "2026-05-13",
+  "description": "Public registry of PMP-compliant providers. v0.1 is a static JSON file; v0.2 will move to an on-chain ENS-style resolver. Submit a PR to add your provider.",
+  "providers": [
+    {
+      "name": "Clude",
+      "endpoint": "https://api.clude.io",
+      "chain_id": "solana",
+      "verbs_supported": ["DISCOVER", "RETRIEVE", "VERIFY", "CONTRIBUTE"],
+      "auth": ["privy_jwt", "wallet_signature"],
+      "spec_version": "0.1",
+      "description": "Reference implementation of the Portable Memory Protocol. 5-tier typed memory, hybrid retrieval, on-chain commitments via the existing memory_registry PDA. Will move to Light Protocol compressed NFTs in v0.2.",
+      "homepage": "https://clude.io",
+      "contact": "sebastien@clude.io",
+      "logo": "https://clude.io/logo.svg",
+      "tags": ["reference", "solana", "production"]
+    }
+  ],
+  "submission_guidelines": {
+    "where": "Open a PR adding your provider to providers[] in this file.",
+    "checks": [
+      "Endpoint serves all four v0.1 verbs at /v1/memories.",
+      "VERIFY returns the documented response shape (verified, reason, recomputed_hash, stored_hash, commitment).",
+      "DISCOVER and VERIFY include `Access-Control-Allow-Origin: *` headers.",
+      "Conformance test from spec.portablememoryprotocol.org/conformance passes.",
+      "Provider commits to honouring x402 composition on RETRIEVE (return 402 with x402 payload if gating)."
+    ],
+    "removal": "Providers that go offline for >30 days will be tagged 'inactive'. After 90 days they are removed; the entry is preserved in git history."
+  }
+}

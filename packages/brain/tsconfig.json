@@ -13,7 +13,9 @@
       "@clude/shared": ["../shared/src"],
       "@clude/shared/*": ["../shared/src/*"],
       "@clude/memorypack": ["../memorypack/src"],
-      "@clude/memorypack/*": ["../memorypack/src/*"]
+      "@clude/memorypack/*": ["../memorypack/src/*"],
+      "@clude/tokenization": ["../tokenization/src"],
+      "@clude/tokenization/*": ["../tokenization/src/*"]
     }
   },
   "include": ["src/**/*"],
