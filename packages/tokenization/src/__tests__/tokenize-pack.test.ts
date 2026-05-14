@@ -17,7 +17,7 @@ const memories = (count: number) =>
 const baseInput = (count = 4): TokenizePackInput => ({
   packId: 'pack-abc',
   authorWallet: 'GsbwXfQGv9pBkj1234567890abcdef1234567890abcdef',
-  gateUri: 'https://api.pmp.dev/v1/packs/pack-abc/unlock',
+  gateUri: 'https://api.portablememoryprotocol.com/v1/packs/pack-abc/unlock',
   memories: memories(count),
 });
 

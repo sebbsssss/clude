@@ -7,7 +7,7 @@
  *
  *   import { PmpClient } from '@pmp/sdk';
  *
- *   const client = new PmpClient({ baseUrl: 'https://api.pmp.dev' });
+ *   const client = new PmpClient({ baseUrl: 'https://api.portablememoryprotocol.com' });
  *   const result = await client.discover({ query: 'roadmap', limit: 10 });
  *   const memory = await client.retrieve(result.memories[0].id);
  *   const proof  = await client.verify(memory.id);

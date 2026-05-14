@@ -110,7 +110,7 @@ The compressed launch plan: spec public, two reference implementations, demo age
 |---|---|
 | 0 | Decisions locked: domain, GH org, engineer + Solidity contractor allocated |
 | 1–2 | Spec v0.1 frozen, public on GitHub |
-| 3–4 | All 4 verbs live on `api.pmp.dev` (Solana, backed by Clude) |
+| 3–4 | All 4 verbs live on `api.portablememoryprotocol.com` (Solana, backed by Clude) |
 | 5 | TypeScript SDK published, LangChain adapter working |
 | 5–10 | Base EVM contracts deployed to Base Sepolia |
 | 8–9 | Cross-chain VERIFY: same endpoint returns the same shape whether asset is on Solana or Base |

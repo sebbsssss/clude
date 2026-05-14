@@ -254,13 +254,116 @@ Authentication is provider-defined. The reference implementation uses Privy JWTs
 - A provider MAY support multiple major versions concurrently at different path prefixes.
 - The `content_hash` algorithm string (`memory-hash-v1`) is independently versioned to allow canonical-form evolution without breaking the wire protocol.
 
-## 9. Reserved for v0.2
+## 9. Pack endpoints (early ship — formally v0.2)
+
+Pack endpoints were originally reserved for v0.2 but the reference implementation
+ships them under `/v1/packs/*` because the marketplace surface is needed for the
+v0.1 launch. The endpoints are forward-compatible with the v0.2 spec text and
+are listed here so independent implementations have a stable target.
+
+### 9.1 `POST /v1/packs`
+
+Create a new Pack from a list of owned memory ids. Tokenises the Pack atomically:
+builds the Merkle tree, commits the root on-chain, persists the Pack row and
+its leaf index. Body:
+
+```json
+{
+  "name": "Solana DeFi memories",
+  "description": "...",
+  "version": "1.0.0",
+  "memory_hash_ids": ["clude-aaaa", "clude-bbbb"],
+  "manifest_id": null,
+  "gate_uri": "https://provider.example/v1/packs/.../unlock"
+}
+```
+
+Server validates each `memory_hash_ids[i]` is (a) owned by the caller, and
+(b) already tokenised (`tokenization_status = 'minted'`). Caps `memory_hash_ids`
+at 10,000 entries per Pack.
+
+Returns 201 with the Pack object including its on-chain attestation.
+
+### 9.2 `GET /v1/packs/:id`
+
+Retrieve Pack metadata. Returns 200 with name, version, author, memory_count,
+and attestation. Returns 404 if not found.
+
+### 9.3 `GET /v1/packs/:id/preview?count=N`
+
+Selective disclosure. Returns `N` (max 10) revealed memories from the Pack
+plus their Merkle inclusion proofs against the on-chain root. The
+`unrevealed_count` field tells the client how many memories remain sealed.
+The server cross-checks that the rebuilt root from the persisted leaves
+matches the on-chain commitment and returns 500 on any mismatch.
+
+### 9.4 `GET /v1/packs/:id/verify`
+
+Public verifier (no auth). Rebuilds the Merkle tree from the persisted
+content hashes, compares to the on-chain root, and returns:
+
+```json
+{
+  "id": "pack-...",
+  "verified": true,
+  "reason": "verified",
+  "memory_count": 100,
+  "recomputed_root": "<hex>",
+  "committed_root": "<hex>",
+  "commitment": { "chain": "solana", "asset_id": "...", "tx_sig": "...", "tokenized_at": "..." }
+}
+```
+
+`reason: "drift_detected"` if the content has changed since tokenisation,
+`reason: "not_tokenised"` for draft packs.
+
+### 9.5 `POST /v1/packs/:id/unlock`
+
+Token-gated full content access. The caller proves wallet control and
+on-chain token holding in a single request:
+
+```json
+{
+  "wallet": "<base58 Solana pubkey>",
+  "message": "unlock:pack-abc123:1716123456",
+  "signature": "<base58 Ed25519 signature>"
+}
+```
+
+The signed message MUST follow the format `unlock:<pack_id>:<unix_ts_seconds>`.
+The server verifies:
+
+1. The message format is exact, with `pack_id` matching the URL.
+2. The timestamp is within ±300 seconds of server time (replay protection).
+3. The signature is valid Ed25519 over the UTF-8 message bytes for `wallet`.
+4. `wallet` currently holds at least 1 unit of the Pack token on-chain.
+
+On success (200), returns all Pack memories with full content plus their
+Merkle inclusion proofs — so the client can independently audit each
+memory's membership in the Pack without re-trusting the provider.
+
+Failure status codes:
+
+| Reason | Status |
+|---|---|
+| `malformed_message`, `pack_id_mismatch`, `invalid_wallet` | 422 |
+| `message_expired`, `invalid_signature` | 401 |
+| `not_token_holder` | 403 |
+| `rpc_unavailable` | 503 |
+
+**Encryption note (v0.1 vs v0.2):** v0.1 ships *authorization* (server gates
+the API), not *encryption*. Memory content is plaintext (or encrypted to a
+server-held key) at rest. v0.2 will introduce threshold encryption so the
+server cannot unilaterally read Pack content — `/unlock` will return
+decryption shares instead of plaintext.
+
+## 9b. Reserved for v0.2
 
 The following are placeholders. Implementations SHOULD NOT serve these endpoints in v0.1.
 
 - `POST /v1/memories/:id/attest` — generate a zk-proof attestation over a memory corpus (compliance).
 - `GET /v1/subscribe?query=...` — Server-Sent Events stream of new memories matching a query.
-- Pack-level endpoints (`/v1/packs/*`) for selective disclosure and Pack tokenisation.
+- Threshold-encrypted Pack content (replaces the v0.1 server-trusted unlock model).
 
 ## 10. Security considerations
 
@@ -271,7 +374,7 @@ The following are placeholders. Implementations SHOULD NOT serve these endpoints
 
 ## 11. Reference implementation
 
-The Solana reference implementation lives at `https://github.com/portablememoryprotocol/reference-solana` and runs at `https://api.pmp.dev`. Backed by [Clude](https://clude.io). License: Apache-2.0 for the spec and SDK, MIT for the reference impl.
+The Solana reference implementation lives at `https://github.com/portablememoryprotocol/reference-solana` and runs at `https://api.portablememoryprotocol.com`. Backed by [Clude](https://clude.io). License: Apache-2.0 for the spec and SDK, MIT for the reference impl.
 
 ## 12. Acknowledgements
 

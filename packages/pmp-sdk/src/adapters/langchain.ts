@@ -10,7 +10,7 @@
  *   import { PmpClient } from '@pmp/sdk';
  *   import { PmpMemoryStore } from '@pmp/sdk/langchain';
  *
- *   const client = new PmpClient({ baseUrl: 'https://api.pmp.dev', auth: {...} });
+ *   const client = new PmpClient({ baseUrl: 'https://api.portablememoryprotocol.com', auth: {...} });
  *   const memory = new PmpMemoryStore(client, { defaultType: 'episodic' });
  *
  *   // Retrieval-augmented prompt construction

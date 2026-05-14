@@ -17,7 +17,7 @@ describe('PmpMemoryStore (LangChain adapter)', () => {
   beforeEach(() => {
     fetchMock = vi.fn();
     client = new PmpClient({
-      baseUrl: 'https://api.pmp.dev',
+      baseUrl: 'https://api.portablememoryprotocol.com',
       fetch: fetchMock as unknown as typeof globalThis.fetch,
     });
     store = new PmpMemoryStore(client, { defaultType: 'episodic', k: 5 });
