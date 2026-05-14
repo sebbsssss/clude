@@ -545,3 +545,75 @@ CREATE TABLE IF NOT EXISTS wiki_pack_installations (
 
 CREATE INDEX IF NOT EXISTS idx_wiki_pack_installations_owner
   ON wiki_pack_installations(owner_wallet);
+
+-- ─────────── PMP tokenisation (migration 019) ───────────
+-- Tokenisation columns on memories so each memory can carry a content hash
+-- + compressed-NFT address on Solana. Content-bundle Pack registry and
+-- Merkle-tree-aware join table for selective disclosure.
+-- See packages/database/migrations/019_pmp_tokenisation.sql for full notes.
+
+ALTER TABLE memories
+  ADD COLUMN IF NOT EXISTS content_hash TEXT,
+  ADD COLUMN IF NOT EXISTS cnft_address TEXT,
+  ADD COLUMN IF NOT EXISTS cnft_tree TEXT,
+  ADD COLUMN IF NOT EXISTS cnft_leaf_index BIGINT,
+  ADD COLUMN IF NOT EXISTS cnft_tx_sig TEXT,
+  ADD COLUMN IF NOT EXISTS tokenization_status TEXT
+    CHECK (tokenization_status IN ('pending', 'minted', 'skipped', 'failed')),
+  ADD COLUMN IF NOT EXISTS tokenized_at TIMESTAMPTZ;
+
+CREATE INDEX IF NOT EXISTS idx_memories_content_hash
+  ON memories(content_hash) WHERE content_hash IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_memories_cnft_address
+  ON memories(cnft_address) WHERE cnft_address IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_memories_tok_status
+  ON memories(tokenization_status)
+  WHERE tokenization_status IN ('pending', 'failed');
+
+CREATE TABLE IF NOT EXISTS cnft_trees (
+  tree_address TEXT PRIMARY KEY,
+  capacity INTEGER NOT NULL,
+  current_leaves INTEGER NOT NULL DEFAULT 0,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_cnft_trees_active
+  ON cnft_trees(is_active) WHERE is_active = TRUE;
+
+CREATE TABLE IF NOT EXISTS memory_packs (
+  pack_id TEXT PRIMARY KEY,
+  manifest_id TEXT,
+  author_wallet TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  version TEXT NOT NULL,
+  memory_count INTEGER NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  published_at TIMESTAMPTZ,
+  merkle_root TEXT,
+  pack_token_address TEXT,
+  pack_token_tx_sig TEXT,
+  pack_schema_version SMALLINT DEFAULT 1,
+  gate_uri TEXT,
+  tokenized_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_memory_packs_author
+  ON memory_packs(author_wallet);
+CREATE INDEX IF NOT EXISTS idx_memory_packs_published
+  ON memory_packs(published_at) WHERE published_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_memory_packs_token
+  ON memory_packs(pack_token_address) WHERE pack_token_address IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS memory_pack_contents (
+  pack_id TEXT NOT NULL REFERENCES memory_packs(pack_id) ON DELETE CASCADE,
+  memory_id BIGINT NOT NULL REFERENCES memories(id) ON DELETE RESTRICT,
+  leaf_index INTEGER NOT NULL,
+  content_hash TEXT NOT NULL,
+  PRIMARY KEY (pack_id, memory_id),
+  UNIQUE (pack_id, leaf_index)
+);
+
+CREATE INDEX IF NOT EXISTS idx_memory_pack_contents_memory
+  ON memory_pack_contents(memory_id);

@@ -1,0 +1,21 @@
+{
+  "name": "@clude/tokenization",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Primitives for tokenising agent memories: content hashing, Merkle commitments, Light Protocol cNFT mints, selective-disclosure proofs. Reference implementation of the PMP (Portable Memory Protocol) commitment layer.",
+  "license": "Apache-2.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.19.11",
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.0"
+  }
+}
