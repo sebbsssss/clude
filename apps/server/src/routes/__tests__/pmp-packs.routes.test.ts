@@ -141,7 +141,9 @@ vi.mock('../../lib/pack-gate.js', async () => {
 
 import { pmpPacksRoutes } from '../pmp-packs.routes.js';
 import nacl from 'tweetnacl';
-import bs58 from 'bs58';
+// @ts-ignore — bs58 is ESM-only, works at runtime via Node CJS/ESM interop
+import * as bs58Module from 'bs58';
+const bs58 = (bs58Module as any).default || bs58Module;
 
 function app() {
   const a = express();
