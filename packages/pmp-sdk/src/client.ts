@@ -27,7 +27,7 @@ export type AuthHeader = {
 };
 
 export interface PmpClientOptions {
-  /** Base URL of a PMP provider, e.g. `https://api.pmp.dev` */
+  /** Base URL of a PMP provider, e.g. `https://api.portablememoryprotocol.com` */
   baseUrl: string;
   /** Bearer / wallet-sig / extra headers to attach to every request. */
   auth?: AuthHeader;

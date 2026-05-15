@@ -1,18 +1,7 @@
-import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./hooks/useAuth";
 import { AuthContext } from "./hooks/AuthContext";
-import { ChatInterface } from "./components/chat-interface";
-
-// Chat v2 (side-by-side at /chat/v2) — lazy so the bundle stays split.
-const V2App = lazy(() => import("./v2/V2App").then((m) => ({ default: m.V2App })));
-
-// Lazy-load non-critical routes — keeps initial bundle focused on chat
-// Compound routes disabled (COMPOUND_ENABLED=false) — kept for future re-enable
-// const CompoundDashboard = lazy(() => import('./components/CompoundDashboard').then(m => ({ default: m.CompoundDashboard })))
-// const CompoundAccuracyScorecard = lazy(() => import('./components/CompoundAccuracyScorecard').then(m => ({ default: m.CompoundAccuracyScorecard })))
-// const CompoundChat = lazy(() => import('./components/CompoundChat').then(m => ({ default: m.CompoundChat })))
-// const MarketDetail = lazy(() => import('./components/MarketDetail').then(m => ({ default: m.MarketDetail })))
+import { V2App } from "./v2/V2App";
 
 export function App() {
   const auth = useAuth();
@@ -33,21 +22,12 @@ export function App() {
 
   return (
     <AuthContext.Provider value={auth} key={identity}>
-      <div className="h-screen bg-black overflow-hidden">
-        <Suspense
-          fallback={
-            <div className="flex items-center justify-center h-screen text-zinc-500">
-              Loading…
-            </div>
-          }
-        >
-          <Routes>
-            <Route path="/" element={<ChatInterface />} />
-            <Route path="/v2" element={<V2App />} />
-            {/* Compound routes disabled — redirect to home */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
+      <div className="h-screen overflow-hidden">
+        <Routes>
+          <Route path="/" element={<V2App />} />
+          <Route path="/v2" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </div>
     </AuthContext.Provider>
   );

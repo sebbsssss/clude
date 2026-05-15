@@ -23,7 +23,7 @@ describe('PmpClient', () => {
 
   function makeClient(opts: { auth?: { bearer?: string; walletSignature?: string; extra?: Record<string, string> } } = {}): PmpClient {
     return new PmpClient({
-      baseUrl: 'https://api.pmp.dev',
+      baseUrl: 'https://api.portablememoryprotocol.com',
       auth: opts.auth,
       fetch: fetchMock as unknown as typeof globalThis.fetch,
     });
@@ -36,13 +36,13 @@ describe('PmpClient', () => {
 
     it('strips trailing slashes from baseUrl', async () => {
       const c = new PmpClient({
-        baseUrl: 'https://api.pmp.dev///',
+        baseUrl: 'https://api.portablememoryprotocol.com///',
         fetch: fetchMock as unknown as typeof globalThis.fetch,
       });
       fetchMock.mockResolvedValue(jsonResponse(200, { count: 0, memories: [] }));
       await c.discover();
       const url = fetchMock.mock.calls[0]![0] as string;
-      expect(url.startsWith('https://api.pmp.dev/v1/memories')).toBe(true);
+      expect(url.startsWith('https://api.portablememoryprotocol.com/v1/memories')).toBe(true);
       expect(url.includes('.dev///')).toBe(false);
     });
   });
