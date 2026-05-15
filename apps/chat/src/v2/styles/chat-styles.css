@@ -1576,8 +1576,8 @@ body {
 .cc-mobile .cc-auth__h1 { font-size: 32px; }
 
 /* The auth screen renders outside CcChat (no `.cc-mobile` ancestor), so the
-   mobile rules above never fire on /chat/v2 before sign-in. Mirror them via
-   a media query so the form reflows to one column on phones. */
+   mobile rules above never fire before sign-in. Mirror them via a media
+   query so the form reflows to one column on phones. */
 @media (max-width: 720px) {
   .cc-auth { grid-template-columns: 1fr; }
   .cc-auth__hero { display: none; }

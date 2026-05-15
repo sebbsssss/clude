@@ -10,19 +10,17 @@ import type { V2Theme } from './types';
 
 const THEME_KEY = 'v2_theme';
 // Session-scoped gate. Each new browser session (new tab / window / incognito /
-// link share) lands on the auth screen first, even if the user is already
-// signed in via the main /chat route. Once they explicitly enter (OTP success,
-// wallet connect, or "Continue" for already-signed-in sessions) the flag
-// sticks through page refreshes for the remainder of the session.
+// link share) lands on the auth screen first. Once they explicitly enter
+// (OTP success, wallet connect, or "Continue" for already-signed-in sessions)
+// the flag sticks through page refreshes for the remainder of the session.
 const ENTERED_KEY = 'v2_entered';
 // Persistent across sessions. Set when the user finishes onboarding (any path,
 // including "just start chatting"). Returning users skip onboarding entirely.
 const ONBOARDED_KEY = 'v2_onboarded';
 
 /**
- * Clude Chat v2 — top-level route.
- * Mounted at `/chat/v2`. Keeps existing Privy/Solana auth; the design's
- * magic-link screen becomes a visual layer that calls `auth.login()`.
+ * Clude Chat — top-level route at /chat/. Keeps Privy/Solana auth; the
+ * magic-link screen is a visual layer that calls `auth.login()`.
  */
 export function V2App() {
   const auth = useAuthContext();
@@ -65,17 +63,6 @@ export function V2App() {
     }
   }, [auth.authenticated, hasEntered]);
 
-  // Remove the dark-mode .dark class the existing /chat route adds to <html>,
-  // so our data-theme-driven vars are the source of truth on /v2.
-  useEffect(() => {
-    const html = document.documentElement;
-    const prev = html.classList.contains('dark');
-    html.classList.remove('dark');
-    return () => {
-      if (prev) html.classList.add('dark');
-    };
-  }, []);
-
   if (!auth.ready) {
     return (
       <div
@@ -99,8 +86,8 @@ export function V2App() {
     );
   }
 
-  // Always show the auth screen first on a fresh session — this is the v2
-  // product entry, not a shortcut into the main /chat session state.
+  // Always show the auth screen first on a fresh session — this is the
+  // product entry, not a shortcut into an existing session.
   if (!hasEntered || !auth.authenticated) {
     return <CcAuth theme={theme} onEntered={markEntered} />;
   }

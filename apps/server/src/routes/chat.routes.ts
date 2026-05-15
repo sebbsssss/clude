@@ -1191,7 +1191,7 @@ export function chatRoutes(): Router {
             const equivalentDirectCost = (tokensPrompt / 1_000_000) * OPUS_RATE.input + (tokensCompletion / 1_000_000) * OPUS_RATE.output;
             const savingsPct = equivalentDirectCost > 0 ? Math.round(((equivalentDirectCost - totalCost) / equivalentDirectCost) * 100) : 0;
 
-            // Frontier-baseline token estimate for the /chat/v2 savings footer.
+            // Frontier-baseline token estimate for the /chat savings footer.
             // A frontier model without Clude's memory compression would have
             // needed the raw prior conversation in-context instead of N
             // summarized memories. Each recalled memory stands in for ~300
