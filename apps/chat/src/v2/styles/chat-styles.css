@@ -901,6 +901,13 @@ body {
   color: var(--fg-3);
 }
 .cc-composer__foothint { color: var(--fg-4); }
+/* Soft secondary annotation next to "memory · on" — reads as flavor text,
+   not a label. Lowercase, no extra letter-spacing, dimmed. */
+.cc-composer__subhint {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--fg-4);
+}
 
 /* =========================================================================
    Memory inspector (slide-over drawer, right-anchored overlay)
