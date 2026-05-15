@@ -198,7 +198,7 @@ export function CcComposer({
                 submit();
               }
             }}
-            placeholder="Message Clude · memories update in the background"
+            placeholder="Message Clude"
             rows={1}
             disabled={disabled}
           />
@@ -214,7 +214,8 @@ export function CcComposer({
         <div className="cc-composer__foot">
           <div className="cc-composer__footleft">
             <span>◈ memory · on</span>
-            {notice && <span className="cc-composer__notice"> · {notice}</span>}
+            <span className="cc-composer__subhint">memories update in the background</span>
+            {notice && <span className="cc-composer__notice">· {notice}</span>}
           </div>
           <div className="cc-composer__footright">
             <span className="cc-composer__foothint">⏎ send</span>
