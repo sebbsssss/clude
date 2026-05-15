@@ -28,7 +28,10 @@
 
 import { PublicKey } from '@solana/web3.js';
 import nacl from 'tweetnacl';
-import bs58 from 'bs58';
+// @ts-ignore — bs58 is ESM-only, works at runtime via Node CJS/ESM interop
+// (mirrors the pattern in packages/brain/src/verify-app/routes.ts)
+import * as bs58Module from 'bs58';
+const bs58 = (bs58Module as any).default || bs58Module;
 import { getConnection } from '@clude/shared/core/solana-client';
 import { createChildLogger } from '@clude/shared/core/logger';
 
