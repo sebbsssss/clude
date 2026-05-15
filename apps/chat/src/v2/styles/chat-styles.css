@@ -329,9 +329,30 @@ body {
   border: 1px solid var(--line-strong);
   box-shadow: var(--shadow-2);
   border-radius: 2px;
-  min-width: 340px;
+  /* Width: prefer 340px on desktop, shrink on narrow viewports. Hard cap at
+     viewport minus 32px so the menu never sticks off the screen edge. */
+  min-width: min(340px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  /* Height: ~26 models in the catalog → menu would otherwise be ~1300px.
+     Cap at 70vh (or 520px max) and scroll internally. */
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   z-index: 50;
-  overflow: hidden;
+}
+/* On phones the trigger sits in the topbar near the right edge; right-anchoring
+   the 340px menu still puts it under the trigger but pushes its left edge close
+   to the left edge of the screen. Stretch it between equal margins instead. */
+@media (max-width: 600px) {
+  .cc-mpick__menu {
+    position: fixed;
+    top: 56px; /* below the topbar */
+    right: 12px;
+    left: 12px;
+    min-width: 0;
+    max-width: none;
+    max-height: calc(100vh - 80px);
+  }
 }
 .cc-mpick__opt {
   display: grid;
