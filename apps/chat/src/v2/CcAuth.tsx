@@ -36,8 +36,8 @@ export function CcAuth({
 
   // Auto-enter the app when auth transitions from signed-out → signed-in
   // (e.g. after OTP verification or wallet-modal connection). We explicitly
-  // skip the initial render — a user who was already signed in from the
-  // main /chat route should still see the auth screen and click Continue.
+  // skip the initial render — already-signed-in users still see the auth
+  // screen and click Continue, so a link share never leaks into a session.
   const prevAuthRef = useRef<boolean>(auth.authenticated);
   useEffect(() => {
     if (auth.authenticated && !prevAuthRef.current && onEntered) {

@@ -30,13 +30,13 @@ function TopNav() {
         </a>
         <div className="prodswitch">
           <a className="prodswitch__item prodswitch__item--active" href="/">Memory</a>
-          <a className="prodswitch__item" href="/chat/v2">Chat</a>
+          <a className="prodswitch__item" href="/chat">Chat</a>
           <a className="prodswitch__item" href="/docs">SDK</a>
         </div>
         <nav className="topnav__links">
           <a className="topnav__link" href="#demo">Demo</a>
           <a className="topnav__link" href="#features">Product</a>
-          <a className="topnav__link" href="/chat/v2">Chat</a>
+          <a className="topnav__link" href="/chat">Chat</a>
           <a className="topnav__link" href="#integrations">Integrations</a>
           <a className="topnav__link" href="#compare">Compare</a>
           <a className="topnav__link" href="/docs">Docs</a>
@@ -344,8 +344,8 @@ function ChatProductSection() {
               </div>
             </div>
             <div style={{marginTop:18, display:"flex", gap:10, flexWrap:"wrap", alignItems:"center"}}>
-              <a className="btn btn--brand" href="/chat/v2">Open Clude Chat ↗</a>
-              <a className="btn btn--ghost" href="/chat/v2">iOS · Android · Web</a>
+              <a className="btn btn--brand" href="/chat">Open Clude Chat ↗</a>
+              <a className="btn btn--ghost" href="/chat">iOS · Android · Web</a>
             </div>
           </div>
           <div className="bigfeature__art" style={{padding:"36px 28px", overflow:"visible"}}>
@@ -562,7 +562,7 @@ function CTASection() {
         </div>
         <div className="cta__ctas">
           <a className="btn btn--primary btn--lg" href="/docs">Read the SDK docs →</a>
-          <a className="btn btn--ghost btn--lg" href="/chat/v2">Open Clude Chat</a>
+          <a className="btn btn--ghost btn--lg" href="/chat">Open Clude Chat</a>
         </div>
       </div>
     </section>
@@ -589,7 +589,7 @@ function Footer() {
             <ul>
               <li><a href="/docs">SDK</a></li>
               <li><a href="/dashboard">Dashboard</a></li>
-              <li><a href="/chat/v2">Chat</a></li>
+              <li><a href="/chat">Chat</a></li>
               <li><a href="/docs#mcp">MCP server</a></li>
             </ul>
           </div>
