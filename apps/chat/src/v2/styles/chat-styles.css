@@ -829,16 +829,27 @@ body {
   gap: 8px;
 }
 .cc-composer__box {
-  display: grid;
-  /* attach | textarea | send. When attach is absent, the first track collapses. */
-  grid-template-columns: auto 1fr auto;
+  /* Flex (not grid) so the textarea always fills available width and the
+     buttons stay content-sized, regardless of whether the optional attach
+     button is rendered. Previous grid `auto 1fr auto` collapsed when the
+     attach button was absent: the textarea fell into `auto` and the send
+     button got stretched into `1fr`. */
+  display: flex;
+  align-items: flex-end;
   gap: 8px;
-  align-items: end;
   padding: 10px 10px 10px 12px;
   border: 1px solid var(--line-strong);
   background: var(--bg-1);
   border-radius: 3px;
   transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+.cc-composer__box textarea {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.cc-composer__box .cc-composer__attach,
+.cc-composer__box .cc-composer__send {
+  flex: 0 0 auto;
 }
 .cc-composer__box:focus-within {
   border-color: var(--line-contrast);
