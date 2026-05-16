@@ -329,9 +329,30 @@ body {
   border: 1px solid var(--line-strong);
   box-shadow: var(--shadow-2);
   border-radius: 2px;
-  min-width: 340px;
+  /* Width: prefer 340px on desktop, shrink on narrow viewports. Hard cap at
+     viewport minus 32px so the menu never sticks off the screen edge. */
+  min-width: min(340px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  /* Height: ~26 models in the catalog → menu would otherwise be ~1300px.
+     Cap at 70vh (or 520px max) and scroll internally. */
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   z-index: 50;
-  overflow: hidden;
+}
+/* On phones the trigger sits in the topbar near the right edge; right-anchoring
+   the 340px menu still puts it under the trigger but pushes its left edge close
+   to the left edge of the screen. Stretch it between equal margins instead. */
+@media (max-width: 600px) {
+  .cc-mpick__menu {
+    position: fixed;
+    top: 56px; /* below the topbar */
+    right: 12px;
+    left: 12px;
+    min-width: 0;
+    max-width: none;
+    max-height: calc(100vh - 80px);
+  }
 }
 .cc-mpick__opt {
   display: grid;
@@ -829,16 +850,27 @@ body {
   gap: 8px;
 }
 .cc-composer__box {
-  display: grid;
-  /* attach | textarea | send. When attach is absent, the first track collapses. */
-  grid-template-columns: auto 1fr auto;
+  /* Flex (not grid) so the textarea always fills available width and the
+     buttons stay content-sized, regardless of whether the optional attach
+     button is rendered. Previous grid `auto 1fr auto` collapsed when the
+     attach button was absent: the textarea fell into `auto` and the send
+     button got stretched into `1fr`. */
+  display: flex;
+  align-items: flex-end;
   gap: 8px;
-  align-items: end;
   padding: 10px 10px 10px 12px;
   border: 1px solid var(--line-strong);
   background: var(--bg-1);
   border-radius: 3px;
   transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+.cc-composer__box textarea {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.cc-composer__box .cc-composer__attach,
+.cc-composer__box .cc-composer__send {
+  flex: 0 0 auto;
 }
 .cc-composer__box:focus-within {
   border-color: var(--line-contrast);
@@ -901,6 +933,13 @@ body {
   color: var(--fg-3);
 }
 .cc-composer__foothint { color: var(--fg-4); }
+/* Soft secondary annotation next to "memory · on" — reads as flavor text,
+   not a label. Lowercase, no extra letter-spacing, dimmed. */
+.cc-composer__subhint {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--fg-4);
+}
 
 /* =========================================================================
    Memory inspector (slide-over drawer, right-anchored overlay)
