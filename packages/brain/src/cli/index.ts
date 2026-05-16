@@ -26,6 +26,12 @@ if (command === 'setup') {
     console.error('MCP install failed:', err.message);
     process.exit(1);
   });
+} else if (command === 'connect') {
+  const { runConnect } = require('./connect');
+  runConnect().catch((err: Error) => {
+    console.error('Connect failed:', err.message);
+    process.exit(1);
+  });
 } else if (command === 'ship') {
   const message = process.argv.slice(3).join(' ');
   const { runShip } = require('./ship');
@@ -120,7 +126,8 @@ if (command === 'setup') {
   console.log(`    ${c.cyan}npx @clude/sdk status${c.reset}        Check if Clude is active + memory stats`);
   console.log(`    ${c.cyan}npx @clude/sdk init${c.reset}          Advanced setup (self-hosted options)`);
   console.log(`    ${c.cyan}npx @clude/sdk register${c.reset}      Get an API key only`);
-  console.log(`    ${c.cyan}npx @clude/sdk mcp-install${c.reset}   Install MCP server for your IDE`);
+  console.log(`    ${c.cyan}npx @clude/sdk connect${c.reset}       Connect to Claude Desktop as a remote connector`);
+  console.log(`    ${c.cyan}npx @clude/sdk mcp-install${c.reset}   Install MCP server for your IDE (local stdio)`);
   console.log(`    ${c.cyan}npx @clude/sdk inject-instructions${c.reset}  Write usage instructions to CLAUDE.md`);
   console.log(`    ${c.cyan}npx @clude/sdk export${c.reset}        Export memories (json/md/chatgpt/gemini/memorypack)`);
   console.log(`    ${c.cyan}npx @clude/sdk import${c.reset}        Import from ChatGPT export, markdown, JSON`);
