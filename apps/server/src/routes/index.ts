@@ -18,6 +18,7 @@ import { memoryPacksRoutes } from './memory-packs.routes.js';
 import { wikiPacksRoutes } from './wiki-packs.routes.js';
 import { pmpRoutes } from './pmp.routes.js';
 import { pmpPacksRoutes } from './pmp-packs.routes.js';
+import { pmpAdminRoutes } from './pmp-admin.routes.js';
 import { demoRoutes } from './demo.routes.js';
 import { showcaseRoutes } from './showcase.routes.js';
 import { walletAuthRoutes } from './wallet-auth.routes.js';
@@ -64,6 +65,10 @@ export function mountApiRoutes(app: express.Application): void {
   // PMP Pack endpoints (spec-reserved for v0.2, implementation shipping early)
   // POST /v1/packs, GET /v1/packs/:id, /preview, /verify — marketplace surface.
   app.use(pmpPacksRoutes());
+
+  // PMP admin — backfill control (X-Admin-Token gated, disabled unless
+  // PMP_ADMIN_TOKEN is set). POST/GET /v1/admin/backfill, /backfill/stop.
+  app.use(pmpAdminRoutes());
 
   // Memory packs: export, import, smart-export
   app.use('/api/memory-packs', memoryPacksRoutes());

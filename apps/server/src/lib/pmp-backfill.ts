@@ -43,6 +43,12 @@ export interface BackfillOptions {
   maxDurationMs?: number;
   /** Bail-out flag the caller can flip (e.g. on SIGTERM). */
   shouldStop?: () => boolean;
+  /**
+   * Called once per completed batch with a snapshot of cumulative stats.
+   * Lets a long-running caller (e.g. the admin endpoint) surface live
+   * progress without waiting for the whole run to finish.
+   */
+  onProgress?: (stats: BackfillStats) => void;
 }
 
 export interface BackfillStats {
@@ -206,6 +212,10 @@ export async function runPmpBackfill(
         // Don't break the loop — keep going on next memory.
       }
     }
+
+    // Surface cumulative progress after each batch.
+    stats.durationMs = Date.now() - start;
+    opts.onProgress?.({ ...stats });
   }
 
   stats.durationMs = Date.now() - start;
