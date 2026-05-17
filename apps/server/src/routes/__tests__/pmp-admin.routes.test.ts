@@ -48,7 +48,7 @@ function app() {
 }
 
 const TOKEN = 'test-admin-token-xyz';
-const STATS: BackfillStats = { scanned: 10, minted: 9, skipped: 1, failed: 0, durationMs: 1234 };
+const STATS: BackfillStats = { scanned: 10, minted: 9, skipped: 1, failed: 0, batches: 1, durationMs: 1234 };
 
 beforeEach(() => {
   _resetBackfillRunner();

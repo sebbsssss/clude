@@ -617,3 +617,22 @@ CREATE TABLE IF NOT EXISTS memory_pack_contents (
 
 CREATE INDEX IF NOT EXISTS idx_memory_pack_contents_memory
   ON memory_pack_contents(memory_id);
+
+-- ─────────── PMP batch tokenisation (migration 020) ───────────
+-- The backfill commits memories in batches: one Merkle root on-chain for
+-- many memories. This table records each batch so a memory's inclusion
+-- proof can be regenerated (memories.cnft_tree holds the batch merkle_root).
+
+CREATE TABLE IF NOT EXISTS memory_batches (
+  batch_id          TEXT PRIMARY KEY,
+  merkle_root       TEXT NOT NULL,
+  memory_count      INTEGER NOT NULL,
+  leaves            JSONB NOT NULL,
+  commitment_asset  TEXT,
+  commitment_tx_sig TEXT,
+  chain             TEXT NOT NULL DEFAULT 'solana',
+  created_at        TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_memory_batches_root
+  ON memory_batches(merkle_root);

@@ -78,7 +78,7 @@ export function startBackfill(
   finishedAt = null;
   lastError = null;
   stopRequested = false;
-  stats = { scanned: 0, minted: 0, skipped: 0, failed: 0, durationMs: 0 };
+  stats = { scanned: 0, minted: 0, skipped: 0, failed: 0, batches: 0, durationMs: 0 };
   options = {
     batchSize: opts.batchSize,
     ratePerMinute: opts.ratePerMinute,
