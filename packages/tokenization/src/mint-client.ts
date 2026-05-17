@@ -43,6 +43,22 @@ export interface PackCommitment {
   merkleRoot: string;
 }
 
+/**
+ * Receipt for a batch commitment — one on-chain write covering many memories.
+ * Distinct from PackCommitment: a Pack is a curated, tradeable product; a
+ * batch is an internal tokenisation optimisation (the backfill commits
+ * memories in batches so a 100k-memory corpus costs ~100 transactions
+ * instead of ~100k).
+ */
+export interface BatchCommitment {
+  chain: ChainId;
+  /** On-chain identifier for the batch commitment (memo tx, cNFT mint, etc.). */
+  assetId: string;
+  txSig: string;
+  /** Echoed back from the input — the Merkle root the batch committed. */
+  merkleRoot: string;
+}
+
 export interface CommitMemoryInput {
   /** sha256 hex of the memory's canonical content (from content-hash.ts). */
   contentHash: string;
@@ -65,6 +81,15 @@ export interface CommitPackInput {
   gateUri: string | null;
 }
 
+export interface CommitMemoryBatchInput {
+  /** Stable id for this tokenisation batch (e.g. 'batch-abcd1234'). */
+  batchId: string;
+  /** sha256 hex Merkle root over the batch's memory content hashes. */
+  merkleRoot: string;
+  /** Number of memories in the batch (verifier sanity-check). */
+  memoryCount: number;
+}
+
 export interface MintClient {
   /** Which chain this client commits to. */
   readonly chain: ChainId;
@@ -75,11 +100,21 @@ export interface MintClient {
   /** Commit a Pack's Merkle root on-chain. Returns the commitment receipt. */
   commitPackRoot(input: CommitPackInput): Promise<PackCommitment>;
 
+  /**
+   * Commit a Merkle root over a batch of memory hashes — one on-chain write
+   * for many memories. Used by the backfill to tokenise large corpora
+   * economically.
+   */
+  commitMemoryBatch(input: CommitMemoryBatchInput): Promise<BatchCommitment>;
+
   /** Look up a previously-committed memory by its content hash. */
   fetchMemoryCommitment(contentHash: string): Promise<MemoryCommitment | null>;
 
   /** Look up a previously-committed Pack by its merkle root. */
   fetchPackCommitment(merkleRoot: string): Promise<PackCommitment | null>;
+
+  /** Look up a previously-committed batch by its merkle root. */
+  fetchBatchCommitment(merkleRoot: string): Promise<BatchCommitment | null>;
 }
 
 /**
@@ -93,6 +128,7 @@ export class FakeMintClient implements MintClient {
   readonly chain: ChainId = 'fake';
   private readonly memories = new Map<string, MemoryCommitment>();
   private readonly packs = new Map<string, PackCommitment>();
+  private readonly batches = new Map<string, BatchCommitment>();
   private mintCounter = 0;
 
   async commitMemoryHash(input: CommitMemoryInput): Promise<MemoryCommitment> {
@@ -124,6 +160,20 @@ export class FakeMintClient implements MintClient {
     return commitment;
   }
 
+  async commitMemoryBatch(input: CommitMemoryBatchInput): Promise<BatchCommitment> {
+    const existing = this.batches.get(input.merkleRoot);
+    if (existing) return existing;
+    const seq = ++this.mintCounter;
+    const commitment: BatchCommitment = {
+      chain: 'fake',
+      assetId: `fake-batch-${input.merkleRoot.slice(0, 16)}-${seq}`,
+      txSig: `faketx-batch-${seq}`,
+      merkleRoot: input.merkleRoot,
+    };
+    this.batches.set(input.merkleRoot, commitment);
+    return commitment;
+  }
+
   async fetchMemoryCommitment(contentHash: string): Promise<MemoryCommitment | null> {
     return this.memories.get(contentHash) ?? null;
   }
@@ -132,10 +182,15 @@ export class FakeMintClient implements MintClient {
     return this.packs.get(merkleRoot) ?? null;
   }
 
+  async fetchBatchCommitment(merkleRoot: string): Promise<BatchCommitment | null> {
+    return this.batches.get(merkleRoot) ?? null;
+  }
+
   /** Test helper: clear all in-memory state. */
   reset(): void {
     this.memories.clear();
     this.packs.clear();
+    this.batches.clear();
     this.mintCounter = 0;
   }
 }

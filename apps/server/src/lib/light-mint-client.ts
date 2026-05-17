@@ -40,8 +40,10 @@ import type {
   MintClient,
   CommitMemoryInput,
   CommitPackInput,
+  CommitMemoryBatchInput,
   MemoryCommitment,
   PackCommitment,
+  BatchCommitment,
 } from '@clude/tokenization';
 import { writeMemo } from '@clude/shared/core/solana-client';
 import { MEMO_MAX_LENGTH } from '@clude/shared/utils/constants';
@@ -166,6 +168,33 @@ export class LightMintClient implements MintClient {
   }
 
   /**
+   * Batch commitment via Light Protocol — a single compressed-account write
+   * carrying the batch Merkle root. v0.2 work: see TODO(light-2) for the
+   * mint-account setup. Until then this falls through to the SPL Memo
+   * program so batch tokenisation still produces a verifiable receipt.
+   */
+  async commitMemoryBatch(input: CommitMemoryBatchInput): Promise<BatchCommitment> {
+    log.warn(
+      { batchId: input.batchId, root: input.merkleRoot.slice(0, 16) },
+      'LightMintClient.commitMemoryBatch: scaffold — falling through to memo write',
+    );
+    const memo = `clude-batch | v1 | ${input.batchId} | ${input.merkleRoot} | ${input.memoryCount}`;
+    if (memo.length > MEMO_MAX_LENGTH) {
+      throw new Error('LightMintClient fallback: batch memo exceeds MEMO_MAX_LENGTH');
+    }
+    const txSig = await writeMemo(memo);
+    if (!txSig) {
+      throw new Error('LightMintClient fallback: writeMemo returned null');
+    }
+    return {
+      chain: 'solana',
+      assetId: `memo:${txSig}`,
+      txSig,
+      merkleRoot: input.merkleRoot,
+    };
+  }
+
+  /**
    * Look up a memory commitment by its content hash via Photon's
    * getCompressedAccountsByOwner or a custom indexer keyed off content_hash.
    *
@@ -188,6 +217,11 @@ export class LightMintClient implements MintClient {
    * use PdaMintClient.fetchPackCommitment which queries memory_packs in Supabase.
    */
   async fetchPackCommitment(_merkleRoot: string): Promise<PackCommitment | null> {
+    return null;
+  }
+
+  /** Batch commitment lookup — v0.2 work; scaffold returns null. */
+  async fetchBatchCommitment(_merkleRoot: string): Promise<BatchCommitment | null> {
     return null;
   }
 }
