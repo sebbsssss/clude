@@ -120,15 +120,19 @@ Public endpoint. No authentication. Cacheable for short windows.
 }
 ```
 
-**`verified: false` reasons:**
+**`verified` reasons:**
 
-| Reason | Meaning |
-|---|---|
-| `not_committed` | The memory exists in the provider's index but never landed on-chain |
-| `drift_detected` | The current content differs from what was originally committed (tampering or unrecorded edit) |
-| `revoked` | The memory was superseded by a compaction and its hash is no longer authoritative |
+| Reason | `verified` | Meaning |
+|---|---|---|
+| `verified` | `true` | Content hash matches the canonical `memory-hash-v1` commitment on-chain |
+| `verified_legacy` | `true` | The memory is committed on-chain via a provider's pre-PMP scheme. The provider could not match the full canonical hash but can prove an on-chain transaction exists for this memory. Clients SHOULD treat this as on-chain-but-not-canonical and MAY surface the transaction for manual inspection. |
+| `not_committed` | `false` | The memory exists in the provider's index but never landed on-chain |
+| `drift_detected` | `false` | The current content differs from what was originally committed (tampering or unrecorded edit). Takes precedence over `verified_legacy` — drift always wins. |
+| `revoked` | `false` | The memory was superseded by a compaction and its hash is no longer authoritative |
 
 VERIFY MUST recompute the content hash from the current memory state, not trust the stored value. The stored value is returned for diagnostics.
+
+When a transaction signature is available (either path), the response SHOULD include a `solscan_url` (or chain-appropriate explorer URL) so a human can click through to the on-chain proof directly.
 
 ### 4.4 CONTRIBUTE — write a new memory
 
