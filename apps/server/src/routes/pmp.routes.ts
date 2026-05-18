@@ -258,7 +258,7 @@ export function pmpRoutes(): Router {
       const { data, error } = await db
         .from('memories')
         .select(
-          'content, memory_type, owner_wallet, created_at, tags, source, related_user, related_wallet, content_hash, cnft_address, cnft_tree, cnft_leaf_index, cnft_tx_sig, tokenization_status, compacted, compacted_into, hash_id',
+          'content, memory_type, owner_wallet, created_at, tags, source, related_user, related_wallet, content_hash, cnft_address, cnft_tree, cnft_leaf_index, cnft_tx_sig, tokenization_status, solana_signature, compacted, compacted_into, hash_id',
         )
         .eq('hash_id', id)
         .limit(1)
@@ -301,13 +301,46 @@ export function pmpRoutes(): Router {
       const mint = getPdaMintClient();
       const verifyResult = await verifyMemoryProtocol(recomputed, mint);
 
+      // Legacy on-chain fallback. Before PMP, the bot committed memory hashes
+      // to Solana via the SPL Memo program — the `solana_signature` column.
+      // Those memories ARE on-chain; they just predate the canonical
+      // `memory-hash-v1` scheme and the cNFT registry. If the PMP-native
+      // lookup found nothing but a legacy signature exists, report the memory
+      // as verified-via-legacy with the real transaction so anyone can click
+      // through to the on-chain proof. (`reason: 'verified_legacy'` is honest:
+      // the on-chain digest is sha256(content) under the pre-PMP scheme, not
+      // the full canonical hash. Re-tokenising via backfill upgrades it.)
+      const legacySig = (data.solana_signature as string | null) ?? null;
+      const usingLegacy = !verifyResult.verified && !drift && legacySig !== null;
+
+      const SOLSCAN_TX = 'https://solscan.io/tx/';
+      let commitment = verifyResult.commitment;
+      let verified = verifyResult.verified && !drift;
+      let reason: string = drift ? 'drift_detected' : verifyResult.reason;
+      let solscanUrl: string | null =
+        verifyResult.commitment?.txSig ? `${SOLSCAN_TX}${verifyResult.commitment.txSig}` : null;
+
+      if (usingLegacy) {
+        verified = true;
+        reason = 'verified_legacy';
+        commitment = {
+          chain: 'solana',
+          assetId: `memo:${legacySig}`,
+          txSig: legacySig,
+          treeAddress: null,
+          leafIndex: null,
+        };
+        solscanUrl = `${SOLSCAN_TX}${legacySig}`;
+      }
+
       res.json({
         id,
-        verified: verifyResult.verified && !drift,
-        reason: drift ? 'drift_detected' : verifyResult.reason,
+        verified,
+        reason,
         recomputed_hash: recomputed,
         stored_hash: stored,
-        commitment: verifyResult.commitment,
+        commitment,
+        solscan_url: solscanUrl,
       });
     } catch (err) {
       log.error({ err, id }, 'VERIFY failed');
