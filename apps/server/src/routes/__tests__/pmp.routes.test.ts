@@ -331,6 +331,42 @@ describe('VERIFY — GET /v1/memories/:id/verify', () => {
     expect(res.body.verified).toBe(false);
     expect(res.body.reason).toBe('not_committed');
     expect(res.body.commitment).toBeNull();
+    expect(res.body.solscan_url).toBeNull();
+  });
+
+  it('returns verified_legacy when only a pre-PMP solana_signature exists', async () => {
+    // Memory has no cNFT commitment but DOES have a legacy memo signature —
+    // committed on-chain before PMP. VERIFY should surface it as verified.
+    const legacySig = '5xLegacyMemoTxSig1111111111111111111111111111111111111111111111111111111111111111111111';
+    queryQueue.push({
+      data: { ...baseRow, solana_signature: legacySig },
+      error: null,
+    });
+    const res = await request(buildApp()).get('/v1/memories/mem-v1/verify');
+    expect(res.status).toBe(200);
+    expect(res.body.verified).toBe(true);
+    expect(res.body.reason).toBe('verified_legacy');
+    expect(res.body.commitment).not.toBeNull();
+    expect(res.body.commitment.chain).toBe('solana');
+    expect(res.body.commitment.txSig).toBe(legacySig);
+    expect(res.body.solscan_url).toBe(`https://solscan.io/tx/${legacySig}`);
+  });
+
+  it('does NOT use the legacy fallback when content has drifted', async () => {
+    // A stale stored_hash means the content changed since it was committed.
+    // Even with a legacy signature, drift wins — we don't claim verified.
+    queryQueue.push({
+      data: {
+        ...baseRow,
+        content_hash: 'stale-hash',
+        solana_signature: '5xSomeLegacySig',
+      },
+      error: null,
+    });
+    const res = await request(buildApp()).get('/v1/memories/mem-v1/verify');
+    expect(res.status).toBe(200);
+    expect(res.body.verified).toBe(false);
+    expect(res.body.reason).toBe('drift_detected');
   });
 
   it('returns drift_detected when stored hash differs from recomputed', async () => {
