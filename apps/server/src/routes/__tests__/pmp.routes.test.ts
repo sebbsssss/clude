@@ -334,9 +334,11 @@ describe('VERIFY — GET /v1/memories/:id/verify', () => {
     expect(res.body.solscan_url).toBeNull();
   });
 
-  it('returns verified_legacy when only a pre-PMP solana_signature exists', async () => {
-    // Memory has no cNFT commitment but DOES have a legacy memo signature —
-    // committed on-chain before PMP. VERIFY should surface it as verified.
+  it('returns verified_legacy WITHOUT a tx link when only a pre-PMP solana_signature exists', async () => {
+    // Memory has no cNFT commitment but DOES have a legacy memo signature.
+    // It IS on-chain — but the oldest memo format embeds plaintext content,
+    // so VERIFY must NOT surface the txSig or a Solscan link. It confirms
+    // verified=true and points the caller at re-tokenisation.
     const legacySig = '5xLegacyMemoTxSig1111111111111111111111111111111111111111111111111111111111111111111111';
     queryQueue.push({
       data: { ...baseRow, solana_signature: legacySig },
@@ -346,10 +348,12 @@ describe('VERIFY — GET /v1/memories/:id/verify', () => {
     expect(res.status).toBe(200);
     expect(res.body.verified).toBe(true);
     expect(res.body.reason).toBe('verified_legacy');
-    expect(res.body.commitment).not.toBeNull();
-    expect(res.body.commitment.chain).toBe('solana');
-    expect(res.body.commitment.txSig).toBe(legacySig);
-    expect(res.body.solscan_url).toBe(`https://solscan.io/tx/${legacySig}`);
+    // Critical: no transaction pointer is leaked for legacy memos.
+    expect(res.body.commitment).toBeNull();
+    expect(res.body.solscan_url).toBeNull();
+    expect(res.body.hint).toMatch(/re-tokenise/);
+    // The signature must not appear anywhere in the response body.
+    expect(JSON.stringify(res.body)).not.toContain(legacySig);
   });
 
   it('does NOT use the legacy fallback when content has drifted', async () => {

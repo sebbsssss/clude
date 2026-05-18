@@ -301,15 +301,18 @@ export function pmpRoutes(): Router {
       const mint = getPdaMintClient();
       const verifyResult = await verifyMemoryProtocol(recomputed, mint);
 
-      // Legacy on-chain fallback. Before PMP, the bot committed memory hashes
-      // to Solana via the SPL Memo program — the `solana_signature` column.
-      // Those memories ARE on-chain; they just predate the canonical
-      // `memory-hash-v1` scheme and the cNFT registry. If the PMP-native
-      // lookup found nothing but a legacy signature exists, report the memory
-      // as verified-via-legacy with the real transaction so anyone can click
-      // through to the on-chain proof. (`reason: 'verified_legacy'` is honest:
-      // the on-chain digest is sha256(content) under the pre-PMP scheme, not
-      // the full canonical hash. Re-tokenising via backfill upgrades it.)
+      // Legacy on-chain fallback. Before PMP, the bot committed memories to
+      // Solana via the SPL Memo program (`solana_signature`). Such memories
+      // ARE on-chain — but the oldest memo format embeds a CONTENT PREFIX in
+      // the memo payload, not just a hash. We therefore confirm the memory is
+      // legacy-committed but DO NOT surface the transaction signature or a
+      // Solscan link: doing so would publicly point at a transaction that may
+      // contain plaintext memory content.
+      //
+      // The remedy is re-tokenisation: the backfill writes a clean hash-only
+      // commitment, after which VERIFY returns canonical `verified` with a
+      // safe, linkable `solscan_url`. `verified_legacy` is the honest
+      // in-between: "on-chain, but via a scheme we won't publicly link."
       const legacySig = (data.solana_signature as string | null) ?? null;
       const usingLegacy = !verifyResult.verified && !drift && legacySig !== null;
 
@@ -317,26 +320,28 @@ export function pmpRoutes(): Router {
       let commitment = verifyResult.commitment;
       let verified = verifyResult.verified && !drift;
       let reason: string = drift ? 'drift_detected' : verifyResult.reason;
+      // A Solscan link is only surfaced for canonical commitments, which are
+      // hash-only by construction (registry PDA or `clude:v1:sha256:` memo).
       let solscanUrl: string | null =
-        verifyResult.commitment?.txSig ? `${SOLSCAN_TX}${verifyResult.commitment.txSig}` : null;
+        verifyResult.verified && !drift && verifyResult.commitment?.txSig
+          ? `${SOLSCAN_TX}${verifyResult.commitment.txSig}`
+          : null;
+      let hint: string | undefined;
 
       if (usingLegacy) {
         verified = true;
         reason = 'verified_legacy';
-        commitment = {
-          chain: 'solana',
-          assetId: `memo:${legacySig}`,
-          txSig: legacySig,
-          treeAddress: null,
-          leafIndex: null,
-        };
-        solscanUrl = `${SOLSCAN_TX}${legacySig}`;
+        // No txSig, no solscan_url — legacy memos may carry plaintext content.
+        commitment = null;
+        solscanUrl = null;
+        hint = 're-tokenise via backfill for a hash-only commitment with a public proof link';
       }
 
       res.json({
         id,
         verified,
         reason,
+        ...(hint ? { hint } : {}),
         recomputed_hash: recomputed,
         stored_hash: stored,
         commitment,
