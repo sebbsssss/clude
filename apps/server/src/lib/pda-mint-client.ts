@@ -25,8 +25,10 @@ import type {
   MintClient,
   CommitMemoryInput,
   CommitPackInput,
+  CommitMemoryBatchInput,
   MemoryCommitment,
   PackCommitment,
+  BatchCommitment,
 } from '@clude/tokenization';
 import {
   registerMemoryOnChain,
@@ -135,6 +137,29 @@ export class PdaMintClient implements MintClient {
     };
   }
 
+  async commitMemoryBatch(input: CommitMemoryBatchInput): Promise<BatchCommitment> {
+    // Encode the batch commitment as a compact memo string.
+    // Format: clude-batch | v1 | <batch_id> | <root_hex> | <count>
+    const memo = `clude-batch | v1 | ${input.batchId} | ${input.merkleRoot} | ${input.memoryCount}`;
+    if (memo.length > MEMO_MAX_LENGTH) {
+      throw new Error(
+        `PdaMintClient: batch commitment memo length ${memo.length} exceeds MEMO_MAX_LENGTH ${MEMO_MAX_LENGTH}`,
+      );
+    }
+
+    const txSig = await writeMemo(memo);
+    if (!txSig) {
+      throw new Error('PdaMintClient: batch memo write failed');
+    }
+
+    return {
+      chain: 'solana',
+      assetId: `memo:${txSig}`,
+      txSig,
+      merkleRoot: input.merkleRoot,
+    };
+  }
+
   async fetchMemoryCommitment(contentHash: string): Promise<MemoryCommitment | null> {
     try {
       const db = getDb();
@@ -192,6 +217,19 @@ export class PdaMintClient implements MintClient {
       log.warn({ err }, 'fetchPackCommitment threw');
       return null;
     }
+  }
+
+  /**
+   * Look up a batch commitment by its Merkle root.
+   *
+   * v0.1: returns null — batch tokenisation is committed via the memo program
+   * but not yet indexed in a queryable table. When the backfill is wired to
+   * use batch mode, a `memory_batches` table lands and this resolves against
+   * it. The `tokenizeMemoryBatch` primitive returns commitments inline, so
+   * callers don't depend on this lookup today.
+   */
+  async fetchBatchCommitment(_merkleRoot: string): Promise<BatchCommitment | null> {
+    return null;
   }
 }
 

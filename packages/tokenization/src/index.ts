@@ -37,8 +37,10 @@ export {
   type MintClient,
   type MemoryCommitment,
   type PackCommitment,
+  type BatchCommitment,
   type CommitMemoryInput,
   type CommitPackInput,
+  type CommitMemoryBatchInput,
 } from './mint-client';
 
 export {
@@ -47,6 +49,13 @@ export {
   type TokenizeMemoryResult,
   type TokenizeMemoryPatch,
 } from './tokenize-memory';
+
+export {
+  tokenizeMemoryBatch,
+  type TokenizeBatchMemberInput,
+  type TokenizeBatchMemberResult,
+  type TokenizeBatchResult,
+} from './tokenize-batch';
 
 export {
   tokenizePack,
