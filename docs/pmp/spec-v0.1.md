@@ -125,14 +125,16 @@ Public endpoint. No authentication. Cacheable for short windows.
 | Reason | `verified` | Meaning |
 |---|---|---|
 | `verified` | `true` | Content hash matches the canonical `memory-hash-v1` commitment on-chain |
-| `verified_legacy` | `true` | The memory is committed on-chain via a provider's pre-PMP scheme. The provider could not match the full canonical hash but can prove an on-chain transaction exists for this memory. Clients SHOULD treat this as on-chain-but-not-canonical and MAY surface the transaction for manual inspection. |
+| `verified_legacy` | `true` | The memory is committed on-chain via a provider's pre-PMP scheme. The provider confirms an on-chain transaction exists but does NOT return its signature or an explorer link, because legacy commitment formats may embed plaintext content in the on-chain payload. Providers MUST NOT surface a transaction pointer for `verified_legacy`. Re-tokenising the memory under the canonical scheme upgrades it to `verified` with a safe, hash-only, linkable commitment. |
 | `not_committed` | `false` | The memory exists in the provider's index but never landed on-chain |
 | `drift_detected` | `false` | The current content differs from what was originally committed (tampering or unrecorded edit). Takes precedence over `verified_legacy` — drift always wins. |
 | `revoked` | `false` | The memory was superseded by a compaction and its hash is no longer authoritative |
 
 VERIFY MUST recompute the content hash from the current memory state, not trust the stored value. The stored value is returned for diagnostics.
 
-When a transaction signature is available (either path), the response SHOULD include a `solscan_url` (or chain-appropriate explorer URL) so a human can click through to the on-chain proof directly.
+For a canonical `verified` result, the response SHOULD include a `solscan_url` (or chain-appropriate explorer URL) so a human can click through to the on-chain proof. The canonical commitment is hash-only by construction, so the link is safe to publish. For `verified_legacy`, the response MUST NOT include a transaction signature or explorer link — see the reason table above.
+
+**Commitment payloads MUST be hash-only.** A compliant provider MUST NOT write memory content (or any prefix of it) to a public chain. Only the canonical content hash and non-sensitive metadata (memory type, timestamp) may be committed. Providers migrating from a pre-PMP scheme that embedded content MUST stop doing so and SHOULD re-tokenise affected memories under the canonical scheme.
 
 ### 4.4 CONTRIBUTE — write a new memory
 
