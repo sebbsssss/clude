@@ -149,6 +149,8 @@ function parseArgs() {
     skipSeeding: false, // skip cleanup + seeding (reuse existing data in DB)
     resume: '' as string, // path to partial results JSON to resume from
     verify: false, // run a Stage-3 verifier + Stage-4 revise pass on multi-session answers
+    criticModel: '' as string, // model to use for the verifier critic (defaults to reader model)
+    selfConsistency: 0, // if >0, run n=N readers + vote/synthesize for non-counting multi-session
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -188,6 +190,12 @@ function parseArgs() {
         break;
       case '--verify':
         opts.verify = true;
+        break;
+      case '--critic-model':
+        opts.criticModel = args[++i] || '';
+        break;
+      case '--self-consistency':
+        opts.selfConsistency = parseInt(args[++i]) || 3;
         break;
       case '--run-id':
         opts.runId = args[++i] || '';
@@ -496,10 +504,11 @@ async function verifyAndReviseMultiSession(
   readerModel: string,
   dateContext: string,
 ): Promise<string> {
+  const criticModel = (globalThis as any).__criticModel || readerModel;
   let verdict = '';
   try {
     const critic = await anthropic.messages.create({
-      model: readerModel,
+      model: criticModel,
       max_tokens: 400,
       temperature: 0,
       system: `You are a strict critic checking whether a proposed answer is fully supported by the extracted evidence.${dateContext}
@@ -1014,6 +1023,108 @@ You MUST provide a specific answer. Do NOT say "I don't have information" or "I 
 }
 
 /**
+ * Self-consistency ensemble for non-counting multi-session questions.
+ *
+ * Theory: counting-union proves that running multiple reads with shuffled
+ * context + merging catches items the single-pass missed. For non-counting
+ * questions the output isn't an item set but a natural-language answer —
+ * so instead of unioning, we run n=N reads + send all candidates to a
+ * synthesizer that picks the best answer or merges them.
+ *
+ * Same shuffle pattern as counting-union (reverse / rotate by index).
+ */
+async function generateSelfConsistentAnswer(
+  context: string,
+  question: string,
+  questionType: string,
+  readerModel: string,
+  questionDate: string | undefined,
+  n: number,
+): Promise<string> {
+  const dateContext = questionDate ? `\nThe question is being asked on: ${questionDate}.` : '';
+
+  // Shuffle context same way counting-union does
+  const contextLines = context.split('\n');
+  const shuffled = (runIdx: number) => {
+    if (runIdx === 0) return context;
+    const sections: string[][] = [];
+    let cur: string[] = [];
+    for (const line of contextLines) {
+      if (line.startsWith('### Conversation ') && cur.length > 0) {
+        sections.push([...cur]);
+        cur = [];
+      }
+      cur.push(line);
+    }
+    if (cur.length) sections.push(cur);
+    if (sections.length <= 2) return context;
+    const header = sections[0];
+    const convs = sections.slice(1);
+    if (runIdx % 2 === 1) convs.reverse();
+    else {
+      const rotateBy = runIdx % convs.length;
+      const rotated = [...convs.slice(rotateBy), ...convs.slice(0, rotateBy)];
+      convs.splice(0, convs.length, ...rotated);
+    }
+    return [header, ...convs].map(s => s.join('\n')).join('\n');
+  };
+
+  // Run N reader passes in parallel — each goes through the existing
+  // multi-session two-stage logic via generateAnswerCoN.
+  // Disable verify during candidate generation so we measure ensemble
+  // effect cleanly (we can layer it back on the synthesizer if desired).
+  const wasVerify = (globalThis as any).__verifyEnabled;
+  (globalThis as any).__verifyEnabled = false;
+  let candidates: string[] = [];
+  try {
+    const settled = await Promise.allSettled(
+      Array.from({ length: n }, (_, i) =>
+        generateAnswerCoN(shuffled(i), question, questionType, readerModel, questionDate),
+      ),
+    );
+    candidates = settled
+      .filter(s => s.status === 'fulfilled')
+      .map(s => (s as PromiseFulfilledResult<string>).value)
+      .filter(s => s && s.trim().length > 0);
+  } finally {
+    (globalThis as any).__verifyEnabled = wasVerify;
+  }
+
+  if (candidates.length === 0) return '';
+  if (candidates.length === 1) return candidates[0];
+
+  // Synthesize the N candidate answers. The synthesizer sees the original
+  // question + all candidates and picks the most-supported answer (or
+  // merges them if they're complementary).
+  try {
+    const synth = await anthropic.messages.create({
+      model: readerModel,
+      max_tokens: 600,
+      temperature: 0,
+      system: `You are synthesizing the best answer from multiple candidate answers to the same question.${dateContext}
+
+PROCESS:
+1. Read all candidates. They were generated independently with shuffled context.
+2. If all agree on the core fact, output that fact.
+3. If they disagree on a count or number, pick the count that the MAJORITY supports — or if no majority, pick the count whose supporting items are most clearly enumerated.
+4. If they disagree on a name/identity, pick the one with the most specific supporting evidence.
+5. If they complement each other (different parts of the answer), merge them coherently.
+6. If a candidate says "not enough information" but others give a specific answer, prefer the specific answer ONLY if its evidence is clear; otherwise prefer abstention.
+
+Output the final synthesized answer in 1-3 sentences. Be specific (exact counts, names, amounts). Do NOT explain your synthesis process — output only the final answer.`,
+      messages: [{
+        role: 'user',
+        content: `Question: ${question}\n\nCandidate answers:\n${candidates.map((c, i) => `[Candidate ${i + 1}]\n${c}`).join('\n\n')}\n\nFinal synthesized answer:`,
+      }],
+    });
+    const out = synth.content[0].type === 'text' ? synth.content[0].text.trim() : '';
+    return out || candidates[0];
+  } catch {
+    return candidates[0];
+  }
+}
+
+/**
  * Counting-specific union extraction: run multiple extraction passes,
  * take the UNION of found items, count programmatically.
  * Key insight: each pass misses different items, so union captures more.
@@ -1031,7 +1142,11 @@ async function generateCountingUnionAnswer(
   // Check if this is a counting/aggregation question
   const isCountingQ = /\bhow many\b|\bhow much total\b|\bhow much .* (spend|spent|raise|raised|earn|earned|pay|paid|cost|save|saved)\b|\btotal (number|amount|cost|distance|money)\b|\bwhat is the (total|average|minimum|maximum)\b|\bhow much (did|will|would|do) I\b|\bhow much money\b|\bpage count\b|\bspend the most\b|\bapproximate (increase|decrease)\b/i.test(question);
   if (!isCountingQ) {
-    // Fall back to standard answer for non-counting questions
+    // For non-counting questions: optionally run n=N self-consistency ensemble
+    const scN = ((globalThis as any).__selfConsistencyN || 0) as number;
+    if (scN > 0) {
+      return generateSelfConsistentAnswer(context, question, _questionType, readerModel, questionDate, scN);
+    }
     return generateAnswerCoN(context, question, _questionType, readerModel, questionDate);
   }
 
@@ -1355,6 +1470,8 @@ async function main() {
   // __generateAnswerOverride). Avoids threading a new parameter through 8
   // function signatures.
   (globalThis as any).__verifyEnabled = opts.verify;
+  (globalThis as any).__criticModel = opts.criticModel || opts.readerModel;
+  (globalThis as any).__selfConsistencyN = opts.selfConsistency;
   console.log();
 
   // Apply run-id isolation: unique owner_wallet avoids needing to clean stale data
