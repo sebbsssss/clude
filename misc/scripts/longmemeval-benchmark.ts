@@ -24,7 +24,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
-import { Cortex } from '../src/sdk';
+import { Cortex } from '@clude/brain/sdk';
 import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { randomBytes } from 'crypto';
@@ -1321,14 +1321,18 @@ async function main() {
   console.log(`  Total turns: ${totalTurns}`);
   console.log();
 
+  // Hoisted so the post-run report can reference seeding state even when
+  // --skip-seeding is set or when seeding is bypassed for cached datasets.
+  let seedStart: bigint | undefined;
+  let seeded = 0;
+  let useRoundLevel = opts.variant === 'oracle' || uniqueSessions.length < 2000;
+
   if (!opts.skipSeeding) {
   // ── Seed memories (direct DB insert — bypasses SDK side-effects) ──
   console.log('── Seeding memories ──────────────────────────────');
-  const seedStart = process.hrtime.bigint();
-  let seeded = 0;
-
+  seedStart = process.hrtime.bigint();
   // Use session-level for large datasets, round-level for oracle
-  const useRoundLevel = opts.variant === 'oracle' || uniqueSessions.length < 2000;
+  useRoundLevel = opts.variant === 'oracle' || uniqueSessions.length < 2000;
   console.log(`  Strategy: ${useRoundLevel ? 'round-level' : 'session-level'}`);
 
   // Build all memory rows first (no DB calls)
