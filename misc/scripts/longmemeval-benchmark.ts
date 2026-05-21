@@ -24,7 +24,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
-import { Cortex } from '../src/sdk';
+import { Cortex } from '@clude/brain/sdk';
 import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { randomBytes } from 'crypto';
@@ -148,6 +148,9 @@ function parseArgs() {
     truncateSessions: false, // use old truncate-to-5000 seeding instead of session chunking
     skipSeeding: false, // skip cleanup + seeding (reuse existing data in DB)
     resume: '' as string, // path to partial results JSON to resume from
+    verify: false, // run a Stage-3 verifier + Stage-4 revise pass on multi-session answers
+    criticModel: '' as string, // model to use for the verifier critic (defaults to reader model)
+    selfConsistency: 0, // if >0, run n=N readers + vote/synthesize for non-counting multi-session
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -184,6 +187,15 @@ function parseArgs() {
         break;
       case '--rejudge':
         opts.rejudge = args[++i] || '';  // path to results JSON to re-judge
+        break;
+      case '--verify':
+        opts.verify = true;
+        break;
+      case '--critic-model':
+        opts.criticModel = args[++i] || '';
+        break;
+      case '--self-consistency':
+        opts.selfConsistency = parseInt(args[++i]) || 3;
         break;
       case '--run-id':
         opts.runId = args[++i] || '';
@@ -461,6 +473,100 @@ CRITICAL RULES:
   'abstention': 'ONLY answer if you find clearly relevant information in the context. If the context contains nothing related to the question, say "I don\'t have information about that."',
 };
 
+// Quick guard so verifier doesn't waste a call on IDK answers (which get
+// retried via the IDK fallback path below).
+function multiIdkPatternEarly(text: string): boolean {
+  return /i don't (have|see|find)|cannot (find|answer)|no.*(information|record|mention).*(about|of|for)/i.test(text);
+}
+
+/**
+ * Stage 3 (verifier) + Stage 4 (revise).
+ *
+ * Reads the question, the extracted evidence, and the proposed answer.
+ * Decides VERIFIED (return as-is) or REVISE (regenerate with critique).
+ *
+ * Empirical result (2026-05-22, oracle multi-session, n=133):
+ *   baseline = 86.5%, --verify = 86.5%, NET DELTA = 0
+ *   4 questions flipped right, 4 flipped wrong. Verifier acts as a
+ *   second reader, not a sharper one. Same-model critic cannot reliably
+ *   critique its own output.
+ *
+ * Kept opt-in (--verify) for future asymmetric experiments:
+ *   - Opus critic + Sonnet reader (different model = different errors)
+ *   - Stricter prompt that only flags undeniable errors
+ *   - n=3 self-consistency ensemble instead (more promising path)
+ */
+async function verifyAndReviseMultiSession(
+  question: string,
+  extraction: string,
+  context: string,
+  proposedAnswer: string,
+  readerModel: string,
+  dateContext: string,
+): Promise<string> {
+  const criticModel = (globalThis as any).__criticModel || readerModel;
+  let verdict = '';
+  try {
+    const critic = await anthropic.messages.create({
+      model: criticModel,
+      max_tokens: 400,
+      temperature: 0,
+      system: `You are a strict critic checking whether a proposed answer is fully supported by the extracted evidence.${dateContext}
+
+Decide one of:
+- VERIFIED: every claim in the answer is supported by a specific extracted item; counts/totals add up; cross-session joins are correct.
+- REVISE: a specific evidence gap, arithmetic error, missed item, or wrong cross-session join.
+
+Output rules:
+- If VERIFIED, output exactly the word: VERIFIED
+- If REVISE, output: REVISE: <one-sentence critique pointing to the exact item, count, or fact that's wrong or missing>
+- Be strict on arithmetic, counting, and cross-session matching.
+- Be charitable on phrasing/style — only flag substantive evidence problems.
+- Never fabricate evidence in your critique; only point to things in the extracted data or the original context.`,
+      messages: [{
+        role: 'user',
+        content: `Question: ${question}\n\nExtracted evidence:\n${extraction}\n\nProposed answer:\n${proposedAnswer}\n\nVerdict:`,
+      }],
+    });
+    verdict = critic.content[0].type === 'text' ? critic.content[0].text.trim() : '';
+  } catch {
+    return proposedAnswer; // verifier failure — fall back silently
+  }
+
+  if (!verdict || !/^REVISE/i.test(verdict)) return proposedAnswer;
+
+  const critique = verdict.replace(/^REVISE:\s*/i, '').trim();
+
+  try {
+    const revised = await anthropic.messages.create({
+      model: readerModel,
+      max_tokens: 600,
+      temperature: 0,
+      system: `You answer multi-session questions using extracted evidence. A prior answer was flagged — fix it.${dateContext}
+
+PROCESS:
+1. Read the critique carefully — it points to a specific evidence gap or error in the prior answer.
+2. Re-scan the extracted data AND the original context for items that resolve the critique.
+3. Produce a corrected answer that addresses the critique while staying grounded in evidence.
+
+Rules:
+- Show counts/totals with each contributing item.
+- Cross-check both extracted data AND original context before committing to a number.
+- If the critique is unfounded (the prior answer was actually correct), say so and restate the prior answer.
+- If after re-checking the answer truly cannot be supported, say "The information provided is not enough."
+- Keep the final answer concise (1-3 sentences).`,
+      messages: [{
+        role: 'user',
+        content: `Question: ${question}\n\nExtracted evidence:\n${extraction}\n\nOriginal memory context:\n${context}\n\nPrior answer (flagged):\n${proposedAnswer}\n\nCritique: ${critique}\n\nRevised answer:`,
+      }],
+    });
+    const revisedText = revised.content[0].type === 'text' ? revised.content[0].text.trim() : '';
+    return revisedText || proposedAnswer;
+  } catch {
+    return proposedAnswer;
+  }
+}
+
 async function generateAnswerCoN(
   context: string,
   question: string,
@@ -669,6 +775,20 @@ Rules:
     });
 
     let multiAnswer = stage2.content[0].type === 'text' ? stage2.content[0].text.trim() : '';
+
+    // Stage 3 (verifier): critique the answer against the evidence. If
+    // weak, Stage 4 regenerates with the critique as guidance.
+    // Gated behind --verify so we can A/B this against the existing baseline.
+    if ((globalThis as any).__verifyEnabled && !multiIdkPatternEarly(multiAnswer)) {
+      multiAnswer = await verifyAndReviseMultiSession(
+        question,
+        extraction,
+        context,
+        multiAnswer,
+        readerModel,
+        dateContext,
+      );
+    }
 
     // If multi two-stage gives IDK, fall back to single-pass with IDK retry
     const multiIdkPattern = /i don't (have|see|find)|cannot (find|answer)|no.*(information|record|mention).*(about|of|for)/i;
@@ -903,6 +1023,108 @@ You MUST provide a specific answer. Do NOT say "I don't have information" or "I 
 }
 
 /**
+ * Self-consistency ensemble for non-counting multi-session questions.
+ *
+ * Theory: counting-union proves that running multiple reads with shuffled
+ * context + merging catches items the single-pass missed. For non-counting
+ * questions the output isn't an item set but a natural-language answer —
+ * so instead of unioning, we run n=N reads + send all candidates to a
+ * synthesizer that picks the best answer or merges them.
+ *
+ * Same shuffle pattern as counting-union (reverse / rotate by index).
+ */
+async function generateSelfConsistentAnswer(
+  context: string,
+  question: string,
+  questionType: string,
+  readerModel: string,
+  questionDate: string | undefined,
+  n: number,
+): Promise<string> {
+  const dateContext = questionDate ? `\nThe question is being asked on: ${questionDate}.` : '';
+
+  // Shuffle context same way counting-union does
+  const contextLines = context.split('\n');
+  const shuffled = (runIdx: number) => {
+    if (runIdx === 0) return context;
+    const sections: string[][] = [];
+    let cur: string[] = [];
+    for (const line of contextLines) {
+      if (line.startsWith('### Conversation ') && cur.length > 0) {
+        sections.push([...cur]);
+        cur = [];
+      }
+      cur.push(line);
+    }
+    if (cur.length) sections.push(cur);
+    if (sections.length <= 2) return context;
+    const header = sections[0];
+    const convs = sections.slice(1);
+    if (runIdx % 2 === 1) convs.reverse();
+    else {
+      const rotateBy = runIdx % convs.length;
+      const rotated = [...convs.slice(rotateBy), ...convs.slice(0, rotateBy)];
+      convs.splice(0, convs.length, ...rotated);
+    }
+    return [header, ...convs].map(s => s.join('\n')).join('\n');
+  };
+
+  // Run N reader passes in parallel — each goes through the existing
+  // multi-session two-stage logic via generateAnswerCoN.
+  // Disable verify during candidate generation so we measure ensemble
+  // effect cleanly (we can layer it back on the synthesizer if desired).
+  const wasVerify = (globalThis as any).__verifyEnabled;
+  (globalThis as any).__verifyEnabled = false;
+  let candidates: string[] = [];
+  try {
+    const settled = await Promise.allSettled(
+      Array.from({ length: n }, (_, i) =>
+        generateAnswerCoN(shuffled(i), question, questionType, readerModel, questionDate),
+      ),
+    );
+    candidates = settled
+      .filter(s => s.status === 'fulfilled')
+      .map(s => (s as PromiseFulfilledResult<string>).value)
+      .filter(s => s && s.trim().length > 0);
+  } finally {
+    (globalThis as any).__verifyEnabled = wasVerify;
+  }
+
+  if (candidates.length === 0) return '';
+  if (candidates.length === 1) return candidates[0];
+
+  // Synthesize the N candidate answers. The synthesizer sees the original
+  // question + all candidates and picks the most-supported answer (or
+  // merges them if they're complementary).
+  try {
+    const synth = await anthropic.messages.create({
+      model: readerModel,
+      max_tokens: 600,
+      temperature: 0,
+      system: `You are synthesizing the best answer from multiple candidate answers to the same question.${dateContext}
+
+PROCESS:
+1. Read all candidates. They were generated independently with shuffled context.
+2. If all agree on the core fact, output that fact.
+3. If they disagree on a count or number, pick the count that the MAJORITY supports — or if no majority, pick the count whose supporting items are most clearly enumerated.
+4. If they disagree on a name/identity, pick the one with the most specific supporting evidence.
+5. If they complement each other (different parts of the answer), merge them coherently.
+6. If a candidate says "not enough information" but others give a specific answer, prefer the specific answer ONLY if its evidence is clear; otherwise prefer abstention.
+
+Output the final synthesized answer in 1-3 sentences. Be specific (exact counts, names, amounts). Do NOT explain your synthesis process — output only the final answer.`,
+      messages: [{
+        role: 'user',
+        content: `Question: ${question}\n\nCandidate answers:\n${candidates.map((c, i) => `[Candidate ${i + 1}]\n${c}`).join('\n\n')}\n\nFinal synthesized answer:`,
+      }],
+    });
+    const out = synth.content[0].type === 'text' ? synth.content[0].text.trim() : '';
+    return out || candidates[0];
+  } catch {
+    return candidates[0];
+  }
+}
+
+/**
  * Counting-specific union extraction: run multiple extraction passes,
  * take the UNION of found items, count programmatically.
  * Key insight: each pass misses different items, so union captures more.
@@ -920,7 +1142,11 @@ async function generateCountingUnionAnswer(
   // Check if this is a counting/aggregation question
   const isCountingQ = /\bhow many\b|\bhow much total\b|\bhow much .* (spend|spent|raise|raised|earn|earned|pay|paid|cost|save|saved)\b|\btotal (number|amount|cost|distance|money)\b|\bwhat is the (total|average|minimum|maximum)\b|\bhow much (did|will|would|do) I\b|\bhow much money\b|\bpage count\b|\bspend the most\b|\bapproximate (increase|decrease)\b/i.test(question);
   if (!isCountingQ) {
-    // Fall back to standard answer for non-counting questions
+    // For non-counting questions: optionally run n=N self-consistency ensemble
+    const scN = ((globalThis as any).__selfConsistencyN || 0) as number;
+    if (scN > 0) {
+      return generateSelfConsistentAnswer(context, question, _questionType, readerModel, questionDate, scN);
+    }
     return generateAnswerCoN(context, question, _questionType, readerModel, questionDate);
   }
 
@@ -1237,8 +1463,15 @@ async function main() {
 `);
 
   console.log(`Config: variant=${opts.variant}  embeddings=${hasEmbeddings ? `✓ ${EMBEDDING_PROVIDER}` : '✗'}  reader=${opts.readerModel}`);
-  console.log(`Options: recall_limit=${opts.recallLimit}  fact_extraction=${!opts.skipFactExtraction}  limit=${opts.qaLimit === Infinity ? 'all' : opts.qaLimit}  counting_union=${opts.countingUnion}${opts.countingUnion ? `(${opts.countingRuns} runs)` : ''}`);
+  console.log(`Options: recall_limit=${opts.recallLimit}  fact_extraction=${!opts.skipFactExtraction}  limit=${opts.qaLimit === Infinity ? 'all' : opts.qaLimit}  counting_union=${opts.countingUnion}${opts.countingUnion ? `(${opts.countingRuns} runs)` : ''}  verify=${opts.verify ? '✓' : '✗'}`);
   if (opts.types) console.log(`Types: ${[...opts.types].join(', ')}`);
+
+  // Expose the verify flag to reader helpers via globalThis (same pattern as
+  // __generateAnswerOverride). Avoids threading a new parameter through 8
+  // function signatures.
+  (globalThis as any).__verifyEnabled = opts.verify;
+  (globalThis as any).__criticModel = opts.criticModel || opts.readerModel;
+  (globalThis as any).__selfConsistencyN = opts.selfConsistency;
   console.log();
 
   // Apply run-id isolation: unique owner_wallet avoids needing to clean stale data
@@ -1321,14 +1554,18 @@ async function main() {
   console.log(`  Total turns: ${totalTurns}`);
   console.log();
 
+  // Hoisted so the post-run report can reference seeding state even when
+  // --skip-seeding is set or when seeding is bypassed for cached datasets.
+  let seedStart: bigint | undefined;
+  let seeded = 0;
+  let useRoundLevel = opts.variant === 'oracle' || uniqueSessions.length < 2000;
+
   if (!opts.skipSeeding) {
   // ── Seed memories (direct DB insert — bypasses SDK side-effects) ──
   console.log('── Seeding memories ──────────────────────────────');
-  const seedStart = process.hrtime.bigint();
-  let seeded = 0;
-
+  seedStart = process.hrtime.bigint();
   // Use session-level for large datasets, round-level for oracle
-  const useRoundLevel = opts.variant === 'oracle' || uniqueSessions.length < 2000;
+  useRoundLevel = opts.variant === 'oracle' || uniqueSessions.length < 2000;
   console.log(`  Strategy: ${useRoundLevel ? 'round-level' : 'session-level'}`);
 
   // Build all memory rows first (no DB calls)
