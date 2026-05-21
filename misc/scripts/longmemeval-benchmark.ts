@@ -148,6 +148,7 @@ function parseArgs() {
     truncateSessions: false, // use old truncate-to-5000 seeding instead of session chunking
     skipSeeding: false, // skip cleanup + seeding (reuse existing data in DB)
     resume: '' as string, // path to partial results JSON to resume from
+    verify: false, // run a Stage-3 verifier + Stage-4 revise pass on multi-session answers
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -184,6 +185,9 @@ function parseArgs() {
         break;
       case '--rejudge':
         opts.rejudge = args[++i] || '';  // path to results JSON to re-judge
+        break;
+      case '--verify':
+        opts.verify = true;
         break;
       case '--run-id':
         opts.runId = args[++i] || '';
@@ -461,6 +465,99 @@ CRITICAL RULES:
   'abstention': 'ONLY answer if you find clearly relevant information in the context. If the context contains nothing related to the question, say "I don\'t have information about that."',
 };
 
+// Quick guard so verifier doesn't waste a call on IDK answers (which get
+// retried via the IDK fallback path below).
+function multiIdkPatternEarly(text: string): boolean {
+  return /i don't (have|see|find)|cannot (find|answer)|no.*(information|record|mention).*(about|of|for)/i.test(text);
+}
+
+/**
+ * Stage 3 (verifier) + Stage 4 (revise).
+ *
+ * Reads the question, the extracted evidence, and the proposed answer.
+ * Decides VERIFIED (return as-is) or REVISE (regenerate with critique).
+ *
+ * Empirical result (2026-05-22, oracle multi-session, n=133):
+ *   baseline = 86.5%, --verify = 86.5%, NET DELTA = 0
+ *   4 questions flipped right, 4 flipped wrong. Verifier acts as a
+ *   second reader, not a sharper one. Same-model critic cannot reliably
+ *   critique its own output.
+ *
+ * Kept opt-in (--verify) for future asymmetric experiments:
+ *   - Opus critic + Sonnet reader (different model = different errors)
+ *   - Stricter prompt that only flags undeniable errors
+ *   - n=3 self-consistency ensemble instead (more promising path)
+ */
+async function verifyAndReviseMultiSession(
+  question: string,
+  extraction: string,
+  context: string,
+  proposedAnswer: string,
+  readerModel: string,
+  dateContext: string,
+): Promise<string> {
+  let verdict = '';
+  try {
+    const critic = await anthropic.messages.create({
+      model: readerModel,
+      max_tokens: 400,
+      temperature: 0,
+      system: `You are a strict critic checking whether a proposed answer is fully supported by the extracted evidence.${dateContext}
+
+Decide one of:
+- VERIFIED: every claim in the answer is supported by a specific extracted item; counts/totals add up; cross-session joins are correct.
+- REVISE: a specific evidence gap, arithmetic error, missed item, or wrong cross-session join.
+
+Output rules:
+- If VERIFIED, output exactly the word: VERIFIED
+- If REVISE, output: REVISE: <one-sentence critique pointing to the exact item, count, or fact that's wrong or missing>
+- Be strict on arithmetic, counting, and cross-session matching.
+- Be charitable on phrasing/style — only flag substantive evidence problems.
+- Never fabricate evidence in your critique; only point to things in the extracted data or the original context.`,
+      messages: [{
+        role: 'user',
+        content: `Question: ${question}\n\nExtracted evidence:\n${extraction}\n\nProposed answer:\n${proposedAnswer}\n\nVerdict:`,
+      }],
+    });
+    verdict = critic.content[0].type === 'text' ? critic.content[0].text.trim() : '';
+  } catch {
+    return proposedAnswer; // verifier failure — fall back silently
+  }
+
+  if (!verdict || !/^REVISE/i.test(verdict)) return proposedAnswer;
+
+  const critique = verdict.replace(/^REVISE:\s*/i, '').trim();
+
+  try {
+    const revised = await anthropic.messages.create({
+      model: readerModel,
+      max_tokens: 600,
+      temperature: 0,
+      system: `You answer multi-session questions using extracted evidence. A prior answer was flagged — fix it.${dateContext}
+
+PROCESS:
+1. Read the critique carefully — it points to a specific evidence gap or error in the prior answer.
+2. Re-scan the extracted data AND the original context for items that resolve the critique.
+3. Produce a corrected answer that addresses the critique while staying grounded in evidence.
+
+Rules:
+- Show counts/totals with each contributing item.
+- Cross-check both extracted data AND original context before committing to a number.
+- If the critique is unfounded (the prior answer was actually correct), say so and restate the prior answer.
+- If after re-checking the answer truly cannot be supported, say "The information provided is not enough."
+- Keep the final answer concise (1-3 sentences).`,
+      messages: [{
+        role: 'user',
+        content: `Question: ${question}\n\nExtracted evidence:\n${extraction}\n\nOriginal memory context:\n${context}\n\nPrior answer (flagged):\n${proposedAnswer}\n\nCritique: ${critique}\n\nRevised answer:`,
+      }],
+    });
+    const revisedText = revised.content[0].type === 'text' ? revised.content[0].text.trim() : '';
+    return revisedText || proposedAnswer;
+  } catch {
+    return proposedAnswer;
+  }
+}
+
 async function generateAnswerCoN(
   context: string,
   question: string,
@@ -669,6 +766,20 @@ Rules:
     });
 
     let multiAnswer = stage2.content[0].type === 'text' ? stage2.content[0].text.trim() : '';
+
+    // Stage 3 (verifier): critique the answer against the evidence. If
+    // weak, Stage 4 regenerates with the critique as guidance.
+    // Gated behind --verify so we can A/B this against the existing baseline.
+    if ((globalThis as any).__verifyEnabled && !multiIdkPatternEarly(multiAnswer)) {
+      multiAnswer = await verifyAndReviseMultiSession(
+        question,
+        extraction,
+        context,
+        multiAnswer,
+        readerModel,
+        dateContext,
+      );
+    }
 
     // If multi two-stage gives IDK, fall back to single-pass with IDK retry
     const multiIdkPattern = /i don't (have|see|find)|cannot (find|answer)|no.*(information|record|mention).*(about|of|for)/i;
@@ -1237,8 +1348,13 @@ async function main() {
 `);
 
   console.log(`Config: variant=${opts.variant}  embeddings=${hasEmbeddings ? `✓ ${EMBEDDING_PROVIDER}` : '✗'}  reader=${opts.readerModel}`);
-  console.log(`Options: recall_limit=${opts.recallLimit}  fact_extraction=${!opts.skipFactExtraction}  limit=${opts.qaLimit === Infinity ? 'all' : opts.qaLimit}  counting_union=${opts.countingUnion}${opts.countingUnion ? `(${opts.countingRuns} runs)` : ''}`);
+  console.log(`Options: recall_limit=${opts.recallLimit}  fact_extraction=${!opts.skipFactExtraction}  limit=${opts.qaLimit === Infinity ? 'all' : opts.qaLimit}  counting_union=${opts.countingUnion}${opts.countingUnion ? `(${opts.countingRuns} runs)` : ''}  verify=${opts.verify ? '✓' : '✗'}`);
   if (opts.types) console.log(`Types: ${[...opts.types].join(', ')}`);
+
+  // Expose the verify flag to reader helpers via globalThis (same pattern as
+  // __generateAnswerOverride). Avoids threading a new parameter through 8
+  // function signatures.
+  (globalThis as any).__verifyEnabled = opts.verify;
   console.log();
 
   // Apply run-id isolation: unique owner_wallet avoids needing to clean stale data
