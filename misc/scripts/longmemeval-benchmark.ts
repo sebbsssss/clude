@@ -151,6 +151,8 @@ function parseArgs() {
     verify: false, // run a Stage-3 verifier + Stage-4 revise pass on multi-session answers
     criticModel: '' as string, // model to use for the verifier critic (defaults to reader model)
     selfConsistency: 0, // if >0, run n=N readers + vote/synthesize for non-counting multi-session
+    concurrency: 0, // questions in flight per batch — 0 means auto (4 w/o embeddings, 2 with)
+    batchSleepMs: 0, // ms to sleep between batches (token-bucket safety belt for rate limits)
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -196,6 +198,12 @@ function parseArgs() {
         break;
       case '--self-consistency':
         opts.selfConsistency = parseInt(args[++i]) || 3;
+        break;
+      case '--concurrency':
+        opts.concurrency = parseInt(args[++i]) || 0;
+        break;
+      case '--batch-sleep':
+        opts.batchSleepMs = parseInt(args[++i]) || 0;
         break;
       case '--run-id':
         opts.runId = args[++i] || '';
@@ -2006,7 +2014,12 @@ async function main() {
   const checkpointPath = join(CACHE_DIR, `checkpoint_${opts.variant}${opts.runId ? '_' + opts.runId : ''}.json`);
 
   const evalStart = process.hrtime.bigint();
-  const evalBatchSize = hasEmbeddings ? 2 : 4;
+  // --concurrency overrides the auto-batch size. SC + counting-union triple the
+  // LLM calls per multi-session question, so a default of 4 can saturate the
+  // 2M-input-tokens/min org limit on Sonnet. Use --concurrency 2 (or 1) when
+  // running heavy ensembles.
+  const evalBatchSize = opts.concurrency > 0 ? opts.concurrency : (hasEmbeddings ? 2 : 4);
+  console.log(`  Eval batch size: ${evalBatchSize}${opts.batchSleepMs ? ` (sleep ${opts.batchSleepMs}ms between batches)` : ''}`);
 
   for (let qi = 0; qi < questions.length; qi += evalBatchSize) {
     const batch = questions.slice(qi, qi + evalBatchSize);
@@ -2219,6 +2232,12 @@ async function main() {
     const currentCorrect = allResults.filter(r => r.correct === 1).length;
     const currentAcc = allResults.length > 0 ? ((currentCorrect / allResults.length) * 100).toFixed(1) : '0.0';
     process.stdout.write(`\r  Evaluated: ${done}/${questions.length} (running accuracy: ${currentAcc}%)`);
+
+    // Inter-batch sleep as a token-bucket safety belt. Anthropic's 2M-input-
+    // tokens/min limit can be saturated by SC + counting-union at batch=4.
+    if (opts.batchSleepMs > 0 && qi + evalBatchSize < questions.length) {
+      await sleep(opts.batchSleepMs);
+    }
 
     // Save checkpoint every 20 questions (crash recovery)
     if (done % 20 === 0 || done === questions.length) {
