@@ -1,9 +1,12 @@
 import { describe, it, expect } from 'vitest';
+import nacl from 'tweetnacl';
 import {
   generateDek,
   encryptField,
   decryptField,
   NONCE_LENGTH,
+  wrapDek,
+  unwrapDek,
 } from '../memory-envelope';
 
 describe('DEK + field encryption', () => {
@@ -49,5 +52,43 @@ describe('DEK + field encryption', () => {
   it('decrypt of garbage returns null (never throws)', () => {
     expect(decryptField('not-base64-@@@', generateDek())).toBeNull();
     expect(decryptField('', generateDek())).toBeNull();
+  });
+});
+
+describe('DEK wrap / unwrap (sealed box)', () => {
+  it('wraps to a recipient pubkey and the recipient can unwrap', () => {
+    const recipient = nacl.box.keyPair();
+    const dek = generateDek();
+    const { wrapped, wrapPubkey } = wrapDek(dek, recipient.publicKey);
+    const out = unwrapDek(wrapped, wrapPubkey, recipient.secretKey);
+    expect(out).not.toBeNull();
+    expect(Buffer.from(out!).equals(Buffer.from(dek))).toBe(true);
+  });
+
+  it('wrapPubkey is the EPHEMERAL sender pubkey, not the recipient', () => {
+    const recipient = nacl.box.keyPair();
+    const { wrapPubkey } = wrapDek(generateDek(), recipient.publicKey);
+    expect(wrapPubkey).not.toBe(Buffer.from(recipient.publicKey).toString('base64'));
+  });
+
+  it('a different recipient secret cannot unwrap', () => {
+    const recipient = nacl.box.keyPair();
+    const attacker = nacl.box.keyPair();
+    const { wrapped, wrapPubkey } = wrapDek(generateDek(), recipient.publicKey);
+    expect(unwrapDek(wrapped, wrapPubkey, attacker.secretKey)).toBeNull();
+  });
+
+  it('two wraps of the same DEK differ (fresh ephemeral key each time)', () => {
+    const recipient = nacl.box.keyPair();
+    const dek = generateDek();
+    const a = wrapDek(dek, recipient.publicKey);
+    const b = wrapDek(dek, recipient.publicKey);
+    expect(a.wrapped).not.toBe(b.wrapped);
+    expect(a.wrapPubkey).not.toBe(b.wrapPubkey);
+  });
+
+  it('unwrap of garbage returns null (never throws)', () => {
+    const recipient = nacl.box.keyPair();
+    expect(unwrapDek('@@@', 'also-bad', recipient.secretKey)).toBeNull();
   });
 });

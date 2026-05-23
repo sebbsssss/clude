@@ -43,3 +43,48 @@ export function decryptField(encrypted: string, dek: Uint8Array): string | null 
     return null;
   }
 }
+
+const BOX_NONCE_LENGTH = nacl.box.nonceLength; // 24
+
+export interface WrappedDek {
+  wrapped: string; // base64(nonce[24] || box(dek))
+  wrapPubkey: string; // base64(ephemeral sender public key)
+}
+
+/**
+ * Seal a DEK to a recipient's X25519 public key using an ephemeral sender keypair
+ * (anonymous sealed box). The ephemeral public key is returned so the recipient
+ * can open it; the ephemeral secret key is discarded.
+ */
+export function wrapDek(dek: Uint8Array, recipientPubkey: Uint8Array): WrappedDek {
+  const ephemeral = nacl.box.keyPair();
+  const nonce = nacl.randomBytes(BOX_NONCE_LENGTH);
+  const boxed = nacl.box(dek, nonce, recipientPubkey, ephemeral.secretKey);
+  const combined = new Uint8Array(BOX_NONCE_LENGTH + boxed.length);
+  combined.set(nonce, 0);
+  combined.set(boxed, BOX_NONCE_LENGTH);
+  return {
+    wrapped: Buffer.from(combined).toString('base64'),
+    wrapPubkey: Buffer.from(ephemeral.publicKey).toString('base64'),
+  };
+}
+
+/** Open a sealed DEK with the recipient's secret key. Returns the DEK or null. */
+export function unwrapDek(
+  wrapped: string,
+  wrapPubkey: string,
+  recipientSecretKey: Uint8Array
+): Uint8Array | null {
+  try {
+    const combined = Buffer.from(wrapped, 'base64');
+    if (combined.length < BOX_NONCE_LENGTH + 1) return null;
+    const nonce = combined.subarray(0, BOX_NONCE_LENGTH);
+    const boxed = combined.subarray(BOX_NONCE_LENGTH);
+    const ephemeralPub = Buffer.from(wrapPubkey, 'base64');
+    if (ephemeralPub.length !== nacl.box.publicKeyLength) return null;
+    const out = nacl.box.open(boxed, nonce, ephemeralPub, recipientSecretKey);
+    return out ?? null;
+  } catch {
+    return null;
+  }
+}
