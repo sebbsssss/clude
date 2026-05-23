@@ -36,6 +36,7 @@ import {
 } from '@clude/shared/wiki-packs';
 import { getExperimentalConfig } from '../experimental/config';
 import { bm25SearchMemories } from '../experimental/bm25-search';
+import { setContentTokens } from './content-tokens';
 import { generateOpenRouterResponse, isOpenRouterEnabled } from '@clude/shared/core/openrouter-client';
 import { isEncryptionEnabled, getEncryptionPubkey, encryptContent, decryptMemoryBatch } from '@clude/shared/core/encryption';
 import { eventBus } from '../events/event-bus';
@@ -490,6 +491,9 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
       importance: opts.importance,
       concepts,
     }, 'Memory stored');
+
+    // Lexical index over plaintext content (keyword/BM25 recall; cleared on revoke — encryption §9).
+    await setContentTokens(db, data.id, plaintextContent);
 
     // Notify reflection trigger system (Park et al. 2023 — event-driven reflection)
     eventBus.emit('memory:stored', {
