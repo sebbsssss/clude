@@ -10,6 +10,10 @@
  * Distinct from the legacy symmetric scheme in encryption.ts (HKDF info differs).
  */
 import nacl from 'tweetnacl';
+import { hkdf } from 'crypto';
+import { promisify } from 'util';
+
+const hkdfAsync = promisify(hkdf);
 
 export const NONCE_LENGTH = nacl.secretbox.nonceLength; // 24
 
@@ -88,3 +92,30 @@ export function unwrapDek(
     return null;
   }
 }
+
+const HKDF_SALT = 'clude-cortex-v1';
+const HKDF_INFO = 'memory-encryption-x25519-v2'; // distinct from legacy symmetric scheme
+const VERIFIER_CONSTANT = 'clude-key-verifier-v1';
+
+/**
+ * Derive an X25519 box keypair from a wallet signature (sign-to-derive, spec §4.1).
+ * Determinism is load-bearing — see the verifier-token guard. The 64-byte ed25519
+ * signature is the HKDF input keying material.
+ */
+export async function deriveOwnerEncryptionKeypair(
+  signature: Uint8Array
+): Promise<nacl.BoxKeyPair> {
+  const seed = await hkdfAsync('sha256', signature, HKDF_SALT, HKDF_INFO, 32);
+  return nacl.box.keyPair.fromSecretKey(new Uint8Array(seed as ArrayBuffer));
+}
+
+/** Encrypt the known verifier constant under the derived key (stored as verifier_ct). */
+export function makeVerifierCiphertext(derivedSecretKey: Uint8Array): string {
+  return encryptField(VERIFIER_CONSTANT, derivedSecretKey);
+}
+
+/** True iff the stored verifier decrypts to the constant under this session's derived key. */
+export function checkVerifier(verifierCt: string, derivedSecretKey: Uint8Array): boolean {
+  return decryptField(verifierCt, derivedSecretKey) === VERIFIER_CONSTANT;
+}
+

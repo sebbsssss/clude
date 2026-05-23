@@ -7,6 +7,9 @@ import {
   NONCE_LENGTH,
   wrapDek,
   unwrapDek,
+  deriveOwnerEncryptionKeypair,
+  makeVerifierCiphertext,
+  checkVerifier,
 } from '../memory-envelope';
 
 describe('DEK + field encryption', () => {
@@ -90,5 +93,39 @@ describe('DEK wrap / unwrap (sealed box)', () => {
   it('unwrap of garbage returns null (never throws)', () => {
     const recipient = nacl.box.keyPair();
     expect(unwrapDek('@@@', 'also-bad', recipient.secretKey)).toBeNull();
+  });
+});
+
+describe('owner key derivation + verifier token', () => {
+  // 64-byte fake ed25519 signature (deterministic input)
+  const sigA = new Uint8Array(64).fill(7);
+  const sigB = new Uint8Array(64).fill(9);
+
+  it('derives deterministically from the same signature', async () => {
+    const k1 = await deriveOwnerEncryptionKeypair(sigA);
+    const k2 = await deriveOwnerEncryptionKeypair(sigA);
+    expect(Buffer.from(k1.publicKey).toString('base64'))
+      .toBe(Buffer.from(k2.publicKey).toString('base64'));
+    expect(k1.publicKey.length).toBe(32);
+    expect(k1.secretKey.length).toBe(32);
+  });
+
+  it('different signatures derive different keys', async () => {
+    const k1 = await deriveOwnerEncryptionKeypair(sigA);
+    const k2 = await deriveOwnerEncryptionKeypair(sigB);
+    expect(Buffer.from(k1.publicKey).equals(Buffer.from(k2.publicKey))).toBe(false);
+  });
+
+  it('verifier round-trips for the same key', async () => {
+    const k = await deriveOwnerEncryptionKeypair(sigA);
+    const ct = makeVerifierCiphertext(k.secretKey);
+    expect(checkVerifier(ct, k.secretKey)).toBe(true);
+  });
+
+  it('verifier FAILS for a key derived from a different (non-deterministic) signature', async () => {
+    const good = await deriveOwnerEncryptionKeypair(sigA);
+    const drift = await deriveOwnerEncryptionKeypair(sigB); // simulates a signer that added entropy
+    const ct = makeVerifierCiphertext(good.secretKey);
+    expect(checkVerifier(ct, drift.secretKey)).toBe(false);
   });
 });
