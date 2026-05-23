@@ -1970,6 +1970,110 @@ async function main() {
     }
     console.log();
     console.log(`  Embeddings complete: ${embedded}/${toEmbed.length}`);
+
+    // ── Fragment-based embedding decomposition ──
+    // Restored 2026-05-23. Without this pass the benchmark bypasses
+    // the SDK's embedMemory path entirely and ships memories that
+    // have ONLY a summary embedding. That's the b7624c25 regression
+    // shape. We rebuild fragments here so retrieval can hit per-
+    // chunk and per-tag vectors as well.
+    console.log('  Generating fragment embeddings...');
+    const FRAGMENT_MAX = 2000;
+    const { data: fragSrc } = await db
+      .from('memories')
+      .select('id, content, summary, tags, concepts')
+      .eq('owner_wallet', BENCHMARK_OWNER_WALLET)
+      .order('id')
+      .limit(50000);
+
+    interface FragRow {
+      memory_id: number;
+      fragment_type: 'summary' | 'content_chunk' | 'tag_context';
+      content: string;
+    }
+    const allFragRows: FragRow[] = [];
+    for (const m of (fragSrc || []) as any[]) {
+      // summary
+      allFragRows.push({ memory_id: m.id, fragment_type: 'summary', content: (m.summary || '').slice(0, FRAGMENT_MAX) });
+      // content chunks
+      const content = (m.content || '').slice(0, 5000);
+      if (content.length > FRAGMENT_MAX) {
+        const sentences = content.match(/[^.!?\n]+[.!?\n]+/g) || [content];
+        let chunk = '';
+        for (const sentence of sentences) {
+          if (chunk.length + sentence.length > FRAGMENT_MAX && chunk.length > 0) {
+            allFragRows.push({ memory_id: m.id, fragment_type: 'content_chunk', content: chunk.trim().slice(0, FRAGMENT_MAX) });
+            chunk = '';
+          }
+          chunk += sentence;
+        }
+        if (chunk.trim()) allFragRows.push({ memory_id: m.id, fragment_type: 'content_chunk', content: chunk.trim().slice(0, FRAGMENT_MAX) });
+      } else if (content.length > 0) {
+        allFragRows.push({ memory_id: m.id, fragment_type: 'content_chunk', content });
+      }
+      // tag_context
+      const tags = (m.tags || []) as string[];
+      const concepts = (m.concepts || []) as string[];
+      const labels = [...tags, ...concepts];
+      if (labels.length > 0) {
+        allFragRows.push({ memory_id: m.id, fragment_type: 'tag_context', content: `Context: ${labels.join(', ')}. ${m.summary || ''}`.slice(0, FRAGMENT_MAX) });
+      }
+    }
+    console.log(`  Built ${allFragRows.length} fragments from ${(fragSrc || []).length} memories`);
+
+    // Batch-embed fragments via Voyage (batch=20 keeps us well under the 128 cap with room for headers)
+    const fragBatch = 20;
+    let fragEmbedded = 0;
+    const fragInsertBuffer: any[] = [];
+    for (let i = 0; i < allFragRows.length; i += fragBatch) {
+      const batch = allFragRows.slice(i, i + fragBatch);
+      const texts = batch.map(f => f.content);
+      try {
+        const res = await fetch(voyageConfig.url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${voyageConfig.apiKey}` },
+          body: JSON.stringify({ input: texts, model: voyageConfig.model }),
+        });
+        if (!res.ok) {
+          if (res.status === 429) {
+            await sleep(5000);
+            i -= fragBatch;
+            continue;
+          }
+          console.error(`\n  Voyage fragment error ${res.status}`);
+          continue;
+        }
+        const data = await res.json() as { data: Array<{ embedding: number[]; index: number }> };
+        for (const item of data.data || []) {
+          const src = batch[item.index];
+          if (!src || !item.embedding) continue;
+          fragInsertBuffer.push({
+            memory_id: src.memory_id,
+            fragment_type: src.fragment_type,
+            content: src.content,
+            embedding: JSON.stringify(item.embedding),
+          });
+          fragEmbedded++;
+        }
+        // Flush to DB every 500 fragments to avoid huge in-memory buffer
+        if (fragInsertBuffer.length >= 500) {
+          const { error } = await db.from('memory_fragments').insert(fragInsertBuffer);
+          if (error) console.error('\n  Fragment insert error:', error.message);
+          fragInsertBuffer.length = 0;
+        }
+      } catch (err: any) {
+        console.error(`\n  Fragment embedding error: ${err.message}`);
+      }
+      await sleep(200);
+      process.stdout.write(`\r  Fragment embeddings: ${fragEmbedded}/${allFragRows.length}`);
+    }
+    // Flush remaining
+    if (fragInsertBuffer.length > 0) {
+      const { error } = await db.from('memory_fragments').insert(fragInsertBuffer);
+      if (error) console.error('\n  Fragment insert (final) error:', error.message);
+    }
+    console.log();
+    console.log(`  Fragments complete: ${fragEmbedded}/${allFragRows.length}`);
   }
   console.log();
   } // end if (!opts.skipSeeding)

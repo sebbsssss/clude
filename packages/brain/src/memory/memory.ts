@@ -5,6 +5,7 @@ import {
   timeAgo,
   MEMORY_MIN_DECAY,
   MEMORY_MAX_CONTENT_LENGTH,
+  EMBEDDING_FRAGMENT_MAX_LENGTH,
   MEMORY_MAX_SUMMARY_LENGTH,
   RECENCY_DECAY_BASE,
   RETRIEVAL_WEIGHT_RECENCY,
@@ -639,7 +640,47 @@ async function embedMemory(memoryId: number, opts: StoreMemoryOptions): Promise<
   if (!isEmbeddingEnabled()) return;
 
   const db = getDb();
-  const embeddings = await generateEmbeddings([opts.summary]);
+
+  // ── Fragment decomposition ─────────────────────────────────────────
+  // Restored from commit b7624c25^ (deleted Apr 2 2026, restored 2026-05-23).
+  // Each memory generates multiple embedding fragments so that retrieval
+  // can hit any of:
+  //   - summary  (the same text we keep on `memories.embedding` for back-compat)
+  //   - content_chunk × N  (content split at sentence boundaries, max
+  //                          EMBEDDING_FRAGMENT_MAX_LENGTH chars each)
+  //   - tag_context  (tags + concepts written as a natural sentence)
+  //
+  // Removing fragments was the single largest LongMemEval-S regression we
+  // ever measured (-17.5pp; SS-Pref 100→53, SS-User 97→64). The schema
+  // (memory_fragments table, HNSW index, match_memory_fragments RPC) was
+  // kept intact through the deletion, so we restore by writing again.
+  const fragments: { type: 'summary' | 'content_chunk' | 'tag_context'; text: string }[] = [];
+
+  fragments.push({ type: 'summary', text: opts.summary });
+
+  const content = opts.content.slice(0, MEMORY_MAX_CONTENT_LENGTH);
+  if (content.length > EMBEDDING_FRAGMENT_MAX_LENGTH) {
+    const sentences = content.match(/[^.!?\n]+[.!?\n]+/g) || [content];
+    let chunk = '';
+    for (const sentence of sentences) {
+      if (chunk.length + sentence.length > EMBEDDING_FRAGMENT_MAX_LENGTH && chunk.length > 0) {
+        fragments.push({ type: 'content_chunk', text: chunk.trim() });
+        chunk = '';
+      }
+      chunk += sentence;
+    }
+    if (chunk.trim()) fragments.push({ type: 'content_chunk', text: chunk.trim() });
+  } else {
+    fragments.push({ type: 'content_chunk', text: content });
+  }
+
+  const allLabels = [...(opts.tags || []), ...(opts.concepts || inferConcepts(opts.summary, opts.source, opts.tags || []))];
+  if (allLabels.length > 0) {
+    fragments.push({ type: 'tag_context', text: `Context: ${allLabels.join(', ')}. ${opts.summary}` });
+  }
+
+  // Batch-generate all embeddings in a single call.
+  const embeddings = await generateEmbeddings(fragments.map(f => f.text));
   const summaryEmbedding = embeddings[0];
 
   if (!summaryEmbedding) {
@@ -647,11 +688,30 @@ async function embedMemory(memoryId: number, opts: StoreMemoryOptions): Promise<
     return;
   }
 
-  // Persist the embedding first — recall depends on it.
+  // Persist the summary embedding on the memory row first — primary recall depends on it.
   await db
     .from('memories')
     .update({ embedding: JSON.stringify(summaryEmbedding) })
     .eq('id', memoryId);
+
+  // Persist all fragments with their own embeddings. Failures here are
+  // non-fatal: the summary embedding is already saved, so recall continues
+  // to work — just without the precision boost.
+  const fragmentRows = fragments
+    .map((f, i) => ({
+      memory_id: memoryId,
+      fragment_type: f.type,
+      content: f.text.slice(0, EMBEDDING_FRAGMENT_MAX_LENGTH),
+      embedding: embeddings[i] ? JSON.stringify(embeddings[i]) : null,
+    }))
+    .filter(r => r.embedding !== null);
+
+  if (fragmentRows.length > 0) {
+    const { error } = await db.from('memory_fragments').insert(fragmentRows);
+    if (error) {
+      log.warn({ err: error.message, memoryId }, 'Failed to store memory fragments (summary embedding intact)');
+    }
+  }
 
   // Semantic tagging layer: cosine the new memory's embedding against the
   // cached topic embeddings for this owner's installed packs. Tags whose
@@ -792,32 +852,69 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
         }
 
         try {
-          const allSearches = validEmbeddings.map(emb =>
-            Promise.resolve(db.rpc('match_memories', {
-              query_embedding: JSON.stringify(emb),
-              match_threshold: VECTOR_MATCH_THRESHOLD,
-              match_count: limit * (opts.skipExpansion ? 12 : 4),
-              filter_types: opts.memoryTypes || null,
-              filter_user: opts.relatedUser || null,
-              min_decay: minDecay,
-              filter_owner: getOwnerWallet() || null,
-              filter_tags: opts.tags && opts.tags.length > 0 ? opts.tags : null,
-            })).then(r => r.data || []),
-          );
+          // Two searches per query embedding:
+          //   1. match_memories       — memory-level similarity (always)
+          //   2. match_memory_fragments — fragment-level (only when not in --skipExpansion fast mode)
+          // Fragment search restored 2026-05-23 to recover from b7624c25 regression.
+          // Fragments find facts buried in long memory bodies that the summary embedding misses.
+          const allSearches = validEmbeddings.flatMap(emb => {
+            const searches: Promise<any[]>[] = [
+              Promise.resolve(db.rpc('match_memories', {
+                query_embedding: JSON.stringify(emb),
+                match_threshold: VECTOR_MATCH_THRESHOLD,
+                match_count: limit * (opts.skipExpansion ? 12 : 4),
+                filter_types: opts.memoryTypes || null,
+                filter_user: opts.relatedUser || null,
+                min_decay: minDecay,
+                filter_owner: getOwnerWallet() || null,
+                filter_tags: opts.tags && opts.tags.length > 0 ? opts.tags : null,
+              })).then(r => r.data || []),
+            ];
+            if (!opts.skipExpansion) {
+              searches.push(
+                Promise.resolve(db.rpc('match_memory_fragments', {
+                  query_embedding: JSON.stringify(emb),
+                  match_threshold: VECTOR_MATCH_THRESHOLD,
+                  match_count: limit * 2,
+                  filter_owner: getOwnerWallet() || null,
+                })).then(r => r.data || []),
+              );
+            }
+            return searches;
+          });
 
           const results = await Promise.all(allSearches);
 
-          // Merge: take highest similarity per memory_id across all query variants
-          for (const batch of results) {
-            for (const m of batch) {
-              const current = vectorScores.get(m.id) || 0;
-              vectorScores.set(m.id, Math.max(current, m.similarity));
+          // Merge: take highest similarity per memory_id across ALL queries.
+          // In !skipExpansion mode the results array is interleaved
+          // [memory_search_q1, fragment_search_q1, memory_search_q2, fragment_search_q2, …].
+          // Fragment results carry {memory_id, max_similarity} instead of {id, similarity}.
+          let fragmentHits = 0;
+          if (opts.skipExpansion) {
+            for (const batch of results) {
+              for (const m of batch) {
+                const current = vectorScores.get(m.id) || 0;
+                vectorScores.set(m.id, Math.max(current, m.similarity));
+              }
+            }
+          } else {
+            for (let i = 0; i < results.length; i++) {
+              const isFragmentBatch = i % 2 === 1;
+              for (const r of results[i]) {
+                const id = isFragmentBatch ? r.memory_id : r.id;
+                const sim = isFragmentBatch ? r.max_similarity : r.similarity;
+                if (!id) continue;
+                const current = vectorScores.get(id) || 0;
+                vectorScores.set(id, Math.max(current, sim));
+                if (isFragmentBatch) fragmentHits++;
+              }
             }
           }
 
           log.debug({
             queryVariants: validEmbeddings.length,
             uniqueMemories: vectorScores.size,
+            fragmentHits,
             fastMode: !!opts.skipExpansion,
           }, 'Vector search completed');
         } catch (err) {
