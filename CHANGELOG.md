@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.2.0] — 2026-05-18
+
+Remote MCP connector for Claude Desktop / claude.ai, plus a one-command
+CLI to install it.
+
+### Added
+- **Remote MCP connector at `/api/mcp`** — Streamable HTTP transport so Claude Desktop and claude.ai can connect to Clude as a custom or directory-listed connector. Three owner-scoped tools: `recall_memories`, `store_memory`, `get_memory_stats`. Bearer auth via the existing `agent_keys` table. Live at `https://clude.io/api/mcp`.
+- **`/.well-known/oauth-protected-resource` (RFC 9728)** and **`/.well-known/oauth-authorization-server` (RFC 8414)** — OAuth 2.1 discovery endpoints so Claude's MCP client probe succeeds today and the upgrade to delegated OAuth (Privy / WorkOS / Stytch) is non-breaking.
+- **`clude connect`** — one-command Claude Desktop setup. Detects/registers an API key, verifies it against `/api/mcp` with an MCP `initialize` round-trip, then writes the connector into `claude_desktop_config.json` (platform-aware path, merges with existing config). Also prints the equivalent Claude Code `.mcp.json` snippet and the claude.ai web custom-connector instructions. Flags: `--key=clk_…`, `--host=…`, `--non-interactive` / `-y`.
+
 ## [3.1.0] — 2026-04-28
 
 MemoryPack v0.2 — encryption, blob attachments, tarball packs, hardened
