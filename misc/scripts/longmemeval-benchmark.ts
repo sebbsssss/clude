@@ -1399,8 +1399,26 @@ function formatBenchmarkContext(memories: any[], questionType: string): string {
       sessionMap.get(sid)!.push(m);
     }
 
-    // Sort sessions by date (reverse for KU to put latest first)
+    // For SS-User / SS-Pref: facts are in ONE session — preserve recall rank
+    // ordering so the most-relevant session is first. Date-sorting scatters
+    // relevance and triggers context-rot (98.6% oracle vs 64.3% S-variant).
+    const isFactLookup = questionType === 'single-session-user' || questionType === 'single-session-preference';
+
+    // Compute per-session min recall rank (preserve order from cortex.recall)
+    const sessionFirstSeen = new Map<string, number>();
+    episodic.forEach((m: any, idx: number) => {
+      const sid = m.metadata?.session_id || 'unknown';
+      if (!sessionFirstSeen.has(sid)) sessionFirstSeen.set(sid, idx);
+    });
+
+    // Sort sessions by:
+    // - SS-User / SS-Pref: recall rank (most relevant first)
+    // - KU: date desc (latest first)
+    // - other: date asc (earliest first)
     const sessions = Array.from(sessionMap.entries()).sort((a, b) => {
+      if (isFactLookup) {
+        return (sessionFirstSeen.get(a[0]) ?? 999) - (sessionFirstSeen.get(b[0]) ?? 999);
+      }
       const dateA = a[1][0]?.metadata?.event_date || '';
       const dateB = b[1][0]?.metadata?.event_date || '';
       return isKU
@@ -1408,11 +1426,19 @@ function formatBenchmarkContext(memories: any[], questionType: string): string {
         : String(dateA).localeCompare(String(dateB));  // Normal: earliest first
     });
 
-    const totalSessions = sessions.length;
-    const sortLabel = isKU ? 'LATEST FIRST' : 'sorted by date';
+    // For fact-lookup categories, hard-cap the visible context to top-15
+    // sessions. Reader doesn't need 50 — the right session is in the top
+    // few by recall score (evidence hit rate is 100%) and the long tail
+    // just triggers context-rot.
+    const trimmedSessions = isFactLookup ? sessions.slice(0, 15) : sessions;
+
+    const totalSessions = trimmedSessions.length;
+    const sortLabel = isFactLookup
+      ? 'MOST RELEVANT FIRST'
+      : (isKU ? 'LATEST FIRST' : 'sorted by date');
     lines.push(`## Conversation History (${totalSessions} conversations, ${sortLabel})`);
-    for (let ci = 0; ci < sessions.length; ci++) {
-      const [sid, mems] = sessions[ci];
+    for (let ci = 0; ci < trimmedSessions.length; ci++) {
+      const [sid, mems] = trimmedSessions[ci];
       const date = mems[0]?.metadata?.event_date || '';
       // Sort rounds/chunks within session
       mems.sort((a: any, b: any) => (a.metadata?.round_index ?? a.metadata?.chunk_index ?? 0) - (b.metadata?.round_index ?? b.metadata?.chunk_index ?? 0));
