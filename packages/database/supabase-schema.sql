@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS memories (
   compacted_into TEXT,                    -- hash_id of the memory this was compacted into
   encrypted BOOLEAN DEFAULT FALSE,        -- whether content is client-side encrypted
   encryption_pubkey TEXT,                 -- Solana pubkey that encrypted this memory
+  provider_delegated BOOLEAN DEFAULT TRUE, -- envelope: provider may read while delegated; revoke flips to FALSE (encryption §7)
   owner_wallet TEXT,                      -- Solana pubkey of the memory owner
   event_date TIMESTAMPTZ DEFAULT NULL,    -- explicit event date extracted from content (temporal indexing)
   event_date_precision TEXT DEFAULT NULL CHECK (event_date_precision IN ('day', 'week', 'month', 'year')),
@@ -159,6 +160,7 @@ CREATE INDEX IF NOT EXISTS idx_memories_owner ON memories(owner_wallet);
 CREATE INDEX IF NOT EXISTS idx_memories_event_date ON memories(event_date) WHERE event_date IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_memories_ts_summary ON memories USING GIN (ts_summary);
 CREATE INDEX IF NOT EXISTS idx_memories_content_tokens ON memories USING GIN (content_tokens);
+CREATE INDEX IF NOT EXISTS idx_memories_delegated ON memories(provider_delegated) WHERE encrypted = TRUE;
 
 -- Vector similarity indexes (HNSW for fast approximate nearest neighbor)
 CREATE INDEX IF NOT EXISTS idx_memories_embedding ON memories USING hnsw (embedding vector_cosine_ops);

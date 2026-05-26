@@ -439,6 +439,8 @@ export async function initDatabase(): Promise<void> {
         -- app-maintained; ts_summary (summary-only) is added on fresh deploys that lack it.
         ALTER TABLE memories ADD COLUMN IF NOT EXISTS content_tokens tsvector;
         CREATE INDEX IF NOT EXISTS idx_memories_content_tokens ON memories USING GIN(content_tokens);
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS provider_delegated BOOLEAN DEFAULT TRUE;
+        CREATE INDEX IF NOT EXISTS idx_memories_delegated ON memories(provider_delegated) WHERE encrypted = TRUE;
         DO $do$
         BEGIN
           IF NOT EXISTS (
