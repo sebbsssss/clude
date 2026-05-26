@@ -37,6 +37,7 @@ import {
 import { getExperimentalConfig } from '../experimental/config';
 import { bm25SearchMemories } from '../experimental/bm25-search';
 import { setContentTokens } from './content-tokens';
+import { encryptForStorage } from './memory-encryption';
 import { generateOpenRouterResponse, isOpenRouterEnabled } from '@clude/shared/core/openrouter-client';
 import { isEncryptionEnabled, getEncryptionPubkey, encryptContent, decryptMemoryBatch } from '@clude/shared/core/encryption';
 import { eventBus } from '../events/event-bus';
@@ -448,10 +449,16 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
   const hashId = generateHashId();
 
   try {
-    // Encrypt content if encryption is enabled (content only — summary/tags/metadata stay plaintext)
+    // Encrypt content (content only — summary/tags/metadata stay plaintext). Precedence:
+    // envelope (PMP §5) → legacy SDK scheme (configureEncryption, cortex.ts) → plaintext.
     const plaintextContent = opts.content.slice(0, MEMORY_MAX_CONTENT_LENGTH);
-    const shouldEncrypt = isEncryptionEnabled();
-    const storedContent = shouldEncrypt ? encryptContent(plaintextContent) : plaintextContent;
+    const envelope = await encryptForStorage(plaintextContent, ownerWallet || null);
+    const legacyEncrypt = !envelope && isEncryptionEnabled();
+    const storedContent = envelope
+      ? envelope.ciphertext
+      : legacyEncrypt
+      ? encryptContent(plaintextContent)
+      : plaintextContent;
 
     const { data, error } = await db
       .from('memories')
@@ -471,8 +478,9 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
         metadata: opts.metadata || {},
         evidence_ids: opts.evidenceIds || [],
         compacted: false,
-        encrypted: shouldEncrypt,
-        encryption_pubkey: shouldEncrypt ? getEncryptionPubkey() : null,
+        encrypted: envelope !== null || legacyEncrypt,
+        encryption_pubkey: envelope ? envelope.ownerPubkey : legacyEncrypt ? getEncryptionPubkey() : null,
+        provider_delegated: envelope !== null, // envelope only; legacy has no delegation model
         owner_wallet: ownerWallet || null,
       })
       .select('id, hash_id, content, memory_type, owner_wallet, created_at, tags, source, related_user, related_wallet')
@@ -494,6 +502,24 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
 
     // Lexical index over plaintext content (keyword/BM25 recall; cleared on revoke — encryption §9).
     await setContentTokens(db, data.id, plaintextContent);
+
+    // Persist the wrapped DEKs (owner + provider). Must never be logged (§14).
+    if (envelope) {
+      const { error: wrapErr } = await db.from('memory_dek_wraps').insert(
+        envelope.wraps.map(w => ({ memory_id: data.id, ...w })),
+      );
+      if (wrapErr) {
+        // Without wraps the ciphertext is permanently undecryptable (the DEK is discarded).
+        // Revert to plaintext-at-rest so no data is lost — plaintextContent is still in scope.
+        log.error({ id: data.id, error: wrapErr.message }, 'DEK wrap write failed — reverting memory to plaintext');
+        await db.from('memories').update({
+          content: plaintextContent,
+          encrypted: false,
+          encryption_pubkey: null,
+          provider_delegated: null,
+        }).eq('id', data.id);
+      }
+    }
 
     // Notify reflection trigger system (Park et al. 2023 — event-driven reflection)
     eventBus.emit('memory:stored', {
