@@ -39,7 +39,8 @@ import { bm25SearchMemories } from '../experimental/bm25-search';
 import { setContentTokens } from './content-tokens';
 import { encryptForStorage } from './memory-encryption';
 import { generateOpenRouterResponse, isOpenRouterEnabled } from '@clude/shared/core/openrouter-client';
-import { isEncryptionEnabled, getEncryptionPubkey, encryptContent, decryptMemoryBatch } from '@clude/shared/core/encryption';
+import { isEncryptionEnabled, getEncryptionPubkey, encryptContent } from '@clude/shared/core/encryption';
+import { decryptMemories } from './memory-decryption';
 import { eventBus } from '../events/event-bus';
 
 // ---- EMBEDDING CACHE ---- //
@@ -985,7 +986,7 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
     }
 
     // Phase 3: Merge vector candidates with metadata candidates
-    let candidates: Memory[] = decryptMemoryBatch(data || []);
+    let candidates: Memory[] = await decryptMemories(data || []);
 
     // If vector search found memories not in the metadata set, fetch them
     if (vectorScores.size > 0) {
@@ -1007,7 +1008,7 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
           vectorQuery = vectorQuery.overlaps('tags', opts.tags);
         }
         const { data: vectorOnly } = await vectorQuery;
-        if (vectorOnly) candidates = [...candidates, ...decryptMemoryBatch(vectorOnly)];
+        if (vectorOnly) candidates = [...candidates, ...(await decryptMemories(vectorOnly))];
       }
     }
 
@@ -1128,7 +1129,7 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
             const { data: graphMemories } = await graphQuery;
 
             if (graphMemories && graphMemories.length > 0) {
-              decryptMemoryBatch(graphMemories);
+              await decryptMemories(graphMemories);
               // Build link map with bond-type-weighted strength
               const linkBoostMap = new Map<number, number>();
               for (const l of linked) {
@@ -1456,7 +1457,7 @@ export async function hydrateMemories(ids: number[]): Promise<Memory[]> {
       return [];
     }
 
-    return decryptMemoryBatch((data || []) as Memory[]);
+    return await decryptMemories((data || []) as Memory[]);
   } catch (err) {
     log.error({ err }, 'Memory hydration failed');
     return [];
@@ -1834,7 +1835,7 @@ export async function listMemories(opts: {
     log.error({ error: error.message }, 'Failed to list memories');
     return { memories: [], total: 0 };
   }
-  return { memories: decryptMemoryBatch(data || []), total: count ?? 0 };
+  return { memories: await decryptMemories(data || []), total: count ?? 0 };
 }
 
 // ---- STATS ---- //
@@ -2011,7 +2012,7 @@ export async function getRecentMemories(
     return [];
   }
 
-  return decryptMemoryBatch(data || []);
+  return await decryptMemories(data || []);
 }
 
 // ---- SELF-MODEL ---- //
@@ -2037,7 +2038,7 @@ export async function getSelfModel(): Promise<Memory[]> {
     return [];
   }
 
-  return decryptMemoryBatch(data || []);
+  return await decryptMemories(data || []);
 }
 
 // ---- STORE DREAM LOG ---- //

@@ -12,7 +12,7 @@ import { createChildLogger } from '@clude/shared/core/logger';
 
 const log = createChildLogger('memory-decryption');
 
-interface DecryptableRow { id: number; content: string; encrypted?: boolean; [k: string]: unknown; }
+interface DecryptableRow { id: number; content: string; encrypted?: boolean }
 
 async function fetchProviderWraps(
   ids: number[],
