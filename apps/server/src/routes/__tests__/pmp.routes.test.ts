@@ -45,9 +45,12 @@ vi.mock('@clude/brain/auth/privy-auth', () => ({
 // ── Brain memory ──
 const storeMemoryMock = vi.fn();
 const recallMemoriesMock = vi.fn();
+const decryptOneContentMock = vi.fn(); // default impl (passthrough) set in beforeEach
 vi.mock('@clude/brain/memory', () => ({
   storeMemory: (...args: unknown[]) => storeMemoryMock(...args),
   recallMemories: (...args: unknown[]) => recallMemoriesMock(...args),
+  // VERIFY imports this; default passthrough, overridable per-test for the encrypted case.
+  decryptOneContent: (...args: unknown[]) => decryptOneContentMock(...args),
 }));
 
 // ── Supabase: chainable query mock ──
@@ -124,6 +127,8 @@ beforeEach(() => {
   updateCalls = [];
   storeMemoryMock.mockReset();
   recallMemoriesMock.mockReset();
+  decryptOneContentMock.mockReset();
+  decryptOneContentMock.mockImplementation(async (row: { content: string }) => row.content);
   fakeMint.reset();
 });
 
@@ -322,6 +327,20 @@ describe('VERIFY — GET /v1/memories/:id/verify', () => {
     expect(res.body.recomputed_hash).toBe(expectedHash);
     expect(res.body.stored_hash).toBe(expectedHash);
     expect(res.body.commitment).not.toBeNull();
+  });
+
+  it('returns committed_encrypted for an encrypted memory it cannot decrypt (revoked/no wrap)', async () => {
+    decryptOneContentMock.mockResolvedValueOnce(null); // undecryptable
+    queryQueue.push({
+      data: { ...baseRow, encrypted: true, content: 'CIPHERTEXTB64', content_hash: 'deadbeef' },
+      error: null,
+    });
+    const res = await request(buildApp()).get('/v1/memories/mem-v1/verify');
+    expect(res.status).toBe(200);
+    expect(res.body.reason).toBe('committed_encrypted');
+    expect(res.body.verified).toBe(true); // a commitment exists for the stored hash
+    expect(res.body.recomputed_hash).toBeNull();
+    expect(res.body.stored_hash).toBe('deadbeef');
   });
 
   it('returns verified=false / not_committed when chain has no commitment', async () => {

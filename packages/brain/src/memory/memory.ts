@@ -37,8 +37,11 @@ import {
 } from '@clude/shared/wiki-packs';
 import { getExperimentalConfig } from '../experimental/config';
 import { bm25SearchMemories } from '../experimental/bm25-search';
+import { setContentTokens } from './content-tokens';
+import { encryptForStorage } from './memory-encryption';
 import { generateOpenRouterResponse, isOpenRouterEnabled } from '@clude/shared/core/openrouter-client';
-import { isEncryptionEnabled, getEncryptionPubkey, encryptContent, decryptMemoryBatch } from '@clude/shared/core/encryption';
+import { isEncryptionEnabled, getEncryptionPubkey, encryptContent } from '@clude/shared/core/encryption';
+import { decryptMemories } from './memory-decryption';
 import { eventBus } from '../events/event-bus';
 
 // ---- EMBEDDING CACHE ---- //
@@ -448,10 +451,16 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
   const hashId = generateHashId();
 
   try {
-    // Encrypt content if encryption is enabled (content only — summary/tags/metadata stay plaintext)
+    // Encrypt content (content only — summary/tags/metadata stay plaintext). Precedence:
+    // envelope (PMP §5) → legacy SDK scheme (configureEncryption, cortex.ts) → plaintext.
     const plaintextContent = opts.content.slice(0, MEMORY_MAX_CONTENT_LENGTH);
-    const shouldEncrypt = isEncryptionEnabled();
-    const storedContent = shouldEncrypt ? encryptContent(plaintextContent) : plaintextContent;
+    const envelope = await encryptForStorage(plaintextContent, ownerWallet || null);
+    const legacyEncrypt = !envelope && isEncryptionEnabled();
+    const storedContent = envelope
+      ? envelope.ciphertext
+      : legacyEncrypt
+      ? encryptContent(plaintextContent)
+      : plaintextContent;
 
     const { data, error } = await db
       .from('memories')
@@ -471,8 +480,9 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
         metadata: opts.metadata || {},
         evidence_ids: opts.evidenceIds || [],
         compacted: false,
-        encrypted: shouldEncrypt,
-        encryption_pubkey: shouldEncrypt ? getEncryptionPubkey() : null,
+        encrypted: envelope !== null || legacyEncrypt,
+        encryption_pubkey: envelope ? envelope.ownerPubkey : legacyEncrypt ? getEncryptionPubkey() : null,
+        provider_delegated: envelope !== null, // envelope only; legacy has no delegation model
         owner_wallet: ownerWallet || null,
       })
       .select('id, hash_id, content, memory_type, owner_wallet, created_at, tags, source, related_user, related_wallet')
@@ -492,6 +502,27 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
       concepts,
     }, 'Memory stored');
 
+    // Lexical index over plaintext content (keyword/BM25 recall; cleared on revoke — encryption §9).
+    await setContentTokens(db, data.id, plaintextContent);
+
+    // Persist the wrapped DEKs (owner + provider). Must never be logged (§14).
+    if (envelope) {
+      const { error: wrapErr } = await db.from('memory_dek_wraps').insert(
+        envelope.wraps.map(w => ({ memory_id: data.id, ...w })),
+      );
+      if (wrapErr) {
+        // Without wraps the ciphertext is permanently undecryptable (the DEK is discarded).
+        // Revert to plaintext-at-rest so no data is lost — plaintextContent is still in scope.
+        log.error({ id: data.id, error: wrapErr.message }, 'DEK wrap write failed — reverting memory to plaintext');
+        await db.from('memories').update({
+          content: plaintextContent,
+          encrypted: false,
+          encryption_pubkey: null,
+          provider_delegated: null,
+        }).eq('id', data.id);
+      }
+    }
+
     // Notify reflection trigger system (Park et al. 2023 — event-driven reflection)
     eventBus.emit('memory:stored', {
       importance: clamp(opts.importance ?? 0.5, 0, 1),
@@ -503,7 +534,7 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
     // solana_signature AND the new PMP tokenisation columns (content_hash,
     // cnft_address, cnft_tx_sig, tokenization_status). v0.2 will drop the legacy
     // path once verifiers are on PMP exclusively.
-    commitMemoryToChain(data.id, opts, data as MemoryRowForTokenisation).catch(err =>
+    commitMemoryToChain(data.id, opts, data as MemoryRowForTokenisation, plaintextContent, envelope !== null || legacyEncrypt).catch(err =>
       log.warn({ err }, 'On-chain memory commit failed'),
     );
 
@@ -553,15 +584,18 @@ async function commitMemoryToChain(
   memoryId: number,
   opts: StoreMemoryOptions,
   row: MemoryRowForTokenisation,
+  plaintextContent: string,
+  encrypted: boolean,
 ): Promise<void> {
   // Skip mainnet commits for demo / benchmark memories
   if (TOKENISATION_SKIP_SOURCES.has(opts.source)) return;
 
-  // 1. Canonical PMP hash — what verifiers will recompute on /v1/memories/:id/verify.
-  //    Hashed over the stored row content (post-truncation / post-encryption) so
-  //    the VERIFY endpoint can recompute from the same bytes it serves to clients.
+  // 1. Canonical PMP hash — what verifiers recompute on /v1/memories/:id/verify.
+  //    Hashed over the PLAINTEXT content (never the stored column, which may be
+  //    ciphertext) so the commitment is a stable identity; VERIFY recomputes over
+  //    decrypted content (PMP §8).
   const canonicalHash = memoryContentHash({
-    content: row.content,
+    content: plaintextContent,
     memory_type: row.memory_type,
     owner_wallet: row.owner_wallet,
     created_at: row.created_at,
@@ -578,7 +612,6 @@ async function commitMemoryToChain(
   let signature: string | null = null;
 
   if (isRegistryEnabled()) {
-    const encrypted = isEncryptionEnabled();
     signature = await registerMemoryOnChain(
       contentHashBuf,
       opts.type,
@@ -1050,7 +1083,7 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
     }
 
     // Phase 3: Merge vector candidates with metadata candidates
-    let candidates: Memory[] = decryptMemoryBatch(data || []);
+    let candidates: Memory[] = await decryptMemories(data || []);
 
     // If vector search found memories not in the metadata set, fetch them
     if (vectorScores.size > 0) {
@@ -1072,7 +1105,7 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
           vectorQuery = vectorQuery.overlaps('tags', opts.tags);
         }
         const { data: vectorOnly } = await vectorQuery;
-        if (vectorOnly) candidates = [...candidates, ...decryptMemoryBatch(vectorOnly)];
+        if (vectorOnly) candidates = [...candidates, ...(await decryptMemories(vectorOnly))];
       }
     }
 
@@ -1193,7 +1226,7 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
             const { data: graphMemories } = await graphQuery;
 
             if (graphMemories && graphMemories.length > 0) {
-              decryptMemoryBatch(graphMemories);
+              await decryptMemories(graphMemories);
               // Build link map with bond-type-weighted strength
               const linkBoostMap = new Map<number, number>();
               for (const l of linked) {
@@ -1521,7 +1554,7 @@ export async function hydrateMemories(ids: number[]): Promise<Memory[]> {
       return [];
     }
 
-    return decryptMemoryBatch((data || []) as Memory[]);
+    return await decryptMemories((data || []) as Memory[]);
   } catch (err) {
     log.error({ err }, 'Memory hydration failed');
     return [];
@@ -1899,7 +1932,7 @@ export async function listMemories(opts: {
     log.error({ error: error.message }, 'Failed to list memories');
     return { memories: [], total: 0 };
   }
-  return { memories: decryptMemoryBatch(data || []), total: count ?? 0 };
+  return { memories: await decryptMemories(data || []), total: count ?? 0 };
 }
 
 // ---- STATS ---- //
@@ -2076,7 +2109,7 @@ export async function getRecentMemories(
     return [];
   }
 
-  return decryptMemoryBatch(data || []);
+  return await decryptMemories(data || []);
 }
 
 // ---- SELF-MODEL ---- //
@@ -2102,7 +2135,7 @@ export async function getSelfModel(): Promise<Memory[]> {
     return [];
   }
 
-  return decryptMemoryBatch(data || []);
+  return await decryptMemories(data || []);
 }
 
 // ---- STORE DREAM LOG ---- //

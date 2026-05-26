@@ -435,6 +435,25 @@ export async function initDatabase(): Promise<void> {
         CREATE INDEX IF NOT EXISTS idx_memories_event_date ON memories(event_date)
           WHERE event_date IS NOT NULL;
 
+        -- Lexical index for keyword/BM25 search (encryption §9). content_tokens is
+        -- app-maintained; ts_summary (summary-only) is added on fresh deploys that lack it.
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS content_tokens tsvector;
+        CREATE INDEX IF NOT EXISTS idx_memories_content_tokens ON memories USING GIN(content_tokens);
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS provider_delegated BOOLEAN DEFAULT TRUE;
+        CREATE INDEX IF NOT EXISTS idx_memories_delegated ON memories(provider_delegated) WHERE encrypted = TRUE;
+        DO $do$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'memories' AND column_name = 'ts_summary'
+          ) THEN
+            ALTER TABLE memories ADD COLUMN ts_summary tsvector GENERATED ALWAYS AS (
+              setweight(to_tsvector('english', COALESCE(summary, '')), 'A')
+            ) STORED;
+            CREATE INDEX IF NOT EXISTS idx_memories_ts_summary ON memories USING GIN(ts_summary);
+          END IF;
+        END $do$;
+
         -- Temporal-aware semantic search RPC (Exp 9)
         CREATE OR REPLACE FUNCTION match_memories_temporal(
           query_embedding vector(1024),
@@ -468,8 +487,37 @@ export async function initDatabase(): Promise<void> {
         END;
         $$;
 
-        -- BM25-ranked full-text search RPC (Exp 8)
-        -- Note: ts_summary column requires manual migration (GENERATED ALWAYS AS is not ALTER-able)
+        -- Encryption: owner key registry + per-memory wrapped DEKs (encryption §9, Plan 1 sync).
+        CREATE TABLE IF NOT EXISTS encryption_keys (
+          owner_wallet  TEXT PRIMARY KEY,
+          x25519_pubkey TEXT NOT NULL,
+          verifier_ct   TEXT NOT NULL,
+          created_at    TIMESTAMPTZ DEFAULT NOW(),
+          updated_at    TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS memory_dek_wraps (
+          memory_id   BIGINT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+          recipient   TEXT   NOT NULL,
+          wrapped_dek TEXT   NOT NULL,
+          wrap_pubkey TEXT   NOT NULL,
+          created_at  TIMESTAMPTZ DEFAULT NOW(),
+          PRIMARY KEY (memory_id, recipient)
+        );
+        CREATE INDEX IF NOT EXISTS idx_dek_wraps_memory ON memory_dek_wraps(memory_id);
+
+        -- Populate content_tokens from a transient plaintext arg (PostgREST can't express to_tsvector inline).
+        -- setweight 'B' mirrors the old combined ts_summary weighting (summary 'A' > content 'B').
+        CREATE OR REPLACE FUNCTION set_memory_content_tokens(p_memory_id bigint, p_text text)
+        RETURNS void LANGUAGE sql AS $fn$
+          UPDATE memories
+          SET content_tokens = CASE
+                WHEN p_text IS NULL OR p_text = '' THEN NULL
+                ELSE setweight(to_tsvector('english', p_text), 'B')
+              END
+          WHERE id = p_memory_id;
+        $fn$;
+
+        -- BM25-ranked full-text search RPC (Exp 8) — dual-column (ts_summary + content_tokens)
         CREATE OR REPLACE FUNCTION bm25_search_memories(
           search_query text,
           match_count int DEFAULT 20,
@@ -488,9 +536,11 @@ export async function initDatabase(): Promise<void> {
             RETURN;
           END IF;
           RETURN QUERY
-          SELECT m.id, ts_rank_cd(m.ts_summary, tsquery_val, 32)::float AS rank
+          SELECT m.id,
+            (ts_rank_cd(COALESCE(m.ts_summary, ''::tsvector), tsquery_val, 32)
+             + ts_rank_cd(COALESCE(m.content_tokens, ''::tsvector), tsquery_val, 32))::float AS rank
           FROM memories m
-          WHERE m.ts_summary @@ tsquery_val
+          WHERE (m.ts_summary @@ tsquery_val OR m.content_tokens @@ tsquery_val)
             AND m.decay_factor >= min_decay
             AND (filter_owner IS NULL OR m.owner_wallet = filter_owner)
             AND (filter_types IS NULL OR m.memory_type = ANY(filter_types))
