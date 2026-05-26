@@ -25,6 +25,7 @@ dotenv.config();
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
 import { Cortex } from '@clude/brain/sdk';
+import { rerankWithVoyage, rerankWithCrossEncoder } from '@clude/brain/experimental/index';
 import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { randomBytes } from 'crypto';
@@ -153,6 +154,8 @@ function parseArgs() {
     selfConsistency: 0, // if >0, run n=N readers + vote/synthesize for non-counting multi-session
     concurrency: 0, // questions in flight per batch — 0 means auto (4 w/o embeddings, 2 with)
     batchSleepMs: 0, // ms to sleep between batches (token-bucket safety belt for rate limits)
+    rerank: '' as string, // 'voyage' | 'cohere' | '' (off). Cross-encoder rerank after recall.
+    rerankTopN: 25, // keep this many memories after rerank
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -204,6 +207,12 @@ function parseArgs() {
         break;
       case '--batch-sleep':
         opts.batchSleepMs = parseInt(args[++i]) || 0;
+        break;
+      case '--rerank':
+        opts.rerank = args[++i] || '';
+        break;
+      case '--rerank-top-n':
+        opts.rerankTopN = parseInt(args[++i]) || 25;
         break;
       case '--run-id':
         opts.runId = args[++i] || '';
@@ -2283,6 +2292,37 @@ async function main() {
           }
           contextMemories = [...nonSessionMems, ...sessionMems];
         }
+
+        // Cross-encoder rerank: bi-encoder (Voyage embeddings) scores query and
+        // doc independently — can't capture fine-grained relevance. A cross-
+        // encoder (Voyage Rerank-2.5 or Cohere Rerank-v3.5) jointly attends to
+        // both. Researcher Exp 3 projects +7-10pp on LongMemEval. Opt-in via
+        // --rerank voyage|cohere. We rerank the final contextMemories slice
+        // before format so it benefits every category equally.
+        if (opts.rerank && contextMemories.length > 1) {
+          try {
+            const rerankInput = contextMemories.map((m: any, i: number) => ({
+              id: m.id ?? `tmp-${i}`,
+              summary: m.summary || (m.content || '').slice(0, 200),
+              content: m.content,
+              _score: 0,
+            }));
+            const rerankApiKey = opts.rerank === 'cohere'
+              ? (process.env.COHERE_API_KEY || '')
+              : (process.env.VOYAGE_API_KEY || process.env.EMBEDDING_API_KEY || '');
+            const rerankFn = opts.rerank === 'cohere' ? rerankWithCrossEncoder : rerankWithVoyage;
+            const reranked = await rerankFn(rerankInput as any, q.question, {
+              apiKey: rerankApiKey,
+              topN: Math.min(opts.rerankTopN, contextMemories.length),
+            });
+            // Map back to original memory objects (preserves all metadata)
+            const byId = new Map<any, any>(contextMemories.map((m: any, i: number) => [m.id ?? `tmp-${i}`, m]));
+            contextMemories = (reranked as any[]).map((r) => byId.get(r.id)).filter(Boolean);
+          } catch {
+            // Silent fallback — benchmark should still produce results if rerank fails
+          }
+        }
+
         const context = formatBenchmarkContext(contextMemories, q.question_type);
         let generated: string;
         if (q.question_type === 'multi-session') {
