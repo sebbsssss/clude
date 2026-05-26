@@ -532,7 +532,7 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
     // solana_signature AND the new PMP tokenisation columns (content_hash,
     // cnft_address, cnft_tx_sig, tokenization_status). v0.2 will drop the legacy
     // path once verifiers are on PMP exclusively.
-    commitMemoryToChain(data.id, opts, data as MemoryRowForTokenisation).catch(err =>
+    commitMemoryToChain(data.id, opts, data as MemoryRowForTokenisation, plaintextContent, envelope !== null || legacyEncrypt).catch(err =>
       log.warn({ err }, 'On-chain memory commit failed'),
     );
 
@@ -582,15 +582,18 @@ async function commitMemoryToChain(
   memoryId: number,
   opts: StoreMemoryOptions,
   row: MemoryRowForTokenisation,
+  plaintextContent: string,
+  encrypted: boolean,
 ): Promise<void> {
   // Skip mainnet commits for demo / benchmark memories
   if (TOKENISATION_SKIP_SOURCES.has(opts.source)) return;
 
-  // 1. Canonical PMP hash — what verifiers will recompute on /v1/memories/:id/verify.
-  //    Hashed over the stored row content (post-truncation / post-encryption) so
-  //    the VERIFY endpoint can recompute from the same bytes it serves to clients.
+  // 1. Canonical PMP hash — what verifiers recompute on /v1/memories/:id/verify.
+  //    Hashed over the PLAINTEXT content (never the stored column, which may be
+  //    ciphertext) so the commitment is a stable identity; VERIFY recomputes over
+  //    decrypted content (PMP §8).
   const canonicalHash = memoryContentHash({
-    content: row.content,
+    content: plaintextContent,
     memory_type: row.memory_type,
     owner_wallet: row.owner_wallet,
     created_at: row.created_at,
@@ -607,7 +610,6 @@ async function commitMemoryToChain(
   let signature: string | null = null;
 
   if (isRegistryEnabled()) {
-    const encrypted = isEncryptionEnabled();
     signature = await registerMemoryOnChain(
       contentHashBuf,
       opts.type,
