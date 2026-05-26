@@ -45,7 +45,7 @@ vi.mock('@clude/brain/auth/privy-auth', () => ({
 // ── Brain memory ──
 const storeMemoryMock = vi.fn();
 const recallMemoriesMock = vi.fn();
-const decryptOneContentMock = vi.fn(async (row: { content: string }) => row.content);
+const decryptOneContentMock = vi.fn(); // default impl (passthrough) set in beforeEach
 vi.mock('@clude/brain/memory', () => ({
   storeMemory: (...args: unknown[]) => storeMemoryMock(...args),
   recallMemories: (...args: unknown[]) => recallMemoriesMock(...args),
