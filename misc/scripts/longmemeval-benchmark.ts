@@ -24,7 +24,8 @@ import dotenv from 'dotenv';
 dotenv.config();
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
-import { Cortex } from '../src/sdk';
+import { Cortex } from '@clude/brain/sdk';
+import { rerankWithVoyage, rerankWithCrossEncoder } from '@clude/brain/experimental/index';
 import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { randomBytes } from 'crypto';
@@ -148,6 +149,13 @@ function parseArgs() {
     truncateSessions: false, // use old truncate-to-5000 seeding instead of session chunking
     skipSeeding: false, // skip cleanup + seeding (reuse existing data in DB)
     resume: '' as string, // path to partial results JSON to resume from
+    verify: false, // run a Stage-3 verifier + Stage-4 revise pass on multi-session answers
+    criticModel: '' as string, // model to use for the verifier critic (defaults to reader model)
+    selfConsistency: 0, // if >0, run n=N readers + vote/synthesize for non-counting multi-session
+    concurrency: 0, // questions in flight per batch — 0 means auto (4 w/o embeddings, 2 with)
+    batchSleepMs: 0, // ms to sleep between batches (token-bucket safety belt for rate limits)
+    rerank: '' as string, // 'voyage' | 'cohere' | '' (off). Cross-encoder rerank after recall.
+    rerankTopN: 25, // keep this many memories after rerank
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -184,6 +192,27 @@ function parseArgs() {
         break;
       case '--rejudge':
         opts.rejudge = args[++i] || '';  // path to results JSON to re-judge
+        break;
+      case '--verify':
+        opts.verify = true;
+        break;
+      case '--critic-model':
+        opts.criticModel = args[++i] || '';
+        break;
+      case '--self-consistency':
+        opts.selfConsistency = parseInt(args[++i]) || 3;
+        break;
+      case '--concurrency':
+        opts.concurrency = parseInt(args[++i]) || 0;
+        break;
+      case '--batch-sleep':
+        opts.batchSleepMs = parseInt(args[++i]) || 0;
+        break;
+      case '--rerank':
+        opts.rerank = args[++i] || '';
+        break;
+      case '--rerank-top-n':
+        opts.rerankTopN = parseInt(args[++i]) || 25;
         break;
       case '--run-id':
         opts.runId = args[++i] || '';
@@ -461,6 +490,100 @@ CRITICAL RULES:
   'abstention': 'ONLY answer if you find clearly relevant information in the context. If the context contains nothing related to the question, say "I don\'t have information about that."',
 };
 
+// Quick guard so verifier doesn't waste a call on IDK answers (which get
+// retried via the IDK fallback path below).
+function multiIdkPatternEarly(text: string): boolean {
+  return /i don't (have|see|find)|cannot (find|answer)|no.*(information|record|mention).*(about|of|for)/i.test(text);
+}
+
+/**
+ * Stage 3 (verifier) + Stage 4 (revise).
+ *
+ * Reads the question, the extracted evidence, and the proposed answer.
+ * Decides VERIFIED (return as-is) or REVISE (regenerate with critique).
+ *
+ * Empirical result (2026-05-22, oracle multi-session, n=133):
+ *   baseline = 86.5%, --verify = 86.5%, NET DELTA = 0
+ *   4 questions flipped right, 4 flipped wrong. Verifier acts as a
+ *   second reader, not a sharper one. Same-model critic cannot reliably
+ *   critique its own output.
+ *
+ * Kept opt-in (--verify) for future asymmetric experiments:
+ *   - Opus critic + Sonnet reader (different model = different errors)
+ *   - Stricter prompt that only flags undeniable errors
+ *   - n=3 self-consistency ensemble instead (more promising path)
+ */
+async function verifyAndReviseMultiSession(
+  question: string,
+  extraction: string,
+  context: string,
+  proposedAnswer: string,
+  readerModel: string,
+  dateContext: string,
+): Promise<string> {
+  const criticModel = (globalThis as any).__criticModel || readerModel;
+  let verdict = '';
+  try {
+    const critic = await anthropic.messages.create({
+      model: criticModel,
+      max_tokens: 400,
+      temperature: 0,
+      system: `You are a strict critic checking whether a proposed answer is fully supported by the extracted evidence.${dateContext}
+
+Decide one of:
+- VERIFIED: every claim in the answer is supported by a specific extracted item; counts/totals add up; cross-session joins are correct.
+- REVISE: a specific evidence gap, arithmetic error, missed item, or wrong cross-session join.
+
+Output rules:
+- If VERIFIED, output exactly the word: VERIFIED
+- If REVISE, output: REVISE: <one-sentence critique pointing to the exact item, count, or fact that's wrong or missing>
+- Be strict on arithmetic, counting, and cross-session matching.
+- Be charitable on phrasing/style — only flag substantive evidence problems.
+- Never fabricate evidence in your critique; only point to things in the extracted data or the original context.`,
+      messages: [{
+        role: 'user',
+        content: `Question: ${question}\n\nExtracted evidence:\n${extraction}\n\nProposed answer:\n${proposedAnswer}\n\nVerdict:`,
+      }],
+    });
+    verdict = critic.content[0].type === 'text' ? critic.content[0].text.trim() : '';
+  } catch {
+    return proposedAnswer; // verifier failure — fall back silently
+  }
+
+  if (!verdict || !/^REVISE/i.test(verdict)) return proposedAnswer;
+
+  const critique = verdict.replace(/^REVISE:\s*/i, '').trim();
+
+  try {
+    const revised = await anthropic.messages.create({
+      model: readerModel,
+      max_tokens: 600,
+      temperature: 0,
+      system: `You answer multi-session questions using extracted evidence. A prior answer was flagged — fix it.${dateContext}
+
+PROCESS:
+1. Read the critique carefully — it points to a specific evidence gap or error in the prior answer.
+2. Re-scan the extracted data AND the original context for items that resolve the critique.
+3. Produce a corrected answer that addresses the critique while staying grounded in evidence.
+
+Rules:
+- Show counts/totals with each contributing item.
+- Cross-check both extracted data AND original context before committing to a number.
+- If the critique is unfounded (the prior answer was actually correct), say so and restate the prior answer.
+- If after re-checking the answer truly cannot be supported, say "The information provided is not enough."
+- Keep the final answer concise (1-3 sentences).`,
+      messages: [{
+        role: 'user',
+        content: `Question: ${question}\n\nExtracted evidence:\n${extraction}\n\nOriginal memory context:\n${context}\n\nPrior answer (flagged):\n${proposedAnswer}\n\nCritique: ${critique}\n\nRevised answer:`,
+      }],
+    });
+    const revisedText = revised.content[0].type === 'text' ? revised.content[0].text.trim() : '';
+    return revisedText || proposedAnswer;
+  } catch {
+    return proposedAnswer;
+  }
+}
+
 async function generateAnswerCoN(
   context: string,
   question: string,
@@ -669,6 +792,20 @@ Rules:
     });
 
     let multiAnswer = stage2.content[0].type === 'text' ? stage2.content[0].text.trim() : '';
+
+    // Stage 3 (verifier): critique the answer against the evidence. If
+    // weak, Stage 4 regenerates with the critique as guidance.
+    // Gated behind --verify so we can A/B this against the existing baseline.
+    if ((globalThis as any).__verifyEnabled && !multiIdkPatternEarly(multiAnswer)) {
+      multiAnswer = await verifyAndReviseMultiSession(
+        question,
+        extraction,
+        context,
+        multiAnswer,
+        readerModel,
+        dateContext,
+      );
+    }
 
     // If multi two-stage gives IDK, fall back to single-pass with IDK retry
     const multiIdkPattern = /i don't (have|see|find)|cannot (find|answer)|no.*(information|record|mention).*(about|of|for)/i;
@@ -903,6 +1040,108 @@ You MUST provide a specific answer. Do NOT say "I don't have information" or "I 
 }
 
 /**
+ * Self-consistency ensemble for non-counting multi-session questions.
+ *
+ * Theory: counting-union proves that running multiple reads with shuffled
+ * context + merging catches items the single-pass missed. For non-counting
+ * questions the output isn't an item set but a natural-language answer —
+ * so instead of unioning, we run n=N reads + send all candidates to a
+ * synthesizer that picks the best answer or merges them.
+ *
+ * Same shuffle pattern as counting-union (reverse / rotate by index).
+ */
+async function generateSelfConsistentAnswer(
+  context: string,
+  question: string,
+  questionType: string,
+  readerModel: string,
+  questionDate: string | undefined,
+  n: number,
+): Promise<string> {
+  const dateContext = questionDate ? `\nThe question is being asked on: ${questionDate}.` : '';
+
+  // Shuffle context same way counting-union does
+  const contextLines = context.split('\n');
+  const shuffled = (runIdx: number) => {
+    if (runIdx === 0) return context;
+    const sections: string[][] = [];
+    let cur: string[] = [];
+    for (const line of contextLines) {
+      if (line.startsWith('### Conversation ') && cur.length > 0) {
+        sections.push([...cur]);
+        cur = [];
+      }
+      cur.push(line);
+    }
+    if (cur.length) sections.push(cur);
+    if (sections.length <= 2) return context;
+    const header = sections[0];
+    const convs = sections.slice(1);
+    if (runIdx % 2 === 1) convs.reverse();
+    else {
+      const rotateBy = runIdx % convs.length;
+      const rotated = [...convs.slice(rotateBy), ...convs.slice(0, rotateBy)];
+      convs.splice(0, convs.length, ...rotated);
+    }
+    return [header, ...convs].map(s => s.join('\n')).join('\n');
+  };
+
+  // Run N reader passes in parallel — each goes through the existing
+  // multi-session two-stage logic via generateAnswerCoN.
+  // Disable verify during candidate generation so we measure ensemble
+  // effect cleanly (we can layer it back on the synthesizer if desired).
+  const wasVerify = (globalThis as any).__verifyEnabled;
+  (globalThis as any).__verifyEnabled = false;
+  let candidates: string[] = [];
+  try {
+    const settled = await Promise.allSettled(
+      Array.from({ length: n }, (_, i) =>
+        generateAnswerCoN(shuffled(i), question, questionType, readerModel, questionDate),
+      ),
+    );
+    candidates = settled
+      .filter(s => s.status === 'fulfilled')
+      .map(s => (s as PromiseFulfilledResult<string>).value)
+      .filter(s => s && s.trim().length > 0);
+  } finally {
+    (globalThis as any).__verifyEnabled = wasVerify;
+  }
+
+  if (candidates.length === 0) return '';
+  if (candidates.length === 1) return candidates[0];
+
+  // Synthesize the N candidate answers. The synthesizer sees the original
+  // question + all candidates and picks the most-supported answer (or
+  // merges them if they're complementary).
+  try {
+    const synth = await anthropic.messages.create({
+      model: readerModel,
+      max_tokens: 600,
+      temperature: 0,
+      system: `You are synthesizing the best answer from multiple candidate answers to the same question.${dateContext}
+
+PROCESS:
+1. Read all candidates. They were generated independently with shuffled context.
+2. If all agree on the core fact, output that fact.
+3. If they disagree on a count or number, pick the count that the MAJORITY supports — or if no majority, pick the count whose supporting items are most clearly enumerated.
+4. If they disagree on a name/identity, pick the one with the most specific supporting evidence.
+5. If they complement each other (different parts of the answer), merge them coherently.
+6. If a candidate says "not enough information" but others give a specific answer, prefer the specific answer ONLY if its evidence is clear; otherwise prefer abstention.
+
+Output the final synthesized answer in 1-3 sentences. Be specific (exact counts, names, amounts). Do NOT explain your synthesis process — output only the final answer.`,
+      messages: [{
+        role: 'user',
+        content: `Question: ${question}\n\nCandidate answers:\n${candidates.map((c, i) => `[Candidate ${i + 1}]\n${c}`).join('\n\n')}\n\nFinal synthesized answer:`,
+      }],
+    });
+    const out = synth.content[0].type === 'text' ? synth.content[0].text.trim() : '';
+    return out || candidates[0];
+  } catch {
+    return candidates[0];
+  }
+}
+
+/**
  * Counting-specific union extraction: run multiple extraction passes,
  * take the UNION of found items, count programmatically.
  * Key insight: each pass misses different items, so union captures more.
@@ -920,7 +1159,11 @@ async function generateCountingUnionAnswer(
   // Check if this is a counting/aggregation question
   const isCountingQ = /\bhow many\b|\bhow much total\b|\bhow much .* (spend|spent|raise|raised|earn|earned|pay|paid|cost|save|saved)\b|\btotal (number|amount|cost|distance|money)\b|\bwhat is the (total|average|minimum|maximum)\b|\bhow much (did|will|would|do) I\b|\bhow much money\b|\bpage count\b|\bspend the most\b|\bapproximate (increase|decrease)\b/i.test(question);
   if (!isCountingQ) {
-    // Fall back to standard answer for non-counting questions
+    // For non-counting questions: optionally run n=N self-consistency ensemble
+    const scN = ((globalThis as any).__selfConsistencyN || 0) as number;
+    if (scN > 0) {
+      return generateSelfConsistentAnswer(context, question, _questionType, readerModel, questionDate, scN);
+    }
     return generateAnswerCoN(context, question, _questionType, readerModel, questionDate);
   }
 
@@ -1165,8 +1408,26 @@ function formatBenchmarkContext(memories: any[], questionType: string): string {
       sessionMap.get(sid)!.push(m);
     }
 
-    // Sort sessions by date (reverse for KU to put latest first)
+    // For SS-User / SS-Pref: facts are in ONE session — preserve recall rank
+    // ordering so the most-relevant session is first. Date-sorting scatters
+    // relevance and triggers context-rot (98.6% oracle vs 64.3% S-variant).
+    const isFactLookup = questionType === 'single-session-user' || questionType === 'single-session-preference';
+
+    // Compute per-session min recall rank (preserve order from cortex.recall)
+    const sessionFirstSeen = new Map<string, number>();
+    episodic.forEach((m: any, idx: number) => {
+      const sid = m.metadata?.session_id || 'unknown';
+      if (!sessionFirstSeen.has(sid)) sessionFirstSeen.set(sid, idx);
+    });
+
+    // Sort sessions by:
+    // - SS-User / SS-Pref: recall rank (most relevant first)
+    // - KU: date desc (latest first)
+    // - other: date asc (earliest first)
     const sessions = Array.from(sessionMap.entries()).sort((a, b) => {
+      if (isFactLookup) {
+        return (sessionFirstSeen.get(a[0]) ?? 999) - (sessionFirstSeen.get(b[0]) ?? 999);
+      }
       const dateA = a[1][0]?.metadata?.event_date || '';
       const dateB = b[1][0]?.metadata?.event_date || '';
       return isKU
@@ -1174,11 +1435,19 @@ function formatBenchmarkContext(memories: any[], questionType: string): string {
         : String(dateA).localeCompare(String(dateB));  // Normal: earliest first
     });
 
-    const totalSessions = sessions.length;
-    const sortLabel = isKU ? 'LATEST FIRST' : 'sorted by date';
+    // For fact-lookup categories, hard-cap the visible context to top-15
+    // sessions. Reader doesn't need 50 — the right session is in the top
+    // few by recall score (evidence hit rate is 100%) and the long tail
+    // just triggers context-rot.
+    const trimmedSessions = isFactLookup ? sessions.slice(0, 15) : sessions;
+
+    const totalSessions = trimmedSessions.length;
+    const sortLabel = isFactLookup
+      ? 'MOST RELEVANT FIRST'
+      : (isKU ? 'LATEST FIRST' : 'sorted by date');
     lines.push(`## Conversation History (${totalSessions} conversations, ${sortLabel})`);
-    for (let ci = 0; ci < sessions.length; ci++) {
-      const [sid, mems] = sessions[ci];
+    for (let ci = 0; ci < trimmedSessions.length; ci++) {
+      const [sid, mems] = trimmedSessions[ci];
       const date = mems[0]?.metadata?.event_date || '';
       // Sort rounds/chunks within session
       mems.sort((a: any, b: any) => (a.metadata?.round_index ?? a.metadata?.chunk_index ?? 0) - (b.metadata?.round_index ?? b.metadata?.chunk_index ?? 0));
@@ -1237,8 +1506,15 @@ async function main() {
 `);
 
   console.log(`Config: variant=${opts.variant}  embeddings=${hasEmbeddings ? `✓ ${EMBEDDING_PROVIDER}` : '✗'}  reader=${opts.readerModel}`);
-  console.log(`Options: recall_limit=${opts.recallLimit}  fact_extraction=${!opts.skipFactExtraction}  limit=${opts.qaLimit === Infinity ? 'all' : opts.qaLimit}  counting_union=${opts.countingUnion}${opts.countingUnion ? `(${opts.countingRuns} runs)` : ''}`);
+  console.log(`Options: recall_limit=${opts.recallLimit}  fact_extraction=${!opts.skipFactExtraction}  limit=${opts.qaLimit === Infinity ? 'all' : opts.qaLimit}  counting_union=${opts.countingUnion}${opts.countingUnion ? `(${opts.countingRuns} runs)` : ''}  verify=${opts.verify ? '✓' : '✗'}`);
   if (opts.types) console.log(`Types: ${[...opts.types].join(', ')}`);
+
+  // Expose the verify flag to reader helpers via globalThis (same pattern as
+  // __generateAnswerOverride). Avoids threading a new parameter through 8
+  // function signatures.
+  (globalThis as any).__verifyEnabled = opts.verify;
+  (globalThis as any).__criticModel = opts.criticModel || opts.readerModel;
+  (globalThis as any).__selfConsistencyN = opts.selfConsistency;
   console.log();
 
   // Apply run-id isolation: unique owner_wallet avoids needing to clean stale data
@@ -1321,14 +1597,18 @@ async function main() {
   console.log(`  Total turns: ${totalTurns}`);
   console.log();
 
+  // Hoisted so the post-run report can reference seeding state even when
+  // --skip-seeding is set or when seeding is bypassed for cached datasets.
+  let seedStart: bigint | undefined;
+  let seeded = 0;
+  let useRoundLevel = opts.variant === 'oracle' || uniqueSessions.length < 2000;
+
   if (!opts.skipSeeding) {
   // ── Seed memories (direct DB insert — bypasses SDK side-effects) ──
   console.log('── Seeding memories ──────────────────────────────');
-  const seedStart = process.hrtime.bigint();
-  let seeded = 0;
-
+  seedStart = process.hrtime.bigint();
   // Use session-level for large datasets, round-level for oracle
-  const useRoundLevel = opts.variant === 'oracle' || uniqueSessions.length < 2000;
+  useRoundLevel = opts.variant === 'oracle' || uniqueSessions.length < 2000;
   console.log(`  Strategy: ${useRoundLevel ? 'round-level' : 'session-level'}`);
 
   // Build all memory rows first (no DB calls)
@@ -1725,6 +2005,110 @@ async function main() {
     }
     console.log();
     console.log(`  Embeddings complete: ${embedded}/${toEmbed.length}`);
+
+    // ── Fragment-based embedding decomposition ──
+    // Restored 2026-05-23. Without this pass the benchmark bypasses
+    // the SDK's embedMemory path entirely and ships memories that
+    // have ONLY a summary embedding. That's the b7624c25 regression
+    // shape. We rebuild fragments here so retrieval can hit per-
+    // chunk and per-tag vectors as well.
+    console.log('  Generating fragment embeddings...');
+    const FRAGMENT_MAX = 2000;
+    const { data: fragSrc } = await db
+      .from('memories')
+      .select('id, content, summary, tags, concepts')
+      .eq('owner_wallet', BENCHMARK_OWNER_WALLET)
+      .order('id')
+      .limit(50000);
+
+    interface FragRow {
+      memory_id: number;
+      fragment_type: 'summary' | 'content_chunk' | 'tag_context';
+      content: string;
+    }
+    const allFragRows: FragRow[] = [];
+    for (const m of (fragSrc || []) as any[]) {
+      // summary
+      allFragRows.push({ memory_id: m.id, fragment_type: 'summary', content: (m.summary || '').slice(0, FRAGMENT_MAX) });
+      // content chunks
+      const content = (m.content || '').slice(0, 5000);
+      if (content.length > FRAGMENT_MAX) {
+        const sentences = content.match(/[^.!?\n]+[.!?\n]+/g) || [content];
+        let chunk = '';
+        for (const sentence of sentences) {
+          if (chunk.length + sentence.length > FRAGMENT_MAX && chunk.length > 0) {
+            allFragRows.push({ memory_id: m.id, fragment_type: 'content_chunk', content: chunk.trim().slice(0, FRAGMENT_MAX) });
+            chunk = '';
+          }
+          chunk += sentence;
+        }
+        if (chunk.trim()) allFragRows.push({ memory_id: m.id, fragment_type: 'content_chunk', content: chunk.trim().slice(0, FRAGMENT_MAX) });
+      } else if (content.length > 0) {
+        allFragRows.push({ memory_id: m.id, fragment_type: 'content_chunk', content });
+      }
+      // tag_context
+      const tags = (m.tags || []) as string[];
+      const concepts = (m.concepts || []) as string[];
+      const labels = [...tags, ...concepts];
+      if (labels.length > 0) {
+        allFragRows.push({ memory_id: m.id, fragment_type: 'tag_context', content: `Context: ${labels.join(', ')}. ${m.summary || ''}`.slice(0, FRAGMENT_MAX) });
+      }
+    }
+    console.log(`  Built ${allFragRows.length} fragments from ${(fragSrc || []).length} memories`);
+
+    // Batch-embed fragments via Voyage (batch=20 keeps us well under the 128 cap with room for headers)
+    const fragBatch = 20;
+    let fragEmbedded = 0;
+    const fragInsertBuffer: any[] = [];
+    for (let i = 0; i < allFragRows.length; i += fragBatch) {
+      const batch = allFragRows.slice(i, i + fragBatch);
+      const texts = batch.map(f => f.content);
+      try {
+        const res = await fetch(voyageConfig.url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${voyageConfig.apiKey}` },
+          body: JSON.stringify({ input: texts, model: voyageConfig.model }),
+        });
+        if (!res.ok) {
+          if (res.status === 429) {
+            await sleep(5000);
+            i -= fragBatch;
+            continue;
+          }
+          console.error(`\n  Voyage fragment error ${res.status}`);
+          continue;
+        }
+        const data = await res.json() as { data: Array<{ embedding: number[]; index: number }> };
+        for (const item of data.data || []) {
+          const src = batch[item.index];
+          if (!src || !item.embedding) continue;
+          fragInsertBuffer.push({
+            memory_id: src.memory_id,
+            fragment_type: src.fragment_type,
+            content: src.content,
+            embedding: JSON.stringify(item.embedding),
+          });
+          fragEmbedded++;
+        }
+        // Flush to DB every 500 fragments to avoid huge in-memory buffer
+        if (fragInsertBuffer.length >= 500) {
+          const { error } = await db.from('memory_fragments').insert(fragInsertBuffer);
+          if (error) console.error('\n  Fragment insert error:', error.message);
+          fragInsertBuffer.length = 0;
+        }
+      } catch (err: any) {
+        console.error(`\n  Fragment embedding error: ${err.message}`);
+      }
+      await sleep(200);
+      process.stdout.write(`\r  Fragment embeddings: ${fragEmbedded}/${allFragRows.length}`);
+    }
+    // Flush remaining
+    if (fragInsertBuffer.length > 0) {
+      const { error } = await db.from('memory_fragments').insert(fragInsertBuffer);
+      if (error) console.error('\n  Fragment insert (final) error:', error.message);
+    }
+    console.log();
+    console.log(`  Fragments complete: ${fragEmbedded}/${allFragRows.length}`);
   }
   console.log();
   } // end if (!opts.skipSeeding)
@@ -1769,7 +2153,12 @@ async function main() {
   const checkpointPath = join(CACHE_DIR, `checkpoint_${opts.variant}${opts.runId ? '_' + opts.runId : ''}.json`);
 
   const evalStart = process.hrtime.bigint();
-  const evalBatchSize = hasEmbeddings ? 2 : 4;
+  // --concurrency overrides the auto-batch size. SC + counting-union triple the
+  // LLM calls per multi-session question, so a default of 4 can saturate the
+  // 2M-input-tokens/min org limit on Sonnet. Use --concurrency 2 (or 1) when
+  // running heavy ensembles.
+  const evalBatchSize = opts.concurrency > 0 ? opts.concurrency : (hasEmbeddings ? 2 : 4);
+  console.log(`  Eval batch size: ${evalBatchSize}${opts.batchSleepMs ? ` (sleep ${opts.batchSleepMs}ms between batches)` : ''}`);
 
   for (let qi = 0; qi < questions.length; qi += evalBatchSize) {
     const batch = questions.slice(qi, qi + evalBatchSize);
@@ -1929,6 +2318,37 @@ async function main() {
           }
           contextMemories = [...nonSessionMems, ...sessionMems];
         }
+
+        // Cross-encoder rerank: bi-encoder (Voyage embeddings) scores query and
+        // doc independently — can't capture fine-grained relevance. A cross-
+        // encoder (Voyage Rerank-2.5 or Cohere Rerank-v3.5) jointly attends to
+        // both. Researcher Exp 3 projects +7-10pp on LongMemEval. Opt-in via
+        // --rerank voyage|cohere. We rerank the final contextMemories slice
+        // before format so it benefits every category equally.
+        if (opts.rerank && contextMemories.length > 1) {
+          try {
+            const rerankInput = contextMemories.map((m: any, i: number) => ({
+              id: m.id ?? `tmp-${i}`,
+              summary: m.summary || (m.content || '').slice(0, 200),
+              content: m.content,
+              _score: 0,
+            }));
+            const rerankApiKey = opts.rerank === 'cohere'
+              ? (process.env.COHERE_API_KEY || '')
+              : (process.env.VOYAGE_API_KEY || process.env.EMBEDDING_API_KEY || '');
+            const rerankFn = opts.rerank === 'cohere' ? rerankWithCrossEncoder : rerankWithVoyage;
+            const reranked = await rerankFn(rerankInput as any, q.question, {
+              apiKey: rerankApiKey,
+              topN: Math.min(opts.rerankTopN, contextMemories.length),
+            });
+            // Map back to original memory objects (preserves all metadata)
+            const byId = new Map<any, any>(contextMemories.map((m: any, i: number) => [m.id ?? `tmp-${i}`, m]));
+            contextMemories = (reranked as any[]).map((r) => byId.get(r.id)).filter(Boolean);
+          } catch {
+            // Silent fallback — benchmark should still produce results if rerank fails
+          }
+        }
+
         const context = formatBenchmarkContext(contextMemories, q.question_type);
         let generated: string;
         if (q.question_type === 'multi-session') {
@@ -1982,6 +2402,12 @@ async function main() {
     const currentCorrect = allResults.filter(r => r.correct === 1).length;
     const currentAcc = allResults.length > 0 ? ((currentCorrect / allResults.length) * 100).toFixed(1) : '0.0';
     process.stdout.write(`\r  Evaluated: ${done}/${questions.length} (running accuracy: ${currentAcc}%)`);
+
+    // Inter-batch sleep as a token-bucket safety belt. Anthropic's 2M-input-
+    // tokens/min limit can be saturated by SC + counting-union at batch=4.
+    if (opts.batchSleepMs > 0 && qi + evalBatchSize < questions.length) {
+      await sleep(opts.batchSleepMs);
+    }
 
     // Save checkpoint every 20 questions (crash recovery)
     if (done % 20 === 0 || done === questions.length) {

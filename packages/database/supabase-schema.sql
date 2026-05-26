@@ -89,13 +89,14 @@ CREATE TABLE IF NOT EXISTS memories (
   compacted_into TEXT,                    -- hash_id of the memory this was compacted into
   encrypted BOOLEAN DEFAULT FALSE,        -- whether content is client-side encrypted
   encryption_pubkey TEXT,                 -- Solana pubkey that encrypted this memory
+  provider_delegated BOOLEAN DEFAULT TRUE, -- envelope: provider may read while delegated; revoke flips to FALSE (encryption §7)
   owner_wallet TEXT,                      -- Solana pubkey of the memory owner
   event_date TIMESTAMPTZ DEFAULT NULL,    -- explicit event date extracted from content (temporal indexing)
   event_date_precision TEXT DEFAULT NULL CHECK (event_date_precision IN ('day', 'week', 'month', 'year')),
   ts_summary tsvector GENERATED ALWAYS AS (
-    setweight(to_tsvector('english', COALESCE(summary, '')), 'A') ||
-    setweight(to_tsvector('english', COALESCE(LEFT(content, 2000), '')), 'B')
-  ) STORED                                -- auto-generated tsvector for BM25-like full-text search
+    setweight(to_tsvector('english', COALESCE(summary, '')), 'A')
+  ) STORED,                               -- summary-only lexemes; content lexemes live in content_tokens (encryption §9)
+  content_tokens tsvector                 -- content lexemes, app-maintained via set_memory_content_tokens; cleared on revoke
 );
 
 -- Memory fragments: granular vector decomposition for precision retrieval
@@ -109,6 +110,31 @@ CREATE TABLE IF NOT EXISTS memory_fragments (
   embedding vector(1024),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ============================================================
+-- ENCRYPTION (PMP memory encryption-at-rest — see migration 021,
+-- docs/pmp/memory-encryption-design.md §9). Owner-held envelope encryption.
+-- ============================================================
+
+-- Owner public-key registry. No private keys, ever.
+CREATE TABLE IF NOT EXISTS encryption_keys (
+  owner_wallet  TEXT PRIMARY KEY,
+  x25519_pubkey TEXT NOT NULL,
+  verifier_ct   TEXT NOT NULL,                 -- secretbox("clude-key-verifier-v1") under derived key (H2)
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Per-memory wrapped DEKs. Wrap = sealed box; wrap_pubkey is the ephemeral sender pubkey.
+CREATE TABLE IF NOT EXISTS memory_dek_wraps (
+  memory_id   BIGINT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+  recipient   TEXT   NOT NULL,                 -- 'owner' | 'provider'
+  wrapped_dek TEXT   NOT NULL,                 -- base64(nonce || box(DEK))
+  wrap_pubkey TEXT   NOT NULL,                 -- base64 ephemeral sender X25519 pubkey
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (memory_id, recipient)
+);
+CREATE INDEX IF NOT EXISTS idx_dek_wraps_memory ON memory_dek_wraps(memory_id);
 
 -- Dream logs: consolidation, reflection, emergence sessions
 CREATE TABLE IF NOT EXISTS dream_logs (
@@ -133,6 +159,8 @@ CREATE INDEX IF NOT EXISTS idx_memories_evidence ON memories USING GIN(evidence_
 CREATE INDEX IF NOT EXISTS idx_memories_owner ON memories(owner_wallet);
 CREATE INDEX IF NOT EXISTS idx_memories_event_date ON memories(event_date) WHERE event_date IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_memories_ts_summary ON memories USING GIN (ts_summary);
+CREATE INDEX IF NOT EXISTS idx_memories_content_tokens ON memories USING GIN (content_tokens);
+CREATE INDEX IF NOT EXISTS idx_memories_delegated ON memories(provider_delegated) WHERE encrypted = TRUE;
 
 -- Vector similarity indexes (HNSW for fast approximate nearest neighbor)
 CREATE INDEX IF NOT EXISTS idx_memories_embedding ON memories USING hnsw (embedding vector_cosine_ops);
@@ -213,6 +241,18 @@ $$;
 
 -- BM25-ranked full-text search using tsvector/tsquery (Exp 8)
 -- Replaces ilike-based keyword search with stemming and TF-IDF ranking.
+-- Populate content_tokens from a transient plaintext arg (PostgREST can't express to_tsvector inline).
+-- setweight 'B' mirrors the old combined ts_summary weighting (summary 'A' > content 'B').
+CREATE OR REPLACE FUNCTION set_memory_content_tokens(p_memory_id bigint, p_text text)
+RETURNS void LANGUAGE sql AS $$
+  UPDATE memories
+  SET content_tokens = CASE
+        WHEN p_text IS NULL OR p_text = '' THEN NULL
+        ELSE setweight(to_tsvector('english', p_text), 'B')
+      END
+  WHERE id = p_memory_id;
+$$;
+
 CREATE OR REPLACE FUNCTION bm25_search_memories(
   search_query text,
   match_count int DEFAULT 20,
@@ -231,9 +271,11 @@ BEGIN
     RETURN;
   END IF;
   RETURN QUERY
-  SELECT m.id, ts_rank_cd(m.ts_summary, tsquery_val, 32)::float AS rank
+  SELECT m.id,
+    (ts_rank_cd(COALESCE(m.ts_summary, ''::tsvector), tsquery_val, 32)
+     + ts_rank_cd(COALESCE(m.content_tokens, ''::tsvector), tsquery_val, 32))::float AS rank
   FROM memories m
-  WHERE m.ts_summary @@ tsquery_val
+  WHERE (m.ts_summary @@ tsquery_val OR m.content_tokens @@ tsquery_val)
     AND m.decay_factor >= min_decay
     AND (filter_owner IS NULL OR m.owner_wallet = filter_owner)
     AND (filter_types IS NULL OR m.memory_type = ANY(filter_types))

@@ -23,6 +23,7 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import {
   storeMemory,
   recallMemories,
+  decryptOneContent,
   type Memory,
   type MemoryType,
 } from '@clude/brain/memory';
@@ -258,7 +259,7 @@ export function pmpRoutes(): Router {
       const { data, error } = await db
         .from('memories')
         .select(
-          'content, memory_type, owner_wallet, created_at, tags, source, related_user, related_wallet, content_hash, cnft_address, cnft_tree, cnft_leaf_index, cnft_tx_sig, tokenization_status, solana_signature, compacted, compacted_into, hash_id',
+          'id, encrypted, content, memory_type, owner_wallet, created_at, tags, source, related_user, related_wallet, content_hash, cnft_address, cnft_tree, cnft_leaf_index, cnft_tx_sig, tokenization_status, solana_signature, compacted, compacted_into, hash_id',
         )
         .eq('hash_id', id)
         .limit(1)
@@ -284,8 +285,27 @@ export function pmpRoutes(): Router {
 
       // Recompute the content hash from current state. Compare against the
       // stored value to detect drift; either way report on-chain lookup result.
+      // Canonical hash is over PLAINTEXT (§8). Decrypt if encrypted; if we can't
+      // (revoked / no provider wrap) the commitment exists but we can't recompute.
+      const isEncrypted = (data as { encrypted?: boolean }).encrypted === true;
+      const plaintextForHash = isEncrypted
+        ? await decryptOneContent({ id: Number(data.id), content: String(data.content ?? ''), encrypted: true })
+        : String(data.content ?? '');
+      if (isEncrypted && plaintextForHash === null) {
+        res.json({
+          id,
+          verified: ((data.content_hash as string | null) ?? null) !== null,
+          reason: 'committed_encrypted',
+          recomputed_hash: null,
+          stored_hash: (data.content_hash as string | null) ?? null,
+          commitment: null,
+          solscan_url: null,
+        });
+        return;
+      }
+
       const canonical: CanonicalMemoryInput = {
-        content: String(data.content ?? ''),
+        content: plaintextForHash ?? '',
         memory_type: data.memory_type as MemoryType,
         owner_wallet: (data.owner_wallet as string | null) ?? null,
         created_at: String(data.created_at ?? ''),

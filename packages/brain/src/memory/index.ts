@@ -58,3 +58,6 @@ export {
   scopeToOwner,
   SCOPE_BOT_OWN,
 } from './memory';
+
+// Envelope decryption (recall + VERIFY)
+export { decryptMemories, decryptOneContent } from './memory-decryption';
