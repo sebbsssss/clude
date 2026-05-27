@@ -2327,6 +2327,19 @@ async function main() {
         // before format so it benefits every category equally.
         if (opts.rerank && contextMemories.length > 1) {
           try {
+            // Per-category top-N: previous global top-N=25 clipped SS-User
+            // long-form preferences (-5.7pp). Wider for fact-buried categories,
+            // tighter for short fact-lookup where recency dominates.
+            const perCategoryTopN: Record<string, number> = {
+              'single-session-user': 35,
+              'single-session-preference': 30,
+              'single-session-assistant': 25,
+              'multi-session': 30,
+              'knowledge-update': 15,
+              'temporal-reasoning': 25,
+            };
+            const targetTopN = perCategoryTopN[q.question_type] ?? opts.rerankTopN;
+
             const rerankInput = contextMemories.map((m: any, i: number) => ({
               id: m.id ?? `tmp-${i}`,
               summary: m.summary || (m.content || '').slice(0, 200),
@@ -2339,7 +2352,7 @@ async function main() {
             const rerankFn = opts.rerank === 'cohere' ? rerankWithCrossEncoder : rerankWithVoyage;
             const reranked = await rerankFn(rerankInput as any, q.question, {
               apiKey: rerankApiKey,
-              topN: Math.min(opts.rerankTopN, contextMemories.length),
+              topN: Math.min(targetTopN, contextMemories.length),
             });
             // Map back to original memory objects (preserves all metadata)
             const byId = new Map<any, any>(contextMemories.map((m: any, i: number) => [m.id ?? `tmp-${i}`, m]));
