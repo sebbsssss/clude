@@ -1529,6 +1529,17 @@ async function main() {
   const db: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
   anthropic = new Anthropic({ apiKey: ANTHROPIC_KEY });
 
+  // Opus 4.7 deprecated the `temperature` (and `top_p`) param. Strip them at the
+  // SDK boundary so every call site keeps working without per-site model checks.
+  const _origCreate = anthropic.messages.create.bind(anthropic.messages);
+  (anthropic.messages as any).create = ((params: any, opts?: any) => {
+    if (params && /opus-4-7|opus-4\.7/i.test(String(params.model || ''))) {
+      const { temperature, top_p, ...rest } = params;
+      return _origCreate(rest, opts);
+    }
+    return _origCreate(params, opts);
+  }) as any;
+
   const cortex = new Cortex({
     supabase: { url: SUPABASE_URL, serviceKey: SUPABASE_KEY },
     anthropic: { apiKey: ANTHROPIC_KEY },
@@ -2575,6 +2586,14 @@ async function main() {
 // ── Re-judge mode ─────────────────────────────────────────────
 async function rejudgeResults(resultsPath: string) {
   anthropic = new Anthropic();
+  const _origCreate = anthropic.messages.create.bind(anthropic.messages);
+  (anthropic.messages as any).create = ((params: any, opts?: any) => {
+    if (params && /opus-4-7|opus-4\.7/i.test(String(params.model || ''))) {
+      const { temperature, top_p, ...rest } = params;
+      return _origCreate(rest, opts);
+    }
+    return _origCreate(params, opts);
+  }) as any;
   const raw = JSON.parse(readFileSync(resultsPath, 'utf-8'));
   const results: any[] = raw.results || [];
   const oldJudge = raw.config?.judgeModel || 'unknown';
