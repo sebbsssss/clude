@@ -441,6 +441,8 @@ export async function initDatabase(): Promise<void> {
         CREATE INDEX IF NOT EXISTS idx_memories_content_tokens ON memories USING GIN(content_tokens);
         ALTER TABLE memories ADD COLUMN IF NOT EXISTS provider_delegated BOOLEAN DEFAULT TRUE;
         CREATE INDEX IF NOT EXISTS idx_memories_delegated ON memories(provider_delegated) WHERE encrypted = TRUE;
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS summary_ciphertext TEXT;
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS embedding_ciphertext TEXT;
         DO $do$
         BEGIN
           IF NOT EXISTS (
@@ -516,6 +518,22 @@ export async function initDatabase(): Promise<void> {
               END
           WHERE id = p_memory_id;
         $fn$;
+
+        -- Atomic revoke: clear plaintext + drop the provider wrap in one transaction (encryption §7).
+        CREATE OR REPLACE FUNCTION revoke_memory(p_memory_id bigint, p_summary_ct text, p_embedding_ct text)
+        RETURNS void LANGUAGE plpgsql AS $rev$
+        BEGIN
+          UPDATE memories SET
+            summary = '',
+            summary_ciphertext = p_summary_ct,
+            embedding = NULL,
+            embedding_ciphertext = NULLIF(p_embedding_ct, ''),
+            content_tokens = NULL,
+            provider_delegated = false
+          WHERE id = p_memory_id;
+          DELETE FROM memory_dek_wraps WHERE memory_id = p_memory_id AND recipient = 'provider';
+        END;
+        $rev$;
 
         -- BM25-ranked full-text search RPC (Exp 8) — dual-column (ts_summary + content_tokens)
         CREATE OR REPLACE FUNCTION bm25_search_memories(

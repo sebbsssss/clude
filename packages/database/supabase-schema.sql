@@ -90,6 +90,8 @@ CREATE TABLE IF NOT EXISTS memories (
   encrypted BOOLEAN DEFAULT FALSE,        -- whether content is client-side encrypted
   encryption_pubkey TEXT,                 -- Solana pubkey that encrypted this memory
   provider_delegated BOOLEAN DEFAULT TRUE, -- envelope: provider may read while delegated; revoke flips to FALSE (encryption §7)
+  summary_ciphertext TEXT,                 -- secretbox(summary) — populated on revoke (§9)
+  embedding_ciphertext TEXT,               -- secretbox(embedding) — populated on revoke (§9)
   owner_wallet TEXT,                      -- Solana pubkey of the memory owner
   event_date TIMESTAMPTZ DEFAULT NULL,    -- explicit event date extracted from content (temporal indexing)
   event_date_precision TEXT DEFAULT NULL CHECK (event_date_precision IN ('day', 'week', 'month', 'year')),
@@ -251,6 +253,22 @@ RETURNS void LANGUAGE sql AS $$
         ELSE setweight(to_tsvector('english', p_text), 'B')
       END
   WHERE id = p_memory_id;
+$$;
+
+-- Atomic revoke: clear plaintext + drop the provider wrap in one transaction (encryption §7).
+CREATE OR REPLACE FUNCTION revoke_memory(p_memory_id bigint, p_summary_ct text, p_embedding_ct text)
+RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  UPDATE memories SET
+    summary = '',
+    summary_ciphertext = p_summary_ct,
+    embedding = NULL,
+    embedding_ciphertext = NULLIF(p_embedding_ct, ''),
+    content_tokens = NULL,
+    provider_delegated = false
+  WHERE id = p_memory_id;
+  DELETE FROM memory_dek_wraps WHERE memory_id = p_memory_id AND recipient = 'provider';
+END;
 $$;
 
 CREATE OR REPLACE FUNCTION bm25_search_memories(
