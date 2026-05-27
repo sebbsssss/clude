@@ -8,7 +8,7 @@
  */
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { requirePrivyAuth } from '@clude/brain/auth/privy-auth';
-import { revokeMemory } from '@clude/brain/memory';
+import { revokeMemory, redelegateMemory } from '@clude/brain/memory';
 import { getDb } from '@clude/shared/core/database';
 import { createChildLogger } from '@clude/shared/core/logger';
 
@@ -64,6 +64,60 @@ export function encryptionRoutes(): Router {
     } catch (err) {
       log.error({ err, hashId }, 'revoke failed');
       res.status(500).json({ error: 'revoke_failed' });
+    }
+  });
+
+  // Restore the provider's access to a single revoked memory (owner-only). The client posts a
+  // provider re-wrap of the DEK; redelegateMemory validates it by decrypting the stored ciphertext.
+  router.post('/v1/memories/:id/redelegate', requirePrivyAuth, async (req: Request, res: Response) => {
+    const wallet = req.verifiedWallet;
+    if (!wallet) {
+      res.status(401).json({ error: 'unauthenticated' });
+      return;
+    }
+    const hashId = String(req.params.id ?? '');
+    if (!hashId || hashId.length > 64) {
+      res.status(422).json({ error: 'invalid_id' });
+      return;
+    }
+    const wrappedDek = typeof req.body?.wrapped_dek === 'string' ? req.body.wrapped_dek : '';
+    const wrapPubkey = typeof req.body?.wrap_pubkey === 'string' ? req.body.wrap_pubkey : '';
+    if (!wrappedDek || !wrapPubkey || wrappedDek.length > 1024 || wrapPubkey.length > 1024) {
+      res.status(422).json({ error: 'invalid_wrap' });
+      return;
+    }
+    try {
+      const db = getDb();
+      const { data: mem, error } = await db
+        .from('memories')
+        .select('id, owner_wallet')
+        .eq('hash_id', hashId)
+        .maybeSingle();
+      if (error) {
+        res.status(500).json({ error: 'lookup_failed' });
+        return;
+      }
+      if (!mem) {
+        res.status(404).json({ error: 'not_found' });
+        return;
+      }
+      if (mem.owner_wallet !== wallet) {
+        res.status(403).json({ error: 'forbidden' });
+        return;
+      }
+      const result = await redelegateMemory(db, mem.id as number, {
+        wrapped_dek: wrappedDek,
+        wrap_pubkey: wrapPubkey,
+      });
+      // A rejected wrap is a client error (the posted re-wrap didn't yield the memory's DEK).
+      if (!result.redelegated && result.reason === 'invalid_wrap') {
+        res.status(422).json({ id: hashId, ...result });
+        return;
+      }
+      res.json({ id: hashId, ...result });
+    } catch (err) {
+      log.error({ err, hashId }, 'redelegate failed');
+      res.status(500).json({ error: 'redelegate_failed' });
     }
   });
 

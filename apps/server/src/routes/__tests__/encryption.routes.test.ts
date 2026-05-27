@@ -19,10 +19,12 @@ vi.mock('@clude/brain/auth/privy-auth', () => ({
   },
 }));
 
-// revokeMemory mock (the route imports it from @clude/brain/memory)
+// revokeMemory + redelegateMemory mocks (the route imports them from @clude/brain/memory)
 const revokeMemoryMock = vi.fn(); // default impl set in beforeEach
+const redelegateMemoryMock = vi.fn();
 vi.mock('@clude/brain/memory', () => ({
   revokeMemory: (...a: unknown[]) => revokeMemoryMock(...a),
+  redelegateMemory: (...a: unknown[]) => redelegateMemoryMock(...a),
 }));
 
 // Programmable DB: single-revoke uses select().eq().maybeSingle(); revoke-all uses
@@ -59,6 +61,8 @@ beforeEach(() => {
   revokeAllRows = [{ id: 1 }, { id: 2 }];
   revokeMemoryMock.mockReset();
   revokeMemoryMock.mockResolvedValue({ revoked: true });
+  redelegateMemoryMock.mockReset();
+  redelegateMemoryMock.mockResolvedValue({ redelegated: true });
 });
 
 describe('POST /v1/memories/:id/revoke', () => {
@@ -85,6 +89,43 @@ describe('POST /v1/memories/:id/revoke', () => {
   it('401 when unauthenticated', async () => {
     authedWallet = null;
     const res = await request(app()).post('/v1/memories/mem-x/revoke');
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('POST /v1/memories/:id/redelegate', () => {
+  const wrap = { wrapped_dek: 'WRAP', wrap_pubkey: 'PUB' };
+
+  it('re-delegates for the owner', async () => {
+    const res = await request(app()).post('/v1/memories/mem-x/redelegate').send(wrap);
+    expect(res.status).toBe(200);
+    expect(res.body.redelegated).toBe(true);
+    expect(redelegateMemoryMock).toHaveBeenCalledWith(expect.anything(), 7, wrap);
+  });
+
+  it('403 for a non-owner', async () => {
+    memLookup = { id: 7, owner_wallet: 'SOMEONE_ELSE' };
+    const res = await request(app()).post('/v1/memories/mem-x/redelegate').send(wrap);
+    expect(res.status).toBe(403);
+    expect(redelegateMemoryMock).not.toHaveBeenCalled();
+  });
+
+  it('422 when the posted wrap is rejected (invalid_wrap)', async () => {
+    redelegateMemoryMock.mockResolvedValue({ redelegated: false, reason: 'invalid_wrap' });
+    const res = await request(app()).post('/v1/memories/mem-x/redelegate').send(wrap);
+    expect(res.status).toBe(422);
+    expect(res.body.reason).toBe('invalid_wrap');
+  });
+
+  it('422 when the wrap fields are missing', async () => {
+    const res = await request(app()).post('/v1/memories/mem-x/redelegate').send({});
+    expect(res.status).toBe(422);
+    expect(redelegateMemoryMock).not.toHaveBeenCalled();
+  });
+
+  it('401 when unauthenticated', async () => {
+    authedWallet = null;
+    const res = await request(app()).post('/v1/memories/mem-x/redelegate').send(wrap);
     expect(res.status).toBe(401);
   });
 });
