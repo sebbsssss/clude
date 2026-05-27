@@ -2363,12 +2363,26 @@ async function main() {
         }
 
         const context = formatBenchmarkContext(contextMemories, q.question_type);
+
+        // Per-category reader model selection. Opus 4.7 on reasoning-heavy
+        // categories (KU update-detection, multi-session synthesis, preference
+        // inference, temporal arithmetic). Sonnet 4.5 stays default for the
+        // lookup-style categories where it's already saturated.
+        const perCategoryReader: Record<string, string> = {
+          'knowledge-update': 'claude-opus-4-7',
+          'multi-session': 'claude-opus-4-7',
+          'single-session-preference': 'claude-opus-4-7',
+          'temporal-reasoning': 'claude-opus-4-7',
+          // SS-Asst / SS-User → use default opts.readerModel (Sonnet)
+        };
+        const categoryReader = perCategoryReader[q.question_type] || opts.readerModel;
+
         let generated: string;
         if (q.question_type === 'multi-session') {
-          generated = await generateCountingUnionAnswer(context, q.question, q.question_type, opts.readerModel, q.question_date, opts.countingRuns);
+          generated = await generateCountingUnionAnswer(context, q.question, q.question_type, categoryReader, q.question_date, opts.countingRuns);
         } else {
           const answerFn = (globalThis as any).__generateAnswerOverride || generateAnswerCoN;
-          generated = await answerFn(context, q.question, q.question_type, opts.readerModel, q.question_date);
+          generated = await answerFn(context, q.question, q.question_type, categoryReader, q.question_date);
         }
 
         // Judge
