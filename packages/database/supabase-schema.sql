@@ -271,6 +271,35 @@ BEGIN
 END;
 $$;
 
+-- Atomic re-delegate (encryption §7) — inverse of revoke_memory. Restores plaintext
+-- summary/embedding, rebuilds content_tokens via the canonical builder, clears ciphertext
+-- cols, sets provider_delegated=true, (re-)inserts the provider wrap. Caller passes decrypted
+-- plaintext (it holds the validated DEK); plaintext is transient, not stored beyond columns.
+CREATE OR REPLACE FUNCTION redelegate_memory(
+  p_memory_id   bigint,
+  p_summary     text,
+  p_embedding   text,
+  p_content     text,
+  p_wrapped_dek text,
+  p_wrap_pubkey text
+)
+RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  UPDATE memories SET
+    summary = p_summary,
+    summary_ciphertext = NULL,
+    embedding = NULLIF(p_embedding, '')::vector,
+    embedding_ciphertext = NULL,
+    provider_delegated = true
+  WHERE id = p_memory_id;
+  PERFORM set_memory_content_tokens(p_memory_id, p_content);
+  INSERT INTO memory_dek_wraps (memory_id, recipient, wrapped_dek, wrap_pubkey)
+  VALUES (p_memory_id, 'provider', p_wrapped_dek, p_wrap_pubkey)
+  ON CONFLICT (memory_id, recipient) DO UPDATE
+    SET wrapped_dek = EXCLUDED.wrapped_dek, wrap_pubkey = EXCLUDED.wrap_pubkey;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION bm25_search_memories(
   search_query text,
   match_count int DEFAULT 20,
