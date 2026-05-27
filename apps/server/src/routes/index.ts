@@ -18,6 +18,7 @@ import { memoryRoutes } from './memory.routes.js';
 import { memoryPacksRoutes } from './memory-packs.routes.js';
 import { wikiPacksRoutes } from './wiki-packs.routes.js';
 import { pmpRoutes } from './pmp.routes.js';
+import { encryptionRoutes } from './encryption.routes.js';
 import { pmpPacksRoutes } from './pmp-packs.routes.js';
 import { pmpAdminRoutes } from './pmp-admin.routes.js';
 import { demoRoutes } from './demo.routes.js';
@@ -62,6 +63,9 @@ export function mountApiRoutes(app: express.Application): void {
   // Public spec-conformant endpoints: DISCOVER, RETRIEVE, VERIFY, CONTRIBUTE.
   // Mounted at root so URLs match the spec exactly (e.g. /v1/memories).
   app.use(pmpRoutes());
+
+  // PMP encryption control plane — owner-scoped revoke (encryption §7)
+  app.use(encryptionRoutes());
 
   // PMP Pack endpoints (spec-reserved for v0.2, implementation shipping early)
   // POST /v1/packs, GET /v1/packs/:id, /preview, /verify — marketplace surface.
