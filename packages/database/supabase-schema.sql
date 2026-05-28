@@ -90,6 +90,8 @@ CREATE TABLE IF NOT EXISTS memories (
   encrypted BOOLEAN DEFAULT FALSE,        -- whether content is client-side encrypted
   encryption_pubkey TEXT,                 -- Solana pubkey that encrypted this memory
   provider_delegated BOOLEAN DEFAULT TRUE, -- envelope: provider may read while delegated; revoke flips to FALSE (encryption §7)
+  summary_ciphertext TEXT,                 -- secretbox(summary) — populated on revoke (§9)
+  embedding_ciphertext TEXT,               -- secretbox(embedding) — populated on revoke (§9)
   owner_wallet TEXT,                      -- Solana pubkey of the memory owner
   event_date TIMESTAMPTZ DEFAULT NULL,    -- explicit event date extracted from content (temporal indexing)
   event_date_precision TEXT DEFAULT NULL CHECK (event_date_precision IN ('day', 'week', 'month', 'year')),
@@ -251,6 +253,51 @@ RETURNS void LANGUAGE sql AS $$
         ELSE setweight(to_tsvector('english', p_text), 'B')
       END
   WHERE id = p_memory_id;
+$$;
+
+-- Atomic revoke: clear plaintext + drop the provider wrap in one transaction (encryption §7).
+CREATE OR REPLACE FUNCTION revoke_memory(p_memory_id bigint, p_summary_ct text, p_embedding_ct text)
+RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  UPDATE memories SET
+    summary = '',
+    summary_ciphertext = p_summary_ct,
+    embedding = NULL,
+    embedding_ciphertext = NULLIF(p_embedding_ct, ''),
+    content_tokens = NULL,
+    provider_delegated = false
+  WHERE id = p_memory_id;
+  DELETE FROM memory_dek_wraps WHERE memory_id = p_memory_id AND recipient = 'provider';
+END;
+$$;
+
+-- Atomic re-delegate (encryption §7) — inverse of revoke_memory. Restores plaintext
+-- summary/embedding, rebuilds content_tokens via the canonical builder, clears ciphertext
+-- cols, sets provider_delegated=true, (re-)inserts the provider wrap. Caller passes decrypted
+-- plaintext (it holds the validated DEK); plaintext is transient, not stored beyond columns.
+CREATE OR REPLACE FUNCTION redelegate_memory(
+  p_memory_id   bigint,
+  p_summary     text,
+  p_embedding   text,
+  p_content     text,
+  p_wrapped_dek text,
+  p_wrap_pubkey text
+)
+RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  UPDATE memories SET
+    summary = p_summary,
+    summary_ciphertext = NULL,
+    embedding = NULLIF(p_embedding, '')::vector,
+    embedding_ciphertext = NULL,
+    provider_delegated = true
+  WHERE id = p_memory_id;
+  PERFORM set_memory_content_tokens(p_memory_id, p_content);
+  INSERT INTO memory_dek_wraps (memory_id, recipient, wrapped_dek, wrap_pubkey)
+  VALUES (p_memory_id, 'provider', p_wrapped_dek, p_wrap_pubkey)
+  ON CONFLICT (memory_id, recipient) DO UPDATE
+    SET wrapped_dek = EXCLUDED.wrapped_dek, wrap_pubkey = EXCLUDED.wrap_pubkey;
+END;
 $$;
 
 CREATE OR REPLACE FUNCTION bm25_search_memories(

@@ -51,6 +51,11 @@ vi.mock('@clude/brain/memory', () => ({
   recallMemories: (...args: unknown[]) => recallMemoriesMock(...args),
   // VERIFY imports this; default passthrough, overridable per-test for the encrypted case.
   decryptOneContent: (...args: unknown[]) => decryptOneContentMock(...args),
+  // Defensive: include the rest of the @clude/brain/memory surface so this mock doesn't
+  // shadow real exports for any sibling test that runs in the same vitest worker (mock cascade).
+  decryptMemories: vi.fn(async (mems: unknown[]) => mems),
+  revokeMemory: vi.fn(),
+  redelegateMemory: vi.fn(),
 }));
 
 // ── Supabase: chainable query mock ──

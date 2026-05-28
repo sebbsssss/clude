@@ -60,6 +60,12 @@ vi.mock('@clude/shared/core/owner-context', () => ({
 vi.mock('@clude/brain/memory', () => ({
   recallMemories: vi.fn().mockResolvedValue([]),
   storeMemory: vi.fn().mockResolvedValue(undefined),
+  // Defensive: full @clude/brain/memory surface so this mock doesn't shadow real exports
+  // for any sibling test that runs in the same vitest worker (mock cascade).
+  decryptMemories: vi.fn(async (mems: unknown[]) => mems),
+  decryptOneContent: vi.fn(),
+  revokeMemory: vi.fn(),
+  redelegateMemory: vi.fn(),
 }));
 
 vi.mock('@clude/shared/core/guardrails', () => ({

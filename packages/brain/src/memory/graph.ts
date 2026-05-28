@@ -209,6 +209,7 @@ export async function getMemoriesByEntity(
   const memories = (data || [])
     .map((d: any) => d.memories)
     .filter((m: any) => m !== null)
+    .filter((m: any) => m.provider_delegated !== false) // exclude revoked (encryption §7)
     .filter((m: any) => !opts?.memoryTypes || opts.memoryTypes.includes(m.memory_type))
     .filter((m: any) => !ownerWallet || m.owner_wallet === ownerWallet);
 

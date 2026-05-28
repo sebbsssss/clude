@@ -61,3 +61,6 @@ export {
 
 // Envelope decryption (recall + VERIFY)
 export { decryptMemories, decryptOneContent } from './memory-decryption';
+
+// Revoke + re-delegate (encryption §7)
+export { revokeMemory, redelegateMemory, type RevokeResult, type RedelegateResult } from './memory-revoke';
