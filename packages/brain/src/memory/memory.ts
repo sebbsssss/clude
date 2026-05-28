@@ -963,6 +963,7 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
       .select('*')
       .gte('decay_factor', minDecay)
       .not('source', 'in', '("demo","demo-maas")')
+      .not('provider_delegated', 'is', false) // exclude revoked (encryption §7); vector + BM25 self-exclude via sealing
       .order('importance', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(limit * 3);
@@ -1141,10 +1142,10 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
 
           // Phase 5a: Direct entity memories
           for (const entity of entities) {
-            const entityMemories = await getMemoriesByEntity(entity.id, {
+            const entityMemories = await decryptMemories(await getMemoriesByEntity(entity.id, {
               limit: Math.ceil(limit / 2),
               memoryTypes: opts.memoryTypes,
-            });
+            }));
             for (const mem of entityMemories) {
               addLinkPath(mem.id, 'entity');
               if (!resultIdSet.has(mem.id)) {
@@ -1166,10 +1167,10 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
             const cooccurrences = await getEntityCooccurrences(entity.id, { minCooccurrence: 2, maxResults: 3 });
             for (const cooc of cooccurrences) {
               if (cooccurrenceAdded >= limit) break;
-              const coMems = await getMemoriesByEntity(cooc.related_entity_id, {
+              const coMems = await decryptMemories(await getMemoriesByEntity(cooc.related_entity_id, {
                 limit: 3,
                 memoryTypes: opts.memoryTypes,
-              });
+              }));
               for (const mem of coMems) {
                 if (cooccurrenceAdded >= limit) break;
                 addLinkPath(mem.id, 'entity');
@@ -1221,7 +1222,8 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
             let graphQuery = db
               .from('memories')
               .select('*')
-              .in('id', graphCandidateIds);
+              .in('id', graphCandidateIds)
+              .not('provider_delegated', 'is', false); // exclude revoked linked rows (encryption §7)
             graphQuery = scopeToOwner(graphQuery);
             const { data: graphMemories } = await graphQuery;
 
@@ -1497,6 +1499,7 @@ export async function recallMemorySummaries(opts: RecallOptions): Promise<Memory
       .select('id, memory_type, summary, tags, concepts, importance, decay_factor, created_at, source')
       .gte('decay_factor', minDecay)
       .not('source', 'in', '("demo","demo-maas")')
+      .not('provider_delegated', 'is', false) // exclude revoked (encryption §7); vector + BM25 self-exclude via sealing
       .order('importance', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(limit);

@@ -441,6 +441,8 @@ export async function initDatabase(): Promise<void> {
         CREATE INDEX IF NOT EXISTS idx_memories_content_tokens ON memories USING GIN(content_tokens);
         ALTER TABLE memories ADD COLUMN IF NOT EXISTS provider_delegated BOOLEAN DEFAULT TRUE;
         CREATE INDEX IF NOT EXISTS idx_memories_delegated ON memories(provider_delegated) WHERE encrypted = TRUE;
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS summary_ciphertext TEXT;
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS embedding_ciphertext TEXT;
         DO $do$
         BEGIN
           IF NOT EXISTS (
@@ -516,6 +518,50 @@ export async function initDatabase(): Promise<void> {
               END
           WHERE id = p_memory_id;
         $fn$;
+
+        -- Atomic revoke: clear plaintext + drop the provider wrap in one transaction (encryption §7).
+        CREATE OR REPLACE FUNCTION revoke_memory(p_memory_id bigint, p_summary_ct text, p_embedding_ct text)
+        RETURNS void LANGUAGE plpgsql AS $rev$
+        BEGIN
+          UPDATE memories SET
+            summary = '',
+            summary_ciphertext = p_summary_ct,
+            embedding = NULL,
+            embedding_ciphertext = NULLIF(p_embedding_ct, ''),
+            content_tokens = NULL,
+            provider_delegated = false
+          WHERE id = p_memory_id;
+          DELETE FROM memory_dek_wraps WHERE memory_id = p_memory_id AND recipient = 'provider';
+        END;
+        $rev$;
+
+        -- Atomic re-delegate (encryption §7) — inverse of revoke_memory. Restores plaintext
+        -- summary/embedding, rebuilds content_tokens via the canonical builder, clears ciphertext
+        -- cols, sets provider_delegated=true, (re-)inserts the provider wrap.
+        CREATE OR REPLACE FUNCTION redelegate_memory(
+          p_memory_id   bigint,
+          p_summary     text,
+          p_embedding   text,
+          p_content     text,
+          p_wrapped_dek text,
+          p_wrap_pubkey text
+        )
+        RETURNS void LANGUAGE plpgsql AS $redel$
+        BEGIN
+          UPDATE memories SET
+            summary = p_summary,
+            summary_ciphertext = NULL,
+            embedding = NULLIF(p_embedding, '')::vector,
+            embedding_ciphertext = NULL,
+            provider_delegated = true
+          WHERE id = p_memory_id;
+          PERFORM set_memory_content_tokens(p_memory_id, p_content);
+          INSERT INTO memory_dek_wraps (memory_id, recipient, wrapped_dek, wrap_pubkey)
+          VALUES (p_memory_id, 'provider', p_wrapped_dek, p_wrap_pubkey)
+          ON CONFLICT (memory_id, recipient) DO UPDATE
+            SET wrapped_dek = EXCLUDED.wrapped_dek, wrap_pubkey = EXCLUDED.wrap_pubkey;
+        END;
+        $redel$;
 
         -- BM25-ranked full-text search RPC (Exp 8) — dual-column (ts_summary + content_tokens)
         CREATE OR REPLACE FUNCTION bm25_search_memories(

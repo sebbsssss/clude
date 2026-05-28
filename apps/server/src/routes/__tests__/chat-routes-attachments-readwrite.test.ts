@@ -90,7 +90,16 @@ vi.mock('@clude/shared/utils/rate-limit', () => ({
   getRateLimitCount: vi.fn(async () => 0),
 }));
 vi.mock('@clude/shared/core/guardrails', () => ({ checkInputContent: () => ({ allowed: true }) }));
-vi.mock('@clude/brain/memory', () => ({ recallMemories: vi.fn(async () => []), storeMemory: vi.fn() }));
+vi.mock('@clude/brain/memory', () => ({
+  recallMemories: vi.fn(async () => []),
+  storeMemory: vi.fn(),
+  // Defensive: full @clude/brain/memory surface so this mock doesn't shadow real exports
+  // for any sibling test that runs in the same vitest worker (mock cascade).
+  decryptMemories: vi.fn(async (mems: unknown[]) => mems),
+  decryptOneContent: vi.fn(),
+  revokeMemory: vi.fn(),
+  redelegateMemory: vi.fn(),
+}));
 vi.mock('@clude/shared/core/owner-context', () => ({ withOwnerWallet: (_w: string, fn: any) => fn() }));
 vi.mock('@clude/brain/auth/privy-auth', () => ({ requirePrivyAuth: (_req: any, _res: any, next: any) => next() }));
 vi.mock('@clude/brain/features/agent-tier', () => ({
