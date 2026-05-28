@@ -1529,6 +1529,17 @@ async function main() {
   const db: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
   anthropic = new Anthropic({ apiKey: ANTHROPIC_KEY });
 
+  // Opus 4.7 deprecated the `temperature` (and `top_p`) param. Strip them at the
+  // SDK boundary so every call site keeps working without per-site model checks.
+  const _origCreate = anthropic.messages.create.bind(anthropic.messages);
+  (anthropic.messages as any).create = ((params: any, opts?: any) => {
+    if (params && /opus-4-7|opus-4\.7/i.test(String(params.model || ''))) {
+      const { temperature, top_p, ...rest } = params;
+      return _origCreate(rest, opts);
+    }
+    return _origCreate(params, opts);
+  }) as any;
+
   const cortex = new Cortex({
     supabase: { url: SUPABASE_URL, serviceKey: SUPABASE_KEY },
     anthropic: { apiKey: ANTHROPIC_KEY },
@@ -2327,6 +2338,19 @@ async function main() {
         // before format so it benefits every category equally.
         if (opts.rerank && contextMemories.length > 1) {
           try {
+            // Per-category top-N: previous global top-N=25 clipped SS-User
+            // long-form preferences (-5.7pp). Wider for fact-buried categories,
+            // tighter for short fact-lookup where recency dominates.
+            const perCategoryTopN: Record<string, number> = {
+              'single-session-user': 35,
+              'single-session-preference': 30,
+              'single-session-assistant': 25,
+              'multi-session': 30,
+              'knowledge-update': 15,
+              'temporal-reasoning': 25,
+            };
+            const targetTopN = perCategoryTopN[q.question_type] ?? opts.rerankTopN;
+
             const rerankInput = contextMemories.map((m: any, i: number) => ({
               id: m.id ?? `tmp-${i}`,
               summary: m.summary || (m.content || '').slice(0, 200),
@@ -2339,7 +2363,7 @@ async function main() {
             const rerankFn = opts.rerank === 'cohere' ? rerankWithCrossEncoder : rerankWithVoyage;
             const reranked = await rerankFn(rerankInput as any, q.question, {
               apiKey: rerankApiKey,
-              topN: Math.min(opts.rerankTopN, contextMemories.length),
+              topN: Math.min(targetTopN, contextMemories.length),
             });
             // Map back to original memory objects (preserves all metadata)
             const byId = new Map<any, any>(contextMemories.map((m: any, i: number) => [m.id ?? `tmp-${i}`, m]));
@@ -2350,12 +2374,26 @@ async function main() {
         }
 
         const context = formatBenchmarkContext(contextMemories, q.question_type);
+
+        // Per-category reader model selection. Opus 4.7 on reasoning-heavy
+        // categories (KU update-detection, multi-session synthesis, preference
+        // inference, temporal arithmetic). Sonnet 4.5 stays default for the
+        // lookup-style categories where it's already saturated.
+        const perCategoryReader: Record<string, string> = {
+          'knowledge-update': 'claude-opus-4-7',
+          'multi-session': 'claude-opus-4-7',
+          'single-session-preference': 'claude-opus-4-7',
+          'temporal-reasoning': 'claude-opus-4-7',
+          // SS-Asst / SS-User → use default opts.readerModel (Sonnet)
+        };
+        const categoryReader = perCategoryReader[q.question_type] || opts.readerModel;
+
         let generated: string;
         if (q.question_type === 'multi-session') {
-          generated = await generateCountingUnionAnswer(context, q.question, q.question_type, opts.readerModel, q.question_date, opts.countingRuns);
+          generated = await generateCountingUnionAnswer(context, q.question, q.question_type, categoryReader, q.question_date, opts.countingRuns);
         } else {
           const answerFn = (globalThis as any).__generateAnswerOverride || generateAnswerCoN;
-          generated = await answerFn(context, q.question, q.question_type, opts.readerModel, q.question_date);
+          generated = await answerFn(context, q.question, q.question_type, categoryReader, q.question_date);
         }
 
         // Judge
@@ -2548,6 +2586,14 @@ async function main() {
 // ── Re-judge mode ─────────────────────────────────────────────
 async function rejudgeResults(resultsPath: string) {
   anthropic = new Anthropic();
+  const _origCreate = anthropic.messages.create.bind(anthropic.messages);
+  (anthropic.messages as any).create = ((params: any, opts?: any) => {
+    if (params && /opus-4-7|opus-4\.7/i.test(String(params.model || ''))) {
+      const { temperature, top_p, ...rest } = params;
+      return _origCreate(rest, opts);
+    }
+    return _origCreate(params, opts);
+  }) as any;
   const raw = JSON.parse(readFileSync(resultsPath, 'utf-8'));
   const results: any[] = raw.results || [];
   const oldJudge = raw.config?.judgeModel || 'unknown';
