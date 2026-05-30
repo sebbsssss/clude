@@ -624,6 +624,8 @@ export async function initDatabase(): Promise<void> {
         );
         CREATE INDEX IF NOT EXISTS idx_chat_msg_conv ON chat_messages(conversation_id, created_at);
         CREATE INDEX IF NOT EXISTS idx_chat_msg_saved ON chat_messages(created_at) WHERE tokens_saved IS NOT NULL;
+        -- Proof counter totals. "today" is UTC-based (resets 00:00 UTC). Full-table aggregate:
+        -- callers MUST use a server-side TTL cache (see proof.routes.ts). Mirror of migration 026.
         CREATE OR REPLACE FUNCTION proof_tokens_saved_totals()
         RETURNS TABLE(
           measured_saved        bigint,

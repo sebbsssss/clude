@@ -9,6 +9,9 @@ CREATE INDEX IF NOT EXISTS idx_chat_msg_saved ON chat_messages(created_at) WHERE
 -- Totals for the proof counter. measured_* cover rows with tokens_saved populated
 -- (post-migration, real); historical_prompt_sum covers legacy rows (tokens_saved IS NULL)
 -- for the disclosed hybrid baseline estimate (§7.3). One pass, no per-row fetch.
+-- "today" is UTC-based (Supabase session tz = UTC); measured_today resets at 00:00 UTC.
+-- Full-table aggregate: callers MUST use a server-side TTL cache (see proof.routes.ts).
+-- At very large chat_messages volumes, replace with a materialized rollup.
 CREATE OR REPLACE FUNCTION proof_tokens_saved_totals()
 RETURNS TABLE(
   measured_saved        bigint,
