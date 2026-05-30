@@ -489,7 +489,15 @@ async getTokensSaved(): Promise<{ totalSaved: number; savedToday: number; avgSav
 
 - Add state near the other `useState` hooks: `const [tokensSaved, setTokensSaved] = useState<number>(0);`
 - Animate it: `const savedCount = useCounter(tokensSaved);`
-- Add a `"savings"` area to `gridTemplateAreas` (lines ~465–470), e.g. replace `"agents  memories memories spark"` with `"agents  savings  memories spark"` (and adjust an adjacent area so the grid stays rectangular — verify columns sum correctly).
+- Add a `"savings"` area to `gridTemplateAreas` (lines ~465–470). **Every row string must keep the same number of column tokens (4) or CSS Grid silently breaks.** Do NOT steal a column from `memories` (the naive `"agents savings memories spark"` shrinks the 2-wide memories card). The safe, non-destructive option is a new full-width-ish top row, e.g.:
+  ```
+  "savings savings  memories spark"
+  "agents  memories memories spark"
+  "status  activity activity graph"
+  "status  activity activity graph"
+  "types   tags     concepts logs"
+  ```
+  Pick whatever placement you prefer, but verify each row has exactly 4 tokens before moving on.
 - Insert a new `<Card area="savings" delay={0.03}>` after the AGENTS card (~line 501), copying the AGENTS single-number structure: `SECTION_HEADER` label "Tokens saved", big number `{savedCount.toLocaleString()}`, sublabel `{avgSavingsPct}% avg · all-time`.
 - In the initial `Promise.all` (~287) add `api.getTokensSaved().catch(() => null)` and set `tokensSaved`/avg from it; in the polling block (~319–358) add a `refreshTokensSaved` on the 30s interval.
 
