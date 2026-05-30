@@ -25,6 +25,7 @@ dotenv.config();
 
 import { readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { randomBytes } from 'crypto';
 
 // ── Verified API imports ──────────────────────────────────────────────────────
 
@@ -282,17 +283,18 @@ async function seedMemories(
     const batchContents = batch.map(item => factToStatement(item));
 
     const rows = batch.map((item, j) => ({
+      hash_id: randomBytes(16).toString('hex'),
       content: batchContents[j],
       summary: batchContents[j],
       memory_type: 'semantic' as const,
       tags: ['solana-grounding', item.category],
+      concepts: [] as string[],
+      emotional_valence: 0,
       source: BENCHMARK_SOURCE,
       owner_wallet: wallet,
       importance: 0.6,
       compacted: false,
       evidence_ids: [] as string[],
-      decay_factor: 1.0,
-      access_count: 0,
     }));
 
     const { data, error } = await db.from('memories').insert(rows).select('id');
