@@ -1123,10 +1123,14 @@ export function chatRoutes(): Router {
           .eq('conversation_id', conversationId)
           .eq('role', 'assistant');
         priorTurnsTokens = (priorRows || []).reduce(
-          (s: number, r: any) => s + (r.tokens_prompt || 0) + (r.tokens_completion || 0),
+          (s: number, r: { tokens_prompt: number | null; tokens_completion: number | null }) =>
+            s + (r.tokens_prompt || 0) + (r.tokens_completion || 0),
           0,
         );
-      } catch { /* non-fatal: savings degrades to this-turn-only */ }
+      } catch (err) {
+        // non-fatal: savings degrades to this-turn-only, but log so persistent failures are diagnosable
+        log.warn({ err }, 'priorTurnsTokens query failed; token savings degraded to this-turn-only');
+      }
 
       // 8. Resolve LLM model for streamText
       let llmModel: any;
