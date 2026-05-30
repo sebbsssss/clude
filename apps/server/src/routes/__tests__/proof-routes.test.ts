@@ -21,6 +21,47 @@ vi.mock('@clude/shared/core/database', () => ({
   getDb: () => ({ from: () => chainBuilder(), rpc: () => chainBuilder() }),
 }));
 
+// --- Mocks for hallucination ask endpoint ---
+
+vi.mock('@clude/brain/memory', () => ({
+  recallMemories: vi.fn().mockResolvedValue([
+    { id: 1, summary: 'Slot 328970103 was at 2025-03-25T00:04:22Z', content: 'block time 2025-03-25T00:04:22Z', importance: 0.9, decayFactor: 1 },
+  ]),
+  formatMemoryContext: vi.fn().mockReturnValue('Context: Slot 328970103 block time is 2025-03-25T00:04:22Z'),
+}));
+
+vi.mock('@clude/shared/core/owner-context', () => ({
+  withOwnerWallet: vi.fn((_w: string | null, fn: () => unknown) => fn()),
+}));
+
+vi.mock('@clude/shared/core/openrouter-client', () => ({
+  generateOpenRouterResponse: vi.fn().mockResolvedValue('2025-03-25T00:04:22Z'),
+  OPENROUTER_MODELS: { 'claude-haiku-4.5': 'anthropic/claude-haiku-4.5' },
+}));
+
+// Mock the fixture loader to return known test fixtures
+vi.mock('../../lib/proof-hallucination.js', () => ({
+  loadHallucinationData: vi.fn().mockReturnValue({
+    results: {
+      placeholder: true,
+      rate: null,
+      baselineRate: null,
+      n: 0,
+      model: 'anthropic/claude-haiku-4.5',
+      datasetVersion: 'crypto_solana_mainnet_us@2025-03-31',
+      runAt: null,
+      byCategory: {},
+    },
+    examples: [
+      { id: 'ex-1', question: 'When was slot 1?', groundTruth: '2025-01-01T00:00:00Z', clude: { answer: '2025-01-01T00:00:00Z', correct: true }, baseline: { answer: 'I don\'t know', correct: false } },
+      { id: 'ex-2', question: 'Who led slot 2?', groundTruth: 'ABC123', clude: { answer: 'ABC123', correct: true }, baseline: { answer: 'XYZ789', correct: false } },
+    ],
+    qa: [
+      { id: 'block:328970103::block_time', category: 'block_time', question: 'What was the block time (UTC) of Solana slot 328970103?', gold: '2025-03-25T00:04:22Z', sourceRef: 'block:328970103' },
+    ],
+  }),
+}));
+
 import { proofRoutes } from '../proof.routes.js';
 
 function createTestApp() {
@@ -29,6 +70,8 @@ function createTestApp() {
   app.use('/api/proof', proofRoutes());
   return app;
 }
+
+// ---------- /tokens-saved (existing) ----------
 
 describe('GET /api/proof/tokens-saved', () => {
   let server: Server; let baseUrl: string;
@@ -58,5 +101,114 @@ describe('GET /api/proof/tokens-saved', () => {
     const body: any = await r.json();
     expect(r.status).toBe(200);
     expect(body.totalSaved).toBeGreaterThanOrEqual(0);
+  });
+});
+
+// ---------- /hallucination ----------
+
+describe('GET /api/proof/hallucination', () => {
+  let server: Server; let baseUrl: string;
+  beforeAll(async () => {
+    await new Promise<void>((res) => { server = createTestApp().listen(0, () => {
+      baseUrl = `http://127.0.0.1:${(server.address() as any).port}`; res(); }); });
+  });
+  afterAll(async () => { await new Promise<void>((res) => server.close(() => res())); });
+
+  it('returns 200 with the placeholder shape from fixture', async () => {
+    const r = await fetch(`${baseUrl}/api/proof/hallucination`);
+    const body: any = await r.json();
+    expect(r.status).toBe(200);
+    expect(body).toMatchObject({
+      placeholder: true,
+      rate: null,
+      n: 0,
+      model: 'anthropic/claude-haiku-4.5',
+      datasetVersion: 'crypto_solana_mainnet_us@2025-03-31',
+    });
+  });
+});
+
+// ---------- /hallucination/examples ----------
+
+describe('GET /api/proof/hallucination/examples', () => {
+  let server: Server; let baseUrl: string;
+  beforeAll(async () => {
+    await new Promise<void>((res) => { server = createTestApp().listen(0, () => {
+      baseUrl = `http://127.0.0.1:${(server.address() as any).port}`; res(); }); });
+  });
+  afterAll(async () => { await new Promise<void>((res) => server.close(() => res())); });
+
+  it('returns 200 with all examples when n is not specified', async () => {
+    const r = await fetch(`${baseUrl}/api/proof/hallucination/examples`);
+    const body: any = await r.json();
+    expect(r.status).toBe(200);
+    expect(Array.isArray(body.examples)).toBe(true);
+    expect(body.examples).toHaveLength(2);
+  });
+
+  it('caps results by ?n= query param', async () => {
+    const r = await fetch(`${baseUrl}/api/proof/hallucination/examples?n=1`);
+    const body: any = await r.json();
+    expect(r.status).toBe(200);
+    expect(body.examples).toHaveLength(1);
+  });
+
+  it('respects max cap of 50', async () => {
+    const r = await fetch(`${baseUrl}/api/proof/hallucination/examples?n=9999`);
+    const body: any = await r.json();
+    expect(r.status).toBe(200);
+    // fixtures have only 2 examples, so cap=50 doesn't truncate further
+    expect(body.examples.length).toBeLessThanOrEqual(50);
+  });
+});
+
+// ---------- /hallucination/ask ----------
+
+describe('POST /api/proof/hallucination/ask', () => {
+  let server: Server; let baseUrl: string;
+  beforeAll(async () => {
+    await new Promise<void>((res) => { server = createTestApp().listen(0, () => {
+      baseUrl = `http://127.0.0.1:${(server.address() as any).port}`; res(); }); });
+  });
+  afterAll(async () => { await new Promise<void>((res) => server.close(() => res())); });
+
+  it('returns side-by-side shape for a known questionId', async () => {
+    const r = await fetch(`${baseUrl}/api/proof/hallucination/ask`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ questionId: 'block:328970103::block_time' }),
+    });
+    const body: any = await r.json();
+    expect(r.status).toBe(200);
+    expect(typeof body.question).toBe('string');
+    expect(body.groundTruth).toBe('2025-03-25T00:04:22Z');
+    expect(body).toHaveProperty('clude');
+    expect(body).toHaveProperty('baseline');
+    expect(typeof body.clude.answer).toBe('string');
+    expect(typeof body.baseline.answer).toBe('string');
+    expect(typeof body.clude.recalledCount).toBe('number');
+  });
+
+  it('returns 400 when question exceeds 500 chars', async () => {
+    const r = await fetch(`${baseUrl}/api/proof/hallucination/ask`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: 'x'.repeat(501) }),
+    });
+    expect(r.status).toBe(400);
+  });
+
+  it('returns side-by-side shape for a free-text question without questionId', async () => {
+    const r = await fetch(`${baseUrl}/api/proof/hallucination/ask`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: 'What is the block time of slot 328970103?' }),
+    });
+    const body: any = await r.json();
+    expect(r.status).toBe(200);
+    expect(body).toHaveProperty('clude');
+    expect(body).toHaveProperty('baseline');
+    // no gold for free-text
+    expect(body.groundTruth).toBeNull();
   });
 });

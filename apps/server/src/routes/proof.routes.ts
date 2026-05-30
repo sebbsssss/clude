@@ -1,6 +1,13 @@
 import { Router, Request, Response } from 'express';
+import path from 'path';
+import rateLimit from 'express-rate-limit';
 import { getDb } from '@clude/shared/core/database';
 import { createChildLogger } from '@clude/shared/core/logger';
+import { withOwnerWallet } from '@clude/shared/core/owner-context';
+import { generateOpenRouterResponse, OPENROUTER_MODELS } from '@clude/shared/core/openrouter-client';
+import { gradeAnswer, isAbstention } from '@clude/shared/core/solana-grading';
+import { recallMemories, formatMemoryContext } from '@clude/brain/memory';
+import { loadHallucinationData } from '../lib/proof-hallucination.js';
 
 const log = createChildLogger('proof-routes');
 
@@ -61,6 +68,70 @@ async function computePayload(): Promise<TokensSavedPayload> {
   return { totalSaved, savedToday: measuredToday, avgSavingsPct, ratePerMin, baselineEstimated, updatedAt: new Date(now).toISOString() };
 }
 
+// ---------------------------------------------------------------------------
+// Hallucination benchmark fixtures
+// ---------------------------------------------------------------------------
+
+// Resolve the apps/web/public dir the same way static.routes.ts does:
+// __dirname is apps/server/src/routes (dev) or apps/server/dist/routes (prod).
+const _monorepoRoot = path.join(__dirname, '..', '..', '..', '..');
+const _webPublicDir = path.join(_monorepoRoot, 'apps', 'web', 'public');
+const PROOF_DIR = path.join(_webPublicDir, 'proof');
+
+// Load once at module level; missing dir yields safe defaults (no crash at route registration).
+const { results: _hallucinationResults, examples: _hallucinationExamples, qa: _hallucinationQa } =
+  loadHallucinationData(PROOF_DIR);
+
+// Build a quick lookup map: id → QA item
+const _qaById = new Map(_hallucinationQa.map((q) => [q.id, q]));
+
+// Cache for /ask responses to avoid redundant LLM calls (normalized question → response)
+const _askCache = new Map<string, object>();
+
+// Safe defaults returned when fixtures are not yet populated
+const HALLUCINATION_RESULTS_DEFAULT = {
+  placeholder: true,
+  rate: null,
+  baselineRate: null,
+  n: 0,
+  model: 'anthropic/claude-haiku-4.5',
+  datasetVersion: 'crypto_solana_mainnet_us@2025-03-31',
+  runAt: null,
+  byCategory: {},
+};
+
+// ---------------------------------------------------------------------------
+// Demo wallet for the /ask endpoint.
+//
+// IMPORTANT — PERSISTENT SEED NOTE:
+// The DEMO_WALLET corpus is a PERSISTENT demo dataset that must be seeded once
+// before the endpoint returns grounded answers. To seed it, run the Solana
+// grounding benchmark script with --skip-cleanup and point it at this wallet:
+//   DEMO_WALLET=bench:solana-grounding:demo
+// Until seeded, recallMemories returns [] and Clude correctly abstains
+// ("I don't have enough information"), which is itself a valid demonstration
+// of hallucination avoidance.
+// ---------------------------------------------------------------------------
+const DEMO_WALLET = 'bench:solana-grounding:demo';
+
+const GROUNDED_SYS =
+  'You are a Solana blockchain assistant with access to verified on-chain data. ' +
+  'Answer the question using ONLY the provided context. If the answer is not in the context, ' +
+  'say "I don\'t have enough information to answer that." Be concise — one or two sentences max.';
+
+const BASELINE_SYS =
+  'You are a Solana blockchain assistant. Answer the question to the best of your ability. ' +
+  'Be concise — one or two sentences max.';
+
+// Tighter per-IP rate limiter for the live /ask endpoint
+const askLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests' },
+});
+
 export function proofRoutes(): Router {
   const router = Router();
 
@@ -74,6 +145,134 @@ export function proofRoutes(): Router {
     } catch (err) {
       log.error({ err }, 'tokens-saved endpoint error');
       res.json({ totalSaved: cache?.payload.totalSaved ?? 0, savedToday: 0, avgSavingsPct: FALLBACK_AVG_PCT, ratePerMin: 0, baselineEstimated: cache?.payload.baselineEstimated ?? 0, updatedAt: new Date().toISOString() });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // GET /hallucination — benchmark summary
+  // -------------------------------------------------------------------------
+  router.get('/hallucination', (_req: Request, res: Response) => {
+    res.json(_hallucinationResults ?? HALLUCINATION_RESULTS_DEFAULT);
+  });
+
+  // -------------------------------------------------------------------------
+  // GET /hallucination/examples?n= — curated side-by-side examples
+  // -------------------------------------------------------------------------
+  router.get('/hallucination/examples', (req: Request, res: Response) => {
+    const MAX = 50;
+    const rawN = req.query['n'];
+    let n = _hallucinationExamples.length; // default: all
+    if (rawN !== undefined) {
+      const parsed = Number(rawN);
+      if (!Number.isNaN(parsed) && parsed >= 0) {
+        n = Math.min(parsed, MAX);
+      }
+    }
+    res.json({ examples: _hallucinationExamples.slice(0, n) });
+  });
+
+  // -------------------------------------------------------------------------
+  // POST /hallucination/ask — live one-question demo (rate-limited)
+  // -------------------------------------------------------------------------
+  router.post('/hallucination/ask', askLimiter, async (req: Request, res: Response) => {
+    try {
+      const { questionId, question: rawQuestion } = req.body as {
+        questionId?: string;
+        question?: string;
+      };
+
+      // Resolve question text and gold answer
+      let query: string;
+      let gold: string | null = null;
+      let sourceRef: string | null = null;
+      let category: string | null = null;
+
+      if (questionId) {
+        const item = _qaById.get(questionId);
+        if (!item) {
+          res.status(404).json({ error: 'questionId not found' });
+          return;
+        }
+        query = item.question;
+        gold = item.gold;
+        sourceRef = item.sourceRef;
+        category = item.category;
+      } else if (typeof rawQuestion === 'string' && rawQuestion.length > 0) {
+        if (rawQuestion.length > 500) {
+          res.status(400).json({ error: 'question exceeds 500 character limit' });
+          return;
+        }
+        query = rawQuestion;
+      } else {
+        res.status(400).json({ error: 'provide either questionId or question' });
+        return;
+      }
+
+      // Check response cache (keyed on normalized question)
+      const cacheKey = query.trim().toLowerCase();
+      if (_askCache.has(cacheKey)) {
+        res.json(_askCache.get(cacheKey));
+        return;
+      }
+
+      const model = OPENROUTER_MODELS['claude-haiku-4.5'];
+
+      // Grounded condition: recall memories into context
+      const mems = await withOwnerWallet(DEMO_WALLET, () =>
+        recallMemories({ query, limit: 8, skipExpansion: true }),
+      );
+      const ctx = formatMemoryContext(mems);
+
+      const [cludeAnswer, baselineAnswer] = await Promise.all([
+        generateOpenRouterResponse({
+          systemPrompt: GROUNDED_SYS,
+          messages: [{ role: 'user', content: `Context:\n${ctx}\n\nQuestion: ${query}\n\nAnswer:` }],
+          model,
+          temperature: 0,
+          maxTokens: 200,
+        }),
+        generateOpenRouterResponse({
+          systemPrompt: BASELINE_SYS,
+          messages: [{ role: 'user', content: query }],
+          model,
+          temperature: 0,
+          maxTokens: 200,
+        }),
+      ]);
+
+      // Grade if we have ground truth
+      const cludeCorrect = gold !== null && category !== null
+        ? gradeAnswer(category, gold, cludeAnswer)
+        : null;
+      const baselineCorrect = gold !== null && category !== null
+        ? gradeAnswer(category, gold, baselineAnswer)
+        : null;
+
+      // A hallucination is: Clude gave a confident wrong answer (not an abstention)
+      const hallucinated =
+        cludeCorrect === false && !isAbstention(cludeAnswer);
+
+      const payload = {
+        question: query,
+        groundTruth: gold,
+        sourceRef,
+        clude: {
+          answer: cludeAnswer,
+          correct: cludeCorrect,
+          recalledCount: mems.length,
+        },
+        baseline: {
+          answer: baselineAnswer,
+          correct: baselineCorrect,
+        },
+        hallucinated,
+      };
+
+      _askCache.set(cacheKey, payload);
+      res.json(payload);
+    } catch (err) {
+      log.error({ err }, '/hallucination/ask error');
+      res.status(500).json({ error: 'Internal error' });
     }
   });
 
