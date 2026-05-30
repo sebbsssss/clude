@@ -108,12 +108,12 @@ This naturally yields ~80%+ on long/high-usage sessions (where re-sending histor
 
 ### 7.2 Persistence
 
-Migration (numbered SQL in `/migrations/`): add to `chat_messages`:
+Migration (next numbered SQL in `packages/database/migrations/` — latest is `025_redelegate_rpc.sql`, so this is `026_*`): add to `chat_messages`:
 - `frontier_tokens INT` (= `baseline_context_tokens`)
 - `memories_used INT`
 - `tokens_saved INT` (= computed at write per §7.1, floored at 0)
 
-Write these in the existing assistant-message insert ([`chat.routes.ts:1262`](../../apps/server/src/routes/chat.routes.ts)). `baseline_context_tokens` is computed with one scoped query summing prior `chat_messages` tokens for the `conversation_id` (owner-scoped).
+Write these in the existing assistant-message insert ([`chat.routes.ts:1262`](../../apps/server/src/routes/chat.routes.ts)). `baseline_context_tokens` is computed with one scoped query summing prior `chat_messages` tokens for the `conversation_id` (owner-scoped). Note the insert already writes a `memory_ids` array; `memories_used` is the scalar count (`memory_ids.length`) — write both so they don't drift.
 
 ### 7.3 Aggregate + live tick + baseline (hybrid)
 
@@ -162,7 +162,7 @@ Exact-match (with light normalization) grading → **no LLM judge needed** for m
 `POST /api/proof/hallucination/ask` runs one question through both conditions live. Because it makes real model calls on public input:
 - Reuse the repo's existing express-rate-limit; add a **tighter per-IP cap + a daily ceiling** on this route specifically.
 - **Cap input length**; scope to the Solana corpus (the UI offers "pick/shuffle a real fact" and an "ask about this data" box, not free-form arbitrary prompts).
-- Use a **cheap, fast model (Haiku)** for both conditions — keeps cost low; the grounding gap is still stark.
+- Use a **cheap, fast model** for both conditions — pin `claude-haiku-4-5-20251001` (Haiku 4.5) so the API contract's `model`/`datasetVersion` stay stable and reproducible; keeps cost low and the grounding gap is still stark. (If any benchmark run uses an Opus model, strip `temperature`/`top_p` at the SDK boundary per the repo's Opus constraint.)
 - **Cache** by normalized question so repeats are free. The curated `examples` set is fully static and free.
 
 ## 9. Honesty framing (applies to all copy)
@@ -210,7 +210,7 @@ Each spec respects the repo limits (≤15 files / ≤400 diff lines), targets `s
 
 1. **Spec 1 — Proof API + live tokens-saved counter.** Migration + persistence (§7.2) + cached aggregate + `GET /api/proof/tokens-saved` + align the chat footer (§7.1) + counters on web hero, dashboard, chat. **Ships standalone value.**
 2. **Spec 2 — Solana grounding benchmark.** BigQuery export + committed fixture + Q&A generation + benchmark harness + `GET /api/proof/hallucination` & `/examples` + stored run. **Produces the 2% number.** Needs GCP creds once.
-3. **Spec 3 — The Proof page.** `proof.html` + `proof.js`: live counter hero, real token-savings demo, grounding side-by-side, "ask your own" (`POST /ask` + guardrails §8.5), citations panel (§5.1.4). **Ties it together.**
+3. **Spec 3 — The Proof page.** `proof.html` + `proof.js`: live counter hero, real token-savings demo, grounding side-by-side, "ask your own" (`POST /ask` + guardrails §8.5), citations panel (§5.1, item 4). **Ties it together.**
 
 **Sequence:** 1 → 2 → 3 (Spec 3 depends on both). Spec 1 is the lowest-risk, fastest win.
 
