@@ -651,7 +651,9 @@ async function main(): Promise<void> {
   const byCategory: BenchmarkResults['byCategory'] = {};
   for (const [cat, s] of catStats) {
     byCategory[cat] = {
-      groundedAccuracy: s.groundedTotal > 0 ? s.groundedCorrect / s.groundedTotal : 0,
+      // Denominator excludes abstentions so per-category accuracy reconciles with the
+      // headline rate (which is also computed over non-abstaining grounded answers).
+      groundedAccuracy: s.groundedNonAbstaining > 0 ? s.groundedCorrect / s.groundedNonAbstaining : 0,
       baselineAccuracy: s.baselineTotal > 0 ? s.baselineCorrect / s.baselineTotal : 0,
       n: s.groundedTotal,
     };
