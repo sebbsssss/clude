@@ -21,6 +21,22 @@ describe('gradeAnswer', () => {
   it('an abstention answer never grades correct on a real fact', () => {
     expect(gradeAnswer('tx_fee', '5000', "I don't have enough information")).toBe(false);
   });
+  it('numeric: matches a standalone number even when the answer restates a digit-bearing signature', () => {
+    expect(gradeAnswer('tx_fee', '5000', 'Transaction 2P4iR9xZ5q paid 5000 lamports')).toBe(true);
+  });
+  it('numeric: does NOT match digits embedded in an identifier or a different number', () => {
+    // "5000" appears only inside the base58 token, and the real fee is 7000
+    expect(gradeAnswer('tx_fee', '5000', 'Transaction 5000ZxQk paid 7000 lamports')).toBe(false);
+  });
+  it('numeric: matches thousands-separated and is exact for large lamports', () => {
+    expect(gradeAnswer('account_lamports', '1447680', 'It holds 1,447,680 lamports')).toBe(true);
+    expect(gradeAnswer('account_lamports', '12345678901234567', 'balance is 12345678901234567 lamports')).toBe(true);
+  });
+  it('token_symbol: token-boundary, no substring false-positive', () => {
+    expect(gradeAnswer('token_symbol', 'SOL', 'it is a Solana token')).toBe(false);
+    expect(gradeAnswer('token_symbol', 'SOL', 'The symbol is SOL.')).toBe(true);
+    expect(gradeAnswer('token_symbol', '$FEDUP', 'ticker: $FEDUP')).toBe(true);
+  });
 });
 
 describe('isAbstention', () => {

@@ -46,10 +46,25 @@ function normalizeStatus(text: string): 'success' | 'fail' | null {
   return null;
 }
 
-function stripToNumber(text: string): number {
-  // Keep digits, dot, minus; strip everything else (commas, units, spaces, words)
-  const cleaned = text.replace(/[^0-9.\-]/g, '');
-  return Number(cleaned);
+function commaGroup(digits: string): string {
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+/**
+ * True iff the integer `gold` appears as a STANDALONE number in `predicted`
+ * (optionally thousands-separated). Crucially, it does NOT match digits that are
+ * embedded inside an identifier (e.g. a base58 signature like "2P4iR5000xQ") or
+ * concatenated with other numbers — comparing whole-string digit soup produced
+ * false negatives whenever the reader restated the question's signature/pubkey.
+ * String-based (no Number()), so it is exact for lamports beyond 2^53.
+ */
+function numericMatch(gold: string, predicted: string): boolean {
+  const digits = gold.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, '');
+  if (!digits) return false;
+  const grouped = commaGroup(digits);
+  // Boundaries are non-alphanumeric (not \b), so a number inside a base58 token won't match.
+  const re = new RegExp(`(?<![A-Za-z0-9])(?:${digits}|${grouped})(?![A-Za-z0-9])`);
+  return re.test(predicted);
 }
 
 // ---------------------------------------------------------------------------
@@ -65,10 +80,7 @@ export function gradeAnswer(
   if (isAbstention(predicted)) return false;
 
   if (NUMERIC_CATEGORIES.has(category)) {
-    const goldNum = stripToNumber(gold);
-    const predNum = stripToNumber(predicted);
-    if (isNaN(goldNum) || isNaN(predNum)) return false;
-    return goldNum === predNum;
+    return numericMatch(gold, predicted);
   }
 
   if (BASE58_EXACT_CATEGORIES.has(category)) {
@@ -77,7 +89,16 @@ export function gradeAnswer(
   }
 
   if (category === 'token_symbol') {
-    return predicted.toLowerCase().includes(gold.trim().toLowerCase());
+    // Token-boundary match (not substring): gold "SOL" must not match inside "Solana".
+    const norm = (s: string) => s.trim().toLowerCase().replace(/^\$/, '');
+    const goldSym = norm(gold);
+    if (!goldSym) return false;
+    const toks = predicted
+      .toLowerCase()
+      .split(/[^a-z0-9$]+/)
+      .map((t) => t.replace(/^\$/, ''))
+      .filter(Boolean);
+    return toks.includes(goldSym);
   }
 
   if (category === 'tx_status') {
