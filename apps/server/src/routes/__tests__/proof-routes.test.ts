@@ -42,7 +42,7 @@ describe('GET /api/proof/tokens-saved', () => {
   it('returns measured + hybrid-estimated total with the documented shape', async () => {
     mockDbQueue.push({ data: [{ measured_saved: 100000, measured_today: 10000, measured_frontier: 120000, historical_prompt_sum: 1000000, n: 500 }], error: null });
     const r = await fetch(`${baseUrl}/api/proof/tokens-saved`);
-    const body = await r.json();
+    const body: any = await r.json();
     expect(r.status).toBe(200);
     expect(body.baselineEstimated).toBe(820000); // round(1_000_000 * 0.82)
     expect(body.totalSaved).toBe(920000);         // 100000 + 820000
@@ -55,7 +55,7 @@ describe('GET /api/proof/tokens-saved', () => {
   it('degrades to a safe payload (200, non-negative total) when the RPC errors', async () => {
     mockDbQueue.push({ data: null, error: { message: 'boom' } });
     const r = await fetch(`${baseUrl}/api/proof/tokens-saved`);
-    const body = await r.json();
+    const body: any = await r.json();
     expect(r.status).toBe(200);
     expect(body.totalSaved).toBeGreaterThanOrEqual(0);
   });

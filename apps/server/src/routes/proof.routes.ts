@@ -32,7 +32,7 @@ async function computePayload(): Promise<TokensSavedPayload> {
     log.warn({ error }, 'proof totals RPC failed; serving last-known/zero');
     return {
       totalSaved: cache?.payload.totalSaved ?? 0,
-      savedToday: 0,
+      savedToday: cache?.payload.savedToday ?? 0,
       avgSavingsPct: FALLBACK_AVG_PCT,
       ratePerMin: 0,
       baselineEstimated: cache?.payload.baselineEstimated ?? 0,
