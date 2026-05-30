@@ -252,6 +252,8 @@ export function Dashboard() {
   const [stats, setStats] = useState<MemoryStats | null>(null);
   const [inferenceStats, setInferenceStats] = useState<any>(null);
   const [recentMemories, setRecentMemories] = useState<Memory[]>([]);
+  const [tokensSaved, setTokensSaved] = useState<number>(0);
+  const [savingsPct, setSavingsPct] = useState<number>(0);
   const [initialLoad, setInitialLoad] = useState(true);
   const uptime = useMemo(() => {
     if (!stats?.newestMemory) return '—';
@@ -288,13 +290,15 @@ export function Dashboard() {
       api.getStats().catch(() => null),
       api.getInferenceStats().catch(() => null),
       api.getMemories({ hours: 168, limit: 50 }).catch(() => ({ memories: [], scoped_to: null })),
-    ]).then(([s, v, m]) => {
+      api.getTokensSaved().catch(() => null),
+    ]).then(([s, v, m, tk]) => {
       const memResult = m as { memories: Memory[]; scoped_to?: string | null };
       if (api.verifyScope(s || memResult)) {
         setStats(s);
         setRecentMemories(memResult.memories || []);
       }
       setInferenceStats(v);
+      if (tk) { setTokensSaved(tk.totalSaved); setSavingsPct(tk.avgSavingsPct); }
       setInitialLoad(false);
     });
   }, [authMode, walletAddress, ready]);
@@ -334,6 +338,9 @@ export function Dashboard() {
       api.getStats().then(s => {
         if (api.verifyScope(s)) setStats(s);
       }).catch(() => {});
+      api.getTokensSaved().then(r => {
+        if (r) { setTokensSaved(r.totalSaved); setSavingsPct(r.avgSavingsPct); }
+      }).catch(() => {});
     };
     const refreshMemories = () => {
       syncMode();
@@ -363,6 +370,7 @@ export function Dashboard() {
     selectedAgent?.name || null,
   );
 
+  const savedCount = useCounter(tokensSaved);
   const total = useCounter(stats?.total || 0);
   const episodic = useCounter(stats?.byType?.episodic || 0);
   const semantic = useCounter(stats?.byType?.semantic || 0);
@@ -461,8 +469,9 @@ export function Dashboard() {
       <div className="bento-grid" style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(4, 1fr)',
-        gridTemplateRows: 'auto auto auto auto',
+        gridTemplateRows: 'auto auto auto auto auto',
         gridTemplateAreas: `
+          "savings savings  savings  savings"
           "agents  memories memories spark"
           "status  activity activity graph"
           "status  activity activity graph"
@@ -470,6 +479,30 @@ export function Dashboard() {
         `,
         gap: 3,
       }}>
+
+        {/* ── TOKENS SAVED ── */}
+        <Card area="savings" delay={0.01} style={{
+          padding: '20px 18px',
+          display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+        }}>
+          <div style={SECTION_HEADER}>Tokens saved</div>
+          <div style={{ margin: '12px 0 4px' }}>
+            <span style={{
+              fontSize: 40, fontWeight: 800, lineHeight: 1,
+              color: 'var(--text)',
+              fontVariantNumeric: 'tabular-nums',
+              letterSpacing: -2,
+            }}>
+              {savedCount.toLocaleString()}
+            </span>
+          </div>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            fontSize: 9, color: 'var(--text-faint)',
+          }}>
+            {Math.round(savingsPct)}% avg · all-time
+          </div>
+        </Card>
 
         {/* ── AGENTS ── */}
         <Card area="agents" delay={0.02} style={{

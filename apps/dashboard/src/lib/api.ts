@@ -208,6 +208,16 @@ class CludeAPI {
     return this.fetch(this.appendWallet('/api/graph/stats'));
   }
 
+  // Tokens Saved (proof features — public/global endpoint, no wallet scoping)
+  async getTokensSaved(): Promise<{
+    totalSaved: number;
+    savedToday: number;
+    avgSavingsPct: number;
+    ratePerMin: number;
+  } | null> {
+    try { return await this.fetch('/api/proof/tokens-saved'); } catch { return null; }
+  }
+
   // Inference Stats
   async getInferenceStats(): Promise<{
     inference: {
