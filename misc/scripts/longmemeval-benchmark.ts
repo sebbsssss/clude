@@ -156,6 +156,8 @@ function parseArgs() {
     batchSleepMs: 0, // ms to sleep between batches (token-bucket safety belt for rate limits)
     rerank: '' as string, // 'voyage' | 'cohere' | '' (off). Cross-encoder rerank after recall.
     rerankTopN: 25, // keep this many memories after rerank
+    rrfVariants: 0, // if >0, generate N HyDE hypothetical-answer queries and RRF-merge their recalls
+    rrfCategories: 'single-session-preference,single-session-user' as string, // categories to apply RRF
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -210,6 +212,12 @@ function parseArgs() {
         break;
       case '--rerank':
         opts.rerank = args[++i] || '';
+        break;
+      case '--rrf-variants':
+        opts.rrfVariants = parseInt(args[++i]) || 2;
+        break;
+      case '--rrf-categories':
+        opts.rrfCategories = args[++i] || opts.rrfCategories;
         break;
       case '--rerank-top-n':
         opts.rerankTopN = parseInt(args[++i]) || 25;
@@ -1146,6 +1154,66 @@ Output the final synthesized answer in 1-3 sentences. Be specific (exact counts,
  * take the UNION of found items, count programmatically.
  * Key insight: each pass misses different items, so union captures more.
  */
+/**
+ * HyDE: generate N hypothetical first-person statements that would answer the
+ * question if found in a past conversation. Used as additional query variants
+ * for retrieval — closes the question-vs-document distribution gap that
+ * vector search often suffers from on memory benchmarks.
+ *
+ * Ref: Gao et al., "Precise Zero-Shot Dense Retrieval without Relevance Labels"
+ */
+async function generateHydeVariants(question: string, n: number): Promise<string[]> {
+  if (n <= 0) return [];
+  try {
+    const resp = await anthropic.messages.create({
+      model: 'claude-sonnet-4-5-20250929',
+      max_tokens: 500,
+      temperature: 0.3,
+      system: `Generate ${n} different hypothetical FIRST-PERSON statements that, if the user had said them in a past conversation, would directly answer the question below. These are used as semantic search queries to find relevant memories.
+
+Rules:
+- Each statement is ONE sentence the user (not the assistant) would have said
+- Be specific and factual-sounding — name brands, places, numbers, activities
+- The N variants should DIFFER in phrasing and specifics so they cover different memory phrasings
+- Output ONLY a JSON array of strings, no commentary`,
+      messages: [{
+        role: 'user',
+        content: `Question: ${question}\n\nGenerate ${n} hypothetical user statements as JSON:`,
+      }],
+    });
+    const text = resp.content[0].type === 'text' ? resp.content[0].text.trim() : '[]';
+    const match = text.match(/\[[\s\S]*\]/);
+    if (!match) return [];
+    const parsed = JSON.parse(match[0]);
+    return Array.isArray(parsed) ? parsed.filter((s: any) => typeof s === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Reciprocal Rank Fusion (Cormack et al. 2009). Parameter-free way to merge
+ * multiple ranked result lists. Each item's RRF score is the sum over all
+ * lists of 1 / (k + rank). Items appearing in multiple lists float to the top.
+ *
+ * k=60 is the canonical value from the paper.
+ */
+function rrfMerge<T extends { id: any }>(resultLists: T[][], k: number = 60): T[] {
+  const scores = new Map<string, number>();
+  const items = new Map<string, T>();
+  for (const list of resultLists) {
+    list.forEach((m, rank) => {
+      const id = String(m.id);
+      scores.set(id, (scores.get(id) || 0) + 1 / (k + rank));
+      if (!items.has(id)) items.set(id, m);
+    });
+  }
+  return Array.from(scores.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([id]) => items.get(id)!)
+    .filter(Boolean);
+}
+
 async function generateCountingUnionAnswer(
   context: string,
   question: string,
@@ -1515,6 +1583,18 @@ async function main() {
   (globalThis as any).__verifyEnabled = opts.verify;
   (globalThis as any).__criticModel = opts.criticModel || opts.readerModel;
   (globalThis as any).__selfConsistencyN = opts.selfConsistency;
+  // RRF + HyDE — opt in via --rrf-variants N (default off). Limited to specific
+  // categories with known retrieval gaps (SS-Pref, SS-User) by default.
+  const rrfCats = new Set<string>(
+    opts.rrfVariants > 0
+      ? (opts.rrfCategories || '').split(',').map((s: string) => s.trim()).filter(Boolean)
+      : [],
+  );
+  (globalThis as any).__rrfVariants = opts.rrfVariants;
+  (globalThis as any).__rrfCats = rrfCats;
+  if (opts.rrfVariants > 0 && rrfCats.size > 0) {
+    console.log(`  RRF+HyDE enabled (${opts.rrfVariants} variants) for: ${[...rrfCats].join(', ')}`);
+  }
   console.log();
 
   // Apply run-id isolation: unique owner_wallet avoids needing to clean stale data
@@ -2214,12 +2294,32 @@ async function main() {
         } else {
           // Standard recall with haystack session tags
           const recallStart = process.hrtime.bigint();
-          memories = await cortex.recall({
-            query: q.question,
-            limit: opts.recallLimit,
-            tags: q.haystack_session_ids,
-            skipExpansion: true,
-          });
+          const rrfVariants = (globalThis as any).__rrfVariants || 0;
+          const rrfCats = (globalThis as any).__rrfCats as Set<string> | undefined;
+          if (rrfVariants > 0 && rrfCats?.has(q.question_type)) {
+            // RRF+HyDE: generate N hypothetical answer queries, run cortex.recall
+            // for each, then merge the result lists via Reciprocal Rank Fusion.
+            const variants = await generateHydeVariants(q.question, rrfVariants);
+            const queries = [q.question, ...variants];
+            const lists = await Promise.all(
+              queries.map(qq =>
+                cortex.recall({
+                  query: qq,
+                  limit: opts.recallLimit,
+                  tags: q.haystack_session_ids,
+                  skipExpansion: true,
+                }),
+              ),
+            );
+            memories = rrfMerge(lists, 60).slice(0, opts.recallLimit);
+          } else {
+            memories = await cortex.recall({
+              query: q.question,
+              limit: opts.recallLimit,
+              tags: q.haystack_session_ids,
+              skipExpansion: true,
+            });
+          }
           recallTime = ms(recallStart);
 
           // Post-filter to question's haystack sessions (safety net)
