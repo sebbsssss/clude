@@ -617,9 +617,29 @@ export async function initDatabase(): Promise<void> {
           tokens_prompt INTEGER,
           tokens_completion INTEGER,
           memory_ids INTEGER[],
+          frontier_tokens INTEGER,
+          memories_used INTEGER,
+          tokens_saved INTEGER,
           created_at TIMESTAMPTZ DEFAULT NOW()
         );
         CREATE INDEX IF NOT EXISTS idx_chat_msg_conv ON chat_messages(conversation_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_chat_msg_saved ON chat_messages(created_at) WHERE tokens_saved IS NOT NULL;
+        CREATE OR REPLACE FUNCTION proof_tokens_saved_totals()
+        RETURNS TABLE(
+          measured_saved        bigint,
+          measured_today        bigint,
+          measured_frontier     bigint,
+          historical_prompt_sum bigint,
+          n                     bigint
+        ) LANGUAGE sql STABLE AS $$
+          SELECT
+            COALESCE(SUM(tokens_saved)    FILTER (WHERE tokens_saved IS NOT NULL), 0)::bigint,
+            COALESCE(SUM(tokens_saved)    FILTER (WHERE tokens_saved IS NOT NULL AND created_at >= date_trunc('day', now())), 0)::bigint,
+            COALESCE(SUM(frontier_tokens) FILTER (WHERE tokens_saved IS NOT NULL), 0)::bigint,
+            COALESCE(SUM(tokens_prompt)   FILTER (WHERE tokens_saved IS NULL), 0)::bigint,
+            COUNT(*)                      FILTER (WHERE tokens_saved IS NOT NULL)::bigint
+          FROM chat_messages;
+        $$;
 
         -- Chat billing: balances, top-ups, and per-message usage
         CREATE TABLE IF NOT EXISTS chat_balances (
