@@ -25,6 +25,7 @@ import { demoRoutes } from './demo.routes.js';
 import { showcaseRoutes } from './showcase.routes.js';
 import { walletAuthRoutes } from './wallet-auth.routes.js';
 import { accountRoutes } from './account.routes.js';
+import { proofRoutes } from './proof.routes.js';
 import { createChildLogger } from '@clude/shared/core/logger';
 import rateLimit from 'express-rate-limit';
 
@@ -133,6 +134,9 @@ export function mountApiRoutes(app: express.Application): void {
 
   // Account: in-app deletion (App Store guideline 5.1.1(v))
   app.use('/api/account', accountRoutes());
+
+  // Proof: public value-proof metrics (tokens-saved counter; later: grounding demo)
+  app.use('/api/proof', proofRoutes());
 
   // Helius webhook (USDC payment detection — outside /api to avoid API rate limiter)
   app.use('/webhook', topupWebhookRoutes());
