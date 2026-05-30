@@ -156,6 +156,7 @@ function parseArgs() {
     batchSleepMs: 0, // ms to sleep between batches (token-bucket safety belt for rate limits)
     rerank: '' as string, // 'voyage' | 'cohere' | '' (off). Cross-encoder rerank after recall.
     rerankTopN: 25, // keep this many memories after rerank
+    observationalMemory: false, // generate per-haystack observation log, inject as always-on context prefix
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -210,6 +211,9 @@ function parseArgs() {
         break;
       case '--rerank':
         opts.rerank = args[++i] || '';
+        break;
+      case '--observational-memory':
+        opts.observationalMemory = true;
         break;
       case '--rerank-top-n':
         opts.rerankTopN = parseInt(args[++i]) || 25;
@@ -581,6 +585,135 @@ Rules:
     return revisedText || proposedAnswer;
   } catch {
     return proposedAnswer;
+  }
+}
+
+/**
+ * Observational Memory (Mastra-style, Phase 6).
+ *
+ * For each question's haystack, generate a compressed structured "what I know
+ * about this user" overview. This becomes an always-on prefix to the reader's
+ * context — never per-query retrieved. Targets the "I don't know" hallucinations
+ * and multi-event disambiguation failures that retrieval-fragment readers struggle with.
+ *
+ * Cached on disk by haystack-set hash so repeat runs don't regenerate.
+ *
+ * Ref: https://mastra.ai/research/observational-memory (80 → 94.87% on LongMemEval-S)
+ */
+const OBS_LOG_CACHE_PATH = '.longmemeval-cache/obs-logs-s.json';
+let obsLogCache: Record<string, string> | null = null;
+
+function loadObsLogCache(): Record<string, string> {
+  if (obsLogCache !== null) return obsLogCache;
+  try {
+    obsLogCache = JSON.parse(readFileSync(OBS_LOG_CACHE_PATH, 'utf-8'));
+    console.log(`  Loaded ${Object.keys(obsLogCache!).length} cached observation logs`);
+  } catch {
+    obsLogCache = {};
+  }
+  return obsLogCache!;
+}
+
+function saveObsLogCache(): void {
+  if (obsLogCache === null) return;
+  try {
+    writeFileSync(OBS_LOG_CACHE_PATH, JSON.stringify(obsLogCache, null, 2));
+  } catch (err) {
+    console.error('Failed to save obs-log cache:', err);
+  }
+}
+
+function haystackHash(sessionIds: string[]): string {
+  const sorted = [...sessionIds].sort();
+  // Simple hash: first 16 chars of joined sorted IDs
+  const joined = sorted.join('|');
+  let h = 0;
+  for (let i = 0; i < joined.length; i++) {
+    h = ((h << 5) - h + joined.charCodeAt(i)) | 0;
+  }
+  return `${sorted.length}-${h.toString(16)}`;
+}
+
+async function generateObservationLog(q: LMEQuestion): Promise<string> {
+  const cache = loadObsLogCache();
+  const key = haystackHash(q.haystack_session_ids);
+  if (cache[key]) return cache[key];
+
+  // Assemble haystack content with date stamps. Trim per-session to keep within token budget.
+  const sessionTexts: string[] = [];
+  for (let i = 0; i < q.haystack_session_ids.length; i++) {
+    const sid = q.haystack_session_ids[i];
+    const date = q.haystack_dates[i] || 'unknown';
+    const turns = q.haystack_sessions[i] || [];
+    if (turns.length === 0) continue;
+    const text = turns
+      .map(t => `${t.role === 'user' ? 'User' : 'Assistant'}: ${t.content}`)
+      .join('\n');
+    sessionTexts.push(`## Session ${i + 1} [${date}] (id=${sid.slice(0, 8)})\n${text.slice(0, 3500)}`);
+  }
+  const fullText = sessionTexts.join('\n\n').slice(0, 90000);
+
+  try {
+    const resp = await anthropic.messages.create({
+      model: 'claude-sonnet-4-5-20250929',
+      max_tokens: 2500,
+      temperature: 0,
+      system: `You are reading a user's complete conversation history with an AI assistant. Produce a compressed structured "What I know about this user" overview.
+
+Output sections (only include those with relevant info):
+
+## Personal
+- Living situation, family, pets, key relationships — be specific (names, dates)
+
+## Work & Studies
+- Job title, company, team size, achievements — track CHANGES ("was X, now Y" with dates)
+
+## Activities & Routines
+- Hobbies, regular activities with frequencies ("yoga 3x/week"), classes, lessons
+
+## Health & Habits
+- Health conditions, fitness routines, dietary preferences, sleep schedules
+
+## Preferences & Tastes
+- Brands the user likes, products owned, things explicitly disliked or avoided
+- Specific item names ("Sony A7III camera", "Tamiya 1/48 Spitfire model")
+
+## Events Timeline (chronological, exact dates)
+- [YYYY-MM-DD] event description (session id if helpful)
+- Include: trips, purchases, lessons, classes, appointments, milestones, parties, concerts, illnesses, medical events
+
+## Tracked Changes (most important section for "current state" questions)
+- For ANY value that has changed over time, format as:
+  - "X: was VALUE_A (DATE_A), now VALUE_B (DATE_B)"
+- Examples:
+  - "Lives in: was Akihabara (until Jul 2023), now Harajuku (since Oct 2023)"
+  - "Engineers led: was 4 (Jan 2023), now 5 (May 2023)"
+  - "Apartment status: was renting (2023-03), now bought (2023-08)"
+
+## Entity Disambiguation
+- If user mentioned related-but-different entities (e.g. "tennis" vs "table tennis", "baseball cards" vs "football cards"), note them separately so questions about the wrong variant can be flagged as "not enough info"
+
+CRITICAL RULES:
+- Be SPECIFIC. Quote names, numbers, dates EXACTLY as the user said them.
+- Group facts under sections; one fact per bullet.
+- For numeric counts (how many X): if the count CHANGED, use "was/now" format. If stable, give the final number.
+- For "tracked changes": always show "was VALUE (DATE), now VALUE (DATE)" — this is the critical section for current-vs-previous questions.
+- Aim for 80-200 lines total — compress, do not summarize away facts.
+- Skip sections with no relevant info.
+- Do NOT include the assistant's recommendations unless they were specifically discussed as user preferences.`,
+      messages: [{
+        role: 'user',
+        content: `Conversation history:\n\n${fullText}\n\nProduce the structured "What I know about this user" overview:`,
+      }],
+    });
+    const log = resp.content[0].type === 'text' ? resp.content[0].text.trim() : '';
+    cache[key] = log;
+    // Persist eagerly so partial progress survives crashes
+    saveObsLogCache();
+    return log;
+  } catch (err) {
+    console.error(`Obs-log generation failed for question ${q.question_id}:`, err);
+    return '';
   }
 }
 
@@ -1515,6 +1648,10 @@ async function main() {
   (globalThis as any).__verifyEnabled = opts.verify;
   (globalThis as any).__criticModel = opts.criticModel || opts.readerModel;
   (globalThis as any).__selfConsistencyN = opts.selfConsistency;
+  (globalThis as any).__observationalMemory = opts.observationalMemory;
+  if (opts.observationalMemory) {
+    console.log(`  Observational Memory enabled — observation log will be prepended to reader context`);
+  }
   console.log();
 
   // Apply run-id isolation: unique owner_wallet avoids needing to clean stale data
@@ -2373,7 +2510,18 @@ async function main() {
           }
         }
 
-        const context = formatBenchmarkContext(contextMemories, q.question_type);
+        let context = formatBenchmarkContext(contextMemories, q.question_type);
+
+        // Observational Memory: prepend a per-haystack compressed "what I know about
+        // this user" overview as an always-on context prefix. Mastra reports this
+        // lifts LongMemEval-S from ~80 → ~95% on its own. Cached on disk so repeat
+        // runs reuse the same logs.
+        if ((globalThis as any).__observationalMemory) {
+          const obsLog = await generateObservationLog(q);
+          if (obsLog) {
+            context = `# What I know about this user (compressed overview)\n\n${obsLog}\n\n---\n\n# Retrieved memories for this specific question\n\n${context}`;
+          }
+        }
 
         // Per-category reader model selection. Opus 4.7 on reasoning-heavy
         // categories (KU update-detection, multi-session synthesis, preference
