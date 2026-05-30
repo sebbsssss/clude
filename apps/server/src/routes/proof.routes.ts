@@ -6,8 +6,10 @@ const log = createChildLogger('proof-routes');
 
 // Hybrid baseline (§7.3): legacy rows (pre-migration, tokens_saved IS NULL) have no
 // reconstructable savings, so we disclose an estimate = historical prompt tokens × ratio.
-const BASELINE_RATIO = Number(process.env.PROOF_BASELINE_RATIO || '0.82');
+const BASELINE_RATIO = Number(process.env.PROOF_BASELINE_RATIO ?? '0.82');
 const CACHE_TTL_MS = Number(process.env.PROOF_CACHE_TTL_MS ?? '10000');
+// Fallback "avg savings %" when there is no measured frontier yet — derived from the ratio so it tracks env overrides.
+const FALLBACK_AVG_PCT = Math.round(BASELINE_RATIO * 100);
 
 interface TokensSavedPayload {
   totalSaved: number;
@@ -31,7 +33,7 @@ async function computePayload(): Promise<TokensSavedPayload> {
     return {
       totalSaved: cache?.payload.totalSaved ?? 0,
       savedToday: 0,
-      avgSavingsPct: 82,
+      avgSavingsPct: FALLBACK_AVG_PCT,
       ratePerMin: 0,
       baselineEstimated: cache?.payload.baselineEstimated ?? 0,
       updatedAt: new Date(now).toISOString(),
@@ -46,7 +48,7 @@ async function computePayload(): Promise<TokensSavedPayload> {
   const totalSaved = measuredSaved + baselineEstimated;
   const avgSavingsPct = measuredFrontier > 0
     ? Math.round((measuredSaved / measuredFrontier) * 100)
-    : 82;
+    : FALLBACK_AVG_PCT;
 
   let ratePerMin = 0;
   if (lastSample && now > lastSample.at) {
@@ -71,7 +73,7 @@ export function proofRoutes(): Router {
       res.json(cache.payload);
     } catch (err) {
       log.error({ err }, 'tokens-saved endpoint error');
-      res.json({ totalSaved: cache?.payload.totalSaved ?? 0, savedToday: 0, avgSavingsPct: 82, ratePerMin: 0, baselineEstimated: cache?.payload.baselineEstimated ?? 0, updatedAt: new Date().toISOString() });
+      res.json({ totalSaved: cache?.payload.totalSaved ?? 0, savedToday: 0, avgSavingsPct: FALLBACK_AVG_PCT, ratePerMin: 0, baselineEstimated: cache?.payload.baselineEstimated ?? 0, updatedAt: new Date().toISOString() });
     }
   });
 
