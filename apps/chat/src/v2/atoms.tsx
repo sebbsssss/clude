@@ -24,6 +24,15 @@ export function CcSavingsChip({ saved = 12840 }: { saved?: number }) {
   );
 }
 
+export function CcSavedAllTimeChip({ saved }: { saved: number }) {
+  return (
+    <a className="cc-savedchip" href="/proof.html" target="_blank" rel="noopener" style={{ textDecoration: 'none' }} title="Total tokens Clude has saved, to date">
+      <span className="cc-savedchip__val">−{saved.toLocaleString()}</span>
+      <span className="cc-savedchip__lbl">tok saved · all-time</span>
+    </a>
+  );
+}
+
 export function CcCitation({ memory }: { memory: V2Memory | null | undefined }) {
   if (!memory) return null;
   return (
