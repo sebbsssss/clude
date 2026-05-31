@@ -3,9 +3,14 @@ import express from 'express';
 import type { Server } from 'http';
 
 // Disable the endpoint's TTL cache so each test exercises its own RPC result.
-process.env.PROOF_CACHE_TTL_MS = '0';
+// -1 (not 0) forces a recompute every request: the gate is `now - cache.at > TTL`,
+// and same-millisecond requests would otherwise serve a stale cached payload.
+process.env.PROOF_CACHE_TTL_MS = '-1';
 // Zero the lifetime baseline seed so totals reflect only the mocked RPC values.
 process.env.PROOF_BASELINE_SEED = '0';
+// Disable the disclosed daily-savings estimate so measured assertions hold.
+process.env.PROOF_DAILY_MIN = '0';
+process.env.PROOF_DAILY_MAX = '0';
 
 const mockDbQueue: Array<{ data: any; error?: any }> = [];
 function dequeue() { return Promise.resolve(mockDbQueue.shift() ?? { data: null, error: null }); }
@@ -104,6 +109,20 @@ describe('GET /api/proof/tokens-saved', () => {
     const body: any = await r.json();
     expect(r.status).toBe(200);
     expect(body.totalSaved).toBeGreaterThanOrEqual(0);
+  });
+
+  it('adds the disclosed daily estimate to savedToday when bounds are configured', async () => {
+    process.env.PROOF_DAILY_MIN = '100000000';
+    process.env.PROOF_DAILY_MAX = '150000000';
+    mockDbQueue.push({ data: [{ measured_saved: 0, measured_today: 0, measured_frontier: 0, historical_prompt_sum: 0 }], error: null });
+    const r = await fetch(`${baseUrl}/api/proof/tokens-saved`);
+    const body: any = await r.json();
+    // Restore before assertions so later suites see the disabled estimate.
+    process.env.PROOF_DAILY_MIN = '0';
+    process.env.PROOF_DAILY_MAX = '0';
+    expect(r.status).toBe(200);
+    expect(body.savedToday).toBeGreaterThanOrEqual(100000000);
+    expect(body.savedToday).toBeLessThanOrEqual(150000000);
   });
 });
 

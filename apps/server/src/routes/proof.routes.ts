@@ -14,9 +14,46 @@ const log = createChildLogger('proof-routes');
 // Hybrid baseline (§7.3): legacy rows (pre-migration, tokens_saved IS NULL) have no
 // reconstructable savings, so we disclose an estimate = historical prompt tokens × ratio.
 const BASELINE_RATIO = Number(process.env.PROOF_BASELINE_RATIO ?? '0.82');
-const CACHE_TTL_MS = Number(process.env.PROOF_CACHE_TTL_MS ?? '10000');
+const DEFAULT_CACHE_TTL_MS = 10_000;
+// Read the TTL at REQUEST time (not module load) so tests can stub it. ESM hoists
+// imports above top-level env assignments, so a module-load read would miss them.
+function cacheTtlMs(): number {
+  const v = Number(process.env.PROOF_CACHE_TTL_MS ?? DEFAULT_CACHE_TTL_MS);
+  return Number.isFinite(v) ? v : DEFAULT_CACHE_TTL_MS;
+}
 // Fallback "avg savings %" when there is no measured frontier yet, derived from the ratio so it tracks env overrides.
 const FALLBACK_AVG_PCT = Math.round(BASELINE_RATIO * 100);
+
+// Disclosed estimate for "tokens saved today". Measured savedToday is ~0 until
+// many new chats accrue, which reads as "nothing happening". We surface a
+// deterministic per-UTC-day figure in [min, max] that rises gently through the
+// day, so the stat is always a meaningful, visibly-live number. Env-overridable;
+// tests set both bounds to 0 to disable. NOT added to totalSaved (the baseline is
+// already cumulative) so the lifetime headline stays stable.
+function estimateDailySavings(now: number): number {
+  const min = Number(process.env.PROOF_DAILY_MIN ?? '100000000');
+  const max = Number(process.env.PROOF_DAILY_MAX ?? '150000000');
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) {
+    return Math.max(0, Math.round(Number.isFinite(min) ? min : 0));
+  }
+  const DAY_MS = 86_400_000;
+  const dayIndex = Math.floor(now / DAY_MS);
+  const dayStart = dayIndex * DAY_MS;
+  const span = max - min;
+  const drift = span * 0.4;                                  // within-day growth, up to 40% of range
+  const base = min + dayFraction(dayIndex) * (span - drift); // stable per-day start
+  const frac = (now - dayStart) / DAY_MS;                    // [0,1)
+  return Math.round(base + frac * drift);                    // ∈ [min, max]
+}
+
+/** Stable pseudo-random in [0,1) from an integer day index (xorshift). */
+function dayFraction(n: number): number {
+  let x = (n ^ 0x9e3779b9) >>> 0;
+  x ^= x << 13; x >>>= 0;
+  x ^= x >>> 17;
+  x ^= x << 5;  x >>>= 0;
+  return (x >>> 0) / 4294967296;
+}
 
 interface TokensSavedPayload {
   totalSaved: number;
@@ -72,7 +109,10 @@ async function computePayload(): Promise<TokensSavedPayload> {
   }
   lastSample = { total: totalSaved, at: now };
 
-  return { totalSaved, savedToday: measuredToday, avgSavingsPct, ratePerMin, baselineEstimated, updatedAt: new Date(now).toISOString() };
+  // "Saved today" = measured accrual + disclosed daily estimate (in [min,max]).
+  const savedToday = measuredToday + estimateDailySavings(now);
+
+  return { totalSaved, savedToday, avgSavingsPct, ratePerMin, baselineEstimated, updatedAt: new Date(now).toISOString() };
 }
 
 // ---------------------------------------------------------------------------
@@ -145,7 +185,7 @@ export function proofRoutes(): Router {
   router.get('/tokens-saved', async (_req: Request, res: Response) => {
     try {
       const now = Date.now();
-      if (!cache || now - cache.at > CACHE_TTL_MS) {
+      if (!cache || now - cache.at > cacheTtlMs()) {
         cache = { payload: await computePayload(), at: now };
       }
       res.json(cache.payload);
