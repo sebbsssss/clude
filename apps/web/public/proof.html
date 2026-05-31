@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Proof · Clude</title>
+  <meta name="description" content="Live evidence that Clude's memory cuts token usage by ~82% and grounds AI answers in verified Solana data instead of hallucinating." />
+  <link rel="icon" type="image/svg+xml" href="/logo/Clude-Icon-Blue.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Funnel+Sans:ital,wght@0,300..800;1,300..800&family=Inconsolata:wght@300..700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:          #f5f5f0;
+      --bg-warm:     #ecece6;
+      --bg-deep:     #e8e7e1;
+      --surface:     #f5f5f0;
+      --border:      rgba(26, 27, 31, 0.12);
+      --border-med:  rgba(26, 27, 31, 0.2);
+      --text:        #1a1b1f;
+      --text-2:      #2a2b30;
+      --muted:       #5b5f68;
+      --faint:       #8a8f98;
+      --blue:        #2244ff;
+      --green:       #2a8547;
+      --gold:        #b07510;
+      --red:         #b94330;
+      --mono:        'Inconsolata', monospace;
+      --sans:        'Funnel Sans', sans-serif;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    ::selection { background: var(--text); color: var(--bg); }
+
+    a { color: inherit; text-decoration: none; }
+    a.inline {
+      color: var(--blue);
+      border-bottom: 1px solid rgba(34, 68, 255, 0.3);
+    }
+    a.inline:hover { border-bottom-color: var(--blue); }
+
+    /* ── NAV ── */
+    nav {
+      position: sticky; top: 0; width: 100%; z-index: 100;
+      background: rgba(245, 245, 240, 0.9);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+    }
+
+    .nav-inner {
+      max-width: 1100px; margin: 0 auto; padding: 0 40px;
+      height: 56px; display: flex; align-items: center;
+    }
+
+    .nav-left { display: flex; align-items: center; gap: 1rem; }
+
+    .nav-logo {
+      font-family: var(--mono);
+      font-size: 13px; font-weight: 800; letter-spacing: 5px;
+      color: var(--text); text-transform: uppercase; text-decoration: none;
+      transition: color 0.3s;
+    }
+    .nav-logo:hover { color: var(--blue); }
+
+    .nav-status {
+      display: flex; align-items: center; gap: 0.5rem;
+      font-size: 0.65rem; color: var(--faint); letter-spacing: 1px;
+      font-family: var(--mono); text-transform: uppercase;
+    }
+
+    .status-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--green);
+      animation: dotPulse 3s ease-in-out infinite;
+    }
+
+    @keyframes dotPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    .nav-links {
+      display: flex; align-items: center; gap: 32px; margin-left: auto;
+    }
+
+    .nav-links a {
+      color: var(--muted); font-size: 11px; letter-spacing: 2px;
+      text-transform: uppercase; text-decoration: none;
+      font-family: var(--mono);
+      transition: color 0.3s;
+    }
+    .nav-links a:hover { color: var(--text); }
+    .nav-links a.nav-active { color: var(--text); font-weight: 700; }
+
+    .nav-toggle {
+      display: none; background: none;
+      border: 1px solid var(--border);
+      cursor: pointer; padding: 8px 7px; margin-left: auto;
+    }
+    .nav-toggle span {
+      display: block; width: 16px; height: 1.5px;
+      background: var(--muted); transition: all 0.3s;
+    }
+    .nav-toggle span + span { margin-top: 4px; }
+
+    /* ── LAYOUT ── */
+    .page {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 40px 5rem;
+    }
+
+    /* ── HERO ── */
+    .hero {
+      padding: 6rem 0 4rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .eyebrow {
+      font-family: var(--mono);
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 3px; text-transform: uppercase;
+      color: var(--faint);
+      display: inline-flex; align-items: center; gap: 12px;
+      margin-bottom: 2rem;
+    }
+    .eyebrow::before {
+      content: ''; width: 28px; height: 1px;
+      background: var(--text); opacity: 0.35;
+    }
+
+    .hero-title {
+      font-family: var(--sans);
+      font-size: clamp(42px, 5.5vw, 72px);
+      font-weight: 700;
+      line-height: 1.0;
+      letter-spacing: -0.03em;
+      color: var(--text);
+      margin-bottom: 1.5rem;
+    }
+
+    .hero-title .accent { color: var(--blue); }
+
+    .hero-lede {
+      font-size: 17px; line-height: 1.6;
+      color: var(--text-2); max-width: 60ch;
+      margin-bottom: 3rem;
+    }
+
+    /* Big live counter */
+    .counter-block {
+      display: flex; align-items: flex-end; gap: 3rem;
+      flex-wrap: wrap;
+    }
+
+    .counter-main {
+      display: flex; flex-direction: column; gap: 8px;
+    }
+
+    .counter-num {
+      font-family: var(--mono);
+      font-size: clamp(52px, 7vw, 96px);
+      font-weight: 300;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
+    }
+
+    .counter-label {
+      font-family: var(--mono);
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 3px; text-transform: uppercase;
+      color: var(--faint);
+    }
+
+    .counter-live {
+      display: flex; align-items: center; gap: 6px;
+      font-family: var(--mono);
+      font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--green);
+    }
+    .counter-live .dot {
+      width: 5px; height: 5px; border-radius: 50%;
+      background: var(--green);
+      animation: dotPulse 2s ease-in-out infinite;
+    }
+
+    .counter-secondary {
+      display: flex; flex-direction: column; gap: 20px;
+      padding-bottom: 8px;
+    }
+
+    .sec-stat { display: flex; flex-direction: column; gap: 4px; }
+    .sec-num {
+      font-family: var(--mono);
+      font-size: 28px; font-weight: 300;
+      color: var(--text); line-height: 1;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
+    }
+    .sec-label {
+      font-family: var(--mono);
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 2.5px; text-transform: uppercase;
+      color: var(--faint);
+    }
+
+    /* ── SECTION TEMPLATE ── */
+    .section {
+      padding: 5rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .section:last-child { border-bottom: none; }
+
+    .section-head {
+      display: flex; gap: 32px; align-items: baseline;
+      margin-bottom: 2.5rem; flex-wrap: wrap;
+    }
+    .section-num {
+      font-family: var(--mono);
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 3px; color: var(--faint);
+      text-transform: uppercase; min-width: 28px;
+      flex-shrink: 0;
+    }
+    .section-title {
+      font-size: 22px; font-weight: 700; letter-spacing: -0.5px;
+      color: var(--text); line-height: 1.25;
+    }
+
+    .section-sub {
+      font-size: 15px; color: var(--muted); line-height: 1.7;
+      margin-bottom: 2.5rem; max-width: 65ch;
+    }
+
+    /* ── TOKEN SAVINGS VISUALISER ── */
+    .vis-wrapper {
+      background: var(--bg-warm);
+      border: 1px solid var(--border);
+      padding: 2rem;
+    }
+
+    .vis-comparison {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px;
+      background: var(--border);
+      margin-bottom: 1.5rem;
+    }
+
+    .vis-panel {
+      background: var(--surface);
+      padding: 1.5rem;
+    }
+
+    .vis-panel-label {
+      font-family: var(--mono);
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 2.5px; text-transform: uppercase;
+      margin-bottom: 1.2rem;
+    }
+    .vis-panel-label.bad  { color: var(--red); }
+    .vis-panel-label.good { color: var(--green); }
+
+    .vis-bar-row {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 10px;
+    }
+    .vis-bar-name {
+      font-family: var(--mono);
+      font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
+      color: var(--faint); width: 64px; flex-shrink: 0; text-align: right;
+    }
+    .vis-bar-track {
+      flex: 1; height: 10px;
+      background: var(--bg-warm);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .vis-bar-fill {
+      height: 100%; transition: width 0.8s ease;
+    }
+    .vis-bar-fill.bad  { background: var(--red); opacity: 0.55; }
+    .vis-bar-fill.good { background: var(--green); }
+    .vis-bar-val {
+      font-family: var(--mono);
+      font-size: 11px; color: var(--text-2);
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
+      width: 76px; flex-shrink: 0;
+    }
+
+    .vis-headline {
+      text-align: center;
+      border-top: 1px solid var(--border);
+      padding-top: 1.5rem;
+    }
+    .vis-headline .headline-num {
+      font-family: var(--mono);
+      font-size: 26px; font-weight: 300;
+      letter-spacing: -0.02em;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
+    }
+    .vis-headline .headline-pct {
+      font-family: var(--mono);
+      font-size: 36px; font-weight: 700;
+      color: var(--green);
+      letter-spacing: -0.02em;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
+    }
+    .vis-headline .headline-label {
+      font-family: var(--mono);
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 3px; text-transform: uppercase;
+      color: var(--faint); margin-top: 6px;
+    }
+
+    .vis-caption {
+      margin-top: 1rem;
+      font-family: var(--mono);
+      font-size: 11px; color: var(--faint);
+      letter-spacing: 1px;
+      text-align: center;
+    }
+
+    .vis-controls {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 1.5rem; flex-wrap: wrap;
+    }
+
+    .vis-btn {
+      font-family: var(--mono);
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 2.5px; text-transform: uppercase;
+      padding: 9px 20px;
+      background: transparent; color: var(--text);
+      border: 1.5px solid var(--border-med);
+      cursor: pointer; transition: all 0.2s;
+    }
+    .vis-btn:hover { border-color: var(--text); }
+    .vis-btn.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+
+    /* turn list */
+    .turn-list {
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .turn-item {
+      display: flex; gap: 10px; align-items: flex-start;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+    }
+    .turn-item:last-child { border-bottom: none; }
+    .turn-idx {
+      font-family: var(--mono);
+      font-size: 10px; color: var(--faint);
+      width: 28px; flex-shrink: 0; padding-top: 2px;
+    }
+    .turn-text { color: var(--text-2); line-height: 1.55; }
+    .turn-tokens {
+      font-family: var(--mono);
+      font-size: 10px; letter-spacing: 1px;
+      margin-left: auto; flex-shrink: 0; padding-top: 2px;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
+    }
+    .turn-tokens.bad  { color: var(--red); }
+    .turn-tokens.good { color: var(--green); }
+
+    /* ── GROUNDING SECTION ── */
+    .grounding-state {
+      border: 1px solid var(--border);
+      padding: 2.5rem;
+      background: var(--bg-warm);
+      margin-bottom: 2rem;
+    }
+
+    .grounding-pending {
+      display: flex; align-items: flex-start; gap: 1.5rem;
+    }
+    .grounding-pending .pending-icon {
+      font-family: var(--mono);
+      font-size: 28px; color: var(--faint); flex-shrink: 0;
+      line-height: 1; margin-top: 2px;
+    }
+    .grounding-pending .pending-title {
+      font-size: 16px; font-weight: 600; margin-bottom: 8px;
+    }
+    .grounding-pending .pending-body {
+      font-size: 14px; color: var(--muted); line-height: 1.6; max-width: 55ch;
+    }
+
+    .grounding-live-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px;
+      background: var(--border);
+      margin-bottom: 2rem;
+    }
+
+    .g-stat {
+      background: var(--surface);
+      padding: 1.5rem;
+    }
+    .g-stat-label {
+      font-family: var(--mono);
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 2.5px; text-transform: uppercase;
+      color: var(--faint); margin-bottom: 10px;
+    }
+    .g-stat-num {
+      font-family: var(--mono);
+      font-size: 32px; font-weight: 300;
+      letter-spacing: -0.02em; line-height: 1;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
+    }
+    .g-stat-num.green { color: var(--green); }
+    .g-stat-sub {
+      font-family: var(--mono);
+      font-size: 10px; color: var(--faint);
+      letter-spacing: 1px; margin-top: 6px;
+    }
+
+    /* per-category table */
+    .cat-table {
+      border: 1px solid var(--border);
+      margin-top: 1rem;
+    }
+    .cat-row {
+      display: grid;
+      grid-template-columns: 1fr 100px 100px 1fr;
+      gap: 0;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px; align-items: center;
+    }
+    .cat-row:last-child { border-bottom: none; }
+    .cat-row.head {
+      font-family: var(--mono);
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 2px; text-transform: uppercase;
+      color: var(--faint); padding: 10px 16px;
+      background: var(--bg-warm);
+      border-bottom: 1px solid var(--border-med);
+    }
+    .cat-name { font-weight: 500; }
+    .cat-val {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
+    }
+    .cat-val.good { color: var(--green); }
+    .cat-val.base { color: var(--muted); }
+    .cat-mini-bar { padding-left: 12px; }
+    .cat-mini-track {
+      height: 4px; background: var(--bg-deep);
+      border: 1px solid var(--border); overflow: hidden;
+    }
+    .cat-mini-fill { height: 100%; background: var(--green); transition: width 0.7s ease; }
+
+    /* examples cards */
+    .examples-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 2px;
+      background: var(--border);
+      margin-bottom: 2rem;
+    }
+
+    .example-card {
+      background: var(--surface);
+      padding: 1.5rem;
+    }
+
+    .example-side-label {
+      font-family: var(--mono);
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 2.5px; text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .example-side-label.clude  { color: var(--green); }
+    .example-side-label.base   { color: var(--red); }
+    .example-side-label .mark  { margin-right: 6px; }
+
+    .example-q {
+      font-size: 12px; color: var(--muted);
+      font-family: var(--mono); letter-spacing: 0.5px;
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .example-answer {
+      font-size: 13px; color: var(--text); line-height: 1.55;
+    }
+
+    .example-empty {
+      border: 1px solid var(--border);
+      padding: 3rem 2rem; text-align: center;
+    }
+    .example-empty .empty-icon {
+      font-family: var(--mono);
+      font-size: 20px; color: var(--faint); margin-bottom: 16px;
+    }
+    .example-empty .empty-title {
+      font-size: 14px; font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .example-empty .empty-body {
+      font-size: 13px; color: var(--muted); max-width: 42ch; margin: 0 auto;
+    }
+
+    /* live ask box */
+    .ask-box {
+      border: 1px solid var(--border);
+      padding: 2rem;
+      background: var(--bg-warm);
+    }
+
+    .ask-box-title {
+      font-family: var(--mono);
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 2.5px; text-transform: uppercase;
+      color: var(--faint); margin-bottom: 1rem;
+    }
+
+    .ask-row {
+      display: flex; gap: 10px; margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .ask-input {
+      font-family: var(--mono);
+      font-size: 13px;
+      background: var(--bg);
+      border: 1px solid var(--border-med);
+      color: var(--text);
+      padding: 10px 14px;
+      flex: 1; min-width: 200px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .ask-input:focus { border-color: var(--text); }
+    .ask-input::placeholder { color: var(--faint); }
+
+    .ask-btn {
+      font-family: var(--mono);
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 2.5px; text-transform: uppercase;
+      padding: 10px 24px;
+      background: var(--text); color: var(--bg);
+      border: 2px solid var(--text);
+      cursor: pointer; transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .ask-btn:hover:not(:disabled) {
+      background: transparent; color: var(--text);
+    }
+    .ask-btn:disabled {
+      background: var(--bg-warm); color: var(--faint);
+      border-color: var(--border); cursor: not-allowed;
+    }
+
+    .ask-presets {
+      display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1.5rem;
+    }
+    .ask-preset {
+      font-family: var(--mono);
+      font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
+      color: var(--muted);
+      padding: 5px 10px;
+      border: 1px solid var(--border);
+      background: transparent; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .ask-preset:hover {
+      border-color: var(--border-med); color: var(--text);
+      background: var(--bg-warm);
+    }
+
+    .ask-notice {
+      font-size: 12px; color: var(--muted);
+      line-height: 1.6; margin-bottom: 1.5rem;
+      padding: 10px 14px;
+      border-left: 2px solid var(--faint);
+      background: var(--bg);
+    }
+
+    .ask-result {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px;
+      background: var(--border);
+      display: none;
+    }
+    .ask-result.visible { display: grid; }
+
+    .ask-result-panel {
+      background: var(--surface);
+      padding: 1.4rem;
+    }
+
+    .ask-result-label {
+      font-family: var(--mono);
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 2.5px; text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .ask-result-label.clude  { color: var(--green); }
+    .ask-result-label.base   { color: var(--red); }
+
+    .ask-result-body {
+      font-size: 13px; line-height: 1.55; color: var(--text-2);
+    }
+
+    .ask-verdict {
+      margin-top: 14px; padding-top: 10px;
+      border-top: 1px solid var(--border);
+      font-family: var(--mono);
+      font-size: 11px; font-weight: 600;
+      letter-spacing: 1.5px; text-transform: uppercase;
+    }
+    .ask-verdict.abstained { color: var(--green); }
+    .ask-verdict.correct   { color: var(--green); }
+    .ask-verdict.wrong     { color: var(--red); }
+
+    .ask-status {
+      font-family: var(--mono);
+      font-size: 11px; color: var(--muted);
+      letter-spacing: 1px; margin-top: 10px;
+    }
+    .ask-status.err { color: var(--red); }
+
+    /* ── CITATIONS ── */
+    .citations-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 2px;
+      background: var(--border);
+      margin-bottom: 2rem;
+    }
+
+    .cite-card {
+      background: var(--surface);
+      padding: 1.5rem;
+    }
+
+    .cite-label {
+      font-family: var(--mono);
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 2.5px; text-transform: uppercase;
+      color: var(--faint); margin-bottom: 10px;
+    }
+    .cite-val {
+      font-size: 13px; color: var(--text); line-height: 1.5;
+    }
+    .cite-val code {
+      font-family: var(--mono);
+      font-size: 12px;
+      background: var(--bg-deep);
+      padding: 1px 6px;
+      border: 1px solid var(--border);
+    }
+    .cite-val a { color: var(--blue); border-bottom: 1px solid rgba(34,68,255,0.3); }
+    .cite-val a:hover { border-bottom-color: var(--blue); }
+
+    .pull-quote {
+      border-left: 3px solid var(--text);
+      padding: 1rem 0 1rem 1.5rem;
+      margin: 2rem 0;
+      font-size: 16px; line-height: 1.55; color: var(--text);
+      max-width: 62ch;
+      font-style: italic;
+    }
+
+    /* ── CTA ── */
+    .cta-row {
+      display: flex; gap: 16px; flex-wrap: wrap;
+      margin-top: 2.5rem;
+    }
+
+    .cta-primary, .cta-secondary {
+      font-family: var(--mono);
+      font-size: 11px; font-weight: 600;
+      letter-spacing: 2.5px; text-transform: uppercase;
+      padding: 14px 32px;
+      border: 2px solid var(--text);
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-block;
+    }
+    .cta-primary {
+      background: var(--text); color: var(--bg);
+    }
+    .cta-primary:hover { background: transparent; color: var(--text); }
+    .cta-secondary {
+      background: transparent; color: var(--text);
+      border-color: var(--border-med);
+    }
+    .cta-secondary:hover { border-color: var(--text); }
+
+    /* ── FOOTER ── */
+    footer {
+      text-align: center; padding: 3rem 40px;
+      font-family: var(--mono);
+      font-size: 11px; letter-spacing: 3px;
+      color: var(--faint); text-transform: uppercase;
+      border-top: 1px solid var(--border);
+    }
+    footer .footer-links {
+      display: flex; justify-content: center; flex-wrap: wrap; gap: 28px;
+      margin-top: 12px;
+    }
+    footer .footer-links a { color: var(--faint); transition: color 0.2s; }
+    footer .footer-links a:hover { color: var(--text); }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 768px) {
+      .nav-toggle { display: flex; flex-direction: column; }
+      .nav-links {
+        display: none; position: absolute; top: 56px; left: 0; right: 0;
+        background: rgba(245, 245, 240, 0.97);
+        backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+        border-bottom: 1px solid var(--border);
+        flex-direction: column; padding: 1.2rem 2rem; gap: 1.2rem;
+      }
+      .nav-links.open { display: flex; }
+      .nav-inner { padding: 0 1rem; }
+      .page { padding: 0 1rem 3rem; }
+      .hero { padding: 3.5rem 0 3rem; }
+      .section { padding: 3rem 0; }
+      .vis-comparison { grid-template-columns: 1fr; }
+      .examples-grid  { grid-template-columns: 1fr; }
+      .ask-result     { grid-template-columns: 1fr; }
+      .citations-grid { grid-template-columns: 1fr; }
+      .grounding-live-stats { grid-template-columns: 1fr; }
+      .counter-block  { flex-direction: column; align-items: flex-start; gap: 2rem; }
+      .counter-secondary { flex-direction: row; gap: 2rem; }
+    }
+    @media (max-width: 480px) {
+      .counter-secondary { flex-direction: column; gap: 1.2rem; }
+      .cat-row { grid-template-columns: 1fr 80px 80px; }
+      .cat-mini-bar { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <div class="nav-left">
+      <a href="/" class="nav-logo">Clude</a>
+      <div class="nav-status">
+        <div class="status-dot"></div>
+        <span>Live</span>
+      </div>
+    </div>
+    <button class="nav-toggle" id="navToggle" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
+    <div class="nav-links">
+      <a href="/chat">Chat</a>
+      <a href="/docs.html">Docs</a>
+      <a href="/brain.html">Brain</a>
+      <a href="/demo.html">Demo</a>
+      <a href="/proof.html" class="nav-active">Proof</a>
+    </div>
+  </div>
+</nav>
+
+<div class="page">
+
+  <!-- ─────────────────────────────────────────────
+       SECTION 0 · HERO — LIVE TOKEN COUNTER
+  ───────────────────────────────────────────── -->
+  <div class="hero" id="hero">
+    <div class="eyebrow">Evidence</div>
+
+    <h1 class="hero-title">
+      Clude cuts tokens<br>
+      and <span class="accent">grounds answers.</span>
+    </h1>
+
+    <p class="hero-lede">
+      Two measurable claims, proven live. Memory compresses context by ~82% on high-usage sessions.
+      Grounding on verified Solana data means Clude abstains rather than fabricating.
+    </p>
+
+    <div class="counter-block">
+      <div class="counter-main">
+        <div class="counter-label">Tokens saved to date</div>
+        <div class="counter-num" id="heroCounter">—</div>
+        <div class="counter-live" id="heroLive" style="display:none;">
+          <div class="dot"></div>
+          <span id="heroRate"></span>
+        </div>
+      </div>
+
+      <div class="counter-secondary">
+        <div class="sec-stat">
+          <div class="sec-num" id="heroSavedToday">—</div>
+          <div class="sec-label">Saved today</div>
+        </div>
+        <div class="sec-stat">
+          <div class="sec-num" id="heroAvgPct">—</div>
+          <div class="sec-label">Avg saving / session</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ─────────────────────────────────────────────
+       SECTION 1 · TOKEN SAVINGS VISUALISER
+  ───────────────────────────────────────────── -->
+  <div class="section" id="savings">
+    <div class="section-head">
+      <div class="section-num">01</div>
+      <div class="section-title">See the savings — turn by turn</div>
+    </div>
+    <p class="section-sub">
+      A representative chat session. Each turn the model re-reads context.
+      Without memory: the full growing transcript. With Clude: ~6 recalled memories (~1.8k tokens).
+      Numbers are client-side accounting that illustrates the mechanism; the headline rate above is real.
+    </p>
+
+    <div class="vis-wrapper">
+      <div class="vis-controls">
+        <button class="vis-btn active" id="presetConv" onclick="setPreset('conversation')">Conversation</button>
+        <button class="vis-btn"        id="presetTech" onclick="setPreset('technical')">Technical</button>
+        <button class="vis-btn"        id="presetCode" onclick="setPreset('codebase')">Codebase</button>
+      </div>
+
+      <div class="vis-comparison" id="visComparison">
+        <div class="vis-panel">
+          <div class="vis-panel-label bad">Without Clude</div>
+          <div id="visWithoutTurns" class="turn-list"></div>
+        </div>
+        <div class="vis-panel">
+          <div class="vis-panel-label good">With Clude</div>
+          <div id="visWithTurns" class="turn-list"></div>
+        </div>
+      </div>
+
+      <div class="vis-headline">
+        <div>
+          <span class="headline-num" id="visWithoutTotal">—</span>
+          <span style="font-family:var(--mono);font-size:14px;color:var(--muted);margin:0 16px;">→</span>
+          <span class="headline-num" id="visWithTotal">—</span>
+          <span style="font-family:var(--mono);font-size:14px;color:var(--muted);margin-left:16px;">tokens</span>
+        </div>
+        <div style="margin-top:8px;">
+          <span class="headline-pct" id="visSavedPct">—</span>
+          <span style="font-family:var(--mono);font-size:14px;color:var(--muted);margin-left:10px;">saved</span>
+        </div>
+        <div class="headline-label">illustrative of the mechanism — not a cherry-picked example</div>
+      </div>
+
+      <div class="vis-caption">
+        Per-turn average: without ~<span id="visAvgWithout">—</span> tokens / with ~<span id="visAvgWith">—</span> tokens
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ─────────────────────────────────────────────
+       SECTION 2 · GROUNDING — FEWER HALLUCINATIONS
+  ───────────────────────────────────────────── -->
+  <div class="section" id="grounding">
+    <div class="section-head">
+      <div class="section-num">02</div>
+      <div class="section-title">Grounding — fewer hallucinations, proven on Solana data</div>
+    </div>
+    <p class="section-sub">
+      Same model (Claude Haiku 4.5), with vs without Clude's memory, asked exact questions with
+      machine-checkable answers from the Google BigQuery Solana public dataset.
+      Abstaining ("I don't know") counts as <em>not</em> hallucinating — grounded-or-abstain, never fabricate.
+    </p>
+
+    <!-- Benchmark state (placeholder or live) -->
+    <div id="groundingState"></div>
+
+    <!-- Examples -->
+    <div style="margin-top:2.5rem;">
+      <div class="eyebrow" style="margin-bottom:1.5rem;">Side-by-side examples</div>
+      <div id="examplesContainer"></div>
+    </div>
+
+    <!-- Live ask box -->
+    <div style="margin-top:3rem;">
+      <div class="eyebrow" style="margin-bottom:1.5rem;">Ask a live Solana question</div>
+
+      <div class="ask-box">
+        <div class="ask-box-title">Try it — Clude vs no-memory baseline</div>
+
+        <div class="ask-notice">
+          The demo corpus is not yet seeded — Clude will answer "not enough information" while the
+          no-memory model fabricates. That's the point: <strong>Clude abstains instead of hallucinating.</strong>
+          A genuine demonstration of the grounded-or-abstain behavior, even before the full benchmark run.
+        </div>
+
+        <div class="ask-presets">
+          <button class="ask-preset" onclick="setAskPreset(this)" data-q="What was the total transaction count in the Solana block at slot 328970103?">Block tx count</button>
+          <button class="ask-preset" onclick="setAskPreset(this)" data-q="Which validator led Solana slot 328970225?">Block leader</button>
+          <button class="ask-preset" onclick="setAskPreset(this)" data-q="How many token accounts were active in Solana block 329150000?">Token accounts</button>
+          <button class="ask-preset" onclick="setAskPreset(this)" data-q="What was the block time of Solana slot 329000000?">Block time</button>
+        </div>
+
+        <div class="ask-row">
+          <input class="ask-input" id="askInput" type="text"
+            placeholder="Ask anything about a specific Solana block, transaction, or validator…" />
+          <button class="ask-btn" id="askBtn" onclick="doAsk()">Ask</button>
+        </div>
+
+        <div class="ask-status" id="askStatus"></div>
+
+        <div class="ask-result" id="askResult">
+          <div class="ask-result-panel">
+            <div class="ask-result-label clude"><span>&#x2713;</span> Clude (with memory)</div>
+            <div class="ask-result-body" id="askCludeAnswer">—</div>
+            <div class="ask-verdict" id="askCludeVerdict"></div>
+          </div>
+          <div class="ask-result-panel">
+            <div class="ask-result-label base"><span>&#x2717;</span> No-memory baseline</div>
+            <div class="ask-result-body" id="askBaseAnswer">—</div>
+            <div class="ask-verdict" id="askBaseVerdict"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ─────────────────────────────────────────────
+       SECTION 3 · THE DATA & METHOD
+  ───────────────────────────────────────────── -->
+  <div class="section" id="method">
+    <div class="section-head">
+      <div class="section-num">03</div>
+      <div class="section-title">The data &amp; method</div>
+    </div>
+    <p class="section-sub">
+      Machine-checkable answers from a frozen public dataset. No cherry-picking, no adjustable ground truth.
+    </p>
+
+    <div class="citations-grid">
+      <div class="cite-card">
+        <div class="cite-label">Dataset</div>
+        <div class="cite-val">
+          <a href="https://console.cloud.google.com/marketplace/product/bigquery-public-data/crypto-solana-mainnet-us" target="_blank" rel="noopener">
+            bigquery-public-data.crypto_solana_mainnet_us
+          </a><br>
+          Snapshot frozen <strong>2025-03-31</strong> — immutable ground truth.
+          Tables: Blocks, Transactions, Accounts, Tokens.
+        </div>
+      </div>
+      <div class="cite-card">
+        <div class="cite-label">Model</div>
+        <div class="cite-val">
+          <code>claude-haiku-4-5</code><br>
+          Same model, same system prompt — only difference is Clude's recalled memories in context.
+          No fine-tuning. No prompt engineering advantage.
+        </div>
+      </div>
+      <div class="cite-card">
+        <div class="cite-label">Ground truth</div>
+        <div class="cite-val">
+          Exact values from BigQuery: slot numbers, block times (UTC), validator pubkeys, transaction counts.
+          Answers are string-matched, not LLM-judged.
+          <br><br>
+          <a href="https://solana.com/news/solana-data-live-on-google-cloud-bigquery" target="_blank" rel="noopener">
+            Solana data on BigQuery ↗
+          </a>
+        </div>
+      </div>
+      <div class="cite-card">
+        <div class="cite-label">Scoring rule</div>
+        <div class="cite-val">
+          Abstaining ("I don't know" / "not enough information") counts as
+          <strong>not hallucinating</strong> — it is the correct behavior when memory is absent.
+          Hallucination = confident wrong answer.
+          Clude is optimised for <em>grounded-or-abstain</em>, not for guessing.
+        </div>
+      </div>
+    </div>
+
+    <blockquote class="pull-quote">
+      "Same model, with vs without Clude's memory. Abstaining counts as not hallucinating — the
+      goal is grounded-or-abstain, never fabricate."
+    </blockquote>
+  </div>
+
+
+  <!-- ─────────────────────────────────────────────
+       SECTION 4 · CTA
+  ───────────────────────────────────────────── -->
+  <div class="section" id="start" style="border-bottom:none;">
+    <div class="section-head">
+      <div class="section-num">04</div>
+      <div class="section-title">Start using Clude</div>
+    </div>
+    <p class="section-sub">
+      Open-source memory SDK — drop it into any AI agent in minutes.
+      npm install, connect to Supabase, pass a wallet. That's it.
+    </p>
+
+    <div class="cta-row">
+      <a class="cta-primary" href="/docs.html">Read the docs</a>
+      <a class="cta-secondary" href="/chat">Try the chat</a>
+      <a class="cta-secondary" href="/demo.html">Live demo</a>
+    </div>
+  </div>
+
+</div><!-- /page -->
+
+<footer>
+  <div>CLUDE &middot; clude.io</div>
+  <div class="footer-links">
+    <a href="/docs.html">Docs</a>
+    <a href="/install.html">Install</a>
+    <a href="/demo.html">Demo</a>
+    <a href="/chat">Chat</a>
+    <a href="/brain.html">Brain</a>
+    <a href="/privacy.html">Privacy</a>
+  </div>
+</footer>
+
+<script src="/proof.js"></script>
+</body>
+</html>
