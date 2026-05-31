@@ -96,3 +96,22 @@ export async function encryptForStorage(
     ],
   };
 }
+
+/**
+ * `provider_delegated` value for a NEW memory write. NEVER returns `false`.
+ *
+ * `false` is reserved exclusively for the revoke RPC (Plan 4). The recall filter
+ * `.not('provider_delegated', 'is', false)` treats `false` as "revoked → exclude",
+ * so writing `false` at insert time silently hides the row from recall.
+ *
+ *   - envelope-encrypted write → DEK is wrapped to the provider at write time → `true` (delegated)
+ *   - plaintext / legacy write  → no delegation model applies → `null` (provider reads plaintext
+ *                                  directly; the row stays fully visible to recall, since the filter
+ *                                  excludes only `false`)
+ *
+ * Regression guard: the original code wrote `envelope !== null` — i.e. `false` for every
+ * plaintext write while encryption was dormant — silently excluding those rows from recall.
+ */
+export function delegationStateForWrite(hasEnvelope: boolean): true | null {
+  return hasEnvelope ? true : null;
+}

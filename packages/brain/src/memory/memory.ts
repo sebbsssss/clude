@@ -38,7 +38,7 @@ import {
 import { getExperimentalConfig } from '../experimental/config';
 import { bm25SearchMemories } from '../experimental/bm25-search';
 import { setContentTokens } from './content-tokens';
-import { encryptForStorage } from './memory-encryption';
+import { encryptForStorage, delegationStateForWrite } from './memory-encryption';
 import { generateOpenRouterResponse, isOpenRouterEnabled } from '@clude/shared/core/openrouter-client';
 import { isEncryptionEnabled, getEncryptionPubkey, encryptContent } from '@clude/shared/core/encryption';
 import { decryptMemories } from './memory-decryption';
@@ -482,7 +482,7 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
         compacted: false,
         encrypted: envelope !== null || legacyEncrypt,
         encryption_pubkey: envelope ? envelope.ownerPubkey : legacyEncrypt ? getEncryptionPubkey() : null,
-        provider_delegated: envelope !== null, // envelope only; legacy has no delegation model
+        provider_delegated: delegationStateForWrite(envelope !== null), // true|null at write; false is revoke-only (§7)
         owner_wallet: ownerWallet || null,
       })
       .select('id, hash_id, content, memory_type, owner_wallet, created_at, tags, source, related_user, related_wallet')
