@@ -22,9 +22,9 @@
       --muted:       #5b5f68;
       --faint:       #8a8f98;
       --blue:        #2244ff;
-      --green:       #2a8547;
-      --gold:        #b07510;
-      --red:         #b94330;
+      --green:       #2244ff;
+      --gold:        #2244ff;
+      --red:         #5b5f68;
       --mono:        'Inconsolata', monospace;
       --sans:        'Funnel Sans', sans-serif;
     }
@@ -318,12 +318,12 @@
       letter-spacing: 2.5px; text-transform: uppercase;
     }
     .vis-ba-label.bad  {
-      background: rgba(185, 67, 48, 0.08);
-      color: var(--red);
+      background: rgba(0, 0, 0, 0.04);
+      color: var(--muted);
     }
     .vis-ba-label.good {
-      background: rgba(42, 133, 71, 0.08);
-      color: var(--green);
+      background: rgba(34, 68, 255, 0.06);
+      color: var(--blue);
     }
 
     .vis-comparison {
@@ -641,8 +641,8 @@
       font-size: 12px; font-weight: 700;
       letter-spacing: 2.5px; text-transform: uppercase;
     }
-    .examples-header-cell.clude { background: rgba(42, 133, 71, 0.08); color: var(--green); }
-    .examples-header-cell.base  { background: rgba(185, 67, 48, 0.08); color: var(--red); }
+    .examples-header-cell.clude { background: rgba(34, 68, 255, 0.06); color: var(--blue); }
+    .examples-header-cell.base  { background: rgba(0, 0, 0, 0.04); color: var(--muted); }
 
     .examples-grid {
       display: grid;
@@ -757,8 +757,8 @@
     .mech-col-group:nth-child(7) .mech-bar.mech-bar-animate { transition-delay: 0.47s; }
     .mech-col-group:nth-child(8) .mech-bar.mech-bar-animate { transition-delay: 0.54s; }
 
-    .mech-bar-without { background: rgba(185, 67, 48, 0.65); }
-    .mech-bar-with    { background: var(--green); opacity: 0.85; }
+    .mech-bar-without { background: #8a8f98; }
+    .mech-bar-with    { background: var(--blue); opacity: 0.85; }
 
     .mech-turn-label {
       font-family: var(--mono);
@@ -780,10 +780,10 @@
       content: ''; display: inline-block;
       width: 12px; height: 12px; flex-shrink: 0;
     }
-    .mech-legend-without { color: var(--red); }
-    .mech-legend-without::before { background: rgba(185, 67, 48, 0.65); }
-    .mech-legend-with { color: var(--green); }
-    .mech-legend-with::before { background: var(--green); opacity: 0.85; }
+    .mech-legend-without { color: var(--muted); }
+    .mech-legend-without::before { background: #8a8f98; }
+    .mech-legend-with { color: var(--blue); }
+    .mech-legend-with::before { background: var(--blue); opacity: 0.85; }
 
     .mech-caption {
       margin-top: 0.8rem;
@@ -911,8 +911,8 @@
       font-size: 11px; font-weight: 700;
       letter-spacing: 2.5px; text-transform: uppercase;
     }
-    .ask-result-header-cell.clude { background: rgba(42, 133, 71, 0.08); color: var(--green); }
-    .ask-result-header-cell.base  { background: rgba(185, 67, 48, 0.08); color: var(--red); }
+    .ask-result-header-cell.clude { background: rgba(34, 68, 255, 0.06); color: var(--blue); }
+    .ask-result-header-cell.base  { background: rgba(0, 0, 0, 0.04); color: var(--muted); }
 
     .ask-result {
       display: grid;
@@ -951,9 +951,9 @@
       border: 1px solid transparent;
     }
     .ask-grounded-dataset {
-      color: var(--green);
-      border-color: rgba(42, 133, 71, 0.4);
-      background: rgba(42, 133, 71, 0.07);
+      color: var(--blue);
+      border-color: rgba(34, 68, 255, 0.4);
+      background: rgba(34, 68, 255, 0.07);
     }
     .ask-grounded-memory {
       color: var(--blue);
