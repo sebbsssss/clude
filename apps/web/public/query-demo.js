@@ -1,4 +1,4 @@
-/* proof.js — Public proof page for clude.io/proof
+/* query-demo.js — Public proof page for clude.io/query-demo
  * No build step. Vanilla JS, same-origin fetches.
  * Degrades gracefully on any fetch failure.
  */
