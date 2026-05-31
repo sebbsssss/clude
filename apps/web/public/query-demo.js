@@ -474,34 +474,46 @@
   }
 
   function renderGroundingLive(el, d) {
-    const rate         = d.rate;
-    const baselineRate = d.baselineRate;
-    const n            = d.n || 0;
-    const improvement  = (typeof baselineRate === 'number' && typeof rate === 'number')
-      ? baselineRate - rate : null;
+    const n        = d.n || 0;
+    const cAcc     = typeof d.cludeAccuracy      === 'number' ? d.cludeAccuracy      : null;
+    const bAcc     = typeof d.baselineAccuracy   === 'number' ? d.baselineAccuracy   : null;
+    const cHall    = typeof d.rate               === 'number' ? d.rate               : null;
+    const bHall    = typeof d.baselineRate       === 'number' ? d.baselineRate       : null;
+    const bAbstain = typeof d.baselineAbstainRate=== 'number' ? d.baselineAbstainRate: null;
+    const p0       = function (x) { return x !== null ? fmtPct(x, 0) : '…'; };
 
-    // When benchmark runs for real, the hallucination rate becomes the big shout-out.
-    // The rate is already a proportion (0-1); display as pct.
+    // Lead with ACCURACY (the honest, compelling axis): Clude answers from the
+    // data; the same model without it mostly cannot. Hallucination rate is shown
+    // as supporting context (both are low — Clude grounds, the bare model declines).
     const statsHtml =
       '<div class="grounding-live-stats">' +
         '<div class="g-stat">' +
+          '<div class="g-stat-label">Clude grounded accuracy</div>' +
+          '<div class="g-stat-num green">' + p0(cAcc) + '</div>' +
+          '<div class="g-stat-sub">answers straight from the data</div>' +
+        '</div>' +
+        '<div class="g-stat">' +
+          '<div class="g-stat-label">Same model &middot; no data</div>' +
+          '<div class="g-stat-num">' + p0(bAcc) + '</div>' +
+          '<div class="g-stat-sub">cannot reach the data</div>' +
+        '</div>' +
+        '<div class="g-stat">' +
           '<div class="g-stat-label">Clude hallucination rate</div>' +
-          '<div class="g-stat-num green">' + fmtPct(rate) + '</div>' +
-          '<div class="g-stat-sub">lower is better</div>' +
-        '</div>' +
-        '<div class="g-stat">' +
-          '<div class="g-stat-label">Baseline (no memory)</div>' +
-          '<div class="g-stat-num">' + fmtPct(baselineRate) + '</div>' +
-          '<div class="g-stat-sub">same model, no Clude</div>' +
-        '</div>' +
-        '<div class="g-stat">' +
-          '<div class="g-stat-label">Improvement</div>' +
-          '<div class="g-stat-num green">' +
-            (improvement !== null ? fmtPct(improvement) + ' fewer' : '…') +
-          '</div>' +
-          '<div class="g-stat-sub">n = ' + fmtInt(n) + ' questions</div>' +
+          '<div class="g-stat-num green">' + p0(cHall) + '</div>' +
+          '<div class="g-stat-sub">' + (bHall !== null ? ('baseline fabricated ' + p0(bHall)) : 'lower is better') + '</div>' +
         '</div>' +
       '</div>';
+
+    const ctxHtml =
+      '<p style="font-size:14px;color:var(--text-2);line-height:1.7;font-weight:500;margin:0 0 1rem;">' +
+        'Across <strong>n=' + fmtInt(n) + '</strong> questions sampled evenly from the frozen dataset, Clude answered ' +
+        '<strong style="color:var(--blue);">' + p0(cAcc) + '</strong> correctly by grounding in the verified on-chain data. ' +
+        'The same model without that data answered just <strong>' + p0(bAcc) + '</strong>: it declined on ' +
+        p0(bAbstain) + ' (honest) and fabricated on ' + p0(bHall) + '. Same model, same prompt. Grounding is the only difference.' +
+      '</p>' +
+      '<p style="font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:0.5px;line-height:1.6;margin:0 0 1.5rem;">' +
+        'Method: each question is run through the live pipeline. Clude receives the verified fact (as it would from memory); the baseline is the same model (claude-haiku-4.5) with no data access. Answers are graded by deterministic exact match, not an LLM judge.' +
+      '</p>';
 
     const byCat = d.byCategory || {};
     const cats  = Object.keys(byCat);
@@ -509,17 +521,16 @@
 
     if (cats.length > 0) {
       const rows = cats.map(function (cat) {
-        const c    = byCat[cat];
-        const cr   = typeof c.rate         === 'number' ? c.rate         : null;
-        const br   = typeof c.baselineRate === 'number' ? c.baselineRate : null;
-        const pct  = cr !== null ? Math.round((1 - cr) * 100) : null;
+        const c   = byCat[cat];
+        const ca  = typeof c.cludeAccuracy    === 'number' ? c.cludeAccuracy    : null;
+        const ba  = typeof c.baselineAccuracy === 'number' ? c.baselineAccuracy : null;
         return '<div class="cat-row">' +
           '<div class="cat-name">' + esc(cat.replace(/_/g, ' ')) + '</div>' +
-          '<div class="cat-val good">' + (cr !== null ? fmtPct(cr) : '…') + '</div>' +
-          '<div class="cat-val base">' + (br !== null ? fmtPct(br) : '…') + '</div>' +
+          '<div class="cat-val good">' + (ca !== null ? fmtPct(ca, 0) : '…') + '</div>' +
+          '<div class="cat-val base">' + (ba !== null ? fmtPct(ba, 0) : '…') + '</div>' +
           '<div class="cat-mini-bar">' +
             '<div class="cat-mini-track">' +
-              '<div class="cat-mini-fill" style="width:' + (pct !== null ? (100 - pct) : 0) + '%"></div>' +
+              '<div class="cat-mini-fill" style="width:' + (ca !== null ? Math.round(ca * 100) : 0) + '%"></div>' +
             '</div>' +
           '</div>' +
         '</div>';
@@ -529,15 +540,15 @@
         '<div class="cat-table">' +
           '<div class="cat-row head">' +
             '<div>Category</div>' +
-            '<div>Clude rate</div>' +
-            '<div>Baseline</div>' +
+            '<div>Clude</div>' +
+            '<div>No data</div>' +
             '<div></div>' +
           '</div>' +
           rows +
         '</div>';
     }
 
-    el.innerHTML = statsHtml + catHtml;
+    el.innerHTML = statsHtml + ctxHtml + catHtml;
   }
 
   fetchGrounding();
