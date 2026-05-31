@@ -5,6 +5,7 @@ import { mountApiRoutes } from './routes';
 import { staticRoutes } from './routes/static.routes';
 import { optionalPrivyAuth } from '@clude/brain/auth/privy-auth';
 import { createChildLogger } from '@clude/shared/core/logger';
+import { initOpenRouter, isOpenRouterEnabled } from '@clude/shared/core/openrouter-client';
 
 const log = createChildLogger('server');
 
@@ -12,6 +13,15 @@ export function createServer(): express.Application {
   const app = express();
 
   app.set('trust proxy', 1);
+
+  // Initialize the shared OpenRouter client used by non-streaming helpers
+  // (generateOpenRouterResponse — /api/proof/hallucination/ask, explore, lotr).
+  // The streaming chat path builds its own client via @openrouter/ai-sdk-provider,
+  // so this shared singleton was otherwise never initialized on the API server
+  // and those helpers threw "OpenRouter client not initialized".
+  if (!isOpenRouterEnabled() && config.openrouter.apiKey) {
+    initOpenRouter({ apiKey: config.openrouter.apiKey });
+  }
 
   app.use(express.json());
   app.use(createCompression());
