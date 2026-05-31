@@ -4,7 +4,7 @@ import rateLimit from 'express-rate-limit';
 import { getDb } from '@clude/shared/core/database';
 import { createChildLogger } from '@clude/shared/core/logger';
 import { withOwnerWallet } from '@clude/shared/core/owner-context';
-import { generateOpenRouterResponse, OPENROUTER_MODELS } from '@clude/shared/core/openrouter-client';
+import { generateOpenRouterResponse, OPENROUTER_MODELS, isOpenRouterEnabled } from '@clude/shared/core/openrouter-client';
 import { gradeAnswer, isAbstention } from '@clude/shared/core/solana-grading';
 import { recallMemories, formatMemoryContext } from '@clude/brain/memory';
 import { loadHallucinationData } from '../lib/proof-hallucination.js';
@@ -212,6 +212,13 @@ export function proofRoutes(): Router {
       const cacheKey = query.trim().toLowerCase();
       if (_askCache.has(cacheKey)) {
         res.json(_askCache.get(cacheKey));
+        return;
+      }
+
+      // Degrade gracefully if the shared OpenRouter client isn't configured
+      // (no OPENROUTER_API_KEY) rather than throwing → 500.
+      if (!isOpenRouterEnabled()) {
+        res.status(503).json({ error: 'Live demo is temporarily unavailable.' });
         return;
       }
 
