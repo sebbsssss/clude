@@ -37,6 +37,7 @@ vi.mock('@clude/shared/core/owner-context', () => ({
 vi.mock('@clude/shared/core/openrouter-client', () => ({
   generateOpenRouterResponse: vi.fn().mockResolvedValue('2025-03-25T00:04:22Z'),
   OPENROUTER_MODELS: { 'claude-haiku-4.5': 'anthropic/claude-haiku-4.5' },
+  isOpenRouterEnabled: () => true,
 }));
 
 // Mock the fixture loader to return known test fixtures
