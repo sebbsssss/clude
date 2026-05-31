@@ -49,7 +49,7 @@ function TopNav() {
   );
 }
 
-function Hero() {
+function Hero({ tokensSaved }) {
   return (
     <section className="hero" id="top">
       <div className="container hero__inner">
@@ -83,6 +83,10 @@ function Hero() {
             <div>
               <strong>0.04ms</strong>
               Recall · local
+            </div>
+            <div>
+              <strong>{tokensSaved == null ? '…' : (tokensSaved >= 1e6 ? (tokensSaved / 1e6).toFixed(1) + 'M' : tokensSaved.toLocaleString())}</strong>
+              Tokens saved · to date
             </div>
           </div>
         </div>
@@ -626,10 +630,21 @@ function Footer() {
 }
 
 function App() {
+  const [tokensSaved, setTokensSaved] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    const load = () => fetch('/api/proof/tokens-saved')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (alive && typeof d?.totalSaved === 'number') setTokensSaved(d.totalSaved); })
+      .catch(() => {});
+    load();
+    const t = setInterval(load, 30000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
   return (
     <div className="page">
       <TopNav />
-      <Hero />
+      <Hero tokensSaved={tokensSaved} />
       <LiveDemoSection />
       <FeatureSection />
       <ChatProductSection />

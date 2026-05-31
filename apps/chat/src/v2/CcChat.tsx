@@ -139,6 +139,7 @@ export function CcChat({
   const [showCitations, setShowCitations] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [pendingConvId, setPendingConvId] = useState<string | null>(null);
+  const [savedAllTime, setSavedAllTime] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -205,6 +206,15 @@ export function CcChat({
     if (!activeId && !pendingConvId) setPendingConvId(crypto.randomUUID());
     if (activeId && pendingConvId) setPendingConvId(null);
   }, [activeId, pendingConvId]);
+
+  // Fetch all-time tokens saved — refreshed every 30s.
+  useEffect(() => {
+    let alive = true;
+    const load = () => api.getTokensSaved().then(r => { if (alive && r) setSavedAllTime(r.totalSaved); }).catch(() => {});
+    load();
+    const t = setInterval(load, 30000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
 
   const composerConvId = activeId ?? pendingConvId ?? '';
 
@@ -359,6 +369,7 @@ export function CcChat({
           title={topbarTitle}
           subtitle={`◉ Active · ${msgCount} message${msgCount === 1 ? '' : 's'}`}
           savedToday={savedTokToday}
+          savedAllTime={savedAllTime}
           balance={balanceUsdc}
           onTopUp={() => setTopUpOpen(true)}
           walletReady={walletReady}
