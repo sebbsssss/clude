@@ -691,15 +691,64 @@
   }
 
   /**
+   * Toggle the loading state across the ask UI: spinner on the shuffle button,
+   * spinner in the status line, disabled presets + ask button. Called the moment
+   * the user clicks Shuffle / a preset so the loading is immediately apparent,
+   * then cleared in doAsk's finally block.
+   */
+  function setAskLoading(on) {
+    const btn        = $('askBtn');
+    const shuffleBtn = $('askShuffleBtn');
+    const status     = $('askStatus');
+    const presets    = document.querySelectorAll('.ask-preset');
+    if (on) {
+      if (btn) btn.disabled = true;
+      if (shuffleBtn) {
+        if (!shuffleBtn.dataset.label) shuffleBtn.dataset.label = shuffleBtn.innerHTML;
+        shuffleBtn.classList.add('loading');
+        shuffleBtn.innerHTML = '<span class="ask-spinner ask-spinner-on-blue"></span>Loading a grounded answer…';
+      }
+      presets.forEach(function (p) { p.disabled = true; });
+      if (status) {
+        status.innerHTML = '<span class="ask-spinner"></span>Querying Clude memory and the same model without the data…';
+        status.className = 'ask-status';
+      }
+    } else {
+      if (btn) btn.disabled = false;
+      if (shuffleBtn) {
+        shuffleBtn.classList.remove('loading');
+        if (shuffleBtn.dataset.label) {
+          shuffleBtn.innerHTML = shuffleBtn.dataset.label;
+          delete shuffleBtn.dataset.label;
+        }
+      }
+      presets.forEach(function (p) { p.disabled = false; });
+    }
+  }
+
+  /**
    * Called by the "Shuffle a real Solana fact" button and category presets.
    * Loads dataset if needed, picks a random item, populates the input, and submits.
    */
   window.shuffleAsk = async function (category) {
+    // Show loading immediately on click (dataset fetch + LLM round-trip follows)
+    setAskLoading(true);
     await loadQaItems();
     const item = pickRandom(category || null);
     if (!item) {
-      // Dataset not loaded yet — fall back to free-text ask if there is one
-      window.doAsk();
+      const input = $('askInput');
+      if (input && input.value.trim()) {
+        // Free-text already present, let doAsk handle it (keeps loading on)
+        window.doAsk();
+      } else {
+        // Nothing to ask yet: clear loading and nudge the user
+        setAskLoading(false);
+        const status = $('askStatus');
+        if (status) {
+          status.textContent = 'Dataset still loading, try again in a moment.';
+          status.className = 'ask-status';
+        }
+      }
       return;
     }
     const input = $('askInput');
@@ -722,8 +771,7 @@
     if (!question) return;
 
     _askInFlight = true;
-    if (btn) btn.disabled = true;
-    if (status) { status.textContent = 'Asking…'; status.className = 'ask-status'; }
+    setAskLoading(true);
 
     // Hide empty state, hide results while loading
     const pendingState  = $('askPendingState');
@@ -918,7 +966,7 @@
       if (pendingState) pendingState.classList.remove('hidden');
     } finally {
       _askInFlight = false;
-      if (btn) btn.disabled = false;
+      setAskLoading(false);
     }
   };
 

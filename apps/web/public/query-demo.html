@@ -498,6 +498,71 @@
     .turn-tokens.bad  { color: var(--red); }
     .turn-tokens.good { color: var(--green); }
 
+    /* turn list column headers */
+    .turn-head {
+      display: flex; gap: 10px; align-items: center;
+      padding: 0 0 8px;
+      margin-bottom: 6px;
+      border-bottom: 1.5px solid var(--border-med);
+    }
+    .turn-head-idx { width: 28px; flex-shrink: 0; }
+    .turn-head-query, .turn-head-tokens {
+      font-family: var(--mono);
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 2px; text-transform: uppercase;
+      color: var(--faint);
+    }
+    .turn-head-tokens { margin-left: auto; flex-shrink: 0; }
+
+    /* prominent mechanism summary above the savings table */
+    .vis-summary {
+      background: rgba(34, 68, 255, 0.05);
+      border: 1.5px solid rgba(34, 68, 255, 0.22);
+      padding: 1.5rem 1.75rem;
+      margin-bottom: 1.5rem;
+    }
+    .vis-summary-headline {
+      font-family: var(--sans);
+      font-size: clamp(17px, 2.1vw, 22px);
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.35;
+      letter-spacing: -0.01em;
+    }
+    .vis-summary-headline .anchor-live { color: var(--blue); font-weight: 800; }
+    .vis-summary-avg {
+      display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap;
+      margin-top: 1.1rem; padding-top: 1.1rem;
+      border-top: 1px solid rgba(34, 68, 255, 0.18);
+    }
+    .vis-summary-avg-item { display: flex; flex-direction: column; gap: 4px; }
+    .vis-summary-avg-num {
+      font-family: var(--mono);
+      font-size: 28px; font-weight: 800;
+      letter-spacing: -0.02em; line-height: 1;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
+    }
+    .vis-summary-avg-num.bad  { color: var(--muted); }
+    .vis-summary-avg-num.good { color: var(--blue); }
+    .vis-summary-avg-label {
+      font-family: var(--mono);
+      font-size: 9px; font-weight: 700;
+      letter-spacing: 2px; text-transform: uppercase;
+      color: var(--faint);
+    }
+    .vis-summary-avg-arrow {
+      font-family: var(--mono);
+      font-size: 20px; color: var(--faint);
+      flex-shrink: 0;
+    }
+    .vis-summary-note {
+      font-family: var(--mono);
+      font-size: 10px; color: var(--faint);
+      letter-spacing: 0.5px; line-height: 1.55;
+      margin-top: 1rem;
+    }
+
     /* ── GROUNDING SECTION ── */
     /* Grounding concept shout-out (always visible) */
     .grounding-concept {
@@ -835,6 +900,30 @@
     .ask-shuffle-btn:disabled {
       background: var(--bg-deep); color: var(--faint);
       border-color: var(--border); cursor: not-allowed;
+    }
+    /* loading state keeps the blue fill so the white spinner reads clearly */
+    .ask-shuffle-btn.loading {
+      background: var(--blue); color: #fff;
+      border-color: var(--blue);
+      cursor: wait; opacity: 0.9;
+      pointer-events: none;
+    }
+
+    /* spinner for the ask / shuffle loading indicator */
+    @keyframes askspin { to { transform: rotate(360deg); } }
+    .ask-spinner {
+      display: inline-block;
+      width: 12px; height: 12px;
+      border: 2px solid rgba(34, 68, 255, 0.25);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: askspin 0.7s linear infinite;
+      vertical-align: -2px;
+      margin-right: 8px;
+    }
+    .ask-spinner-on-blue {
+      border-color: rgba(255, 255, 255, 0.45);
+      border-top-color: #fff;
     }
 
     .ask-row {
@@ -1310,6 +1399,27 @@
         <button class="vis-btn"        id="presetCode" onclick="setPreset('codebase')">Codebase</button>
       </div>
 
+      <!-- Prominent mechanism summary (moved above the table, enlarged) -->
+      <div class="vis-summary">
+        <div class="vis-summary-headline" id="visLiveAnchor">
+          Headline rate is live from the API. Preset illustrates the per-turn mechanism.
+        </div>
+        <div class="vis-summary-avg">
+          <div class="vis-summary-avg-item">
+            <div class="vis-summary-avg-num bad">~<span id="visAvgWithout">…</span></div>
+            <div class="vis-summary-avg-label">Avg tokens / turn &middot; without Clude</div>
+          </div>
+          <div class="vis-summary-avg-arrow">&#x2192;</div>
+          <div class="vis-summary-avg-item">
+            <div class="vis-summary-avg-num good">~<span id="visAvgWith">…</span></div>
+            <div class="vis-summary-avg-label">Avg tokens / turn &middot; with Clude</div>
+          </div>
+        </div>
+        <div class="vis-summary-note">
+          Illustrative of the mechanism, not a cherry-picked example. The headline % is from real sessions.
+        </div>
+      </div>
+
       <!-- Clear before/after banner -->
       <div class="vis-before-after">
         <div class="vis-ba-label bad">&#x2717;&nbsp; Without Clude: full transcript re-read every turn</div>
@@ -1318,9 +1428,19 @@
 
       <div class="vis-comparison" id="visComparison">
         <div class="vis-panel">
+          <div class="turn-head">
+            <div class="turn-head-idx"></div>
+            <div class="turn-head-query">Query</div>
+            <div class="turn-head-tokens">Tokens</div>
+          </div>
           <div id="visWithoutTurns" class="turn-list"></div>
         </div>
         <div class="vis-panel">
+          <div class="turn-head">
+            <div class="turn-head-idx"></div>
+            <div class="turn-head-query">Query</div>
+            <div class="turn-head-tokens">Tokens</div>
+          </div>
           <div id="visWithTurns" class="turn-list"></div>
         </div>
       </div>
@@ -1343,14 +1463,6 @@
             <div class="vis-result-pct-label">saved</div>
           </div>
         </div>
-        <div class="vis-live-anchor" id="visLiveAnchor">
-          Preset illustrates mechanism. Headline rate anchored to live API
-        </div>
-      </div>
-
-      <div class="vis-caption">
-        Per-turn average: without ~<span id="visAvgWithout">…</span> tokens &nbsp;/&nbsp; with ~<span id="visAvgWith">…</span> tokens<br>
-        Illustrative of the mechanism, not a cherry-picked example. The headline % above is from real sessions.
       </div>
     </div>
 
@@ -1484,14 +1596,14 @@
         </div>
       </div>
 
-      <!-- Honest framing note — shown below result panels -->
-      <div id="askFramingNote" style="display:none; margin-top:1rem; padding-top:1rem; border-top:1px solid var(--border);">
-        <p style="font-family:var(--mono); font-size:10px; color:var(--faint); letter-spacing:0.5px; line-height:1.65; max-width:72ch;">
-          Same model, same prompt. The only difference is whether it has the on-chain fact.
-          Clude retrieves it from memory and answers precisely. Without it, a general model can&rsquo;t know
+      <!-- Honest framing note — spans the full width of the result table, more prominent -->
+      <div id="askFramingNote" style="display:none; margin-top:1.25rem;">
+        <p style="font-family:var(--sans); font-size:14px; color:var(--text-2); line-height:1.7; font-weight:500; background:rgba(34,68,255,0.05); border-left:3px solid var(--blue); padding:1.1rem 1.4rem; margin:0;">
+          <strong style="color:var(--text);">Same model, same prompt.</strong> The only difference is whether it has the on-chain fact.
+          Clude retrieves it from memory and answers precisely. Without it, a general model cannot know
           a specific historical value, so it declines (honest) or guesses (a hallucination).
-          Clude&rsquo;s memory is what removes the guess.
-          <em>The measured hallucination rate comes from the benchmark across many questions; this
+          <strong style="color:var(--blue);">Clude&rsquo;s memory is what removes the guess.</strong>
+          <em style="color:var(--muted);">The measured hallucination rate comes from the benchmark across many questions; this
           single live call demonstrates grounding.</em>
         </p>
       </div>
