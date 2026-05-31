@@ -1381,9 +1381,9 @@
       <div style="flex:1;min-width:260px;background:rgba(34,68,255,0.06);border:1.5px solid rgba(34,68,255,0.25);padding:1.5rem 2rem;display:flex;gap:1.5rem;align-items:flex-start;">
         <div style="flex-shrink:0;font-size:28px;line-height:1;margin-top:2px;">&#x2601;</div>
         <div>
-          <div style="font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--blue);margin-bottom:6px;">Data source</div>
-          <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px;line-height:1.3;">Grounded in Google BigQuery's public on-chain datasets</div>
-          <div style="font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:0.5px;line-height:1.5;"><code style="font-family:var(--mono);font-size:11px;background:var(--bg-deep);padding:1px 5px;border:1px solid var(--border);">bigquery-public-data.crypto_solana_mainnet_us</code><br>Snapshot frozen 2025-03-31. Machine-checkable ground truth.</div>
+          <div style="font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--blue);margin-bottom:6px;">How grounding works</div>
+          <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px;line-height:1.3;">The data lives in Clude, not in a live query</div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:0.5px;line-height:1.5;">Clude consumes Solana on-chain data from Google BigQuery into its local memory, then answers by traversing that memory locally. No live BigQuery query, no RPC call at answer time.<br>Source snapshot: <code style="font-family:var(--mono);font-size:11px;background:var(--bg-deep);padding:1px 5px;border:1px solid var(--border);">crypto_solana_mainnet_us</code>, frozen 2025-03-31.</div>
         </div>
       </div>
       <div style="flex-shrink:0;min-width:200px;background:var(--bg-warm);border:1.5px solid var(--border-med);padding:1.5rem 2rem;display:flex;flex-direction:column;justify-content:center;gap:6px;">
@@ -1400,10 +1400,11 @@
           Grounded or abstain.<br><span class="accent">Never fabricate.</span>
         </div>
         <p class="grounding-concept-body">
-          Same model (Claude Haiku 4.5), with vs without Clude's memory, asked exact questions
-          with machine-checkable answers from the Google BigQuery Solana public dataset.
-          Abstaining ("I don't know") counts as <em>not</em> hallucinating. This is the right behavior
-          when memory is absent. Clude is optimised for grounded-or-abstain, never guess.
+          Clude consumes the on-chain data into local memory and answers by traversing that memory,
+          not by querying BigQuery at request time. Same model (Claude Haiku 4.5), with vs without
+          that memory: with it, Clude answers straight from the data; without it, a model can only
+          decline or guess. Abstaining ("I don't know") counts as <em>not</em> hallucinating, the right
+          behavior when the fact is not in memory. Clude is optimised for grounded-or-abstain, never guess.
         </p>
       </div>
     </div>
