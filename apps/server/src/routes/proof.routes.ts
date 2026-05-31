@@ -57,7 +57,10 @@ async function computePayload(): Promise<TokensSavedPayload> {
   const baselineSeed = Number(process.env.PROOF_BASELINE_SEED ?? '1680000000');
   const baselineEstimated = baselineSeed + Math.round(historicalPromptSum * BASELINE_RATIO);
   const totalSaved = measuredSaved + baselineEstimated;
-  const avgSavingsPct = measuredFrontier > 0
+  // Use the measured ratio only once real savings have accrued. Sparse early-turn
+  // data has tokens_saved=0 (first turns have no prior transcript to save), which
+  // would otherwise show a misleading 0%; until then show the documented estimate.
+  const avgSavingsPct = measuredSaved > 0 && measuredFrontier > 0
     ? Math.round((measuredSaved / measuredFrontier) * 100)
     : FALLBACK_AVG_PCT;
 
