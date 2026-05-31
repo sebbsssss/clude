@@ -10,7 +10,7 @@
   "nAbstention": 51,
   "model": "anthropic/claude-haiku-4.5",
   "datasetVersion": "crypto_solana_mainnet_us@2025-03-31",
-  "runAt": "2026-05-31T23:29:58.029Z",
+  "runAt": "2026-05-31T23:38:28.426Z",
   "note": "Measured live across 76 questions sampled evenly from the 706-question frozen dataset, through the same grounding pipeline as the ask demo. Clude grounds on the BigQuery snapshot; the baseline is the same model (claude-haiku-4.5) without it. Clude answers from the data; the bare model mostly declines (honest) and rarely fabricates.",
   "byCategory": {
     "block_time": {

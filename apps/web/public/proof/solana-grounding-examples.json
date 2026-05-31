@@ -1,5 +1,50 @@
 [
   {
+    "question": "Did Solana transaction 2P7TW2ypZpUdJHG4tNBowifK376kaQQchGeJD5YN62MuBun6AFepMhvxSvdvm3WoucDRJDox3JAMaYMvw3Jfdttf succeed or fail?",
+    "category": "tx_status",
+    "sourceRef": "tx:2P7TW2ypZpUdJHG4tNBowifK376kaQQchGeJD5YN62MuBun6AFepMhvxSvdvm3WoucDRJDox3JAMaYMvw3Jfdttf",
+    "groundTruth": "Success",
+    "clude": {
+      "answer": "According to the verified Solana mainnet data, transaction 2P7TW2ypZpUdJHG4tNBowifK376kaQQchGeJD5YN62MuBun6AFepMhvxSvdvm3WoucDRJDox3JAMaYMvw3Jfdttf **succeeded**.",
+      "correct": true
+    },
+    "baseline": {
+      "answer": "I don't have the ability to query the Solana blockchain or access real-time transaction data. To check if that transaction succeeded or failed, you can use a Solana explorer like [Solscan.io](https://solscan.io), [Solana Beach](https://solanabeach.io), or [Magic Eden](https://magiceden.io) by pasting the transaction signature into the search bar.",
+      "correct": false
+    },
+    "hallucinated": true
+  },
+  {
+    "question": "Which program owns Solana account 7TQdKHJaUtNKqL2QNYmc9au6gnx3j2r4jGv8WvS2FovX?",
+    "category": "account_owner",
+    "sourceRef": "account:7TQdKHJaUtNKqL2QNYmc9au6gnx3j2r4jGv8WvS2FovX",
+    "groundTruth": "11111111111111111111111111111111",
+    "clude": {
+      "answer": "The program that owns Solana account 7TQdKHJaUtNKqL2QNYmc9au6gnx3j2r4jGv8WvS2FovX is **11111111111111111111111111111111** (the System Program).",
+      "correct": true
+    },
+    "baseline": {
+      "answer": "I don't have real-time access to the Solana blockchain to look up account ownership information. To find which program owns that account, you can use tools like:\n\n- **Solana Explorer** (explorer.solana.com) - search the address and check the \"Owner\" field\n- **Solscan** (solscan.io) - similar interface showing account details",
+      "correct": false
+    },
+    "hallucinated": true
+  },
+  {
+    "question": "How many lamports does Solana account 7TQdKHJaUtNKqL2QNYmc9au6gnx3j2r4jGv8WvS2FovX hold?",
+    "category": "account_lamports",
+    "sourceRef": "account:7TQdKHJaUtNKqL2QNYmc9au6gnx3j2r4jGv8WvS2FovX",
+    "groundTruth": "1447680",
+    "clude": {
+      "answer": "According to the verified Solana mainnet data from the snapshot frozen on 2025-03-31, the account 7TQdKHJaUtNKqL2QNYmc9au6gnx3j2r4jGv8WvS2FovX holds **1,447,680 lamports**.",
+      "correct": true
+    },
+    "baseline": {
+      "answer": "I don't have the ability to query the Solana blockchain in real-time. To check the balance of that account, you can use tools like:\n\n- **Solana Explorer** (explorer.solana.com) - paste the address in the search bar\n- **Solscan** (solscan.io) - another popular block explorer\n- **Solana CLI** - run `solana balance 7TQdKHJaUtNKqL2QNYmc9au6gnx3j2r4jGv8WvS2FovX`",
+      "correct": false
+    },
+    "hallucinated": true
+  },
+  {
     "question": "What was the block time (UTC) of Solana slot 328970103?",
     "category": "block_time",
     "sourceRef": "block:328970103",
@@ -43,50 +88,5 @@
       "correct": false
     },
     "hallucinated": false
-  },
-  {
-    "question": "What fee in lamports did Solana transaction 2P4iRKsqHKD1GhPFuEYU8NMsWYSgMgbmpM7GcCJrMxxtDdt33nuxtowWujN9xqzcD4rnSHCPhJiYt4psiXKRWb5L pay?",
-    "category": "tx_fee",
-    "sourceRef": "tx:2P4iRKsqHKD1GhPFuEYU8NMsWYSgMgbmpM7GcCJrMxxtDdt33nuxtowWujN9xqzcD4rnSHCPhJiYt4psiXKRWb5L",
-    "groundTruth": "7000",
-    "clude": {
-      "answer": "According to the verified Solana mainnet data, transaction 2P4iRKsqHKD1GhPFuEYU8NMsWYSgMgbmpM7GcCJrMxxtDdt33nuxtowWujN9xqzcD4rnSHCPhJiYt4psiXKRWb5L paid **7000 lamports** in fees.",
-      "correct": true
-    },
-    "baseline": {
-      "answer": "I don't have access to real-time blockchain data or the ability to query specific transactions. To find the fee for that transaction, you can use Solana explorers like:\n\n- **Solscan.io** - paste the transaction signature in the search bar\n- **Explorer.solana.com** - Solana's official explorer\n\nThe fee will be displayed in lamports on the transaction details page.",
-      "correct": false
-    },
-    "hallucinated": false
-  },
-  {
-    "question": "Did Solana transaction 2P4iRKsqHKD1GhPFuEYU8NMsWYSgMgbmpM7GcCJrMxxtDdt33nuxtowWujN9xqzcD4rnSHCPhJiYt4psiXKRWb5L succeed or fail?",
-    "category": "tx_status",
-    "sourceRef": "tx:2P4iRKsqHKD1GhPFuEYU8NMsWYSgMgbmpM7GcCJrMxxtDdt33nuxtowWujN9xqzcD4rnSHCPhJiYt4psiXKRWb5L",
-    "groundTruth": "Success",
-    "clude": {
-      "answer": "According to the verified Solana mainnet data provided, transaction 2P4iRKsqHKD1GhPFuEYU8NMsWYSgMgbmpM7GcCJrMxxtDdt33nuxtowWujN9xqzcD4rnSHCPhJiYt4psiXKRWb5L **succeeded**.",
-      "correct": true
-    },
-    "baseline": {
-      "answer": "I don't have access to real-time blockchain data or the ability to query Solana's ledger directly. To check this transaction's status, use a Solana explorer like **Solscan.io** or **Solana Beach** and paste the transaction signature into the search bar.",
-      "correct": false
-    },
-    "hallucinated": false
-  },
-  {
-    "question": "Which program owns Solana account 7TQdKHJaUtNKqL2QNYmc9au6gnx3j2r4jGv8WvS2FovX?",
-    "category": "account_owner",
-    "sourceRef": "account:7TQdKHJaUtNKqL2QNYmc9au6gnx3j2r4jGv8WvS2FovX",
-    "groundTruth": "11111111111111111111111111111111",
-    "clude": {
-      "answer": "The program that owns Solana account 7TQdKHJaUtNKqL2QNYmc9au6gnx3j2r4jGv8WvS2FovX is **11111111111111111111111111111111** (the System Program).",
-      "correct": true
-    },
-    "baseline": {
-      "answer": "I don't have real-time access to the Solana blockchain to look up account ownership information. To find which program owns that account, you can use tools like:\n\n- **Solana Explorer** (explorer.solana.com) - search the address and check the \"Owner\" field\n- **Solscan** (solscan.io) - similar interface showing account details",
-      "correct": false
-    },
-    "hallucinated": true
   }
 ]
