@@ -4,6 +4,8 @@ import type { Server } from 'http';
 
 // Disable the endpoint's TTL cache so each test exercises its own RPC result.
 process.env.PROOF_CACHE_TTL_MS = '0';
+// Zero the lifetime baseline seed so totals reflect only the mocked RPC values.
+process.env.PROOF_BASELINE_SEED = '0';
 
 const mockDbQueue: Array<{ data: any; error?: any }> = [];
 function dequeue() { return Promise.resolve(mockDbQueue.shift() ?? { data: null, error: null }); }
