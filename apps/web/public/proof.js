@@ -7,6 +7,18 @@
 
   const API_BASE = '';
 
+  /* ─── pricing constant ────────────────────────── */
+  // Claude Opus input pricing: $15 per 1M tokens
+  const COST_PER_MTOK = 15;
+
+  /** Format a USD cost value as compact string: $25.2K, $1.23M, etc. */
+  function fmtCostUsd(costUsd) {
+    if (typeof costUsd !== 'number' || isNaN(costUsd)) return '…';
+    if (costUsd >= 1_000_000) return '$' + (costUsd / 1_000_000).toFixed(2) + 'M';
+    if (costUsd >= 1_000)     return '$' + (costUsd / 1_000).toFixed(1) + 'K';
+    return '$' + Math.round(costUsd).toLocaleString();
+  }
+
   /* ─── helpers ─────────────────────────────────── */
 
   function $(id) { return document.getElementById(id); }
@@ -17,21 +29,22 @@
     return d.innerHTML;
   }
 
-  /** Format an integer with commas; >= 1M appends M suffix */
+  /** Format an integer with commas; >= 1B appends B suffix, >= 1M appends M suffix */
   function fmtTokens(n) {
-    if (typeof n !== 'number' || isNaN(n)) return '—';
+    if (typeof n !== 'number' || isNaN(n)) return '…';
+    if (n >= 1e9)       return (n / 1e9).toFixed(2) + 'B';
     if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
     if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'k';
     return n.toLocaleString();
   }
 
   function fmtInt(n) {
-    if (typeof n !== 'number' || isNaN(n)) return '—';
+    if (typeof n !== 'number' || isNaN(n)) return '…';
     return Math.round(n).toLocaleString();
   }
 
   function fmtPct(n, decimals) {
-    if (typeof n !== 'number' || isNaN(n)) return '—';
+    if (typeof n !== 'number' || isNaN(n)) return '…';
     const d = decimals ?? 1;
     return (n * 100).toFixed(d) + '%';
   }
@@ -115,7 +128,7 @@
         _ratePerMin = ratePerMin;
         startTicker(totalSaved, ratePerMin);
       } else {
-        $('heroCounter').textContent = '—';
+        $('heroCounter').textContent = '…';
       }
 
       const heroLive = $('heroLive');
@@ -128,11 +141,21 @@
       }
 
       if ($('heroSavedToday')) {
-        $('heroSavedToday').textContent = savedToday !== null ? fmtTokens(savedToday) : '—';
+        $('heroSavedToday').textContent = savedToday !== null ? fmtTokens(savedToday) : '…';
       }
       if ($('heroAvgPct')) {
         $('heroAvgPct').textContent = avgSavingsPct !== null
-          ? Math.round(avgSavingsPct) + '%' : '—';
+          ? Math.round(avgSavingsPct) + '%' : '…';
+      }
+
+      // Compute and display USD value of tokens saved
+      if ($('heroCostUsd')) {
+        if (totalSaved !== null) {
+          const costUsd = (totalSaved / 1_000_000) * COST_PER_MTOK;
+          $('heroCostUsd').textContent = fmtCostUsd(costUsd);
+        } else {
+          $('heroCostUsd').textContent = '…';
+        }
       }
 
       // Feed live savings % into the shout-out callout and visualiser
@@ -284,10 +307,10 @@
       if (_liveAvgSavingsPct !== null) {
         anchorEl.innerHTML =
           'Headline rate <span class="anchor-live">' + savedPct + '%</span>' +
-          ' is live from the API — preset illustrates the per-turn mechanism.';
+          ' is live from the API. Preset illustrates the per-turn mechanism.';
       } else {
         anchorEl.textContent =
-          'Preset illustrates mechanism — headline rate anchored to live API when available.';
+          'Preset illustrates mechanism. Headline rate anchored to live API when available.';
       }
     }
   }
@@ -349,8 +372,8 @@
         '</div>' +
       '</div>' +
       '<div class="mech-legend">' +
-        '<span class="mech-legend-item mech-legend-without">Without Clude — full transcript re-sent</span>' +
-        '<span class="mech-legend-item mech-legend-with">With Clude — only recalled memories</span>' +
+        '<span class="mech-legend-item mech-legend-without">Without Clude: full transcript re-sent</span>' +
+        '<span class="mech-legend-item mech-legend-with">With Clude: only recalled memories</span>' +
       '</div>';
 
     // Trigger CSS transitions after a microtask so the element is painted
@@ -474,7 +497,7 @@
         '<div class="g-stat">' +
           '<div class="g-stat-label">Improvement</div>' +
           '<div class="g-stat-num green">' +
-            (improvement !== null ? fmtPct(improvement) + ' fewer' : '—') +
+            (improvement !== null ? fmtPct(improvement) + ' fewer' : '…') +
           '</div>' +
           '<div class="g-stat-sub">n = ' + fmtInt(n) + ' questions</div>' +
         '</div>' +
@@ -492,8 +515,8 @@
         const pct  = cr !== null ? Math.round((1 - cr) * 100) : null;
         return '<div class="cat-row">' +
           '<div class="cat-name">' + esc(cat.replace(/_/g, ' ')) + '</div>' +
-          '<div class="cat-val good">' + (cr !== null ? fmtPct(cr) : '—') + '</div>' +
-          '<div class="cat-val base">' + (br !== null ? fmtPct(br) : '—') + '</div>' +
+          '<div class="cat-val good">' + (cr !== null ? fmtPct(cr) : '…') + '</div>' +
+          '<div class="cat-val base">' + (br !== null ? fmtPct(br) : '…') + '</div>' +
           '<div class="cat-mini-bar">' +
             '<div class="cat-mini-track">' +
               '<div class="cat-mini-fill" style="width:' + (pct !== null ? (100 - pct) : 0) + '%"></div>' +
@@ -557,6 +580,26 @@
       '</div>';
   }
 
+  /**
+   * Build a Solscan URL from a sourceRef string like "block:271462400".
+   * Returns an anchor HTML string, or '' if sourceRef is absent/unparseable.
+   */
+  function buildSolscanHtml(sourceRef) {
+    if (!sourceRef || typeof sourceRef !== 'string') return '';
+    const colonIdx = sourceRef.indexOf(':');
+    if (colonIdx === -1) return '';
+    const refType  = sourceRef.slice(0, colonIdx).trim().toLowerCase();
+    const refValue = sourceRef.slice(colonIdx + 1).trim();
+    const typeMap  = { block: 'block', tx: 'tx', account: 'account', token: 'token' };
+    const path     = typeMap[refType];
+    if (!path || !refValue) return '';
+    const url = 'https://solscan.io/' + path + '/' + esc(refValue);
+    return ' <a href="' + url + '" target="_blank" rel="noopener noreferrer" ' +
+      'style="font-family:var(--mono);font-size:10px;letter-spacing:0.5px;' +
+      'color:var(--blue);border-bottom:1px solid rgba(34,68,255,0.35);">' +
+      'Verify on Solscan &#x2197;</a>';
+  }
+
   function renderExamples(el, examples) {
     const MAX_SHOW = 4;
     const shown = examples.slice(0, MAX_SHOW);
@@ -566,18 +609,39 @@
     if (header) header.style.display = 'grid';
 
     const html = shown.map(function (ex) {
-      const q        = ex.question                       || '';
-      const cludeAns = (ex.clude    && ex.clude.answer)    || '—';
-      const baseAns  = (ex.baseline && ex.baseline.answer) || '—';
+      const q          = ex.question                         || '';
+      const cludeAns   = (ex.clude    && ex.clude.answer)    || '…';
+      const baseAns    = (ex.baseline && ex.baseline.answer) || '…';
+      const sourceRef  = ex.sourceRef || null;
+      const groundTruth = ex.groundTruth || null;
+      // Detect honest baseline decline vs hallucination
+      const hallucinated  = ex.hallucinated === true;
+      const baseAbstained = /not enough information|i don'?t know|cannot determine|no information|abstain|don't have access|no data/i.test(baseAns);
+
+      let baseVerdictHtml = '';
+      if (ex.baseline && ex.baseline.correct === true) {
+        baseVerdictHtml = '<div class="ask-verdict correct" style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);">✓ Correct</div>';
+      } else if (hallucinated) {
+        baseVerdictHtml = '<div class="ask-verdict wrong" style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);">✗ Hallucinated: confident wrong answer</div>';
+      } else if (baseAbstained) {
+        baseVerdictHtml = '<div class="ask-verdict abstained" style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);">Declined: no data access (honest)</div>';
+      }
+
+      const solscanHtml = buildSolscanHtml(sourceRef);
+      const gtHtml = groundTruth
+        ? '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:0.5px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">Verified: <strong style="color:var(--text);">' + esc(groundTruth) + '</strong>' + solscanHtml + '</div>'
+        : (solscanHtml ? '<div style="margin-top:8px;">' + solscanHtml + '</div>' : '');
 
       return '<div class="examples-grid">' +
         '<div class="example-card">' +
           '<div class="example-q">' + esc(q) + '</div>' +
           '<div class="example-answer">' + esc(cludeAns) + '</div>' +
+          gtHtml +
         '</div>' +
         '<div class="example-card">' +
           '<div class="example-q">' + esc(q) + '</div>' +
           '<div class="example-answer">' + esc(baseAns) + '</div>' +
+          baseVerdictHtml +
         '</div>' +
       '</div>';
     }).join('');
@@ -687,7 +751,7 @@
 
       if (res.status === 429) {
         if (status) {
-          status.textContent = 'Rate limited — try again in a moment.';
+          status.textContent = 'Rate limited. Try again in a moment.';
           status.className   = 'ask-status err';
         }
         // Restore pending state
@@ -718,6 +782,7 @@
       const hallucinated = d.hallucinated;
       const groundTruth  = d.groundTruth || null;
       const grounded     = d.clude && d.clude.grounded; // 'dataset'|'memory'|'none'
+      const sourceRef    = d.sourceRef || null; // e.g. "block:123456" | "tx:<sig>" | null
 
       // Left panel: Clude
       const cludeAnswerEl  = $('askCludeAnswer');
@@ -745,7 +810,7 @@
 
       if (cludeVerdictEl) {
         if (cludeAbstained) {
-          cludeVerdictEl.textContent = '✓ Abstained — grounded behavior';
+          cludeVerdictEl.textContent = '✓ Abstained: grounded behavior';
           cludeVerdictEl.className   = 'ask-verdict abstained';
         } else if (cludeOk) {
           cludeVerdictEl.textContent = '✓ Correct';
@@ -756,7 +821,7 @@
         }
       }
 
-      // Ground truth row
+      // Ground truth row + Solscan verification link
       if (groundTruthEl) {
         if (groundTruth) {
           groundTruthEl.style.display = 'block';
@@ -767,18 +832,70 @@
         }
       }
 
+      // Build Solscan verification link from sourceRef (e.g. "block:271462400")
+      // Split on the FIRST colon only — tx signatures and pubkeys won't have colons,
+      // but we're defensive about it regardless.
+      const solscanLinkEl = $('askSolscanLink');
+      if (solscanLinkEl) {
+        solscanLinkEl.innerHTML = '';
+        if (sourceRef && typeof sourceRef === 'string') {
+          const colonIdx = sourceRef.indexOf(':');
+          if (colonIdx !== -1) {
+            const refType  = sourceRef.slice(0, colonIdx).trim().toLowerCase();
+            const refValue = sourceRef.slice(colonIdx + 1).trim();
+            const SOLSCAN_BASE = 'https://solscan.io';
+            const typeMap = { block: 'block', tx: 'tx', account: 'account', token: 'token' };
+            const path = typeMap[refType];
+            if (path && refValue) {
+              const url = SOLSCAN_BASE + '/' + path + '/' + refValue;
+              const a = document.createElement('a');
+              a.href      = url;
+              a.target    = '_blank';
+              a.rel       = 'noopener noreferrer';
+              a.textContent = ' Verify on Solscan ↗';
+              a.style.cssText = [
+                'font-family:var(--mono)',
+                'font-size:10px',
+                'letter-spacing:0.5px',
+                'color:var(--blue)',
+                'border-bottom:1px solid rgba(34,68,255,0.35)',
+                'margin-left:6px',
+                'white-space:nowrap',
+              ].join(';');
+              a.addEventListener('mouseenter', function () {
+                this.style.borderBottomColor = 'var(--blue)';
+              });
+              a.addEventListener('mouseleave', function () {
+                this.style.borderBottomColor = 'rgba(34,68,255,0.35)';
+              });
+              solscanLinkEl.appendChild(a);
+            }
+          }
+        }
+      }
+
       // Right panel: baseline
+      // Distinguish honest decline/abstain from an actual hallucination.
+      // hallucinated flag = baseline gave a confident WRONG answer (not an abstention).
       const baseAnswerEl  = $('askBaseAnswer');
       const baseVerdictEl = $('askBaseVerdict');
       if (baseAnswerEl)  baseAnswerEl.textContent  = baseAns;
+
+      // Detect abstention pattern in baseline answer
+      const baseAbstained = /not enough information|i don'?t know|cannot determine|no information|abstain|don't have access|no data/i.test(baseAns);
 
       if (baseVerdictEl) {
         if (baseOk) {
           baseVerdictEl.textContent = '✓ Correct';
           baseVerdictEl.className   = 'ask-verdict correct';
         } else if (hallucinated) {
-          baseVerdictEl.textContent = '✗ Hallucinated';
+          // API confirmed: confident wrong answer → true hallucination
+          baseVerdictEl.textContent = '✗ Hallucinated: confident wrong answer';
           baseVerdictEl.className   = 'ask-verdict wrong';
+        } else if (baseAbstained) {
+          // Honest decline: no data access → not a hallucination
+          baseVerdictEl.textContent = 'Declined: no data access (honest)';
+          baseVerdictEl.className   = 'ask-verdict abstained';
         } else {
           baseVerdictEl.textContent = 'Answered';
           baseVerdictEl.className   = 'ask-verdict';
@@ -789,9 +906,13 @@
       if (resultHeader) resultHeader.style.display = 'grid';
       if (resultEl)     resultEl.classList.add('visible');
 
+      // Show the honest framing note below result panels
+      const framingNoteEl = $('askFramingNote');
+      if (framingNoteEl) framingNoteEl.style.display = 'block';
+
     } catch (err) {
       if (status) {
-        status.textContent = 'Network error — ' + err.message;
+        status.textContent = 'Network error: ' + err.message;
         status.className   = 'ask-status err';
       }
       if (pendingState) pendingState.classList.remove('hidden');

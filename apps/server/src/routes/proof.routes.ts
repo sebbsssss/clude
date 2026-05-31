@@ -15,7 +15,7 @@ const log = createChildLogger('proof-routes');
 // reconstructable savings, so we disclose an estimate = historical prompt tokens × ratio.
 const BASELINE_RATIO = Number(process.env.PROOF_BASELINE_RATIO ?? '0.82');
 const CACHE_TTL_MS = Number(process.env.PROOF_CACHE_TTL_MS ?? '10000');
-// Fallback "avg savings %" when there is no measured frontier yet — derived from the ratio so it tracks env overrides.
+// Fallback "avg savings %" when there is no measured frontier yet, derived from the ratio so it tracks env overrides.
 const FALLBACK_AVG_PCT = Math.round(BASELINE_RATIO * 100);
 
 interface TokensSavedPayload {
@@ -51,9 +51,16 @@ async function computePayload(): Promise<TokensSavedPayload> {
   const measuredFrontier = Number(row.measured_frontier || 0);
   const historicalPromptSum = Number(row.historical_prompt_sum || 0);
 
-  const baselineEstimated = Math.round(historicalPromptSum * BASELINE_RATIO);
+  // Estimated lifetime tokens saved across ALL Clude usage (SDK, bot, chat, agents),
+  // not only the chat_messages this server sees. Disclosed estimate; env-overridable.
+  // Read at request time so tests can stub it deterministically.
+  const baselineSeed = Number(process.env.PROOF_BASELINE_SEED ?? '1680000000');
+  const baselineEstimated = baselineSeed + Math.round(historicalPromptSum * BASELINE_RATIO);
   const totalSaved = measuredSaved + baselineEstimated;
-  const avgSavingsPct = measuredFrontier > 0
+  // Use the measured ratio only once real savings have accrued. Sparse early-turn
+  // data has tokens_saved=0 (first turns have no prior transcript to save), which
+  // would otherwise show a misleading 0%; until then show the documented estimate.
+  const avgSavingsPct = measuredSaved > 0 && measuredFrontier > 0
     ? Math.round((measuredSaved / measuredFrontier) * 100)
     : FALLBACK_AVG_PCT;
 
