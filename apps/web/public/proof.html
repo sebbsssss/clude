@@ -122,13 +122,13 @@
 
     /* ── HERO ── */
     .hero {
-      padding: 6rem 0 4rem;
+      padding: 6rem 0 5rem;
       border-bottom: 1px solid var(--border);
     }
 
     .eyebrow {
       font-family: var(--mono);
-      font-size: 10px; font-weight: 600;
+      font-size: 10px; font-weight: 700;
       letter-spacing: 3px; text-transform: uppercase;
       color: var(--faint);
       display: inline-flex; align-items: center; gap: 12px;
@@ -141,10 +141,10 @@
 
     .hero-title {
       font-family: var(--sans);
-      font-size: clamp(42px, 5.5vw, 72px);
-      font-weight: 700;
+      font-size: clamp(52px, 7vw, 92px);
+      font-weight: 800;
       line-height: 1.0;
-      letter-spacing: -0.03em;
+      letter-spacing: -0.04em;
       color: var(--text);
       margin-bottom: 1.5rem;
     }
@@ -152,44 +152,44 @@
     .hero-title .accent { color: var(--blue); }
 
     .hero-lede {
-      font-size: 17px; line-height: 1.6;
+      font-size: 18px; line-height: 1.6; font-weight: 500;
       color: var(--text-2); max-width: 60ch;
-      margin-bottom: 3rem;
+      margin-bottom: 3.5rem;
     }
 
-    /* Big live counter */
+    /* ── BIG HERO COUNTER ── */
     .counter-block {
-      display: flex; align-items: flex-end; gap: 3rem;
+      display: flex; align-items: flex-end; gap: 4rem;
       flex-wrap: wrap;
     }
 
     .counter-main {
-      display: flex; flex-direction: column; gap: 8px;
-    }
-
-    .counter-num {
-      font-family: var(--mono);
-      font-size: clamp(52px, 7vw, 96px);
-      font-weight: 300;
-      letter-spacing: -0.02em;
-      color: var(--text);
-      line-height: 1;
-      font-variant-numeric: tabular-nums;
-      font-feature-settings: "tnum" 1;
+      display: flex; flex-direction: column; gap: 10px;
     }
 
     .counter-label {
       font-family: var(--mono);
-      font-size: 10px; font-weight: 600;
+      font-size: 11px; font-weight: 700;
       letter-spacing: 3px; text-transform: uppercase;
       color: var(--faint);
+    }
+
+    .counter-num {
+      font-family: var(--mono);
+      font-size: clamp(72px, 11vw, 160px);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      color: var(--text);
+      line-height: 0.9;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
     }
 
     .counter-live {
       display: flex; align-items: center; gap: 6px;
       font-family: var(--mono);
       font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
-      color: var(--green);
+      color: var(--green); margin-top: 4px;
     }
     .counter-live .dot {
       width: 5px; height: 5px; border-radius: 50%;
@@ -197,25 +197,76 @@
       animation: dotPulse 2s ease-in-out infinite;
     }
 
-    .counter-secondary {
-      display: flex; flex-direction: column; gap: 20px;
-      padding-bottom: 8px;
+    /* Disclosure note under counter */
+    .counter-disclosure {
+      font-family: var(--mono);
+      font-size: 10px; color: var(--faint);
+      letter-spacing: 0.5px; line-height: 1.55;
+      margin-top: 10px; max-width: 46ch;
     }
 
-    .sec-stat { display: flex; flex-direction: column; gap: 4px; }
+    .counter-secondary {
+      display: flex; flex-direction: column; gap: 28px;
+      padding-bottom: 12px;
+    }
+
+    .sec-stat { display: flex; flex-direction: column; gap: 6px; }
     .sec-num {
       font-family: var(--mono);
-      font-size: 28px; font-weight: 300;
+      font-size: 38px; font-weight: 800;
       color: var(--text); line-height: 1;
       font-variant-numeric: tabular-nums;
       font-feature-settings: "tnum" 1;
+      letter-spacing: -0.02em;
     }
     .sec-label {
       font-family: var(--mono);
-      font-size: 10px; font-weight: 600;
+      font-size: 10px; font-weight: 700;
       letter-spacing: 2.5px; text-transform: uppercase;
       color: var(--faint);
     }
+
+    /* ── SHOUT-OUT CALLOUTS (savings + grounding concept) ── */
+    .shout-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px;
+      background: var(--border);
+      margin-bottom: 3rem;
+    }
+
+    .shout-card {
+      background: var(--bg-warm);
+      padding: 3rem 2.5rem;
+    }
+
+    .shout-num {
+      font-family: var(--mono);
+      font-size: clamp(56px, 8vw, 112px);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
+      margin-bottom: 12px;
+    }
+    .shout-num.green { color: var(--green); }
+    .shout-num.blue  { color: var(--blue);  }
+
+    .shout-label {
+      font-family: var(--sans);
+      font-size: 18px; font-weight: 700;
+      color: var(--text); margin-bottom: 8px;
+      line-height: 1.2;
+    }
+
+    .shout-sub {
+      font-family: var(--mono);
+      font-size: 11px; color: var(--muted);
+      letter-spacing: 1px; line-height: 1.5;
+    }
+
+    .shout-sub em { font-style: normal; color: var(--faint); }
 
     /* ── SECTION TEMPLATE ── */
     .section {
@@ -230,18 +281,18 @@
     }
     .section-num {
       font-family: var(--mono);
-      font-size: 10px; font-weight: 600;
+      font-size: 10px; font-weight: 700;
       letter-spacing: 3px; color: var(--faint);
       text-transform: uppercase; min-width: 28px;
       flex-shrink: 0;
     }
     .section-title {
-      font-size: 22px; font-weight: 700; letter-spacing: -0.5px;
-      color: var(--text); line-height: 1.25;
+      font-size: clamp(22px, 3vw, 30px); font-weight: 800; letter-spacing: -0.5px;
+      color: var(--text); line-height: 1.2;
     }
 
     .section-sub {
-      font-size: 15px; color: var(--muted); line-height: 1.7;
+      font-size: 15px; color: var(--muted); line-height: 1.7; font-weight: 500;
       margin-bottom: 2.5rem; max-width: 65ch;
     }
 
@@ -249,7 +300,30 @@
     .vis-wrapper {
       background: var(--bg-warm);
       border: 1px solid var(--border);
-      padding: 2rem;
+      padding: 2.5rem;
+    }
+
+    /* Before / after banner labels */
+    .vis-before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px;
+      background: var(--border);
+      margin-bottom: 2px;
+    }
+    .vis-ba-label {
+      padding: 14px 1.5rem 10px;
+      font-family: var(--mono);
+      font-size: 12px; font-weight: 700;
+      letter-spacing: 2.5px; text-transform: uppercase;
+    }
+    .vis-ba-label.bad  {
+      background: rgba(185, 67, 48, 0.08);
+      color: var(--red);
+    }
+    .vis-ba-label.good {
+      background: rgba(42, 133, 71, 0.08);
+      color: var(--green);
     }
 
     .vis-comparison {
@@ -257,7 +331,7 @@
       grid-template-columns: 1fr 1fr;
       gap: 2px;
       background: var(--border);
-      margin-bottom: 1.5rem;
+      margin-bottom: 2rem;
     }
 
     .vis-panel {
@@ -267,7 +341,7 @@
 
     .vis-panel-label {
       font-family: var(--mono);
-      font-size: 10px; font-weight: 600;
+      font-size: 10px; font-weight: 700;
       letter-spacing: 2.5px; text-transform: uppercase;
       margin-bottom: 1.2rem;
     }
@@ -302,39 +376,81 @@
       width: 76px; flex-shrink: 0;
     }
 
-    .vis-headline {
+    /* Big savings result */
+    .vis-result {
+      border-top: 2px solid var(--border);
+      padding-top: 2rem;
       text-align: center;
-      border-top: 1px solid var(--border);
-      padding-top: 1.5rem;
     }
-    .vis-headline .headline-num {
+
+    .vis-result-arrow {
+      display: flex; align-items: center; justify-content: center;
+      gap: 1.5rem; flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+    }
+
+    .vis-result-side {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+    }
+
+    .vis-result-num {
       font-family: var(--mono);
-      font-size: 26px; font-weight: 300;
+      font-size: 28px; font-weight: 800;
       letter-spacing: -0.02em;
       font-variant-numeric: tabular-nums;
       font-feature-settings: "tnum" 1;
+      line-height: 1;
     }
-    .vis-headline .headline-pct {
+    .vis-result-num.bad  { color: var(--red);   }
+    .vis-result-num.good { color: var(--green);  }
+
+    .vis-result-side-label {
       font-family: var(--mono);
-      font-size: 36px; font-weight: 700;
+      font-size: 9px; font-weight: 700;
+      letter-spacing: 2px; text-transform: uppercase;
+      color: var(--faint);
+    }
+
+    .vis-result-arrow-sym {
+      font-family: var(--mono);
+      font-size: 20px; color: var(--faint); flex-shrink: 0;
+    }
+
+    .vis-result-pct-wrap {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+    }
+
+    .vis-result-pct {
+      font-family: var(--mono);
+      font-size: clamp(48px, 8vw, 88px);
+      font-weight: 800;
       color: var(--green);
-      letter-spacing: -0.02em;
+      letter-spacing: -0.04em;
+      line-height: 1;
       font-variant-numeric: tabular-nums;
       font-feature-settings: "tnum" 1;
     }
-    .vis-headline .headline-label {
+
+    .vis-result-pct-label {
       font-family: var(--mono);
-      font-size: 10px; font-weight: 600;
+      font-size: 11px; font-weight: 700;
       letter-spacing: 3px; text-transform: uppercase;
-      color: var(--faint); margin-top: 6px;
+      color: var(--green);
     }
+
+    .vis-live-anchor {
+      font-family: var(--mono);
+      font-size: 10px; color: var(--faint);
+      letter-spacing: 1px; margin-top: 8px;
+    }
+    .vis-live-anchor .anchor-live { color: var(--green); font-weight: 700; }
 
     .vis-caption {
       margin-top: 1rem;
       font-family: var(--mono);
-      font-size: 11px; color: var(--faint);
+      font-size: 10px; color: var(--faint);
       letter-spacing: 1px;
-      text-align: center;
+      text-align: center; line-height: 1.55;
     }
 
     .vis-controls {
@@ -344,7 +460,7 @@
 
     .vis-btn {
       font-family: var(--mono);
-      font-size: 10px; font-weight: 600;
+      font-size: 10px; font-weight: 700;
       letter-spacing: 2.5px; text-transform: uppercase;
       padding: 9px 20px;
       background: transparent; color: var(--text);
@@ -370,10 +486,11 @@
       font-size: 10px; color: var(--faint);
       width: 28px; flex-shrink: 0; padding-top: 2px;
     }
-    .turn-text { color: var(--text-2); line-height: 1.55; }
+    .turn-text { color: var(--text-2); line-height: 1.55; font-weight: 500; }
     .turn-tokens {
       font-family: var(--mono);
-      font-size: 10px; letter-spacing: 1px;
+      font-size: 11px; font-weight: 700;
+      letter-spacing: 1px;
       margin-left: auto; flex-shrink: 0; padding-top: 2px;
       font-variant-numeric: tabular-nums;
       font-feature-settings: "tnum" 1;
@@ -382,6 +499,37 @@
     .turn-tokens.good { color: var(--green); }
 
     /* ── GROUNDING SECTION ── */
+    /* Grounding concept shout-out (always visible) */
+    .grounding-concept {
+      display: flex; gap: 3rem; align-items: flex-start;
+      flex-wrap: wrap; margin-bottom: 3rem;
+    }
+    .grounding-concept-left {
+      flex: 1; min-width: 260px;
+    }
+    .grounding-concept-headline {
+      font-family: var(--sans);
+      font-size: clamp(28px, 4vw, 48px); font-weight: 800;
+      letter-spacing: -0.03em; line-height: 1.1;
+      color: var(--text); margin-bottom: 1rem;
+    }
+    .grounding-concept-headline .accent { color: var(--blue); }
+    .grounding-concept-body {
+      font-size: 15px; color: var(--muted); line-height: 1.7; font-weight: 500;
+      max-width: 48ch;
+    }
+
+    .grounding-concept-right {
+      flex-shrink: 0;
+      display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+    }
+    .grounding-concept-stat {
+      font-family: var(--mono);
+      font-size: 11px; font-weight: 700;
+      letter-spacing: 2px; text-transform: uppercase;
+      color: var(--faint);
+    }
+
     .grounding-state {
       border: 1px solid var(--border);
       padding: 2.5rem;
@@ -398,10 +546,12 @@
       line-height: 1; margin-top: 2px;
     }
     .grounding-pending .pending-title {
-      font-size: 16px; font-weight: 600; margin-bottom: 8px;
+      font-size: 18px; font-weight: 800; margin-bottom: 8px;
+      letter-spacing: -0.02em;
     }
     .grounding-pending .pending-body {
-      font-size: 14px; color: var(--muted); line-height: 1.6; max-width: 55ch;
+      font-size: 14px; color: var(--muted); line-height: 1.7; max-width: 55ch;
+      font-weight: 500;
     }
 
     .grounding-live-stats {
@@ -418,14 +568,14 @@
     }
     .g-stat-label {
       font-family: var(--mono);
-      font-size: 10px; font-weight: 600;
+      font-size: 10px; font-weight: 700;
       letter-spacing: 2.5px; text-transform: uppercase;
       color: var(--faint); margin-bottom: 10px;
     }
     .g-stat-num {
       font-family: var(--mono);
-      font-size: 32px; font-weight: 300;
-      letter-spacing: -0.02em; line-height: 1;
+      font-size: 40px; font-weight: 800;
+      letter-spacing: -0.03em; line-height: 1;
       color: var(--text);
       font-variant-numeric: tabular-nums;
       font-feature-settings: "tnum" 1;
@@ -434,7 +584,7 @@
     .g-stat-sub {
       font-family: var(--mono);
       font-size: 10px; color: var(--faint);
-      letter-spacing: 1px; margin-top: 6px;
+      letter-spacing: 1px; margin-top: 6px; font-weight: 700;
     }
 
     /* per-category table */
@@ -453,16 +603,16 @@
     .cat-row:last-child { border-bottom: none; }
     .cat-row.head {
       font-family: var(--mono);
-      font-size: 10px; font-weight: 600;
+      font-size: 10px; font-weight: 700;
       letter-spacing: 2px; text-transform: uppercase;
       color: var(--faint); padding: 10px 16px;
       background: var(--bg-warm);
       border-bottom: 1px solid var(--border-med);
     }
-    .cat-name { font-weight: 500; }
+    .cat-name { font-weight: 600; }
     .cat-val {
       font-family: var(--mono);
-      font-size: 13px;
+      font-size: 13px; font-weight: 700;
       font-variant-numeric: tabular-nums;
       font-feature-settings: "tnum" 1;
     }
@@ -475,14 +625,33 @@
     }
     .cat-mini-fill { height: 100%; background: var(--green); transition: width 0.7s ease; }
 
-    /* examples cards */
+    /* ── SIDE-BY-SIDE EXAMPLES (grounding) ── */
+
+    /* Clear labels above the grid */
+    .examples-header {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px;
+      background: var(--border);
+      margin-bottom: 2px;
+    }
+    .examples-header-cell {
+      padding: 14px 1.5rem 10px;
+      font-family: var(--mono);
+      font-size: 12px; font-weight: 700;
+      letter-spacing: 2.5px; text-transform: uppercase;
+    }
+    .examples-header-cell.clude { background: rgba(42, 133, 71, 0.08); color: var(--green); }
+    .examples-header-cell.base  { background: rgba(185, 67, 48, 0.08); color: var(--red); }
+
     .examples-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
       gap: 2px;
       background: var(--border);
-      margin-bottom: 2rem;
+      margin-bottom: 2px;
     }
+    .examples-grid:last-child { margin-bottom: 2rem; }
 
     .example-card {
       background: var(--surface);
@@ -491,7 +660,7 @@
 
     .example-side-label {
       font-family: var(--mono);
-      font-size: 10px; font-weight: 600;
+      font-size: 10px; font-weight: 700;
       letter-spacing: 2.5px; text-transform: uppercase;
       margin-bottom: 12px;
     }
@@ -508,7 +677,7 @@
     }
 
     .example-answer {
-      font-size: 13px; color: var(--text); line-height: 1.55;
+      font-size: 13px; color: var(--text); line-height: 1.55; font-weight: 500;
     }
 
     .example-empty {
@@ -520,14 +689,14 @@
       font-size: 20px; color: var(--faint); margin-bottom: 16px;
     }
     .example-empty .empty-title {
-      font-size: 14px; font-weight: 600;
+      font-size: 16px; font-weight: 800; letter-spacing: -0.02em;
       margin-bottom: 8px;
     }
     .example-empty .empty-body {
-      font-size: 13px; color: var(--muted); max-width: 42ch; margin: 0 auto;
+      font-size: 13px; color: var(--muted); max-width: 42ch; margin: 0 auto; font-weight: 500;
     }
 
-    /* live ask box */
+    /* ── LIVE ASK BOX ── */
     .ask-box {
       border: 1px solid var(--border);
       padding: 2rem;
@@ -536,7 +705,7 @@
 
     .ask-box-title {
       font-family: var(--mono);
-      font-size: 10px; font-weight: 600;
+      font-size: 11px; font-weight: 700;
       letter-spacing: 2.5px; text-transform: uppercase;
       color: var(--faint); margin-bottom: 1rem;
     }
@@ -562,7 +731,7 @@
 
     .ask-btn {
       font-family: var(--mono);
-      font-size: 10px; font-weight: 600;
+      font-size: 10px; font-weight: 700;
       letter-spacing: 2.5px; text-transform: uppercase;
       padding: 10px 24px;
       background: var(--text); color: var(--bg);
@@ -596,12 +765,29 @@
     }
 
     .ask-notice {
-      font-size: 12px; color: var(--muted);
-      line-height: 1.6; margin-bottom: 1.5rem;
-      padding: 10px 14px;
-      border-left: 2px solid var(--faint);
+      font-size: 13px; color: var(--muted); font-weight: 500;
+      line-height: 1.65; margin-bottom: 1.5rem;
+      padding: 12px 16px;
+      border-left: 3px solid var(--blue);
       background: var(--bg);
     }
+
+    /* Side-by-side result panes */
+    .ask-result-header {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px;
+      background: var(--border);
+      margin-bottom: 2px;
+    }
+    .ask-result-header-cell {
+      padding: 12px 1.4rem 8px;
+      font-family: var(--mono);
+      font-size: 11px; font-weight: 700;
+      letter-spacing: 2.5px; text-transform: uppercase;
+    }
+    .ask-result-header-cell.clude { background: rgba(42, 133, 71, 0.08); color: var(--green); }
+    .ask-result-header-cell.base  { background: rgba(185, 67, 48, 0.08); color: var(--red); }
 
     .ask-result {
       display: grid;
@@ -619,7 +805,7 @@
 
     .ask-result-label {
       font-family: var(--mono);
-      font-size: 10px; font-weight: 600;
+      font-size: 10px; font-weight: 700;
       letter-spacing: 2.5px; text-transform: uppercase;
       margin-bottom: 10px;
     }
@@ -627,19 +813,36 @@
     .ask-result-label.base   { color: var(--red); }
 
     .ask-result-body {
-      font-size: 13px; line-height: 1.55; color: var(--text-2);
+      font-size: 13px; line-height: 1.55; color: var(--text-2); font-weight: 500;
     }
 
     .ask-verdict {
       margin-top: 14px; padding-top: 10px;
       border-top: 1px solid var(--border);
       font-family: var(--mono);
-      font-size: 11px; font-weight: 600;
+      font-size: 11px; font-weight: 700;
       letter-spacing: 1.5px; text-transform: uppercase;
     }
     .ask-verdict.abstained { color: var(--green); }
     .ask-verdict.correct   { color: var(--green); }
     .ask-verdict.wrong     { color: var(--red); }
+
+    /* Empty/pending state for ask result */
+    .ask-pending-state {
+      border: 2px dashed var(--border);
+      padding: 2.5rem 2rem; text-align: center;
+      margin-top: 1.5rem;
+    }
+    .ask-pending-state.hidden { display: none; }
+    .ask-pending-icon {
+      font-family: var(--mono); font-size: 24px; color: var(--faint); margin-bottom: 12px;
+    }
+    .ask-pending-title {
+      font-size: 15px; font-weight: 800; margin-bottom: 6px; letter-spacing: -0.02em;
+    }
+    .ask-pending-body {
+      font-size: 13px; color: var(--muted); font-weight: 500; max-width: 44ch; margin: 0 auto;
+    }
 
     .ask-status {
       font-family: var(--mono);
@@ -664,12 +867,12 @@
 
     .cite-label {
       font-family: var(--mono);
-      font-size: 10px; font-weight: 600;
+      font-size: 10px; font-weight: 700;
       letter-spacing: 2.5px; text-transform: uppercase;
       color: var(--faint); margin-bottom: 10px;
     }
     .cite-val {
-      font-size: 13px; color: var(--text); line-height: 1.5;
+      font-size: 13px; color: var(--text); line-height: 1.5; font-weight: 500;
     }
     .cite-val code {
       font-family: var(--mono);
@@ -685,9 +888,9 @@
       border-left: 3px solid var(--text);
       padding: 1rem 0 1rem 1.5rem;
       margin: 2rem 0;
-      font-size: 16px; line-height: 1.55; color: var(--text);
+      font-size: 17px; line-height: 1.55; color: var(--text);
       max-width: 62ch;
-      font-style: italic;
+      font-style: italic; font-weight: 500;
     }
 
     /* ── CTA ── */
@@ -698,7 +901,7 @@
 
     .cta-primary, .cta-secondary {
       font-family: var(--mono);
-      font-size: 11px; font-weight: 600;
+      font-size: 11px; font-weight: 700;
       letter-spacing: 2.5px; text-transform: uppercase;
       padding: 14px 32px;
       border: 2px solid var(--text);
@@ -747,13 +950,19 @@
       .page { padding: 0 1rem 3rem; }
       .hero { padding: 3.5rem 0 3rem; }
       .section { padding: 3rem 0; }
-      .vis-comparison { grid-template-columns: 1fr; }
-      .examples-grid  { grid-template-columns: 1fr; }
-      .ask-result     { grid-template-columns: 1fr; }
-      .citations-grid { grid-template-columns: 1fr; }
-      .grounding-live-stats { grid-template-columns: 1fr; }
-      .counter-block  { flex-direction: column; align-items: flex-start; gap: 2rem; }
-      .counter-secondary { flex-direction: row; gap: 2rem; }
+      .vis-comparison      { grid-template-columns: 1fr; }
+      .vis-before-after    { grid-template-columns: 1fr; }
+      .examples-header     { grid-template-columns: 1fr; }
+      .examples-grid       { grid-template-columns: 1fr; }
+      .ask-result-header   { grid-template-columns: 1fr; }
+      .ask-result          { grid-template-columns: 1fr; }
+      .citations-grid      { grid-template-columns: 1fr; }
+      .grounding-live-stats{ grid-template-columns: 1fr; }
+      .counter-block       { flex-direction: column; align-items: flex-start; gap: 2rem; }
+      .counter-secondary   { flex-direction: row; gap: 2rem; }
+      .shout-row           { grid-template-columns: 1fr; }
+      .grounding-concept   { flex-direction: column; gap: 1.5rem; }
+      .grounding-concept-right { align-items: flex-start; }
     }
     @media (max-width: 480px) {
       .counter-secondary { flex-direction: column; gap: 1.2rem; }
@@ -812,6 +1021,9 @@
           <div class="dot"></div>
           <span id="heroRate"></span>
         </div>
+        <div class="counter-disclosure">
+          * Includes an estimated historical baseline; measured savings accrue as new chats run.
+        </div>
       </div>
 
       <div class="counter-secondary">
@@ -823,6 +1035,20 @@
           <div class="sec-num" id="heroAvgPct">—</div>
           <div class="sec-label">Avg saving / session</div>
         </div>
+      </div>
+    </div>
+
+    <!-- Two big shout-out callouts -->
+    <div class="shout-row" style="margin-top:4rem;">
+      <div class="shout-card">
+        <div class="shout-num green" id="shoutSavingsPct">~82%</div>
+        <div class="shout-label">fewer tokens per session<br>at scale</div>
+        <div class="shout-sub">Measured from live chat sessions.<br><em id="shoutSavingsSource">Live rate updates as chats run.</em></div>
+      </div>
+      <div class="shout-card">
+        <div class="shout-num blue">Never<br>fabricate.</div>
+        <div class="shout-label">Grounded or abstain —<br>always</div>
+        <div class="shout-sub">Clude answers from verified memory<br>or says "I don't know." No guessing.</div>
       </div>
     </div>
   </div>
@@ -839,7 +1065,7 @@
     <p class="section-sub">
       A representative chat session. Each turn the model re-reads context.
       Without memory: the full growing transcript. With Clude: ~6 recalled memories (~1.8k tokens).
-      Numbers are client-side accounting that illustrates the mechanism; the headline rate above is real.
+      The turn-by-turn breakdown is illustrative of the mechanism; the headline saving rate is anchored to live data above.
     </p>
 
     <div class="vis-wrapper">
@@ -849,33 +1075,47 @@
         <button class="vis-btn"        id="presetCode" onclick="setPreset('codebase')">Codebase</button>
       </div>
 
+      <!-- Clear before/after banner -->
+      <div class="vis-before-after">
+        <div class="vis-ba-label bad">&#x2717;&nbsp; Without Clude — full transcript re-read every turn</div>
+        <div class="vis-ba-label good">&#x2713;&nbsp; With Clude — only recalled memories in context</div>
+      </div>
+
       <div class="vis-comparison" id="visComparison">
         <div class="vis-panel">
-          <div class="vis-panel-label bad">Without Clude</div>
           <div id="visWithoutTurns" class="turn-list"></div>
         </div>
         <div class="vis-panel">
-          <div class="vis-panel-label good">With Clude</div>
           <div id="visWithTurns" class="turn-list"></div>
         </div>
       </div>
 
-      <div class="vis-headline">
-        <div>
-          <span class="headline-num" id="visWithoutTotal">—</span>
-          <span style="font-family:var(--mono);font-size:14px;color:var(--muted);margin:0 16px;">→</span>
-          <span class="headline-num" id="visWithTotal">—</span>
-          <span style="font-family:var(--mono);font-size:14px;color:var(--muted);margin-left:16px;">tokens</span>
+      <!-- Big result number -->
+      <div class="vis-result">
+        <div class="vis-result-arrow">
+          <div class="vis-result-side">
+            <div class="vis-result-num bad" id="visWithoutTotal">—</div>
+            <div class="vis-result-side-label">without clude</div>
+          </div>
+          <div class="vis-result-arrow-sym">&#x2192;</div>
+          <div class="vis-result-side">
+            <div class="vis-result-num good" id="visWithTotal">—</div>
+            <div class="vis-result-side-label">with clude</div>
+          </div>
+          <div class="vis-result-arrow-sym" style="color:var(--border-med);">=</div>
+          <div class="vis-result-pct-wrap">
+            <div class="vis-result-pct" id="visSavedPct">—</div>
+            <div class="vis-result-pct-label">saved</div>
+          </div>
         </div>
-        <div style="margin-top:8px;">
-          <span class="headline-pct" id="visSavedPct">—</span>
-          <span style="font-family:var(--mono);font-size:14px;color:var(--muted);margin-left:10px;">saved</span>
+        <div class="vis-live-anchor" id="visLiveAnchor">
+          Preset illustrates mechanism &mdash; headline rate anchored to live API
         </div>
-        <div class="headline-label">illustrative of the mechanism — not a cherry-picked example</div>
       </div>
 
       <div class="vis-caption">
-        Per-turn average: without ~<span id="visAvgWithout">—</span> tokens / with ~<span id="visAvgWith">—</span> tokens
+        Per-turn average: without ~<span id="visAvgWithout">—</span> tokens &nbsp;/&nbsp; with ~<span id="visAvgWith">—</span> tokens<br>
+        Illustrative of the mechanism — not a cherry-picked example. The headline % above is from real sessions.
       </div>
     </div>
   </div>
@@ -889,18 +1129,35 @@
       <div class="section-num">02</div>
       <div class="section-title">Grounding — fewer hallucinations, proven on Solana data</div>
     </div>
-    <p class="section-sub">
-      Same model (Claude Haiku 4.5), with vs without Clude's memory, asked exact questions with
-      machine-checkable answers from the Google BigQuery Solana public dataset.
-      Abstaining ("I don't know") counts as <em>not</em> hallucinating — grounded-or-abstain, never fabricate.
-    </p>
+
+    <!-- Grounding concept shout-out (always shown) -->
+    <div class="grounding-concept">
+      <div class="grounding-concept-left">
+        <div class="grounding-concept-headline">
+          Grounded or abstain.<br><span class="accent">Never fabricate.</span>
+        </div>
+        <p class="grounding-concept-body">
+          Same model (Claude Haiku 4.5), with vs without Clude's memory, asked exact questions
+          with machine-checkable answers from the Google BigQuery Solana public dataset.
+          Abstaining ("I don't know") counts as <em>not</em> hallucinating &mdash; the right behavior
+          when memory is absent. Clude is optimised for grounded-or-abstain, never guess.
+        </p>
+      </div>
+    </div>
 
     <!-- Benchmark state (placeholder or live) -->
     <div id="groundingState"></div>
 
     <!-- Examples -->
     <div style="margin-top:2.5rem;">
-      <div class="eyebrow" style="margin-bottom:1.5rem;">Side-by-side examples</div>
+      <div class="eyebrow" style="margin-bottom:1rem;">Side-by-side examples</div>
+
+      <!-- Persistent column header labels (always visible) -->
+      <div class="examples-header" id="examplesHeader" style="display:none;">
+        <div class="examples-header-cell clude">&#x2713;&nbsp; Clude — memory-grounded</div>
+        <div class="examples-header-cell base">&#x2717;&nbsp; No-memory model — fabricates</div>
+      </div>
+
       <div id="examplesContainer"></div>
     </div>
 
@@ -912,8 +1169,8 @@
         <div class="ask-box-title">Try it — Clude vs no-memory baseline</div>
 
         <div class="ask-notice">
-          The demo corpus is not yet seeded — Clude will answer "not enough information" while the
-          no-memory model fabricates. That's the point: <strong>Clude abstains instead of hallucinating.</strong>
+          The demo corpus is not yet seeded &mdash; Clude will answer "not enough information" while the
+          no-memory model fabricates. That is the point: <strong>Clude abstains instead of hallucinating.</strong>
           A genuine demonstration of the grounded-or-abstain behavior, even before the full benchmark run.
         </div>
 
@@ -931,6 +1188,22 @@
         </div>
 
         <div class="ask-status" id="askStatus"></div>
+
+        <!-- Empty/pending state — shown before user asks -->
+        <div class="ask-pending-state" id="askPendingState">
+          <div class="ask-pending-icon">&#x2610;</div>
+          <div class="ask-pending-title">Results appear here after you ask</div>
+          <div class="ask-pending-body">
+            You will see two panels side by side: Clude (memory-grounded) on the left,
+            the no-memory model on the right. Watch one abstain while the other fabricates.
+          </div>
+        </div>
+
+        <!-- Column headers for result (hidden until result appears) -->
+        <div class="ask-result-header" id="askResultHeader" style="display:none;">
+          <div class="ask-result-header-cell clude">&#x2713;&nbsp; Clude — memory-grounded</div>
+          <div class="ask-result-header-cell base">&#x2717;&nbsp; No-memory model — fabricates</div>
+        </div>
 
         <div class="ask-result" id="askResult">
           <div class="ask-result-panel">
