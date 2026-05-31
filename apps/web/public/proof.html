@@ -696,9 +696,105 @@
       font-size: 13px; color: var(--muted); max-width: 42ch; margin: 0 auto; font-weight: 500;
     }
 
+    /* ── MECHANISM BAR CHART ── */
+    .mech-chart-wrap {
+      background: var(--bg-warm);
+      border: 1px solid var(--border);
+      padding: 2rem 2rem 1.5rem;
+      margin-top: 2.5rem;
+    }
+    .mech-chart-title {
+      font-family: var(--mono);
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 2.5px; text-transform: uppercase;
+      color: var(--faint); margin-bottom: 1.2rem;
+    }
+    .mech-chart-inner {
+      display: flex; gap: 12px; align-items: flex-end;
+      height: 140px;
+    }
+    .mech-y-axis {
+      display: flex; flex-direction: column;
+      justify-content: space-between;
+      align-items: flex-end;
+      height: 100%;
+      padding-bottom: 0;
+      font-family: var(--mono);
+      font-size: 9px; color: var(--faint);
+      letter-spacing: 1px;
+      flex-shrink: 0; width: 28px;
+    }
+    .mech-bars-area {
+      display: flex; align-items: flex-end;
+      gap: 6px; flex: 1; height: 100%;
+    }
+    .mech-col-group {
+      display: flex; flex-direction: column;
+      align-items: center; gap: 4px;
+      flex: 1; height: 100%;
+    }
+    .mech-col-pair {
+      display: flex; align-items: flex-end;
+      gap: 3px; width: 100%; flex: 1;
+    }
+    .mech-bar {
+      flex: 1;
+      height: 0%;
+      transition: height 0s;
+      min-width: 0;
+    }
+    .mech-bar.mech-bar-animate {
+      height: var(--target-h, 0%);
+      transition: height 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    }
+    /* Stagger each bar group slightly */
+    .mech-col-group:nth-child(1) .mech-bar.mech-bar-animate { transition-delay: 0.05s; }
+    .mech-col-group:nth-child(2) .mech-bar.mech-bar-animate { transition-delay: 0.12s; }
+    .mech-col-group:nth-child(3) .mech-bar.mech-bar-animate { transition-delay: 0.19s; }
+    .mech-col-group:nth-child(4) .mech-bar.mech-bar-animate { transition-delay: 0.26s; }
+    .mech-col-group:nth-child(5) .mech-bar.mech-bar-animate { transition-delay: 0.33s; }
+    .mech-col-group:nth-child(6) .mech-bar.mech-bar-animate { transition-delay: 0.40s; }
+    .mech-col-group:nth-child(7) .mech-bar.mech-bar-animate { transition-delay: 0.47s; }
+    .mech-col-group:nth-child(8) .mech-bar.mech-bar-animate { transition-delay: 0.54s; }
+
+    .mech-bar-without { background: rgba(185, 67, 48, 0.65); }
+    .mech-bar-with    { background: var(--green); opacity: 0.85; }
+
+    .mech-turn-label {
+      font-family: var(--mono);
+      font-size: 9px; color: var(--faint);
+      letter-spacing: 1px; text-transform: uppercase;
+      flex-shrink: 0;
+    }
+    .mech-legend {
+      display: flex; gap: 1.5rem; flex-wrap: wrap;
+      margin-top: 1rem; padding-top: 1rem;
+      border-top: 1px solid var(--border);
+    }
+    .mech-legend-item {
+      font-family: var(--mono);
+      font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .mech-legend-item::before {
+      content: ''; display: inline-block;
+      width: 12px; height: 12px; flex-shrink: 0;
+    }
+    .mech-legend-without { color: var(--red); }
+    .mech-legend-without::before { background: rgba(185, 67, 48, 0.65); }
+    .mech-legend-with { color: var(--green); }
+    .mech-legend-with::before { background: var(--green); opacity: 0.85; }
+
+    .mech-caption {
+      margin-top: 0.8rem;
+      font-family: var(--mono);
+      font-size: 10px; color: var(--faint);
+      letter-spacing: 0.5px; line-height: 1.55;
+    }
+
     /* ── LIVE ASK BOX ── */
     .ask-box {
-      border: 1px solid var(--border);
+      border: 2px solid var(--blue);
       padding: 2rem;
       background: var(--bg-warm);
     }
@@ -707,7 +803,38 @@
       font-family: var(--mono);
       font-size: 11px; font-weight: 700;
       letter-spacing: 2.5px; text-transform: uppercase;
-      color: var(--faint); margin-bottom: 1rem;
+      color: var(--faint); margin-bottom: 0.5rem;
+    }
+
+    .ask-date-note {
+      font-family: var(--mono);
+      font-size: 10px; color: var(--faint);
+      letter-spacing: 0.5px; line-height: 1.55;
+      margin-bottom: 1.2rem;
+    }
+
+    .ask-shuffle-row {
+      display: flex; gap: 10px; align-items: center;
+      margin-bottom: 1.2rem; flex-wrap: wrap;
+    }
+
+    .ask-shuffle-btn {
+      font-family: var(--mono);
+      font-size: 11px; font-weight: 700;
+      letter-spacing: 2px; text-transform: uppercase;
+      padding: 10px 20px;
+      background: var(--blue); color: #fff;
+      border: 2px solid var(--blue);
+      cursor: pointer; transition: all 0.2s;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .ask-shuffle-btn:hover:not(:disabled) {
+      background: transparent; color: var(--blue);
+    }
+    .ask-shuffle-btn:disabled {
+      background: var(--bg-deep); color: var(--faint);
+      border-color: var(--border); cursor: not-allowed;
     }
 
     .ask-row {
@@ -748,7 +875,13 @@
     }
 
     .ask-presets {
-      display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1.5rem;
+      display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1rem;
+    }
+    .ask-presets-label {
+      font-family: var(--mono);
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 2px; text-transform: uppercase;
+      color: var(--faint); margin-bottom: 0.5rem;
     }
     .ask-preset {
       font-family: var(--mono);
@@ -762,14 +895,6 @@
     .ask-preset:hover {
       border-color: var(--border-med); color: var(--text);
       background: var(--bg-warm);
-    }
-
-    .ask-notice {
-      font-size: 13px; color: var(--muted); font-weight: 500;
-      line-height: 1.65; margin-bottom: 1.5rem;
-      padding: 12px 16px;
-      border-left: 3px solid var(--blue);
-      background: var(--bg);
     }
 
     /* Side-by-side result panes */
@@ -814,6 +939,38 @@
 
     .ask-result-body {
       font-size: 13px; line-height: 1.55; color: var(--text-2); font-weight: 500;
+    }
+
+    .ask-grounded-tag {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 9px; font-weight: 700;
+      letter-spacing: 1.5px; text-transform: uppercase;
+      padding: 2px 7px;
+      margin-top: 6px;
+      border: 1px solid transparent;
+    }
+    .ask-grounded-dataset {
+      color: var(--green);
+      border-color: rgba(42, 133, 71, 0.4);
+      background: rgba(42, 133, 71, 0.07);
+    }
+    .ask-grounded-memory {
+      color: var(--blue);
+      border-color: rgba(34, 68, 255, 0.4);
+      background: rgba(34, 68, 255, 0.07);
+    }
+
+    .ask-ground-truth {
+      margin-top: 10px; padding-top: 10px;
+      border-top: 1px solid var(--border);
+      font-family: var(--mono);
+      font-size: 11px; color: var(--muted);
+      letter-spacing: 0.5px;
+      display: none;
+    }
+    .ask-ground-truth strong {
+      color: var(--text); font-weight: 700;
     }
 
     .ask-verdict {
@@ -1118,7 +1275,18 @@
         Illustrative of the mechanism — not a cherry-picked example. The headline % above is from real sessions.
       </div>
     </div>
+
+    <!-- Per-turn mechanism chart -->
+    <div class="mech-chart-wrap">
+      <div class="mech-chart-title">Context size per turn — the divergence</div>
+      <div id="mechanismChart"><!-- rendered by proof.js --></div>
+      <div class="mech-caption">
+        Without memory, every turn re-sends the entire growing conversation — cost grows roughly with the square of turns.
+        Clude recalls only what is relevant, so per-turn context stays flat from turn&nbsp;1 to turn&nbsp;N.
+      </div>
+    </div>
   </div>
+
 
 
   <!-- ─────────────────────────────────────────────
@@ -1145,10 +1313,85 @@
       </div>
     </div>
 
-    <!-- Benchmark state (placeholder or live) -->
+    <!-- ── LIVE ASK DEMO — top of section, most prominent ── -->
+    <div class="ask-box" style="margin-bottom:3rem;">
+      <div class="ask-box-title">Try it — Clude vs no-memory baseline</div>
+      <div class="ask-date-note">
+        Solana mainnet data via Google BigQuery &middot; snapshot frozen 2025-03-31 (historical, not real-time).
+      </div>
+
+      <!-- Shuffle button — primary interaction -->
+      <div class="ask-shuffle-row">
+        <button class="ask-shuffle-btn" id="askShuffleBtn" onclick="shuffleAsk()">
+          &#x1F3B2; Shuffle a real Solana fact
+        </button>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:1px;">
+          — picks a random question from the frozen dataset and gets a grounded answer
+        </span>
+      </div>
+
+      <!-- Category preset buttons -->
+      <div style="margin-bottom:1.2rem;">
+        <div class="ask-presets-label">Or pick by category:</div>
+        <div class="ask-presets">
+          <button class="ask-preset" onclick="shuffleAsk('block_time')">Block time</button>
+          <button class="ask-preset" onclick="shuffleAsk('block_leader')">Validator (leader)</button>
+          <button class="ask-preset" onclick="shuffleAsk('block_txcount')">Transactions in a block</button>
+          <button class="ask-preset" onclick="shuffleAsk('tx_fee')">Transaction fee</button>
+          <button class="ask-preset" onclick="shuffleAsk('tx_status')">Transaction status</button>
+          <button class="ask-preset" onclick="shuffleAsk('account_owner')">Account owner</button>
+          <button class="ask-preset" onclick="shuffleAsk('account_lamports')">Account balance</button>
+          <button class="ask-preset" onclick="shuffleAsk('token_symbol')">Token symbol</button>
+        </div>
+      </div>
+
+      <!-- Free-text fallback (secondary) -->
+      <div class="ask-row">
+        <input class="ask-input" id="askInput" type="text"
+          placeholder="Or type your own Solana question (may abstain — that&#x2019;s fine)…" />
+        <button class="ask-btn" id="askBtn" onclick="doAsk()">Ask</button>
+      </div>
+
+      <div class="ask-status" id="askStatus"></div>
+
+      <!-- Empty/pending state — shown before user asks -->
+      <div class="ask-pending-state" id="askPendingState">
+        <div class="ask-pending-icon">&#x2610;</div>
+        <div class="ask-pending-title">Results appear here after you ask</div>
+        <div class="ask-pending-body">
+          Hit Shuffle or pick a category above. You will see Clude grounded in the frozen dataset
+          on the left, the no-memory model on the right.
+        </div>
+      </div>
+
+      <!-- Column headers for result (hidden until result appears) -->
+      <div class="ask-result-header" id="askResultHeader" style="display:none;">
+        <div class="ask-result-header-cell clude">&#x2713;&nbsp; Clude &mdash; grounded in Solana data</div>
+        <div class="ask-result-header-cell base">&#x2717;&nbsp; No-memory model</div>
+      </div>
+
+      <div class="ask-result" id="askResult">
+        <div class="ask-result-panel">
+          <div class="ask-result-label clude"><strong>Clude &mdash; grounded in Solana data</strong></div>
+          <div class="ask-result-body" id="askCludeAnswer">—</div>
+          <div id="askGroundedTag" class="ask-grounded-tag"></div>
+          <div class="ask-ground-truth" id="askGroundTruth">
+            Verified answer: <strong id="askGroundTruthValue"></strong>
+          </div>
+          <div class="ask-verdict" id="askCludeVerdict"></div>
+        </div>
+        <div class="ask-result-panel">
+          <div class="ask-result-label base"><strong>No-memory model</strong></div>
+          <div class="ask-result-body" id="askBaseAnswer">—</div>
+          <div class="ask-verdict" id="askBaseVerdict"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Benchmark state (placeholder or live) — BELOW the ask demo -->
     <div id="groundingState"></div>
 
-    <!-- Examples -->
+    <!-- Examples — BELOW the ask demo -->
     <div style="margin-top:2.5rem;">
       <div class="eyebrow" style="margin-bottom:1rem;">Side-by-side examples</div>
 
@@ -1159,65 +1402,6 @@
       </div>
 
       <div id="examplesContainer"></div>
-    </div>
-
-    <!-- Live ask box -->
-    <div style="margin-top:3rem;">
-      <div class="eyebrow" style="margin-bottom:1.5rem;">Ask a live Solana question</div>
-
-      <div class="ask-box">
-        <div class="ask-box-title">Try it — Clude vs no-memory baseline</div>
-
-        <div class="ask-notice">
-          The demo corpus is not yet seeded &mdash; Clude will answer "not enough information" while the
-          no-memory model fabricates. That is the point: <strong>Clude abstains instead of hallucinating.</strong>
-          A genuine demonstration of the grounded-or-abstain behavior, even before the full benchmark run.
-        </div>
-
-        <div class="ask-presets">
-          <button class="ask-preset" onclick="setAskPreset(this)" data-q="What was the total transaction count in the Solana block at slot 328970103?">Block tx count</button>
-          <button class="ask-preset" onclick="setAskPreset(this)" data-q="Which validator led Solana slot 328970225?">Block leader</button>
-          <button class="ask-preset" onclick="setAskPreset(this)" data-q="How many token accounts were active in Solana block 329150000?">Token accounts</button>
-          <button class="ask-preset" onclick="setAskPreset(this)" data-q="What was the block time of Solana slot 329000000?">Block time</button>
-        </div>
-
-        <div class="ask-row">
-          <input class="ask-input" id="askInput" type="text"
-            placeholder="Ask anything about a specific Solana block, transaction, or validator…" />
-          <button class="ask-btn" id="askBtn" onclick="doAsk()">Ask</button>
-        </div>
-
-        <div class="ask-status" id="askStatus"></div>
-
-        <!-- Empty/pending state — shown before user asks -->
-        <div class="ask-pending-state" id="askPendingState">
-          <div class="ask-pending-icon">&#x2610;</div>
-          <div class="ask-pending-title">Results appear here after you ask</div>
-          <div class="ask-pending-body">
-            You will see two panels side by side: Clude (memory-grounded) on the left,
-            the no-memory model on the right. Watch one abstain while the other fabricates.
-          </div>
-        </div>
-
-        <!-- Column headers for result (hidden until result appears) -->
-        <div class="ask-result-header" id="askResultHeader" style="display:none;">
-          <div class="ask-result-header-cell clude">&#x2713;&nbsp; Clude — memory-grounded</div>
-          <div class="ask-result-header-cell base">&#x2717;&nbsp; No-memory model — fabricates</div>
-        </div>
-
-        <div class="ask-result" id="askResult">
-          <div class="ask-result-panel">
-            <div class="ask-result-label clude"><span>&#x2713;</span> Clude (with memory)</div>
-            <div class="ask-result-body" id="askCludeAnswer">—</div>
-            <div class="ask-verdict" id="askCludeVerdict"></div>
-          </div>
-          <div class="ask-result-panel">
-            <div class="ask-result-label base"><span>&#x2717;</span> No-memory baseline</div>
-            <div class="ask-result-body" id="askBaseAnswer">—</div>
-            <div class="ask-verdict" id="askBaseVerdict"></div>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 

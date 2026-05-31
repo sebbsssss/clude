@@ -132,7 +132,7 @@
       }
       if ($('heroAvgPct')) {
         $('heroAvgPct').textContent = avgSavingsPct !== null
-          ? Math.round(avgSavingsPct * 100) + '%' : '—';
+          ? Math.round(avgSavingsPct) + '%' : '—';
       }
 
       // Feed live savings % into the shout-out callout and visualiser
@@ -159,7 +159,7 @@
     const el  = $('shoutSavingsPct');
     const src = $('shoutSavingsSource');
     if (el && typeof pct === 'number' && !isNaN(pct)) {
-      el.textContent = Math.round(pct * 100) + '%';
+      el.textContent = Math.round(pct) + '%';
     }
     if (src) {
       src.textContent = 'Live figure from /api/proof/tokens-saved.';
@@ -221,6 +221,7 @@
     const map = { conversation:'presetConv', technical:'presetTech', codebase:'presetCode' };
     if (map[name] && $(map[name])) $(map[name]).classList.add('active');
     renderVis();
+    renderMechanismChart();
   }
 
   // expose to global for onclick
@@ -262,7 +263,7 @@
     // Prefer live API rate if available; fall back to preset-derived pct
     let savedPct;
     if (_liveAvgSavingsPct !== null) {
-      savedPct = Math.round(_liveAvgSavingsPct * 100);
+      savedPct = Math.round(_liveAvgSavingsPct);
     } else {
       savedPct = totalWithout > 0
         ? Math.round(((totalWithout - totalWith) / totalWithout) * 100) : 0;
@@ -299,9 +300,94 @@
     if (typeof pct !== 'number' || isNaN(pct)) return;
     _liveAvgSavingsPct = pct;
     renderVis();
+    renderMechanismChart();
   }
 
+  /* ─── Per-turn mechanism bar chart ─────────────── */
+
+  /**
+   * Renders the per-turn growing-context bar chart in #mechanismChart.
+   * Two column groups per turn: Without (growing, red) vs With (flat, green).
+   * Bars animate in via CSS transitions once the element is observed.
+   */
+  function renderMechanismChart() {
+    const chartEl = $('mechanismChart');
+    if (!chartEl) return;
+
+    const preset = PRESETS[_currentPreset];
+    if (!preset) return;
+
+    const turns = preset.turns;
+    const maxBase = Math.max.apply(null, turns.map(function (t) { return t.base; }));
+
+    // Build column pairs
+    const cols = turns.map(function (t, i) {
+      const withoutPct = maxBase > 0 ? Math.round((t.base  / maxBase) * 100) : 0;
+      const withPct    = maxBase > 0 ? Math.round((t.clude / maxBase) * 100) : 0;
+      // Cap with-Clude bar at a minimum visible height
+      const withPctShow = Math.max(withPct, 2);
+      return (
+        '<div class="mech-col-group">' +
+          '<div class="mech-col-pair">' +
+            '<div class="mech-bar mech-bar-without" style="--target-h:' + withoutPct + '%;"></div>' +
+            '<div class="mech-bar mech-bar-with"    style="--target-h:' + withPctShow + '%;"></div>' +
+          '</div>' +
+          '<div class="mech-turn-label">T' + (i + 1) + '</div>' +
+        '</div>'
+      );
+    }).join('');
+
+    chartEl.innerHTML =
+      '<div class="mech-chart-inner">' +
+        '<div class="mech-y-axis">' +
+          '<span>Max</span>' +
+          '<span>½</span>' +
+          '<span>0</span>' +
+        '</div>' +
+        '<div class="mech-bars-area">' +
+          cols +
+        '</div>' +
+      '</div>' +
+      '<div class="mech-legend">' +
+        '<span class="mech-legend-item mech-legend-without">Without Clude — full transcript re-sent</span>' +
+        '<span class="mech-legend-item mech-legend-with">With Clude — only recalled memories</span>' +
+      '</div>';
+
+    // Trigger CSS transitions after a microtask so the element is painted
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        const bars = chartEl.querySelectorAll('.mech-bar');
+        bars.forEach(function (b) { b.classList.add('mech-bar-animate'); });
+      });
+    });
+  }
+
+  // Intersection Observer: animate chart when scrolled into view
+  (function () {
+    function doAnimate() {
+      const chartEl = $('mechanismChart');
+      if (!chartEl) return;
+      const bars = chartEl.querySelectorAll('.mech-bar');
+      bars.forEach(function (b) { b.classList.add('mech-bar-animate'); });
+    }
+
+    if ('IntersectionObserver' in window) {
+      const obs = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            doAnimate();
+            obs.disconnect();
+          }
+        });
+      }, { threshold: 0.15 });
+
+      const chartEl = $('mechanismChart');
+      if (chartEl) obs.observe(chartEl);
+    }
+  })();
+
   renderVis();
+  renderMechanismChart();
 
   /* ════════════════════════════════════════════════
      SECTION 2 — Grounding / hallucination benchmark
@@ -330,7 +416,7 @@
             '<div>' +
               '<div class="pending-title">Benchmark data unavailable</div>' +
               '<div class="pending-body">Could not reach the measurement endpoint. ' +
-                'The live ask demo below still works.</div>' +
+                'The live ask demo above still works.</div>' +
             '</div>' +
           '</div>' +
         '</div>';
@@ -357,7 +443,7 @@
               'against ground truth from <code style="font-family:var(--mono);font-size:12px;">' +
               esc(dataset) + '</code>. ' +
               'Results will appear here after the first full run completes. ' +
-              'The live ask demo below demonstrates the abstain-vs-fabricate behavior right now.' +
+              'The live ask demo above demonstrates the abstain-vs-fabricate behavior right now.' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -501,14 +587,64 @@
 
   fetchExamples();
 
-  /* ── Live ask ──────────────────────────────────── */
+  /* ════════════════════════════════════════════════
+     SECTION 2 — Live ask demo
+     Backed by /proof/solana-qa.json (cached on first fetch).
+     Preset buttons + shuffle pick a random item by category
+     and submit { questionId } to /api/proof/hallucination/ask.
+     Free-text falls back to { question }.
+  ═════════════════════════════════════════════════ */
+
+  // Cache for the QA dataset
+  let _qaItems = null;
+  // The questionId most recently submitted (set by shuffle/presets, cleared by free-text)
+  let _pendingQuestionId = null;
+
+  async function loadQaItems() {
+    if (_qaItems !== null) return _qaItems;
+    try {
+      const res = await fetch('/proof/solana-qa.json');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const d = await res.json();
+      _qaItems = Array.isArray(d.items) ? d.items : [];
+    } catch (_) {
+      _qaItems = [];
+    }
+    return _qaItems;
+  }
+
+  /**
+   * Pick a random item (optionally filtered by category).
+   * Returns null if the dataset is empty or category has no items.
+   */
+  function pickRandom(category) {
+    if (!_qaItems || _qaItems.length === 0) return null;
+    const pool = category
+      ? _qaItems.filter(function (it) { return it.category === category; })
+      : _qaItems;
+    if (pool.length === 0) return null;
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  /**
+   * Called by the "Shuffle a real Solana fact" button and category presets.
+   * Loads dataset if needed, picks a random item, populates the input, and submits.
+   */
+  window.shuffleAsk = async function (category) {
+    await loadQaItems();
+    const item = pickRandom(category || null);
+    if (!item) {
+      // Dataset not loaded yet — fall back to free-text ask if there is one
+      window.doAsk();
+      return;
+    }
+    const input = $('askInput');
+    if (input) input.value = item.question;
+    _pendingQuestionId = item.id;
+    window.doAsk();
+  };
 
   let _askInFlight = false;
-
-  window.setAskPreset = function (btn) {
-    const q = btn.getAttribute('data-q');
-    if (q && $('askInput')) $('askInput').value = q;
-  };
 
   window.doAsk = async function () {
     if (_askInFlight) return;
@@ -533,11 +669,20 @@
     if (resultHeader)  resultHeader.style.display = 'none';
     if (resultEl)      resultEl.classList.remove('visible');
 
+    // Capture and clear the pending questionId (so a subsequent free-text ask doesn't reuse it)
+    const questionId = _pendingQuestionId;
+    _pendingQuestionId = null;
+
     try {
+      // Prefer questionId (grounded via dataset) over raw question text
+      const body = questionId
+        ? { questionId: questionId }
+        : { question: question };
+
       const res = await fetch(API_BASE + '/api/proof/hallucination/ask', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ question: question }),
+        body:    JSON.stringify(body),
       });
 
       if (res.status === 429) {
@@ -565,44 +710,78 @@
       // clear status
       if (status) { status.textContent = ''; }
 
-      // populate panels
-      const cludeAns    = (d.clude    && d.clude.answer)    || '(no answer)';
-      const baseAns     = (d.baseline && d.baseline.answer) || '(no answer)';
-      const cludeOk     = d.clude    && d.clude.correct;
-      const baseOk      = d.baseline && d.baseline.correct;
-      const hallucinated= d.hallucinated;
+      // Populate panels
+      const cludeAns     = (d.clude    && d.clude.answer)    || '(no answer)';
+      const baseAns      = (d.baseline && d.baseline.answer) || '(no answer)';
+      const cludeOk      = d.clude    && d.clude.correct === true;
+      const baseOk       = d.baseline && d.baseline.correct === true;
+      const hallucinated = d.hallucinated;
+      const groundTruth  = d.groundTruth || null;
+      const grounded     = d.clude && d.clude.grounded; // 'dataset'|'memory'|'none'
 
-      if ($('askCludeAnswer')) $('askCludeAnswer').textContent = cludeAns;
-      if ($('askBaseAnswer'))  $('askBaseAnswer').textContent  = baseAns;
+      // Left panel: Clude
+      const cludeAnswerEl  = $('askCludeAnswer');
+      const cludeVerdictEl = $('askCludeVerdict');
+      const groundedTagEl  = $('askGroundedTag');
+      const groundTruthEl  = $('askGroundTruth');
 
-      const cludeVerdict = $('askCludeVerdict');
-      const baseVerdict  = $('askBaseVerdict');
+      if (cludeAnswerEl) cludeAnswerEl.textContent = cludeAns;
 
-      const cludeAbstained = /not enough information|i don'?t know|cannot determine|no information|abstain/i.test(cludeAns);
-
-      if (cludeVerdict) {
-        if (cludeAbstained) {
-          cludeVerdict.textContent = '✓ Abstained — grounded behavior';
-          cludeVerdict.className   = 'ask-verdict abstained';
-        } else if (cludeOk) {
-          cludeVerdict.textContent = '✓ Correct';
-          cludeVerdict.className   = 'ask-verdict correct';
+      // Grounded tag
+      if (groundedTagEl) {
+        if (grounded === 'dataset') {
+          groundedTagEl.textContent = 'grounded in dataset';
+          groundedTagEl.className   = 'ask-grounded-tag ask-grounded-dataset';
+        } else if (grounded === 'memory') {
+          groundedTagEl.textContent = 'grounded in memory';
+          groundedTagEl.className   = 'ask-grounded-tag ask-grounded-memory';
         } else {
-          cludeVerdict.textContent = 'Answered';
-          cludeVerdict.className   = 'ask-verdict';
+          groundedTagEl.textContent = '';
+          groundedTagEl.className   = 'ask-grounded-tag';
         }
       }
 
-      if (baseVerdict) {
-        if (baseOk) {
-          baseVerdict.textContent = '✓ Correct';
-          baseVerdict.className   = 'ask-verdict correct';
-        } else if (hallucinated) {
-          baseVerdict.textContent = '✗ Hallucinated';
-          baseVerdict.className   = 'ask-verdict wrong';
+      const cludeAbstained = /not enough information|i don'?t know|cannot determine|no information|abstain/i.test(cludeAns);
+
+      if (cludeVerdictEl) {
+        if (cludeAbstained) {
+          cludeVerdictEl.textContent = '✓ Abstained — grounded behavior';
+          cludeVerdictEl.className   = 'ask-verdict abstained';
+        } else if (cludeOk) {
+          cludeVerdictEl.textContent = '✓ Correct';
+          cludeVerdictEl.className   = 'ask-verdict correct';
         } else {
-          baseVerdict.textContent = 'Answered';
-          baseVerdict.className   = 'ask-verdict';
+          cludeVerdictEl.textContent = 'Answered';
+          cludeVerdictEl.className   = 'ask-verdict';
+        }
+      }
+
+      // Ground truth row
+      if (groundTruthEl) {
+        if (groundTruth) {
+          groundTruthEl.style.display = 'block';
+          const gtValueEl = $('askGroundTruthValue');
+          if (gtValueEl) gtValueEl.textContent = groundTruth;
+        } else {
+          groundTruthEl.style.display = 'none';
+        }
+      }
+
+      // Right panel: baseline
+      const baseAnswerEl  = $('askBaseAnswer');
+      const baseVerdictEl = $('askBaseVerdict');
+      if (baseAnswerEl)  baseAnswerEl.textContent  = baseAns;
+
+      if (baseVerdictEl) {
+        if (baseOk) {
+          baseVerdictEl.textContent = '✓ Correct';
+          baseVerdictEl.className   = 'ask-verdict correct';
+        } else if (hallucinated) {
+          baseVerdictEl.textContent = '✗ Hallucinated';
+          baseVerdictEl.className   = 'ask-verdict wrong';
+        } else {
+          baseVerdictEl.textContent = 'Answered';
+          baseVerdictEl.className   = 'ask-verdict';
         }
       }
 
@@ -622,14 +801,24 @@
     }
   };
 
-  // Allow Enter key in the ask input
+  // Allow Enter key in the ask input; Enter clears questionId → free-text mode
   (function () {
     const input = $('askInput');
     if (input) {
       input.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') window.doAsk();
+        if (e.key === 'Enter') {
+          _pendingQuestionId = null; // typed → free-text
+          window.doAsk();
+        }
+      });
+      // If the user edits the field manually, drop the pending questionId
+      input.addEventListener('input', function () {
+        _pendingQuestionId = null;
       });
     }
   })();
+
+  // Pre-load dataset in the background so shuffle feels instant
+  loadQaItems();
 
 })();
