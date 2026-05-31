@@ -1126,6 +1126,79 @@
       .cat-row { grid-template-columns: 1fr 80px 80px; }
       .cat-mini-bar { display: none; }
     }
+
+    /* ── MOBILE RESPONSIVE: ask box and side-by-side panels ── */
+    @media (max-width: 640px) {
+      /* Ask box: tighter padding */
+      .ask-box {
+        padding: 1.25rem;
+      }
+
+      /* Shuffle row: stack button + label vertically */
+      .ask-shuffle-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+      }
+      .ask-shuffle-btn {
+        width: 100%;
+        text-align: center;
+      }
+
+      /* Ask input row: stack input + button */
+      .ask-row {
+        flex-direction: column;
+      }
+      .ask-input {
+        min-width: 0;
+        width: 100%;
+      }
+      .ask-btn {
+        width: 100%;
+        text-align: center;
+      }
+
+      /* Category preset buttons: smaller, still wrap */
+      .ask-preset {
+        font-size: 9px;
+        padding: 6px 9px;
+      }
+
+      /* Side-by-side result header and panels: single column */
+      .ask-result-header {
+        grid-template-columns: 1fr;
+      }
+      .ask-result {
+        grid-template-columns: 1fr;
+      }
+
+      /* Curated examples header + grids: single column */
+      .examples-header {
+        grid-template-columns: 1fr;
+      }
+      .examples-grid {
+        grid-template-columns: 1fr;
+      }
+
+      /* Ensure no horizontal overflow in panels */
+      .ask-result-panel,
+      .example-card {
+        min-width: 0;
+        overflow-wrap: break-word;
+        word-break: break-word;
+      }
+    }
+
+    @media (max-width: 380px) {
+      .ask-box {
+        padding: 1rem;
+      }
+      .ask-preset {
+        font-size: 8px;
+        padding: 5px 7px;
+        letter-spacing: 1px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -1315,7 +1388,7 @@
 
     <!-- ── LIVE ASK DEMO — top of section, most prominent ── -->
     <div class="ask-box" style="margin-bottom:3rem;">
-      <div class="ask-box-title">Try it — Clude vs no-memory baseline</div>
+      <div class="ask-box-title">Try it — Clude grounded vs general model, same prompt</div>
       <div class="ask-date-note">
         Solana mainnet data via Google BigQuery &middot; snapshot frozen 2025-03-31 (historical, not real-time).
       </div>
@@ -1360,14 +1433,14 @@
         <div class="ask-pending-title">Results appear here after you ask</div>
         <div class="ask-pending-body">
           Hit Shuffle or pick a category above. You will see Clude grounded in the frozen dataset
-          on the left, the no-memory model on the right.
+          on the left, and the same model without data access on the right.
         </div>
       </div>
 
       <!-- Column headers for result (hidden until result appears) -->
       <div class="ask-result-header" id="askResultHeader" style="display:none;">
         <div class="ask-result-header-cell clude">&#x2713;&nbsp; Clude &mdash; grounded in Solana data</div>
-        <div class="ask-result-header-cell base">&#x2717;&nbsp; No-memory model</div>
+        <div class="ask-result-header-cell base">Same model &middot; no access to the data</div>
       </div>
 
       <div class="ask-result" id="askResult">
@@ -1377,14 +1450,27 @@
           <div id="askGroundedTag" class="ask-grounded-tag"></div>
           <div class="ask-ground-truth" id="askGroundTruth">
             Verified answer: <strong id="askGroundTruthValue"></strong>
+            <span id="askSolscanLink"></span>
           </div>
           <div class="ask-verdict" id="askCludeVerdict"></div>
         </div>
         <div class="ask-result-panel">
-          <div class="ask-result-label base"><strong>No-memory model</strong></div>
+          <div class="ask-result-label base"><strong>Same model &middot; no access to the data</strong></div>
           <div class="ask-result-body" id="askBaseAnswer">—</div>
           <div class="ask-verdict" id="askBaseVerdict"></div>
         </div>
+      </div>
+
+      <!-- Honest framing note — shown below result panels -->
+      <div id="askFramingNote" style="display:none; margin-top:1rem; padding-top:1rem; border-top:1px solid var(--border);">
+        <p style="font-family:var(--mono); font-size:10px; color:var(--faint); letter-spacing:0.5px; line-height:1.65; max-width:72ch;">
+          Same model, same prompt &mdash; the only difference is whether it has the on-chain fact.
+          Clude retrieves it from memory and answers precisely. Without it, a general model can&rsquo;t know
+          a specific historical value, so it declines (honest) or guesses (a hallucination).
+          Clude&rsquo;s memory is what removes the guess.
+          &mdash; <em>The measured hallucination rate comes from the benchmark across many questions; this
+          single live call demonstrates grounding.</em>
+        </p>
       </div>
     </div>
 
@@ -1397,8 +1483,8 @@
 
       <!-- Persistent column header labels (always visible) -->
       <div class="examples-header" id="examplesHeader" style="display:none;">
-        <div class="examples-header-cell clude">&#x2713;&nbsp; Clude — memory-grounded</div>
-        <div class="examples-header-cell base">&#x2717;&nbsp; No-memory model — fabricates</div>
+        <div class="examples-header-cell clude">&#x2713;&nbsp; Clude &mdash; grounded in Solana data</div>
+        <div class="examples-header-cell base">Same model &middot; no access to the data</div>
       </div>
 
       <div id="examplesContainer"></div>

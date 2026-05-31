@@ -557,6 +557,26 @@
       '</div>';
   }
 
+  /**
+   * Build a Solscan URL from a sourceRef string like "block:271462400".
+   * Returns an anchor HTML string, or '' if sourceRef is absent/unparseable.
+   */
+  function buildSolscanHtml(sourceRef) {
+    if (!sourceRef || typeof sourceRef !== 'string') return '';
+    const colonIdx = sourceRef.indexOf(':');
+    if (colonIdx === -1) return '';
+    const refType  = sourceRef.slice(0, colonIdx).trim().toLowerCase();
+    const refValue = sourceRef.slice(colonIdx + 1).trim();
+    const typeMap  = { block: 'block', tx: 'tx', account: 'account', token: 'token' };
+    const path     = typeMap[refType];
+    if (!path || !refValue) return '';
+    const url = 'https://solscan.io/' + path + '/' + esc(refValue);
+    return ' <a href="' + url + '" target="_blank" rel="noopener noreferrer" ' +
+      'style="font-family:var(--mono);font-size:10px;letter-spacing:0.5px;' +
+      'color:var(--blue);border-bottom:1px solid rgba(34,68,255,0.35);">' +
+      'Verify on Solscan &#x2197;</a>';
+  }
+
   function renderExamples(el, examples) {
     const MAX_SHOW = 4;
     const shown = examples.slice(0, MAX_SHOW);
@@ -566,18 +586,39 @@
     if (header) header.style.display = 'grid';
 
     const html = shown.map(function (ex) {
-      const q        = ex.question                       || '';
-      const cludeAns = (ex.clude    && ex.clude.answer)    || '—';
-      const baseAns  = (ex.baseline && ex.baseline.answer) || '—';
+      const q          = ex.question                         || '';
+      const cludeAns   = (ex.clude    && ex.clude.answer)    || '—';
+      const baseAns    = (ex.baseline && ex.baseline.answer) || '—';
+      const sourceRef  = ex.sourceRef || null;
+      const groundTruth = ex.groundTruth || null;
+      // Detect honest baseline decline vs hallucination
+      const hallucinated  = ex.hallucinated === true;
+      const baseAbstained = /not enough information|i don'?t know|cannot determine|no information|abstain|don't have access|no data/i.test(baseAns);
+
+      let baseVerdictHtml = '';
+      if (ex.baseline && ex.baseline.correct === true) {
+        baseVerdictHtml = '<div class="ask-verdict correct" style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);">✓ Correct</div>';
+      } else if (hallucinated) {
+        baseVerdictHtml = '<div class="ask-verdict wrong" style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);">✗ Hallucinated — confident wrong answer</div>';
+      } else if (baseAbstained) {
+        baseVerdictHtml = '<div class="ask-verdict abstained" style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);">Declined — no data access (honest)</div>';
+      }
+
+      const solscanHtml = buildSolscanHtml(sourceRef);
+      const gtHtml = groundTruth
+        ? '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:0.5px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">Verified: <strong style="color:var(--text);">' + esc(groundTruth) + '</strong>' + solscanHtml + '</div>'
+        : (solscanHtml ? '<div style="margin-top:8px;">' + solscanHtml + '</div>' : '');
 
       return '<div class="examples-grid">' +
         '<div class="example-card">' +
           '<div class="example-q">' + esc(q) + '</div>' +
           '<div class="example-answer">' + esc(cludeAns) + '</div>' +
+          gtHtml +
         '</div>' +
         '<div class="example-card">' +
           '<div class="example-q">' + esc(q) + '</div>' +
           '<div class="example-answer">' + esc(baseAns) + '</div>' +
+          baseVerdictHtml +
         '</div>' +
       '</div>';
     }).join('');
@@ -718,6 +759,7 @@
       const hallucinated = d.hallucinated;
       const groundTruth  = d.groundTruth || null;
       const grounded     = d.clude && d.clude.grounded; // 'dataset'|'memory'|'none'
+      const sourceRef    = d.sourceRef || null; // e.g. "block:123456" | "tx:<sig>" | null
 
       // Left panel: Clude
       const cludeAnswerEl  = $('askCludeAnswer');
@@ -756,7 +798,7 @@
         }
       }
 
-      // Ground truth row
+      // Ground truth row + Solscan verification link
       if (groundTruthEl) {
         if (groundTruth) {
           groundTruthEl.style.display = 'block';
@@ -767,18 +809,70 @@
         }
       }
 
+      // Build Solscan verification link from sourceRef (e.g. "block:271462400")
+      // Split on the FIRST colon only — tx signatures and pubkeys won't have colons,
+      // but we're defensive about it regardless.
+      const solscanLinkEl = $('askSolscanLink');
+      if (solscanLinkEl) {
+        solscanLinkEl.innerHTML = '';
+        if (sourceRef && typeof sourceRef === 'string') {
+          const colonIdx = sourceRef.indexOf(':');
+          if (colonIdx !== -1) {
+            const refType  = sourceRef.slice(0, colonIdx).trim().toLowerCase();
+            const refValue = sourceRef.slice(colonIdx + 1).trim();
+            const SOLSCAN_BASE = 'https://solscan.io';
+            const typeMap = { block: 'block', tx: 'tx', account: 'account', token: 'token' };
+            const path = typeMap[refType];
+            if (path && refValue) {
+              const url = SOLSCAN_BASE + '/' + path + '/' + refValue;
+              const a = document.createElement('a');
+              a.href      = url;
+              a.target    = '_blank';
+              a.rel       = 'noopener noreferrer';
+              a.textContent = ' Verify on Solscan ↗';
+              a.style.cssText = [
+                'font-family:var(--mono)',
+                'font-size:10px',
+                'letter-spacing:0.5px',
+                'color:var(--blue)',
+                'border-bottom:1px solid rgba(34,68,255,0.35)',
+                'margin-left:6px',
+                'white-space:nowrap',
+              ].join(';');
+              a.addEventListener('mouseenter', function () {
+                this.style.borderBottomColor = 'var(--blue)';
+              });
+              a.addEventListener('mouseleave', function () {
+                this.style.borderBottomColor = 'rgba(34,68,255,0.35)';
+              });
+              solscanLinkEl.appendChild(a);
+            }
+          }
+        }
+      }
+
       // Right panel: baseline
+      // Distinguish honest decline/abstain from an actual hallucination.
+      // hallucinated flag = baseline gave a confident WRONG answer (not an abstention).
       const baseAnswerEl  = $('askBaseAnswer');
       const baseVerdictEl = $('askBaseVerdict');
       if (baseAnswerEl)  baseAnswerEl.textContent  = baseAns;
+
+      // Detect abstention pattern in baseline answer
+      const baseAbstained = /not enough information|i don'?t know|cannot determine|no information|abstain|don't have access|no data/i.test(baseAns);
 
       if (baseVerdictEl) {
         if (baseOk) {
           baseVerdictEl.textContent = '✓ Correct';
           baseVerdictEl.className   = 'ask-verdict correct';
         } else if (hallucinated) {
-          baseVerdictEl.textContent = '✗ Hallucinated';
+          // API confirmed: confident wrong answer → true hallucination
+          baseVerdictEl.textContent = '✗ Hallucinated — confident wrong answer';
           baseVerdictEl.className   = 'ask-verdict wrong';
+        } else if (baseAbstained) {
+          // Honest decline: no data access → not a hallucination
+          baseVerdictEl.textContent = 'Declined — no data access (honest)';
+          baseVerdictEl.className   = 'ask-verdict abstained';
         } else {
           baseVerdictEl.textContent = 'Answered';
           baseVerdictEl.className   = 'ask-verdict';
@@ -788,6 +882,10 @@
       // Show column headers and results
       if (resultHeader) resultHeader.style.display = 'grid';
       if (resultEl)     resultEl.classList.add('visible');
+
+      // Show the honest framing note below result panels
+      const framingNoteEl = $('askFramingNote');
+      if (framingNoteEl) framingNoteEl.style.display = 'block';
 
     } catch (err) {
       if (status) {
