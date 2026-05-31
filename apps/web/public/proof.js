@@ -7,6 +7,18 @@
 
   const API_BASE = '';
 
+  /* ─── pricing constant ────────────────────────── */
+  // Claude Opus input pricing: $15 per 1M tokens
+  const COST_PER_MTOK = 15;
+
+  /** Format a USD cost value as compact string: $25.2K, $1.23M, etc. */
+  function fmtCostUsd(costUsd) {
+    if (typeof costUsd !== 'number' || isNaN(costUsd)) return '—';
+    if (costUsd >= 1_000_000) return '$' + (costUsd / 1_000_000).toFixed(2) + 'M';
+    if (costUsd >= 1_000)     return '$' + (costUsd / 1_000).toFixed(1) + 'K';
+    return '$' + Math.round(costUsd).toLocaleString();
+  }
+
   /* ─── helpers ─────────────────────────────────── */
 
   function $(id) { return document.getElementById(id); }
@@ -17,9 +29,10 @@
     return d.innerHTML;
   }
 
-  /** Format an integer with commas; >= 1M appends M suffix */
+  /** Format an integer with commas; >= 1B appends B suffix, >= 1M appends M suffix */
   function fmtTokens(n) {
     if (typeof n !== 'number' || isNaN(n)) return '—';
+    if (n >= 1e9)       return (n / 1e9).toFixed(2) + 'B';
     if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
     if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'k';
     return n.toLocaleString();
@@ -133,6 +146,16 @@
       if ($('heroAvgPct')) {
         $('heroAvgPct').textContent = avgSavingsPct !== null
           ? Math.round(avgSavingsPct) + '%' : '—';
+      }
+
+      // Compute and display USD value of tokens saved
+      if ($('heroCostUsd')) {
+        if (totalSaved !== null) {
+          const costUsd = (totalSaved / 1_000_000) * COST_PER_MTOK;
+          $('heroCostUsd').textContent = fmtCostUsd(costUsd);
+        } else {
+          $('heroCostUsd').textContent = '—';
+        }
       }
 
       // Feed live savings % into the shout-out callout and visualiser
@@ -284,10 +307,10 @@
       if (_liveAvgSavingsPct !== null) {
         anchorEl.innerHTML =
           'Headline rate <span class="anchor-live">' + savedPct + '%</span>' +
-          ' is live from the API — preset illustrates the per-turn mechanism.';
+          ' is live from the API. Preset illustrates the per-turn mechanism.';
       } else {
         anchorEl.textContent =
-          'Preset illustrates mechanism — headline rate anchored to live API when available.';
+          'Preset illustrates mechanism. Headline rate anchored to live API when available.';
       }
     }
   }
@@ -349,8 +372,8 @@
         '</div>' +
       '</div>' +
       '<div class="mech-legend">' +
-        '<span class="mech-legend-item mech-legend-without">Without Clude — full transcript re-sent</span>' +
-        '<span class="mech-legend-item mech-legend-with">With Clude — only recalled memories</span>' +
+        '<span class="mech-legend-item mech-legend-without">Without Clude: full transcript re-sent</span>' +
+        '<span class="mech-legend-item mech-legend-with">With Clude: only recalled memories</span>' +
       '</div>';
 
     // Trigger CSS transitions after a microtask so the element is painted
@@ -599,9 +622,9 @@
       if (ex.baseline && ex.baseline.correct === true) {
         baseVerdictHtml = '<div class="ask-verdict correct" style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);">✓ Correct</div>';
       } else if (hallucinated) {
-        baseVerdictHtml = '<div class="ask-verdict wrong" style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);">✗ Hallucinated — confident wrong answer</div>';
+        baseVerdictHtml = '<div class="ask-verdict wrong" style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);">✗ Hallucinated: confident wrong answer</div>';
       } else if (baseAbstained) {
-        baseVerdictHtml = '<div class="ask-verdict abstained" style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);">Declined — no data access (honest)</div>';
+        baseVerdictHtml = '<div class="ask-verdict abstained" style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);">Declined: no data access (honest)</div>';
       }
 
       const solscanHtml = buildSolscanHtml(sourceRef);
@@ -728,7 +751,7 @@
 
       if (res.status === 429) {
         if (status) {
-          status.textContent = 'Rate limited — try again in a moment.';
+          status.textContent = 'Rate limited. Try again in a moment.';
           status.className   = 'ask-status err';
         }
         // Restore pending state
@@ -787,7 +810,7 @@
 
       if (cludeVerdictEl) {
         if (cludeAbstained) {
-          cludeVerdictEl.textContent = '✓ Abstained — grounded behavior';
+          cludeVerdictEl.textContent = '✓ Abstained: grounded behavior';
           cludeVerdictEl.className   = 'ask-verdict abstained';
         } else if (cludeOk) {
           cludeVerdictEl.textContent = '✓ Correct';
@@ -867,11 +890,11 @@
           baseVerdictEl.className   = 'ask-verdict correct';
         } else if (hallucinated) {
           // API confirmed: confident wrong answer → true hallucination
-          baseVerdictEl.textContent = '✗ Hallucinated — confident wrong answer';
+          baseVerdictEl.textContent = '✗ Hallucinated: confident wrong answer';
           baseVerdictEl.className   = 'ask-verdict wrong';
         } else if (baseAbstained) {
           // Honest decline: no data access → not a hallucination
-          baseVerdictEl.textContent = 'Declined — no data access (honest)';
+          baseVerdictEl.textContent = 'Declined: no data access (honest)';
           baseVerdictEl.className   = 'ask-verdict abstained';
         } else {
           baseVerdictEl.textContent = 'Answered';
@@ -889,7 +912,7 @@
 
     } catch (err) {
       if (status) {
-        status.textContent = 'Network error — ' + err.message;
+        status.textContent = 'Network error: ' + err.message;
         status.className   = 'ask-status err';
       }
       if (pendingState) pendingState.classList.remove('hidden');
