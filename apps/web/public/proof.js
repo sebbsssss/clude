@@ -95,10 +95,10 @@
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const d = await res.json();
 
-      const totalSaved   = typeof d.totalSaved    === 'number' ? d.totalSaved    : null;
-      const savedToday   = typeof d.savedToday    === 'number' ? d.savedToday    : null;
-      const avgSavingsPct= typeof d.avgSavingsPct === 'number' ? d.avgSavingsPct : null;
-      const ratePerMin   = typeof d.ratePerMin    === 'number' ? d.ratePerMin    : 0;
+      const totalSaved    = typeof d.totalSaved    === 'number' ? d.totalSaved    : null;
+      const savedToday    = typeof d.savedToday    === 'number' ? d.savedToday    : null;
+      const avgSavingsPct = typeof d.avgSavingsPct === 'number' ? d.avgSavingsPct : null;
+      const ratePerMin    = typeof d.ratePerMin    === 'number' ? d.ratePerMin    : 0;
 
       if (_tickInterval) clearInterval(_tickInterval);
       _tickInterval = null;
@@ -135,8 +135,11 @@
           ? Math.round(avgSavingsPct) + '%' : '—';
       }
 
-      // feed saved pct into the visualiser headline
-      if (avgSavingsPct !== null) updateVisSavingsPct(avgSavingsPct);
+      // Feed live savings % into the shout-out callout and visualiser
+      if (avgSavingsPct !== null) {
+        updateShoutSavings(avgSavingsPct);
+        updateVisSavingsPct(avgSavingsPct);
+      }
 
     } catch (err) {
       // silent degradation — keep whatever is displayed
@@ -145,6 +148,23 @@
 
   fetchTokensSaved();
   setInterval(fetchTokensSaved, 10_000);
+
+  /* ─── Shout-out savings callout ────────────────── */
+
+  /**
+   * When the API returns a real avgSavingsPct, promote it into the big
+   * shout-out number so the page always shows the live figure.
+   */
+  function updateShoutSavings(pct) {
+    const el  = $('shoutSavingsPct');
+    const src = $('shoutSavingsSource');
+    if (el && typeof pct === 'number' && !isNaN(pct)) {
+      el.textContent = Math.round(pct) + '%';
+    }
+    if (src) {
+      src.textContent = 'Live figure from /api/proof/tokens-saved.';
+    }
+  }
 
   /* ════════════════════════════════════════════════
      SECTION 1 — Token savings visualiser
@@ -158,7 +178,7 @@
         { text: 'What rate limits should we use?',       base: 980,  clude: 420  },
         { text: 'Remind me about the webhook bug.',      base: 1840, clude: 460  },
         { text: 'What did we decide on enterprise?',     base: 3100, clude: 480  },
-        { text: 'What is the contractor budget?',         base: 4650, clude: 490  },
+        { text: 'What is the contractor budget?',        base: 4650, clude: 490  },
         { text: 'Summarise the migration plan.',         base: 6400, clude: 510  },
         { text: 'Any blockers with staging env?',        base: 8300, clude: 520  },
         { text: 'Finalise the deprecation timeline.',    base: 10500,clude: 530  },
@@ -168,9 +188,9 @@
       turns: [
         { text: 'What embedding dimensions are we using?', base: 510,  clude: 390 },
         { text: 'What is our p99 latency?',                base: 1100, clude: 430 },
-        { text: 'Recall the cross-tenant security bug.',  base: 2000, clude: 460 },
+        { text: 'Recall the cross-tenant security bug.',   base: 2000, clude: 460 },
         { text: 'What was the hybrid search improvement?', base: 3200, clude: 480 },
-        { text: 'Summarise the Cohere rerank decision.',  base: 5000, clude: 500 },
+        { text: 'Summarise the Cohere rerank decision.',   base: 5000, clude: 500 },
         { text: 'What is the monthly Pinecone cost?',      base: 7200, clude: 510 },
       ],
     },
@@ -181,13 +201,16 @@
         { text: 'What pattern does storeMemory follow?',  base: 3900, clude: 470 },
         { text: 'Explain the dream cycle phases.',        base: 6100, clude: 490 },
         { text: 'How is owner scoping enforced?',         base: 9000, clude: 510 },
-        { text: 'What is the Supabase RPC for recall?',    base: 12500,clude: 530 },
+        { text: 'What is the Supabase RPC for recall?',   base: 12500,clude: 530 },
         { text: 'Where is embeddings.ts used?',           base: 16400,clude: 550 },
       ],
     },
   };
 
-  let _currentPreset = 'conversation';
+  let _currentPreset    = 'conversation';
+  // If the API supplies a real savings %, we'll use it to override the
+  // visualiser's headline pct so the two numbers stay in sync.
+  let _liveAvgSavingsPct = null;
 
   function setPreset(name) {
     _currentPreset = name;
@@ -198,6 +221,7 @@
     const map = { conversation:'presetConv', technical:'presetTech', codebase:'presetCode' };
     if (map[name] && $(map[name])) $(map[name]).classList.add('active');
     renderVis();
+    renderMechanismChart();
   }
 
   // expose to global for onclick
@@ -215,12 +239,8 @@
     let totalWithout = 0;
     let totalWith    = 0;
 
-    // find max to scale bars
-    const maxTokens = Math.max(...turns.map(t => t.base));
-
     const woHtml = turns.map(function (t, i) {
       totalWithout += t.base;
-      const pct = Math.round((t.base / maxTokens) * 100);
       return '<div class="turn-item">' +
         '<div class="turn-idx">' + (i + 1) + '</div>' +
         '<div class="turn-text">' + esc(t.text) + '</div>' +
@@ -240,8 +260,14 @@
     withoutEl.innerHTML = woHtml;
     withEl.innerHTML    = wHtml;
 
-    const savedPct = totalWithout > 0
-      ? Math.round(((totalWithout - totalWith) / totalWithout) * 100) : 0;
+    // Prefer live API rate if available; fall back to preset-derived pct
+    let savedPct;
+    if (_liveAvgSavingsPct !== null) {
+      savedPct = Math.round(_liveAvgSavingsPct);
+    } else {
+      savedPct = totalWithout > 0
+        ? Math.round(((totalWithout - totalWith) / totalWithout) * 100) : 0;
+    }
 
     if ($('visWithoutTotal')) $('visWithoutTotal').textContent = totalWithout.toLocaleString();
     if ($('visWithTotal'))    $('visWithTotal').textContent    = totalWith.toLocaleString();
@@ -251,16 +277,117 @@
     const avgWith    = Math.round(totalWith    / turns.length);
     if ($('visAvgWithout')) $('visAvgWithout').textContent = avgWithout.toLocaleString();
     if ($('visAvgWith'))    $('visAvgWith').textContent    = avgWith.toLocaleString();
+
+    // Update the live anchor note
+    const anchorEl = $('visLiveAnchor');
+    if (anchorEl) {
+      if (_liveAvgSavingsPct !== null) {
+        anchorEl.innerHTML =
+          'Headline rate <span class="anchor-live">' + savedPct + '%</span>' +
+          ' is live from the API — preset illustrates the per-turn mechanism.';
+      } else {
+        anchorEl.textContent =
+          'Preset illustrates mechanism — headline rate anchored to live API when available.';
+      }
+    }
   }
 
-  /** Called when the live API returns an avgSavingsPct so the visualiser syncs */
+  /**
+   * Called when the live API returns an avgSavingsPct.
+   * Stores it and re-renders the vis so the big pct number stays in sync.
+   */
   function updateVisSavingsPct(pct) {
-    // The preset data already reflects realistic savings; we don't modify the
-    // table data, but if the API number is materially different we note it.
-    // (No-op for now — preset numbers are illustrative and independently calculated.)
+    if (typeof pct !== 'number' || isNaN(pct)) return;
+    _liveAvgSavingsPct = pct;
+    renderVis();
+    renderMechanismChart();
   }
+
+  /* ─── Per-turn mechanism bar chart ─────────────── */
+
+  /**
+   * Renders the per-turn growing-context bar chart in #mechanismChart.
+   * Two column groups per turn: Without (growing, red) vs With (flat, green).
+   * Bars animate in via CSS transitions once the element is observed.
+   */
+  function renderMechanismChart() {
+    const chartEl = $('mechanismChart');
+    if (!chartEl) return;
+
+    const preset = PRESETS[_currentPreset];
+    if (!preset) return;
+
+    const turns = preset.turns;
+    const maxBase = Math.max.apply(null, turns.map(function (t) { return t.base; }));
+
+    // Build column pairs
+    const cols = turns.map(function (t, i) {
+      const withoutPct = maxBase > 0 ? Math.round((t.base  / maxBase) * 100) : 0;
+      const withPct    = maxBase > 0 ? Math.round((t.clude / maxBase) * 100) : 0;
+      // Cap with-Clude bar at a minimum visible height
+      const withPctShow = Math.max(withPct, 2);
+      return (
+        '<div class="mech-col-group">' +
+          '<div class="mech-col-pair">' +
+            '<div class="mech-bar mech-bar-without" style="--target-h:' + withoutPct + '%;"></div>' +
+            '<div class="mech-bar mech-bar-with"    style="--target-h:' + withPctShow + '%;"></div>' +
+          '</div>' +
+          '<div class="mech-turn-label">T' + (i + 1) + '</div>' +
+        '</div>'
+      );
+    }).join('');
+
+    chartEl.innerHTML =
+      '<div class="mech-chart-inner">' +
+        '<div class="mech-y-axis">' +
+          '<span>Max</span>' +
+          '<span>½</span>' +
+          '<span>0</span>' +
+        '</div>' +
+        '<div class="mech-bars-area">' +
+          cols +
+        '</div>' +
+      '</div>' +
+      '<div class="mech-legend">' +
+        '<span class="mech-legend-item mech-legend-without">Without Clude — full transcript re-sent</span>' +
+        '<span class="mech-legend-item mech-legend-with">With Clude — only recalled memories</span>' +
+      '</div>';
+
+    // Trigger CSS transitions after a microtask so the element is painted
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        const bars = chartEl.querySelectorAll('.mech-bar');
+        bars.forEach(function (b) { b.classList.add('mech-bar-animate'); });
+      });
+    });
+  }
+
+  // Intersection Observer: animate chart when scrolled into view
+  (function () {
+    function doAnimate() {
+      const chartEl = $('mechanismChart');
+      if (!chartEl) return;
+      const bars = chartEl.querySelectorAll('.mech-bar');
+      bars.forEach(function (b) { b.classList.add('mech-bar-animate'); });
+    }
+
+    if ('IntersectionObserver' in window) {
+      const obs = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            doAnimate();
+            obs.disconnect();
+          }
+        });
+      }, { threshold: 0.15 });
+
+      const chartEl = $('mechanismChart');
+      if (chartEl) obs.observe(chartEl);
+    }
+  })();
 
   renderVis();
+  renderMechanismChart();
 
   /* ════════════════════════════════════════════════
      SECTION 2 — Grounding / hallucination benchmark
@@ -289,7 +416,7 @@
             '<div>' +
               '<div class="pending-title">Benchmark data unavailable</div>' +
               '<div class="pending-body">Could not reach the measurement endpoint. ' +
-                'The live ask demo below still works.</div>' +
+                'The live ask demo above still works.</div>' +
             '</div>' +
           '</div>' +
         '</div>';
@@ -316,7 +443,7 @@
               'against ground truth from <code style="font-family:var(--mono);font-size:12px;">' +
               esc(dataset) + '</code>. ' +
               'Results will appear here after the first full run completes. ' +
-              'The live ask demo below demonstrates the abstain-vs-fabricate behavior right now.' +
+              'The live ask demo above demonstrates the abstain-vs-fabricate behavior right now.' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -330,6 +457,8 @@
     const improvement  = (typeof baselineRate === 'number' && typeof rate === 'number')
       ? baselineRate - rate : null;
 
+    // When benchmark runs for real, the hallucination rate becomes the big shout-out.
+    // The rate is already a proportion (0-1); display as pct.
     const statsHtml =
       '<div class="grounding-live-stats">' +
         '<div class="g-stat">' +
@@ -360,7 +489,7 @@
         const c    = byCat[cat];
         const cr   = typeof c.rate         === 'number' ? c.rate         : null;
         const br   = typeof c.baselineRate === 'number' ? c.baselineRate : null;
-        const pct  = cr !== null ? Math.round((1 - cr) * 100) : null; // accuracy pct
+        const pct  = cr !== null ? Math.round((1 - cr) * 100) : null;
         return '<div class="cat-row">' +
           '<div class="cat-name">' + esc(cat.replace(/_/g, ' ')) + '</div>' +
           '<div class="cat-val good">' + (cr !== null ? fmtPct(cr) : '—') + '</div>' +
@@ -413,6 +542,10 @@
   }
 
   function renderExamplesEmpty(el) {
+    // Make sure the shared header stays hidden when there are no examples
+    const header = $('examplesHeader');
+    if (header) header.style.display = 'none';
+
     el.innerHTML =
       '<div class="example-empty">' +
         '<div class="empty-icon">&#x2610;</div>' +
@@ -428,21 +561,21 @@
     const MAX_SHOW = 4;
     const shown = examples.slice(0, MAX_SHOW);
 
+    // Show the persistent column headers now that we have real examples
+    const header = $('examplesHeader');
+    if (header) header.style.display = 'grid';
+
     const html = shown.map(function (ex) {
-      const q           = ex.question    || '';
-      const cludeAns    = (ex.clude  && ex.clude.answer)    || '—';
-      const baseAns     = (ex.baseline && ex.baseline.answer) || '—';
-      const cludeOk     = ex.clude  && ex.clude.correct;
-      const baseOk      = ex.baseline && ex.baseline.correct;
+      const q        = ex.question                       || '';
+      const cludeAns = (ex.clude    && ex.clude.answer)    || '—';
+      const baseAns  = (ex.baseline && ex.baseline.answer) || '—';
 
       return '<div class="examples-grid">' +
         '<div class="example-card">' +
-          '<div class="example-side-label clude"><span class="mark">&#x2713;</span> Clude (with memory)</div>' +
           '<div class="example-q">' + esc(q) + '</div>' +
           '<div class="example-answer">' + esc(cludeAns) + '</div>' +
         '</div>' +
         '<div class="example-card">' +
-          '<div class="example-side-label base"><span class="mark">&#x2717;</span> No-memory baseline</div>' +
           '<div class="example-q">' + esc(q) + '</div>' +
           '<div class="example-answer">' + esc(baseAns) + '</div>' +
         '</div>' +
@@ -454,14 +587,64 @@
 
   fetchExamples();
 
-  /* ── Live ask ──────────────────────────────────── */
+  /* ════════════════════════════════════════════════
+     SECTION 2 — Live ask demo
+     Backed by /proof/solana-qa.json (cached on first fetch).
+     Preset buttons + shuffle pick a random item by category
+     and submit { questionId } to /api/proof/hallucination/ask.
+     Free-text falls back to { question }.
+  ═════════════════════════════════════════════════ */
+
+  // Cache for the QA dataset
+  let _qaItems = null;
+  // The questionId most recently submitted (set by shuffle/presets, cleared by free-text)
+  let _pendingQuestionId = null;
+
+  async function loadQaItems() {
+    if (_qaItems !== null) return _qaItems;
+    try {
+      const res = await fetch('/proof/solana-qa.json');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const d = await res.json();
+      _qaItems = Array.isArray(d.items) ? d.items : [];
+    } catch (_) {
+      _qaItems = [];
+    }
+    return _qaItems;
+  }
+
+  /**
+   * Pick a random item (optionally filtered by category).
+   * Returns null if the dataset is empty or category has no items.
+   */
+  function pickRandom(category) {
+    if (!_qaItems || _qaItems.length === 0) return null;
+    const pool = category
+      ? _qaItems.filter(function (it) { return it.category === category; })
+      : _qaItems;
+    if (pool.length === 0) return null;
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  /**
+   * Called by the "Shuffle a real Solana fact" button and category presets.
+   * Loads dataset if needed, picks a random item, populates the input, and submits.
+   */
+  window.shuffleAsk = async function (category) {
+    await loadQaItems();
+    const item = pickRandom(category || null);
+    if (!item) {
+      // Dataset not loaded yet — fall back to free-text ask if there is one
+      window.doAsk();
+      return;
+    }
+    const input = $('askInput');
+    if (input) input.value = item.question;
+    _pendingQuestionId = item.id;
+    window.doAsk();
+  };
 
   let _askInFlight = false;
-
-  window.setAskPreset = function (btn) {
-    const q = btn.getAttribute('data-q');
-    if (q && $('askInput')) $('askInput').value = q;
-  };
 
   window.doAsk = async function () {
     if (_askInFlight) return;
@@ -478,14 +661,28 @@
     if (btn) btn.disabled = true;
     if (status) { status.textContent = 'Asking…'; status.className = 'ask-status'; }
 
-    const resultEl = $('askResult');
-    if (resultEl) resultEl.classList.remove('visible');
+    // Hide empty state, hide results while loading
+    const pendingState  = $('askPendingState');
+    const resultHeader  = $('askResultHeader');
+    const resultEl      = $('askResult');
+    if (pendingState)  pendingState.classList.add('hidden');
+    if (resultHeader)  resultHeader.style.display = 'none';
+    if (resultEl)      resultEl.classList.remove('visible');
+
+    // Capture and clear the pending questionId (so a subsequent free-text ask doesn't reuse it)
+    const questionId = _pendingQuestionId;
+    _pendingQuestionId = null;
 
     try {
+      // Prefer questionId (grounded via dataset) over raw question text
+      const body = questionId
+        ? { questionId: questionId }
+        : { question: question };
+
       const res = await fetch(API_BASE + '/api/proof/hallucination/ask', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ question: question }),
+        body:    JSON.stringify(body),
       });
 
       if (res.status === 429) {
@@ -493,6 +690,8 @@
           status.textContent = 'Rate limited — try again in a moment.';
           status.className   = 'ask-status err';
         }
+        // Restore pending state
+        if (pendingState) pendingState.classList.remove('hidden');
         return;
       }
 
@@ -502,6 +701,7 @@
           status.textContent = 'Error: ' + (errBody.error || 'HTTP ' + res.status);
           status.className   = 'ask-status err';
         }
+        if (pendingState) pendingState.classList.remove('hidden');
         return;
       }
 
@@ -510,68 +710,115 @@
       // clear status
       if (status) { status.textContent = ''; }
 
-      // populate panels
-      const cludeAns    = (d.clude    && d.clude.answer)    || '(no answer)';
-      const baseAns     = (d.baseline && d.baseline.answer) || '(no answer)';
-      const cludeOk     = d.clude    && d.clude.correct;
-      const baseOk      = d.baseline && d.baseline.correct;
-      const hallucinated= d.hallucinated;
+      // Populate panels
+      const cludeAns     = (d.clude    && d.clude.answer)    || '(no answer)';
+      const baseAns      = (d.baseline && d.baseline.answer) || '(no answer)';
+      const cludeOk      = d.clude    && d.clude.correct === true;
+      const baseOk       = d.baseline && d.baseline.correct === true;
+      const hallucinated = d.hallucinated;
+      const groundTruth  = d.groundTruth || null;
+      const grounded     = d.clude && d.clude.grounded; // 'dataset'|'memory'|'none'
 
-      if ($('askCludeAnswer')) $('askCludeAnswer').textContent = cludeAns;
-      if ($('askBaseAnswer'))  $('askBaseAnswer').textContent  = baseAns;
+      // Left panel: Clude
+      const cludeAnswerEl  = $('askCludeAnswer');
+      const cludeVerdictEl = $('askCludeVerdict');
+      const groundedTagEl  = $('askGroundedTag');
+      const groundTruthEl  = $('askGroundTruth');
 
-      const cludeVerdict = $('askCludeVerdict');
-      const baseVerdict  = $('askBaseVerdict');
+      if (cludeAnswerEl) cludeAnswerEl.textContent = cludeAns;
+
+      // Grounded tag
+      if (groundedTagEl) {
+        if (grounded === 'dataset') {
+          groundedTagEl.textContent = 'grounded in dataset';
+          groundedTagEl.className   = 'ask-grounded-tag ask-grounded-dataset';
+        } else if (grounded === 'memory') {
+          groundedTagEl.textContent = 'grounded in memory';
+          groundedTagEl.className   = 'ask-grounded-tag ask-grounded-memory';
+        } else {
+          groundedTagEl.textContent = '';
+          groundedTagEl.className   = 'ask-grounded-tag';
+        }
+      }
 
       const cludeAbstained = /not enough information|i don'?t know|cannot determine|no information|abstain/i.test(cludeAns);
 
-      if (cludeVerdict) {
+      if (cludeVerdictEl) {
         if (cludeAbstained) {
-          cludeVerdict.textContent = 'Abstained — grounded behavior';
-          cludeVerdict.className   = 'ask-verdict abstained';
+          cludeVerdictEl.textContent = '✓ Abstained — grounded behavior';
+          cludeVerdictEl.className   = 'ask-verdict abstained';
         } else if (cludeOk) {
-          cludeVerdict.textContent = 'Correct';
-          cludeVerdict.className   = 'ask-verdict correct';
+          cludeVerdictEl.textContent = '✓ Correct';
+          cludeVerdictEl.className   = 'ask-verdict correct';
         } else {
-          cludeVerdict.textContent = 'Answered';
-          cludeVerdict.className   = 'ask-verdict';
+          cludeVerdictEl.textContent = 'Answered';
+          cludeVerdictEl.className   = 'ask-verdict';
         }
       }
 
-      if (baseVerdict) {
+      // Ground truth row
+      if (groundTruthEl) {
+        if (groundTruth) {
+          groundTruthEl.style.display = 'block';
+          const gtValueEl = $('askGroundTruthValue');
+          if (gtValueEl) gtValueEl.textContent = groundTruth;
+        } else {
+          groundTruthEl.style.display = 'none';
+        }
+      }
+
+      // Right panel: baseline
+      const baseAnswerEl  = $('askBaseAnswer');
+      const baseVerdictEl = $('askBaseVerdict');
+      if (baseAnswerEl)  baseAnswerEl.textContent  = baseAns;
+
+      if (baseVerdictEl) {
         if (baseOk) {
-          baseVerdict.textContent = 'Correct';
-          baseVerdict.className   = 'ask-verdict correct';
+          baseVerdictEl.textContent = '✓ Correct';
+          baseVerdictEl.className   = 'ask-verdict correct';
         } else if (hallucinated) {
-          baseVerdict.textContent = 'Hallucinated';
-          baseVerdict.className   = 'ask-verdict wrong';
+          baseVerdictEl.textContent = '✗ Hallucinated';
+          baseVerdictEl.className   = 'ask-verdict wrong';
         } else {
-          baseVerdict.textContent = 'Answered';
-          baseVerdict.className   = 'ask-verdict';
+          baseVerdictEl.textContent = 'Answered';
+          baseVerdictEl.className   = 'ask-verdict';
         }
       }
 
-      if (resultEl) resultEl.classList.add('visible');
+      // Show column headers and results
+      if (resultHeader) resultHeader.style.display = 'grid';
+      if (resultEl)     resultEl.classList.add('visible');
 
     } catch (err) {
       if (status) {
         status.textContent = 'Network error — ' + err.message;
         status.className   = 'ask-status err';
       }
+      if (pendingState) pendingState.classList.remove('hidden');
     } finally {
       _askInFlight = false;
       if (btn) btn.disabled = false;
     }
   };
 
-  // Allow Enter key in the ask input
+  // Allow Enter key in the ask input; Enter clears questionId → free-text mode
   (function () {
     const input = $('askInput');
     if (input) {
       input.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') window.doAsk();
+        if (e.key === 'Enter') {
+          _pendingQuestionId = null; // typed → free-text
+          window.doAsk();
+        }
+      });
+      // If the user edits the field manually, drop the pending questionId
+      input.addEventListener('input', function () {
+        _pendingQuestionId = null;
       });
     }
   })();
+
+  // Pre-load dataset in the background so shuffle feels instant
+  loadQaItems();
 
 })();
