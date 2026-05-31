@@ -1,0 +1,13 @@
+{
+  "placeholder": true,
+  "note": "Awaiting first benchmark run; values are illustrative, not measured.",
+  "rate": null,
+  "baselineRate": null,
+  "abstentionAccuracy": null,
+  "n": 0,
+  "nAbstention": 0,
+  "model": "anthropic/claude-haiku-4.5",
+  "datasetVersion": "crypto_solana_mainnet_us@2025-03-31",
+  "runAt": null,
+  "byCategory": {}
+}

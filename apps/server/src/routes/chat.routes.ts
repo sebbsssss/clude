@@ -26,6 +26,7 @@ import {
   attachWithSignedUrls,
   type AttachmentMeta,
 } from '../lib/chat-attachments';
+import { computeSavings } from '../lib/proof-savings.js';
 import { streamText, smoothStream } from 'ai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
@@ -1111,6 +1112,26 @@ export function chatRoutes(): Router {
           budgetTokens: config.chat.maxContextTokens,
         }, 'Context trimmed to fit token budget');
       }
+
+      // Prior assistant turns = the transcript a memoryless agent would re-send each turn.
+      // Summed once (indexed by idx_chat_msg_conv) and reused for footer + persisted total (proof-features §7.1).
+      let priorTurnsTokens = 0;
+      try {
+        const { data: priorRows } = await db
+          .from('chat_messages')
+          .select('tokens_prompt, tokens_completion')
+          .eq('conversation_id', conversationId)
+          .eq('role', 'assistant');
+        priorTurnsTokens = (priorRows || []).reduce(
+          (s: number, r: { tokens_prompt: number | null; tokens_completion: number | null }) =>
+            s + (r.tokens_prompt || 0) + (r.tokens_completion || 0),
+          0,
+        );
+      } catch (err) {
+        // non-fatal: savings degrades to this-turn-only, but log so persistent failures are diagnosable
+        log.warn({ err }, 'priorTurnsTokens query failed; token savings degraded to this-turn-only');
+      }
+
       // 8. Resolve LLM model for streamText
       let llmModel: any;
       if (isBYOK && byokModel) {
@@ -1191,18 +1212,8 @@ export function chatRoutes(): Router {
             const equivalentDirectCost = (tokensPrompt / 1_000_000) * OPUS_RATE.input + (tokensCompletion / 1_000_000) * OPUS_RATE.output;
             const savingsPct = equivalentDirectCost > 0 ? Math.round(((equivalentDirectCost - totalCost) / equivalentDirectCost) * 100) : 0;
 
-            // Frontier-baseline token estimate for the /chat savings footer.
-            // A frontier model without Clude's memory compression would have
-            // needed the raw prior conversation in-context instead of N
-            // summarized memories. Each recalled memory stands in for ~300
-            // tokens of history on average; only reported when memory actually
-            // helped. Conservative: excludes completion tokens since those are
-            // equal across both scenarios.
-            const AVG_TOKENS_PER_RECALLED_MEMORY = 300;
-            const frontierTokens =
-              memoryIds.length > 0
-                ? tokensPrompt + memoryIds.length * AVG_TOKENS_PER_RECALLED_MEMORY
-                : undefined;
+            // Footer baseline aligned with the persisted proof metric (proof-features §7.1).
+            const { frontierTokens } = computeSavings({ priorTurnsTokens, tokensPrompt });
 
             return {
               message_id: assistantMsgId,
@@ -1258,6 +1269,7 @@ export function chatRoutes(): Router {
       }
 
       // 12+13+14. Insert assistant message + update conversation + record usage IN PARALLEL
+      const { frontierTokens: persistedFrontier, tokensSaved } = computeSavings({ priorTurnsTokens, tokensPrompt });
       const dbOps: PromiseLike<any>[] = [
         db.from('chat_messages').insert({
           id: assistantMsgId,
@@ -1268,6 +1280,9 @@ export function chatRoutes(): Router {
           tokens_prompt: tokensPrompt || null,
           tokens_completion: tokensCompletion || null,
           memory_ids: memoryIds.length > 0 ? memoryIds : null,
+          frontier_tokens: persistedFrontier,
+          memories_used: memoryIds.length,
+          tokens_saved: tokensSaved,
         }),
         db.from('chat_conversations')
           .update({ updated_at: new Date().toISOString() })

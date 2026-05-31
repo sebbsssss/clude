@@ -115,6 +115,14 @@ class ChatAPI {
     return res.json();
   }
 
+  async getTokensSaved(): Promise<{ totalSaved: number } | null> {
+    try {
+      const res = await fetch(`${API_BASE}/api/proof/tokens-saved`);
+      if (!res.ok) return null;
+      return res.json();
+    } catch { return null; }
+  }
+
   async sendGuestMessage(content: string, history: Array<{ role: string; content: string }>, onChunk: (text: string) => void, onDone: (remaining?: number) => void, signal?: AbortSignal): Promise<void> {
     const res = await fetch(`${API_BASE}/api/chat/guest`, {
       method: 'POST',
