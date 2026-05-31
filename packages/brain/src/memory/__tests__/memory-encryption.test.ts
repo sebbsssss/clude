@@ -21,6 +21,7 @@ import {
   isMemoryEncryptionEnabled,
   getBotOwnerKeypair,
   encryptForStorage,
+  delegationStateForWrite,
   __resetForTests,
 } from '../memory-encryption';
 import { decryptField, unwrapDek } from '@clude/shared/core/memory-envelope';
@@ -107,5 +108,24 @@ describe('encryptForStorage', () => {
     const ownerWrap = out!.wraps.find(w => w.recipient === 'owner')!;
     const dek = unwrapDek(ownerWrap.wrapped_dek, ownerWrap.wrap_pubkey, userKp.secretKey);
     expect(decryptField(out!.ciphertext, dek!)).toBe('hi');
+  });
+});
+
+describe('delegationStateForWrite (regression guard — provider_delegated must never be false at write)', () => {
+  it('plaintext / dormant write → null (no delegation model, stays visible to recall)', () => {
+    // The bug: a plaintext write got `false`, which the recall filter
+    // `.not('provider_delegated','is',false)` treats as revoked → silently excluded.
+    const v = delegationStateForWrite(false);
+    expect(v).toBeNull();
+    expect(v).not.toBe(false); // the exact regression — never false
+  });
+
+  it('envelope-encrypted write → true (delegated to the provider at write time)', () => {
+    expect(delegationStateForWrite(true)).toBe(true);
+  });
+
+  it('never returns false for any input (false is revoke-RPC-only)', () => {
+    expect(delegationStateForWrite(true)).not.toBe(false);
+    expect(delegationStateForWrite(false)).not.toBe(false);
   });
 });
