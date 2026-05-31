@@ -13,7 +13,7 @@
 
   /** Format a USD cost value as compact string: $25.2K, $1.23M, etc. */
   function fmtCostUsd(costUsd) {
-    if (typeof costUsd !== 'number' || isNaN(costUsd)) return '—';
+    if (typeof costUsd !== 'number' || isNaN(costUsd)) return '…';
     if (costUsd >= 1_000_000) return '$' + (costUsd / 1_000_000).toFixed(2) + 'M';
     if (costUsd >= 1_000)     return '$' + (costUsd / 1_000).toFixed(1) + 'K';
     return '$' + Math.round(costUsd).toLocaleString();
@@ -31,7 +31,7 @@
 
   /** Format an integer with commas; >= 1B appends B suffix, >= 1M appends M suffix */
   function fmtTokens(n) {
-    if (typeof n !== 'number' || isNaN(n)) return '—';
+    if (typeof n !== 'number' || isNaN(n)) return '…';
     if (n >= 1e9)       return (n / 1e9).toFixed(2) + 'B';
     if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
     if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'k';
@@ -39,12 +39,12 @@
   }
 
   function fmtInt(n) {
-    if (typeof n !== 'number' || isNaN(n)) return '—';
+    if (typeof n !== 'number' || isNaN(n)) return '…';
     return Math.round(n).toLocaleString();
   }
 
   function fmtPct(n, decimals) {
-    if (typeof n !== 'number' || isNaN(n)) return '—';
+    if (typeof n !== 'number' || isNaN(n)) return '…';
     const d = decimals ?? 1;
     return (n * 100).toFixed(d) + '%';
   }
@@ -128,7 +128,7 @@
         _ratePerMin = ratePerMin;
         startTicker(totalSaved, ratePerMin);
       } else {
-        $('heroCounter').textContent = '—';
+        $('heroCounter').textContent = '…';
       }
 
       const heroLive = $('heroLive');
@@ -141,11 +141,11 @@
       }
 
       if ($('heroSavedToday')) {
-        $('heroSavedToday').textContent = savedToday !== null ? fmtTokens(savedToday) : '—';
+        $('heroSavedToday').textContent = savedToday !== null ? fmtTokens(savedToday) : '…';
       }
       if ($('heroAvgPct')) {
         $('heroAvgPct').textContent = avgSavingsPct !== null
-          ? Math.round(avgSavingsPct) + '%' : '—';
+          ? Math.round(avgSavingsPct) + '%' : '…';
       }
 
       // Compute and display USD value of tokens saved
@@ -154,7 +154,7 @@
           const costUsd = (totalSaved / 1_000_000) * COST_PER_MTOK;
           $('heroCostUsd').textContent = fmtCostUsd(costUsd);
         } else {
-          $('heroCostUsd').textContent = '—';
+          $('heroCostUsd').textContent = '…';
         }
       }
 
@@ -497,7 +497,7 @@
         '<div class="g-stat">' +
           '<div class="g-stat-label">Improvement</div>' +
           '<div class="g-stat-num green">' +
-            (improvement !== null ? fmtPct(improvement) + ' fewer' : '—') +
+            (improvement !== null ? fmtPct(improvement) + ' fewer' : '…') +
           '</div>' +
           '<div class="g-stat-sub">n = ' + fmtInt(n) + ' questions</div>' +
         '</div>' +
@@ -515,8 +515,8 @@
         const pct  = cr !== null ? Math.round((1 - cr) * 100) : null;
         return '<div class="cat-row">' +
           '<div class="cat-name">' + esc(cat.replace(/_/g, ' ')) + '</div>' +
-          '<div class="cat-val good">' + (cr !== null ? fmtPct(cr) : '—') + '</div>' +
-          '<div class="cat-val base">' + (br !== null ? fmtPct(br) : '—') + '</div>' +
+          '<div class="cat-val good">' + (cr !== null ? fmtPct(cr) : '…') + '</div>' +
+          '<div class="cat-val base">' + (br !== null ? fmtPct(br) : '…') + '</div>' +
           '<div class="cat-mini-bar">' +
             '<div class="cat-mini-track">' +
               '<div class="cat-mini-fill" style="width:' + (pct !== null ? (100 - pct) : 0) + '%"></div>' +
@@ -610,8 +610,8 @@
 
     const html = shown.map(function (ex) {
       const q          = ex.question                         || '';
-      const cludeAns   = (ex.clude    && ex.clude.answer)    || '—';
-      const baseAns    = (ex.baseline && ex.baseline.answer) || '—';
+      const cludeAns   = (ex.clude    && ex.clude.answer)    || '…';
+      const baseAns    = (ex.baseline && ex.baseline.answer) || '…';
       const sourceRef  = ex.sourceRef || null;
       const groundTruth = ex.groundTruth || null;
       // Detect honest baseline decline vs hallucination
