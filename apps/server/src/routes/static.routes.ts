@@ -75,6 +75,16 @@ export function staticRoutes(): Router {
     next();
   });
 
+  router.get('/query-demo', (req: Request, _res: Response, next: express.NextFunction) => {
+    req.url = '/query-demo.html';
+    next();
+  });
+
+  // Back-compat: the page moved from /proof to /query-demo
+  router.get(['/proof', '/proof.html'], (_req: Request, res: Response) => {
+    res.redirect(301, '/query-demo');
+  });
+
   // ── React SPAs ────────────────────────────────────────────────────
 
   // Dashboard SPA at /dashboard
