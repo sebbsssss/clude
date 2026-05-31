@@ -132,7 +132,7 @@
       }
       if ($('heroAvgPct')) {
         $('heroAvgPct').textContent = avgSavingsPct !== null
-          ? Math.round(avgSavingsPct * 100) + '%' : '—';
+          ? Math.round(avgSavingsPct) + '%' : '—';
       }
 
       // Feed live savings % into the shout-out callout and visualiser
@@ -159,7 +159,7 @@
     const el  = $('shoutSavingsPct');
     const src = $('shoutSavingsSource');
     if (el && typeof pct === 'number' && !isNaN(pct)) {
-      el.textContent = Math.round(pct * 100) + '%';
+      el.textContent = Math.round(pct) + '%';
     }
     if (src) {
       src.textContent = 'Live figure from /api/proof/tokens-saved.';
@@ -262,7 +262,7 @@
     // Prefer live API rate if available; fall back to preset-derived pct
     let savedPct;
     if (_liveAvgSavingsPct !== null) {
-      savedPct = Math.round(_liveAvgSavingsPct * 100);
+      savedPct = Math.round(_liveAvgSavingsPct);
     } else {
       savedPct = totalWithout > 0
         ? Math.round(((totalWithout - totalWith) / totalWithout) * 100) : 0;
