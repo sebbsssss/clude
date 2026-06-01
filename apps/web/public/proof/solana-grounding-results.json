@@ -2,71 +2,90 @@
   "placeholder": false,
   "cludeAccuracy": 1,
   "baselineAccuracy": 0,
+  "forcedAccuracy": 0.2236842105263158,
   "rate": 0,
   "baselineRate": 0,
+  "forcedRate": 0.6710526315789473,
   "baselineAbstainRate": 1,
+  "forcedAbstainRate": 0.10526315789473684,
   "abstentionAccuracy": 1,
   "n": 76,
   "nAbstention": 76,
   "model": "anthropic/claude-haiku-4.5",
   "datasetVersion": "crypto_solana_mainnet_us@2025-03-31",
-  "runAt": "2026-06-01T00:29:23.787Z",
-  "note": "Measured live across 76 questions sampled evenly from the 706-question frozen dataset, through the same grounding pipeline as the ask demo. Clude grounds on the BigQuery snapshot; the baseline is the same model (claude-haiku-4.5) without it. Clude answers from the data; the bare model mostly declines (honest) and rarely fabricates.",
+  "runAt": "2026-06-01T01:38:00.612Z",
+  "note": "Measured live across 76 questions sampled evenly from the 706-question frozen dataset, through the same grounding pipeline as the ask demo. Clude grounds on the BigQuery snapshot. Two ungrounded conditions of the SAME model (claude-haiku-4.5): \"default\" is free to decline, and \"forced to answer\" has the refer-to-an-explorer escape hatch removed so it must commit to a value. Clude answers from the data; the forced model fabricates because it has no data to ground on.",
   "byCategory": {
     "block_time": {
       "cludeAccuracy": 1,
       "baselineAccuracy": 0,
+      "forcedAccuracy": 0,
       "rate": 0,
       "baselineRate": 0,
+      "forcedRate": 1,
       "n": 10
     },
     "block_leader": {
       "cludeAccuracy": 1,
       "baselineAccuracy": 0,
+      "forcedAccuracy": 0,
       "rate": 0,
       "baselineRate": 0,
+      "forcedRate": 1,
       "n": 10
     },
     "block_txcount": {
       "cludeAccuracy": 1,
       "baselineAccuracy": 0,
+      "forcedAccuracy": 0,
       "rate": 0,
       "baselineRate": 0,
+      "forcedRate": 0.2,
       "n": 10
     },
     "tx_fee": {
       "cludeAccuracy": 1,
       "baselineAccuracy": 0,
+      "forcedAccuracy": 0.7,
       "rate": 0,
       "baselineRate": 0,
+      "forcedRate": 0.3,
       "n": 10
     },
     "tx_status": {
       "cludeAccuracy": 1,
       "baselineAccuracy": 0,
+      "forcedAccuracy": 1,
       "rate": 0,
       "baselineRate": 0,
+      "forcedRate": 0,
       "n": 10
     },
     "account_owner": {
       "cludeAccuracy": 1,
       "baselineAccuracy": 0,
+      "forcedAccuracy": 0,
       "rate": 0,
       "baselineRate": 0,
+      "forcedRate": 1,
       "n": 10
     },
     "account_lamports": {
       "cludeAccuracy": 1,
       "baselineAccuracy": 0,
+      "forcedAccuracy": 0,
       "rate": 0,
       "baselineRate": 0,
+      "forcedRate": 1,
       "n": 10
     },
     "token_symbol": {
       "cludeAccuracy": 1,
       "baselineAccuracy": 0,
+      "forcedAccuracy": 0,
       "rate": 0,
       "baselineRate": 0,
+      "forcedRate": 1,
       "n": 6
     }
   }
