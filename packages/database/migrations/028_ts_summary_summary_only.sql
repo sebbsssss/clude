@@ -1,8 +1,18 @@
--- 026: ts_summary summary-only repurpose (encryption §9, deferred from migration 022 step 5).
--- The old ts_summary expression referenced both summary AND content. After encryption
--- activation, revoke sets summary='' but leaves content as ciphertext — so the combined
--- ts_summary would continue to hold *content-derived* lexemes after revoke, BM25-searchable
--- as ciphertext lexemes (small but real privacy leak). Repurpose to summary-only so it
+-- 028: ts_summary summary-only repurpose (encryption §9, deferred from migration 022 step 5).
+-- (Renumbered from 026 — that number is taken by 026_proof_token_savings; 027 is the
+--  provider_delegated backfill that already shipped.)
+--
+-- PROD STATE NOTE (Plan 5 pre-flight audit A3): ts_summary currently exists in prod as a PLAIN
+-- tsvector column (is_generated=NEVER, no expression). An older schema created it before the
+-- GENERATED declaration landed, and initDatabase's IF NOT EXISTS guard never recreated it. So
+-- this DROP+ADD converts plain→generated: ts_summary goes from (likely NULL / never-populated)
+-- to summary-derived for ALL rows — a strict BM25 improvement on top of the privacy fix below.
+-- Expect BM25 recall quality to shift slightly (summary lexemes now contribute).
+--
+-- The old ts_summary expression (in code, never applied to prod) referenced both summary AND
+-- content. After encryption activation, revoke sets summary='' but leaves content as ciphertext
+-- — so a combined ts_summary would continue to hold *content-derived* lexemes after revoke,
+-- BM25-searchable as ciphertext lexemes (small but real privacy leak). Repurpose to summary-only so it
 -- auto-empties when summary='' is set.
 --
 -- Postgres does not permit ALTER GENERATED expression, so this is DROP + ADD.

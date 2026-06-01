@@ -509,12 +509,13 @@ export async function initDatabase(): Promise<void> {
 
         -- Populate content_tokens from a transient plaintext arg (PostgREST can't express to_tsvector inline).
         -- setweight 'B' mirrors the old combined ts_summary weighting (summary 'A' > content 'B').
+        -- LEFT(p_text, 2000) matches the migration-022 prod backfill bound (migration 029 / Plan 5 D1=A).
         CREATE OR REPLACE FUNCTION set_memory_content_tokens(p_memory_id bigint, p_text text)
         RETURNS void LANGUAGE sql AS $fn$
           UPDATE memories
           SET content_tokens = CASE
                 WHEN p_text IS NULL OR p_text = '' THEN NULL
-                ELSE setweight(to_tsvector('english', p_text), 'B')
+                ELSE setweight(to_tsvector('english', LEFT(p_text, 2000)), 'B')
               END
           WHERE id = p_memory_id;
         $fn$;
