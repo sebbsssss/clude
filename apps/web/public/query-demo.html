@@ -236,35 +236,55 @@
       margin-bottom: 3rem;
     }
 
+    /* Row layout: big number left, copy fills the full remaining width. */
     .shout-card {
       background: var(--bg-warm);
-      padding: 3rem 2.5rem;
+      padding: 3rem 3.5rem;
+      display: flex;
+      align-items: center;
+      gap: 3.5rem;
+    }
+    .shout-card-num { flex: 0 0 auto; }
+    .shout-card-body {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
     }
 
     .shout-num {
       font-family: var(--mono);
-      font-size: clamp(56px, 8vw, 112px);
+      font-size: clamp(72px, 11vw, 168px);
       font-weight: 800;
       letter-spacing: -0.04em;
-      line-height: 1;
+      line-height: 0.92;
       font-variant-numeric: tabular-nums;
       font-feature-settings: "tnum" 1;
-      margin-bottom: 12px;
     }
     .shout-num.green { color: var(--green); }
-    .shout-num.blue  { color: var(--blue);  }
+    /* The text-style callout ("Never fabricate.") is intrinsically wider than a
+       short stat, so size it down a touch and use the sans face so it reads as a
+       statement and leaves the body copy room to stretch across the card. */
+    .shout-num.blue  {
+      color: var(--blue);
+      font-family: var(--sans);
+      font-size: clamp(52px, 7vw, 104px);
+      line-height: 0.96;
+    }
 
     .shout-label {
       font-family: var(--sans);
-      font-size: 18px; font-weight: 700;
-      color: var(--text); margin-bottom: 8px;
-      line-height: 1.2;
+      font-size: clamp(22px, 2.6vw, 34px); font-weight: 800;
+      color: var(--text);
+      line-height: 1.12;
+      letter-spacing: -0.02em;
     }
 
     .shout-sub {
       font-family: var(--mono);
-      font-size: 11px; color: var(--muted);
-      letter-spacing: 1px; line-height: 1.5;
+      font-size: 14px; color: var(--muted);
+      letter-spacing: 0.5px; line-height: 1.6;
     }
 
     .shout-sub em { font-style: normal; color: var(--faint); }
@@ -1236,6 +1256,8 @@
       .counter-secondary   { flex-direction: row; gap: 2rem; }
       .grounding-concept   { flex-direction: column; gap: 1.5rem; }
       .grounding-concept-right { align-items: flex-start; }
+      /* Stack the number above the copy on narrow screens. */
+      .shout-card { flex-direction: column; align-items: flex-start; gap: 1.25rem; padding: 2.25rem 1.75rem; }
     }
     @media (max-width: 480px) {
       .counter-secondary { flex-direction: column; gap: 1.2rem; }
@@ -1392,14 +1414,18 @@
     <!-- Two big shout-out callouts -->
     <div class="shout-row" style="margin-top:4rem;">
       <div class="shout-card">
-        <div class="shout-num green" id="shoutSavingsPct">~82%</div>
-        <div class="shout-label">fewer tokens per session<br>at scale</div>
-        <div class="shout-sub">Measured from live chat sessions.<br><em id="shoutSavingsSource">Live rate updates as chats run.</em></div>
+        <div class="shout-card-num"><div class="shout-num green" id="shoutSavingsPct">~82%</div></div>
+        <div class="shout-card-body">
+          <div class="shout-label">fewer tokens per session, at scale</div>
+          <div class="shout-sub">Measured from live chat sessions. <em id="shoutSavingsSource">Live rate updates as chats run.</em></div>
+        </div>
       </div>
       <div class="shout-card">
-        <div class="shout-num blue">Never<br>fabricate.</div>
-        <div class="shout-label">Grounded or abstain.<br>Always.</div>
-        <div class="shout-sub">Clude answers from verified memory<br>or says "I don't know." No guessing.</div>
+        <div class="shout-card-num"><div class="shout-num blue">Never<br>fabricate.</div></div>
+        <div class="shout-card-body">
+          <div class="shout-label">Grounded or abstain.<br>Always.</div>
+          <div class="shout-sub">Clude answers from verified memory or says &ldquo;I don&rsquo;t know.&rdquo; No guessing.</div>
+        </div>
       </div>
     </div>
   </div>
