@@ -520,9 +520,23 @@
     const bAbstain = typeof d.baselineAbstainRate=== 'number' ? d.baselineAbstainRate: null;
     const p0       = function (x) { return x !== null ? fmtPct(x, 0) : '…'; };
 
-    // Lead with ACCURACY (the honest, compelling axis): Clude answers from the
-    // data; the same model without it mostly cannot. Hallucination rate is shown
-    // as supporting context (both are low — Clude grounds, the bare model declines).
+    // Lead with the ACCURACY GAP (the honest, compelling axis): Clude answers
+    // from the data, the same model without it cannot. The third card adapts:
+    // if the bare model fabricated, show that; if it honestly declined instead
+    // (the well-aligned case), show the decline rate, which is the real story.
+    const baselineFabricated = bHall !== null && bHall > 0;
+    const thirdCard = baselineFabricated
+      ? '<div class="g-stat">' +
+          '<div class="g-stat-label">Baseline hallucination</div>' +
+          '<div class="g-stat-num">' + p0(bHall) + '</div>' +
+          '<div class="g-stat-sub">Clude fabricated ' + p0(cHall) + '</div>' +
+        '</div>'
+      : '<div class="g-stat">' +
+          '<div class="g-stat-label">Baseline declined</div>' +
+          '<div class="g-stat-num">' + p0(bAbstain) + '</div>' +
+          '<div class="g-stat-sub">honest, but cannot answer</div>' +
+        '</div>';
+
     const statsHtml =
       '<div class="grounding-live-stats">' +
         '<div class="g-stat">' +
@@ -535,19 +549,19 @@
           '<div class="g-stat-num">' + p0(bAcc) + '</div>' +
           '<div class="g-stat-sub">cannot reach the data</div>' +
         '</div>' +
-        '<div class="g-stat">' +
-          '<div class="g-stat-label">Clude hallucination rate</div>' +
-          '<div class="g-stat-num green">' + p0(cHall) + '</div>' +
-          '<div class="g-stat-sub">' + (bHall !== null ? ('baseline fabricated ' + p0(bHall)) : 'lower is better') + '</div>' +
-        '</div>' +
+        thirdCard +
       '</div>';
 
+    // Context paragraph adapts to whether the bare model fabricated or just declined.
+    const baselineTail = baselineFabricated
+      ? 'it declined on ' + p0(bAbstain) + ' (honest) and fabricated on ' + p0(bHall) + '.'
+      : 'it declined every time (honest), unable to answer without the data, while Clude never fabricated (' + p0(cHall) + ' hallucination).';
     const ctxHtml =
       '<p style="font-size:14px;color:var(--text-2);line-height:1.7;font-weight:500;margin:0 0 1rem;">' +
         'Across <strong>n=' + fmtInt(n) + '</strong> questions sampled evenly from the frozen dataset, Clude answered ' +
         '<strong style="color:var(--blue);">' + p0(cAcc) + '</strong> correctly by grounding in the verified on-chain data. ' +
-        'The same model without that data answered just <strong>' + p0(bAcc) + '</strong>: it declined on ' +
-        p0(bAbstain) + ' (honest) and fabricated on ' + p0(bHall) + '. Same model, same prompt. Grounding is the only difference.' +
+        'The same model without that data answered just <strong>' + p0(bAcc) + '</strong>: ' + baselineTail +
+        ' Same model, same prompt. Grounding is the only difference.' +
       '</p>' +
       '<p style="font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:0.5px;line-height:1.6;margin:0 0 1.5rem;">' +
         'Method: each question is run through the live pipeline. Clude receives the verified fact (as it would from memory); the baseline is the same model (claude-haiku-4.5) with no data access. Answers are graded by deterministic exact match, not an LLM judge.' +
