@@ -227,9 +227,10 @@
     }
 
     /* ── SHOUT-OUT CALLOUTS (savings + grounding concept) ── */
+    /* Stacked as two full-width rows (savings, then never-fabricate). */
     .shout-row {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1fr;
       gap: 2px;
       background: var(--border);
       margin-bottom: 3rem;
@@ -721,6 +722,15 @@
     .example-card {
       background: var(--surface);
       padding: 1.5rem;
+      /* flex column so the verdict / verified footer pins to the bottom and the
+         two cards in a row line their footers up regardless of answer length */
+      display: flex;
+      flex-direction: column;
+      /* allow the grid item to shrink and long base58 strings to wrap instead
+         of overflowing the card */
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .example-side-label {
@@ -739,10 +749,16 @@
       margin-bottom: 10px;
       padding-bottom: 10px;
       border-bottom: 1px solid var(--border);
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .example-answer {
       font-size: 13px; color: var(--text); line-height: 1.55; font-weight: 500;
+      /* grow to fill the card height so the footer below pins to the bottom */
+      flex: 1 1 auto;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .example-empty {
@@ -1015,6 +1031,14 @@
     .ask-result-panel {
       background: var(--surface);
       padding: 1.4rem;
+      /* column layout so the verdict footer pins to the bottom and the two
+         panels line their footers up regardless of answer length */
+      display: flex;
+      flex-direction: column;
+      /* let the grid item shrink and long base58 strings wrap, not overflow */
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .ask-result-label {
@@ -1028,6 +1052,10 @@
 
     .ask-result-body {
       font-size: 13px; line-height: 1.55; color: var(--text-2); font-weight: 500;
+      /* grow to fill the panel so the verdict below it sits at the bottom */
+      flex: 1 1 auto;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .ask-grounded-tag {
@@ -1206,7 +1234,6 @@
       .grounding-live-stats{ grid-template-columns: 1fr; }
       .counter-block       { flex-direction: column; align-items: flex-start; gap: 2rem; }
       .counter-secondary   { flex-direction: row; gap: 2rem; }
-      .shout-row           { grid-template-columns: 1fr; }
       .grounding-concept   { flex-direction: column; gap: 1.5rem; }
       .grounding-concept-right { align-items: flex-start; }
     }
@@ -1590,7 +1617,7 @@
           <div class="ask-verdict" id="askCludeVerdict"></div>
         </div>
         <div class="ask-result-panel">
-          <div class="ask-result-label base"><strong>Same model &middot; no access to the data</strong></div>
+          <div class="ask-result-label base" id="askBaseLabel"><strong>Same model &middot; no access to the data</strong></div>
           <div class="ask-result-body" id="askBaseAnswer">…</div>
           <div class="ask-verdict" id="askBaseVerdict"></div>
         </div>
@@ -1599,12 +1626,12 @@
       <!-- Honest framing note — spans the full width of the result table, more prominent -->
       <div id="askFramingNote" style="display:none; margin-top:1.25rem;">
         <p style="font-family:var(--sans); font-size:14px; color:var(--text-2); line-height:1.7; font-weight:500; background:rgba(34,68,255,0.05); border-left:3px solid var(--blue); padding:1.1rem 1.4rem; margin:0;">
-          <strong style="color:var(--text);">Same model, same prompt.</strong> The only difference is whether it has the on-chain fact.
-          Clude retrieves it from memory and answers precisely. Without it, a general model cannot know
-          a specific historical value, so it declines (honest) or guesses (a hallucination).
+          <strong style="color:var(--text);">Same model, same question.</strong> The only difference is whether it has the on-chain fact.
+          Clude retrieves it from memory and answers precisely. The same model with no data, forced to commit to a value,
+          has to guess, and a guess on a specific historical fact is a hallucination.
           <strong style="color:var(--blue);">Clude&rsquo;s memory is what removes the guess.</strong>
-          <em style="color:var(--muted);">The measured hallucination rate comes from the benchmark across many questions; this
-          single live call demonstrates grounding.</em>
+          <em style="color:var(--muted);">Left free to decline, that bare model honestly says it cannot answer; the measured fabrication
+          rate comes from the forced condition across many questions.</em>
         </p>
       </div>
     </div>
@@ -1620,7 +1647,7 @@
       <!-- Persistent column header labels (always visible) -->
       <div class="examples-header" id="examplesHeader" style="display:none;">
         <div class="examples-header-cell clude">&#x2713;&nbsp; Clude: grounded in Solana data</div>
-        <div class="examples-header-cell base">Same model &middot; no access to the data</div>
+        <div class="examples-header-cell base">Same model, forced to answer (no data)</div>
       </div>
 
       <div id="examplesContainer"></div>

@@ -3,14 +3,14 @@
   "cludeAccuracy": 1,
   "baselineAccuracy": 0,
   "rate": 0,
-  "baselineRate": 0.32894736842105265,
-  "baselineAbstainRate": 0.6710526315789473,
-  "abstentionAccuracy": 0.6710526315789473,
+  "baselineRate": 0,
+  "baselineAbstainRate": 1,
+  "abstentionAccuracy": 1,
   "n": 76,
-  "nAbstention": 51,
+  "nAbstention": 76,
   "model": "anthropic/claude-haiku-4.5",
   "datasetVersion": "crypto_solana_mainnet_us@2025-03-31",
-  "runAt": "2026-05-31T23:38:28.426Z",
+  "runAt": "2026-06-01T00:29:23.787Z",
   "note": "Measured live across 76 questions sampled evenly from the 706-question frozen dataset, through the same grounding pipeline as the ask demo. Clude grounds on the BigQuery snapshot; the baseline is the same model (claude-haiku-4.5) without it. Clude answers from the data; the bare model mostly declines (honest) and rarely fabricates.",
   "byCategory": {
     "block_time": {
@@ -45,21 +45,21 @@
       "cludeAccuracy": 1,
       "baselineAccuracy": 0,
       "rate": 0,
-      "baselineRate": 0.5,
+      "baselineRate": 0,
       "n": 10
     },
     "account_owner": {
       "cludeAccuracy": 1,
       "baselineAccuracy": 0,
       "rate": 0,
-      "baselineRate": 1,
+      "baselineRate": 0,
       "n": 10
     },
     "account_lamports": {
       "cludeAccuracy": 1,
       "baselineAccuracy": 0,
       "rate": 0,
-      "baselineRate": 1,
+      "baselineRate": 0,
       "n": 10
     },
     "token_symbol": {

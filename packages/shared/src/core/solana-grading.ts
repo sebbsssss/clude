@@ -15,8 +15,32 @@ export interface SolanaQA {
 // Abstention detection
 // ---------------------------------------------------------------------------
 
-const ABSTENTION_RE =
-  /don'?t (have|know)|not enough info|no information|cannot determine|unable to|insufficient/i;
+// Single source of truth for "honest decline vs confident fabrication".
+// A model that says "I don't have access to the Solana blockchain, use an
+// explorer" is declining honestly, NOT hallucinating, so all of these
+// no-access / can't-look-up / use-an-explorer phrasings must be caught.
+const ABSTENTION_RE = new RegExp(
+  [
+    "don'?t (have|know)",
+    'do not (have|know)',
+    "(can'?t|cannot|unable to|not able to) (determine|provide|access|look up|verify|find|query|confirm|tell)",
+    'not enough info',
+    'no information',
+    'insufficient',
+    'no access',
+    'without access',
+    "(don'?t|do not) have (access|the ability|real-?time|enough)",
+    'no real-?time',
+    "i'?m not able",
+    'i am not able',
+    'use (a|an|the)? ?(solana |block )?explorer',
+    'check (a|an|the)? ?(block )?explorer',
+    'you can (use|check)',
+    "you'?ll need to",
+    'you would need to',
+  ].join('|'),
+  'i',
+);
 
 export function isAbstention(text: string): boolean {
   return ABSTENTION_RE.test(text);
