@@ -170,6 +170,17 @@ const BASELINE_SYS =
   'You are a Solana blockchain assistant. Answer the question to the best of your ability. ' +
   'Be concise — one or two sentences max.';
 
+// Forced-answer condition: same model, no data, but the "go check an explorer"
+// escape hatch is removed. This forces the bare model to commit to a specific
+// value, which is where ungrounded models fabricate. Disclosed on the page as a
+// distinct condition ("forced to answer"), NOT presented as the model's default.
+const FORCED_SYS =
+  'You are a Solana blockchain assistant. Answer with a SPECIFIC value only ' +
+  '(the exact number, timestamp, validator pubkey, owner program, ticker, or ' +
+  'success/fail). Do NOT say you lack access, do NOT refer the user to an explorer ' +
+  'or any external tool, do NOT explain how to look it up. Commit to a concrete ' +
+  'answer. One short sentence.';
+
 // Tighter per-IP rate limiter for the live /ask endpoint
 const askLimiter = rateLimit({
   windowMs: 60_000,
@@ -291,7 +302,7 @@ export function proofRoutes(): Router {
         groundedFrom = 'none';
       }
 
-      const [cludeAnswer, baselineAnswer] = await Promise.all([
+      const [cludeAnswer, baselineAnswer, forcedAnswer] = await Promise.all([
         generateOpenRouterResponse({
           systemPrompt: GROUNDED_SYS,
           messages: [{ role: 'user', content: `Context:\n${ctx}\n\nQuestion: ${query}\n\nAnswer:` }],
@@ -306,6 +317,14 @@ export function proofRoutes(): Router {
           temperature: 0,
           maxTokens: 200,
         }),
+        // Forced-answer condition: same model, no data, escape hatch removed.
+        generateOpenRouterResponse({
+          systemPrompt: FORCED_SYS,
+          messages: [{ role: 'user', content: query }],
+          model,
+          temperature: 0,
+          maxTokens: 200,
+        }),
       ]);
 
       // Grade if we have ground truth
@@ -315,14 +334,19 @@ export function proofRoutes(): Router {
       const baselineCorrect = gold !== null && category !== null
         ? gradeAnswer(category, gold, baselineAnswer)
         : null;
+      const forcedCorrect = gold !== null && category !== null
+        ? gradeAnswer(category, gold, forcedAnswer)
+        : null;
 
       // Abstention is the single source of truth for "honest decline vs fabrication".
       const cludeAbstained = isAbstention(cludeAnswer);
       const baselineAbstained = isAbstention(baselineAnswer);
+      const forcedAbstained = isAbstention(forcedAnswer);
 
       // A hallucination is a confident WRONG answer (graded false AND not an abstention).
       const hallucinated = cludeCorrect === false && !cludeAbstained;
       const baselineHallucinated = baselineCorrect === false && !baselineAbstained;
+      const forcedHallucinated = forcedCorrect === false && !forcedAbstained;
 
       const payload = {
         question: query,
@@ -340,6 +364,13 @@ export function proofRoutes(): Router {
           correct: baselineCorrect,
           abstained: baselineAbstained,
           hallucinated: baselineHallucinated,
+        },
+        // Same model, no data, forced to commit to a value (where fabrication shows up).
+        forced: {
+          answer: forcedAnswer,
+          correct: forcedCorrect,
+          abstained: forcedAbstained,
+          hallucinated: forcedHallucinated,
         },
         hallucinated,
       };

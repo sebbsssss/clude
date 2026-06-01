@@ -514,22 +514,23 @@
   function renderGroundingLive(el, d) {
     const n        = d.n || 0;
     const cAcc     = typeof d.cludeAccuracy      === 'number' ? d.cludeAccuracy      : null;
-    const bAcc     = typeof d.baselineAccuracy   === 'number' ? d.baselineAccuracy   : null;
     const cHall    = typeof d.rate               === 'number' ? d.rate               : null;
-    const bHall    = typeof d.baselineRate       === 'number' ? d.baselineRate       : null;
+    const fHall    = typeof d.forcedRate         === 'number' ? d.forcedRate         : null;
+    const fAcc     = typeof d.forcedAccuracy     === 'number' ? d.forcedAccuracy     : null;
     const bAbstain = typeof d.baselineAbstainRate=== 'number' ? d.baselineAbstainRate: null;
     const p0       = function (x) { return x !== null ? fmtPct(x, 0) : '…'; };
+    const haveForced = fHall !== null;
 
-    // Lead with the ACCURACY GAP (the honest, compelling axis): Clude answers
-    // from the data, the same model without it cannot. The third card adapts:
-    // if the bare model fabricated, show that; if it honestly declined instead
-    // (the well-aligned case), show the decline rate, which is the real story.
-    const baselineFabricated = bHall !== null && bHall > 0;
-    const thirdCard = baselineFabricated
+    // Three conditions of the SAME model (claude-haiku-4.5):
+    //  1. Clude grounded accuracy (answers from the data)
+    //  2. Clude hallucination rate (it grounds, so ~0)
+    //  3. Forced-to-answer hallucination rate: no data, escape hatch removed, so it
+    //     must commit to a value and fabricates. This is the headline contrast.
+    const thirdCard = haveForced
       ? '<div class="g-stat">' +
-          '<div class="g-stat-label">Baseline hallucination</div>' +
-          '<div class="g-stat-num">' + p0(bHall) + '</div>' +
-          '<div class="g-stat-sub">Clude fabricated ' + p0(cHall) + '</div>' +
+          '<div class="g-stat-label">Same model, forced to answer</div>' +
+          '<div class="g-stat-num">' + p0(fHall) + '</div>' +
+          '<div class="g-stat-sub">fabricates with no data</div>' +
         '</div>'
       : '<div class="g-stat">' +
           '<div class="g-stat-label">Baseline declined</div>' +
@@ -545,41 +546,45 @@
           '<div class="g-stat-sub">answers straight from the data</div>' +
         '</div>' +
         '<div class="g-stat">' +
-          '<div class="g-stat-label">Same model &middot; no data</div>' +
-          '<div class="g-stat-num">' + p0(bAcc) + '</div>' +
-          '<div class="g-stat-sub">cannot reach the data</div>' +
+          '<div class="g-stat-label">Clude hallucination rate</div>' +
+          '<div class="g-stat-num green">' + p0(cHall) + '</div>' +
+          '<div class="g-stat-sub">grounds instead of guessing</div>' +
         '</div>' +
         thirdCard +
       '</div>';
 
-    // Context paragraph adapts to whether the bare model fabricated or just declined.
-    const baselineTail = baselineFabricated
-      ? 'it declined on ' + p0(bAbstain) + ' (honest) and fabricated on ' + p0(bHall) + '.'
-      : 'it declined every time (honest), unable to answer without the data, while Clude never fabricated (' + p0(cHall) + ' hallucination).';
-    const ctxHtml =
-      '<p style="font-size:14px;color:var(--text-2);line-height:1.7;font-weight:500;margin:0 0 1rem;">' +
-        'Across <strong>n=' + fmtInt(n) + '</strong> questions sampled evenly from the frozen dataset, Clude answered ' +
-        '<strong style="color:var(--blue);">' + p0(cAcc) + '</strong> correctly by grounding in the verified on-chain data. ' +
-        'The same model without that data answered just <strong>' + p0(bAcc) + '</strong>: ' + baselineTail +
-        ' Same model, same prompt. Grounding is the only difference.' +
-      '</p>' +
-      '<p style="font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:0.5px;line-height:1.6;margin:0 0 1.5rem;">' +
-        'Method: each question is run through the live pipeline. Clude receives the verified fact (as it would from memory); the baseline is the same model (claude-haiku-4.5) with no data access. Answers are graded by deterministic exact match, not an LLM judge.' +
-      '</p>';
+    const ctxHtml = haveForced
+      ? '<p style="font-size:14px;color:var(--text-2);line-height:1.7;font-weight:500;margin:0 0 1rem;">' +
+          'Across <strong>n=' + fmtInt(n) + '</strong> questions sampled evenly from the frozen dataset, Clude answered ' +
+          '<strong style="color:var(--blue);">' + p0(cAcc) + '</strong> correctly by grounding in the verified on-chain data, and fabricated ' +
+          '<strong style="color:var(--blue);">' + p0(cHall) + '</strong> of the time. The exact same model with no data, when forced to commit to an answer, ' +
+          'fabricated <strong>' + p0(fHall) + '</strong> of the time (and was only ' + p0(fAcc) + ' correct by chance). ' +
+          'Same model, same questions. Grounding is the only difference.' +
+        '</p>' +
+        '<p style="font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:0.5px;line-height:1.6;margin:0 0 1.5rem;">' +
+          'Method: three conditions of claude-haiku-4.5 run through the live pipeline. (1) Clude, grounded in the verified fact as it would be from memory. (2) the bare model, free to decline, which it does ' + p0(bAbstain) + ' of the time (honest). (3) the bare model forced to commit to a specific value, with the refer-to-an-explorer escape hatch removed, which is where fabrication shows up. Graded by deterministic exact match, not an LLM judge.' +
+        '</p>'
+      : '<p style="font-size:14px;color:var(--text-2);line-height:1.7;font-weight:500;margin:0 0 1.5rem;">' +
+          'Across <strong>n=' + fmtInt(n) + '</strong> questions, Clude answered <strong style="color:var(--blue);">' + p0(cAcc) + '</strong> ' +
+          'correctly by grounding in the verified on-chain data, and never fabricated (' + p0(cHall) + ' hallucination). Same model, same prompt. Grounding is the only difference.' +
+        '</p>';
 
     const byCat = d.byCategory || {};
     const cats  = Object.keys(byCat);
     let catHtml = '';
 
     if (cats.length > 0) {
+      // Show Clude correctness vs the forced model's fabrication rate per category.
       const rows = cats.map(function (cat) {
         const c   = byCat[cat];
-        const ca  = typeof c.cludeAccuracy    === 'number' ? c.cludeAccuracy    : null;
-        const ba  = typeof c.baselineAccuracy === 'number' ? c.baselineAccuracy : null;
+        const ca  = typeof c.cludeAccuracy === 'number' ? c.cludeAccuracy : null;
+        const fr  = typeof c.forcedRate    === 'number' ? c.forcedRate    : null;
+        const fallback = typeof c.baselineAccuracy === 'number' ? c.baselineAccuracy : null;
+        const rightVal = fr !== null ? fr : fallback;
         return '<div class="cat-row">' +
           '<div class="cat-name">' + esc(cat.replace(/_/g, ' ')) + '</div>' +
           '<div class="cat-val good">' + (ca !== null ? fmtPct(ca, 0) : '…') + '</div>' +
-          '<div class="cat-val base">' + (ba !== null ? fmtPct(ba, 0) : '…') + '</div>' +
+          '<div class="cat-val base">' + (rightVal !== null ? fmtPct(rightVal, 0) : '…') + '</div>' +
           '<div class="cat-mini-bar">' +
             '<div class="cat-mini-track">' +
               '<div class="cat-mini-fill" style="width:' + (ca !== null ? Math.round(ca * 100) : 0) + '%"></div>' +
@@ -588,12 +593,13 @@
         '</div>';
       }).join('');
 
+      const rightHead = (typeof d.forcedRate === 'number') ? 'Forced fabricated' : 'No data';
       catHtml =
         '<div class="cat-table">' +
           '<div class="cat-row head">' +
             '<div>Category</div>' +
-            '<div>Clude</div>' +
-            '<div>No data</div>' +
+            '<div>Clude correct</div>' +
+            '<div>' + rightHead + '</div>' +
             '<div></div>' +
           '</div>' +
           rows +
@@ -891,11 +897,15 @@
       // clear status
       if (status) { status.textContent = ''; }
 
-      // Populate panels
-      const cludeAns     = (d.clude    && d.clude.answer)    || '(no answer)';
-      const baseAns      = (d.baseline && d.baseline.answer) || '(no answer)';
+      // Populate panels. The right panel shows the SAME model forced to answer
+      // (no data, escape hatch removed) when available, since that is where
+      // fabrication is demonstrated; otherwise fall back to the default baseline.
+      const rightCond    = (d.forced && typeof d.forced.answer === 'string') ? d.forced : d.baseline;
+      const usingForced  = rightCond === d.forced;
+      const cludeAns     = (d.clude && d.clude.answer)    || '(no answer)';
+      const baseAns      = (rightCond && rightCond.answer) || '(no answer)';
       const cludeOk      = d.clude    && d.clude.correct === true;
-      const baseOk       = d.baseline && d.baseline.correct === true;
+      const baseOk       = rightCond && rightCond.correct === true;
       const groundTruth  = d.groundTruth || null;
       const grounded     = d.clude && d.clude.grounded; // 'dataset'|'memory'|'none'
       const sourceRef    = d.sourceRef || null; // e.g. "block:123456" | "tx:<sig>" | null
@@ -993,34 +1003,39 @@
         }
       }
 
-      // Right panel: baseline
+      // Right panel: the same model without the data (forced-to-answer when present).
       // Distinguish honest decline/abstain from an actual hallucination.
-      // hallucinated flag = baseline gave a confident WRONG answer (not an abstention).
       const baseAnswerEl  = $('askBaseAnswer');
       const baseVerdictEl = $('askBaseVerdict');
+      const baseLabelEl   = $('askBaseLabel');
       if (baseAnswerEl)  baseAnswerEl.textContent  = baseAns;
+      // Relabel the right panel to match what we're actually showing.
+      if (baseLabelEl) {
+        baseLabelEl.innerHTML = usingForced
+          ? '<strong>Same model, forced to answer</strong>'
+          : '<strong>Same model &middot; no access to the data</strong>';
+      }
 
-      // Trust the API's flags (shared grader). baseline.hallucinated is the
-      // baseline's own flag (NOT d.hallucinated, which is Clude's).
-      const baseAbstained = (d.baseline && typeof d.baseline.abstained === 'boolean')
-        ? d.baseline.abstained
+      // Trust the API's flags (shared grader) for whichever condition we're showing.
+      const baseAbstained = (rightCond && typeof rightCond.abstained === 'boolean')
+        ? rightCond.abstained
         : isAbstainText(baseAns);
-      const baseHallucinated = (d.baseline && typeof d.baseline.hallucinated === 'boolean')
-        ? d.baseline.hallucinated
+      const baseHallucinated = (rightCond && typeof rightCond.hallucinated === 'boolean')
+        ? rightCond.hallucinated
         : (baseOk === false && !baseAbstained);
 
       if (baseVerdictEl) {
         if (baseOk) {
           baseVerdictEl.textContent = '✓ Correct';
           baseVerdictEl.className   = 'ask-verdict correct';
-        } else if (baseAbstained) {
-          // Honest decline: no data access → not a hallucination
-          baseVerdictEl.textContent = 'Declined: no data access (honest)';
-          baseVerdictEl.className   = 'ask-verdict abstained';
         } else if (baseHallucinated) {
           // Confident wrong answer → true hallucination
           baseVerdictEl.textContent = '✗ Hallucinated: confident wrong answer';
           baseVerdictEl.className   = 'ask-verdict wrong';
+        } else if (baseAbstained) {
+          // Honest decline: no data access → not a hallucination
+          baseVerdictEl.textContent = 'Declined: no data access (honest)';
+          baseVerdictEl.className   = 'ask-verdict abstained';
         } else {
           baseVerdictEl.textContent = 'Answered';
           baseVerdictEl.className   = 'ask-verdict';
