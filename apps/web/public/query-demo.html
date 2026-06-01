@@ -722,6 +722,15 @@
     .example-card {
       background: var(--surface);
       padding: 1.5rem;
+      /* flex column so the verdict / verified footer pins to the bottom and the
+         two cards in a row line their footers up regardless of answer length */
+      display: flex;
+      flex-direction: column;
+      /* allow the grid item to shrink and long base58 strings to wrap instead
+         of overflowing the card */
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .example-side-label {
@@ -740,10 +749,16 @@
       margin-bottom: 10px;
       padding-bottom: 10px;
       border-bottom: 1px solid var(--border);
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .example-answer {
       font-size: 13px; color: var(--text); line-height: 1.55; font-weight: 500;
+      /* grow to fill the card height so the footer below pins to the bottom */
+      flex: 1 1 auto;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .example-empty {
@@ -1016,6 +1031,14 @@
     .ask-result-panel {
       background: var(--surface);
       padding: 1.4rem;
+      /* column layout so the verdict footer pins to the bottom and the two
+         panels line their footers up regardless of answer length */
+      display: flex;
+      flex-direction: column;
+      /* let the grid item shrink and long base58 strings wrap, not overflow */
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .ask-result-label {
@@ -1029,6 +1052,10 @@
 
     .ask-result-body {
       font-size: 13px; line-height: 1.55; color: var(--text-2); font-weight: 500;
+      /* grow to fill the panel so the verdict below it sits at the bottom */
+      flex: 1 1 auto;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .ask-grounded-tag {

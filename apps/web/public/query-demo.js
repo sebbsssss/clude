@@ -29,6 +29,44 @@
     return d.innerHTML;
   }
 
+  // Client-side mirror of the server's isAbstention (solana-grading.ts). Used only
+  // as a fallback when the API/fixture didn't supply an `abstained` flag. A model
+  // that says "I don't have access, use an explorer" is declining, NOT fabricating.
+  function isAbstainText(s) {
+    const a = String(s == null ? '' : s).toLowerCase();
+    return (
+      a.indexOf('not enough information') > -1 ||
+      a.indexOf("don't know") > -1 ||
+      a.indexOf('do not know') > -1 ||
+      a.indexOf('cannot determine') > -1 ||
+      a.indexOf("can't determine") > -1 ||
+      a.indexOf('no information') > -1 ||
+      a.indexOf('unable to') > -1 ||
+      a.indexOf("don't have") > -1 ||
+      a.indexOf('do not have') > -1 ||
+      a.indexOf('cannot provide') > -1 ||
+      a.indexOf("can't provide") > -1 ||
+      a.indexOf('cannot access') > -1 ||
+      a.indexOf("can't access") > -1 ||
+      a.indexOf('no access') > -1 ||
+      a.indexOf('without access') > -1 ||
+      a.indexOf("can't look up") > -1 ||
+      a.indexOf('cannot look up') > -1 ||
+      a.indexOf("can't query") > -1 ||
+      a.indexOf('cannot query') > -1 ||
+      a.indexOf("i'm not able") > -1 ||
+      a.indexOf('i am not able') > -1 ||
+      a.indexOf('no real-time') > -1 ||
+      a.indexOf('no realtime') > -1 ||
+      a.indexOf('you can use a') > -1 ||
+      a.indexOf('you can check') > -1 ||
+      a.indexOf('use a solana explorer') > -1 ||
+      a.indexOf('use a block explorer') > -1 ||
+      a.indexOf('check a block explorer') > -1 ||
+      a.indexOf('check an explorer') > -1
+    );
+  }
+
   /** Format an integer with commas; >= 1B appends B suffix, >= 1M appends M suffix */
   function fmtTokens(n) {
     if (typeof n !== 'number' || isNaN(n)) return '…';
@@ -625,17 +663,23 @@
       const baseAns    = (ex.baseline && ex.baseline.answer) || '…';
       const sourceRef  = ex.sourceRef || null;
       const groundTruth = ex.groundTruth || null;
-      // Detect honest baseline decline vs hallucination
-      const hallucinated  = ex.hallucinated === true;
-      const baseAbstained = /not enough information|i don'?t know|cannot determine|no information|abstain|don't have access|no data/i.test(baseAns);
+      // Honest decline vs hallucination. Trust the fixture's flags (written from
+      // the shared grader); fall back to a text check for older fixtures.
+      const baseAbstained = (ex.baseline && typeof ex.baseline.abstained === 'boolean')
+        ? ex.baseline.abstained
+        : isAbstainText(baseAns);
+      const hallucinated = (ex.baseline && typeof ex.baseline.hallucinated === 'boolean')
+        ? ex.baseline.hallucinated
+        : (ex.hallucinated === true && !baseAbstained);
 
+      const VERDICT_STYLE = 'font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);';
       let baseVerdictHtml = '';
       if (ex.baseline && ex.baseline.correct === true) {
-        baseVerdictHtml = '<div class="ask-verdict correct" style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);">✓ Correct</div>';
-      } else if (hallucinated) {
-        baseVerdictHtml = '<div class="ask-verdict wrong" style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);">✗ Hallucinated: confident wrong answer</div>';
+        baseVerdictHtml = '<div class="ask-verdict correct" style="' + VERDICT_STYLE + '">✓ Correct</div>';
       } else if (baseAbstained) {
-        baseVerdictHtml = '<div class="ask-verdict abstained" style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);">Declined: no data access (honest)</div>';
+        baseVerdictHtml = '<div class="ask-verdict abstained" style="' + VERDICT_STYLE + '">Declined: no data access (honest)</div>';
+      } else if (hallucinated) {
+        baseVerdictHtml = '<div class="ask-verdict wrong" style="' + VERDICT_STYLE + '">✗ Hallucinated: confident wrong answer</div>';
       }
 
       const solscanHtml = buildSolscanHtml(sourceRef);
@@ -838,7 +882,6 @@
       const baseAns      = (d.baseline && d.baseline.answer) || '(no answer)';
       const cludeOk      = d.clude    && d.clude.correct === true;
       const baseOk       = d.baseline && d.baseline.correct === true;
-      const hallucinated = d.hallucinated;
       const groundTruth  = d.groundTruth || null;
       const grounded     = d.clude && d.clude.grounded; // 'dataset'|'memory'|'none'
       const sourceRef    = d.sourceRef || null; // e.g. "block:123456" | "tx:<sig>" | null
@@ -865,7 +908,10 @@
         }
       }
 
-      const cludeAbstained = /not enough information|i don'?t know|cannot determine|no information|abstain/i.test(cludeAns);
+      // Trust the API's abstained flag (shared grader); fall back to a regex.
+      const cludeAbstained = (d.clude && typeof d.clude.abstained === 'boolean')
+        ? d.clude.abstained
+        : isAbstainText(cludeAns);
 
       if (cludeVerdictEl) {
         if (cludeAbstained) {
@@ -940,21 +986,27 @@
       const baseVerdictEl = $('askBaseVerdict');
       if (baseAnswerEl)  baseAnswerEl.textContent  = baseAns;
 
-      // Detect abstention pattern in baseline answer
-      const baseAbstained = /not enough information|i don'?t know|cannot determine|no information|abstain|don't have access|no data/i.test(baseAns);
+      // Trust the API's flags (shared grader). baseline.hallucinated is the
+      // baseline's own flag (NOT d.hallucinated, which is Clude's).
+      const baseAbstained = (d.baseline && typeof d.baseline.abstained === 'boolean')
+        ? d.baseline.abstained
+        : isAbstainText(baseAns);
+      const baseHallucinated = (d.baseline && typeof d.baseline.hallucinated === 'boolean')
+        ? d.baseline.hallucinated
+        : (baseOk === false && !baseAbstained);
 
       if (baseVerdictEl) {
         if (baseOk) {
           baseVerdictEl.textContent = '✓ Correct';
           baseVerdictEl.className   = 'ask-verdict correct';
-        } else if (hallucinated) {
-          // API confirmed: confident wrong answer → true hallucination
-          baseVerdictEl.textContent = '✗ Hallucinated: confident wrong answer';
-          baseVerdictEl.className   = 'ask-verdict wrong';
         } else if (baseAbstained) {
           // Honest decline: no data access → not a hallucination
           baseVerdictEl.textContent = 'Declined: no data access (honest)';
           baseVerdictEl.className   = 'ask-verdict abstained';
+        } else if (baseHallucinated) {
+          // Confident wrong answer → true hallucination
+          baseVerdictEl.textContent = '✗ Hallucinated: confident wrong answer';
+          baseVerdictEl.className   = 'ask-verdict wrong';
         } else {
           baseVerdictEl.textContent = 'Answered';
           baseVerdictEl.className   = 'ask-verdict';

@@ -316,9 +316,13 @@ export function proofRoutes(): Router {
         ? gradeAnswer(category, gold, baselineAnswer)
         : null;
 
-      // A hallucination is: Clude gave a confident wrong answer (not an abstention)
-      const hallucinated =
-        cludeCorrect === false && !isAbstention(cludeAnswer);
+      // Abstention is the single source of truth for "honest decline vs fabrication".
+      const cludeAbstained = isAbstention(cludeAnswer);
+      const baselineAbstained = isAbstention(baselineAnswer);
+
+      // A hallucination is a confident WRONG answer (graded false AND not an abstention).
+      const hallucinated = cludeCorrect === false && !cludeAbstained;
+      const baselineHallucinated = baselineCorrect === false && !baselineAbstained;
 
       const payload = {
         question: query,
@@ -327,12 +331,15 @@ export function proofRoutes(): Router {
         clude: {
           answer: cludeAnswer,
           correct: cludeCorrect,
+          abstained: cludeAbstained,
           recalledCount: groundedFrom === 'memory' ? mems.length : groundedFrom === 'dataset' ? 1 : 0,
           grounded: groundedFrom,
         },
         baseline: {
           answer: baselineAnswer,
           correct: baselineCorrect,
+          abstained: baselineAbstained,
+          hallucinated: baselineHallucinated,
         },
         hallucinated,
       };

@@ -35,9 +35,31 @@ const BASE = process.env.PROOF_BASE || 'https://cludebot-test-preview.up.railway
 const PER_CAT = Number(process.env.PER_CAT || 10);
 const PACE_MS = Number(process.env.PACE_MS || 6500);
 
-// Same abstention shape the frontend/grader use, to classify baseline declines.
-const ABSTAIN =
-  /not enough information|i don'?t know|cannot determine|no information|abstain|don'?t have (verified|access|enough)|no (verified )?data|do not have|unable to/i;
+// Fallback abstention regex mirroring packages/shared isAbstention. Only used
+// when the endpoint does not return baseline.abstained (older deploys). A model
+// that says "I don't have access, use an explorer" is declining, not fabricating.
+const ABSTAIN = new RegExp(
+  [
+    "don'?t (have|know)",
+    'do not (have|know)',
+    "(can'?t|cannot|unable to|not able to) (determine|provide|access|look up|verify|find|query|confirm|tell)",
+    'not enough info',
+    'no information',
+    'insufficient',
+    'no access',
+    'without access',
+    "(don'?t|do not) have (access|the ability|real-?time|enough)",
+    'no real-?time',
+    "i'?m not able",
+    'i am not able',
+    'use (a|an|the)? ?(solana |block )?explorer',
+    'check (a|an|the)? ?(block )?explorer',
+    'you can (use|check)',
+    "you'?ll need to",
+    'you would need to',
+  ].join('|'),
+  'i',
+);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -97,15 +119,25 @@ async function main() {
     const r = await ask(it.id);
     if (r) {
       const baseAns = (r.baseline && r.baseline.answer) || '';
-      const baseAbstained = ABSTAIN.test(baseAns);
-      const baselineHall = r.baseline && r.baseline.correct === false && !baseAbstained;
+      const cludeAns = (r.clude && r.clude.answer) || '';
+      // Prefer the server's authoritative flags (shared isAbstention grader);
+      // fall back to the local regex only for older endpoints.
+      const baseAbstained = (r.baseline && typeof r.baseline.abstained === 'boolean')
+        ? r.baseline.abstained
+        : ABSTAIN.test(baseAns);
+      const baselineHall = (r.baseline && typeof r.baseline.hallucinated === 'boolean')
+        ? r.baseline.hallucinated
+        : (r.baseline && r.baseline.correct === false && !baseAbstained);
+      const cludeAbstained = (r.clude && typeof r.clude.abstained === 'boolean')
+        ? r.clude.abstained
+        : ABSTAIN.test(cludeAns);
       rows.push({
         question: r.question || it.question,
         category: it.category,
         sourceRef: r.sourceRef || it.sourceRef || null,
         groundTruth: r.groundTruth ?? it.gold ?? null,
-        clude: { answer: (r.clude && r.clude.answer) || '', correct: r.clude ? r.clude.correct : null },
-        baseline: { answer: baseAns, correct: r.baseline ? r.baseline.correct : null },
+        clude: { answer: cludeAns, correct: r.clude ? r.clude.correct : null, abstained: cludeAbstained },
+        baseline: { answer: baseAns, correct: r.baseline ? r.baseline.correct : null, abstained: baseAbstained, hallucinated: !!baselineHall },
         cludeHall: r.hallucinated === true,
         baselineHall: !!baselineHall,
         baseAbstained,
@@ -200,8 +232,8 @@ async function main() {
     category: x.category,
     sourceRef: x.sourceRef,
     groundTruth: x.groundTruth,
-    clude: { answer: x.clude.answer, correct: x.clude.correct },
-    baseline: { answer: x.baseline.answer, correct: x.baseline.correct },
+    clude: { answer: x.clude.answer, correct: x.clude.correct, abstained: x.clude.abstained },
+    baseline: { answer: x.baseline.answer, correct: x.baseline.correct, abstained: x.baseAbstained, hallucinated: x.baselineHall },
     hallucinated: x.baselineHall,
   }));
   fs.writeFileSync(EXAMPLES_OUT, JSON.stringify(examples, null, 2) + '\n');
