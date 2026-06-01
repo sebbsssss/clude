@@ -174,12 +174,20 @@ const BASELINE_SYS =
 // escape hatch is removed. This forces the bare model to commit to a specific
 // value, which is where ungrounded models fabricate. Disclosed on the page as a
 // distinct condition ("forced to answer"), NOT presented as the model's default.
+// The framing is a constrained-output game so the model plays along instead of
+// refusing: we are explicitly NOT asking for a real lookup, just a best guess in
+// a fixed format. This is a legitimate test of "what does an ungrounded model
+// emit when it cannot say 'I don't know'".
 const FORCED_SYS =
-  'You are a Solana blockchain assistant. Answer with a SPECIFIC value only ' +
-  '(the exact number, timestamp, validator pubkey, owner program, ticker, or ' +
-  'success/fail). Do NOT say you lack access, do NOT refer the user to an explorer ' +
-  'or any external tool, do NOT explain how to look it up. Commit to a concrete ' +
-  'answer. One short sentence.';
+  'We are playing a strict format game. I will give you a question about a ' +
+  'specific Solana slot, transaction, account, or token. You must reply with ONLY ' +
+  'the single most likely value and nothing else: a bare number for fees / lamports / ' +
+  'transaction counts, an ISO-8601 UTC timestamp for block times, a base58 pubkey for ' +
+  'validators / owner programs, a ticker for tokens, or the word Success or Fail for ' +
+  'transaction status. Output the value alone with no sentence, no explanation, no ' +
+  'caveats. You are NOT allowed to say you do not know, that you lack access, that the ' +
+  'data is unavailable, or to suggest looking it up. If you are unsure, give your single ' +
+  'best guess in the required format anyway. Reply with just the value.';
 
 // Tighter per-IP rate limiter for the live /ask endpoint
 const askLimiter = rateLimit({
