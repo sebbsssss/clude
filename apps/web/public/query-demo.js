@@ -1060,19 +1060,25 @@
         }
       }
 
-      // Headline comparison: when both are correct, lead with the cost gap.
+      // Headline comparison: when both are correct, lead with the cost gap, then the
+      // scale argument (the real point — this 706-fact window is a toy; the real corpus
+      // is 250B+ Solana transactions that cannot fit in any prompt).
       var compareEl = $('askCompare');
       if (compareEl) {
+        var scaleNote = '<div style="margin-top:0.9rem;padding-top:0.9rem;border-top:1px solid rgba(34,68,255,0.2);font-size:13px;color:var(--muted);">' +
+          'And this is only ' + fmtInt(d.dumpAll && d.dumpAll.factsInContext ? d.dumpAll.factsInContext : 706) + ' facts, small enough to fit in a prompt so you can watch it. ' +
+          'The real Solana chain is <strong style="color:var(--text);">250B+ transactions</strong> and ~70M more per day. ' +
+          'You cannot dump that into any context window, at any price. Clude still reads just the one fact it needs, so its cost stays flat as the data grows.' +
+          '</div>';
         if (useDump && cludeOk && baseOk && cludeTok && rightTok && cludeTok > 0) {
           var ratio = Math.round(rightTok / cludeTok);
           compareEl.innerHTML = 'Both got the right answer. Clude read <strong style="color:var(--blue);">' + fmtInt(cludeTok) +
             '</strong> tokens; the same model reading all the data used <strong>' + fmtInt(rightTok) +
-            '</strong>. That is <strong style="color:var(--blue);">' + ratio + '× fewer tokens</strong> for the same answer. ' +
-            'At 3 EB of on-chain data you cannot fit it in a prompt at all; retrieval is the only way.';
+            '</strong>. That is <strong style="color:var(--blue);">' + ratio + '× fewer tokens</strong> for the same answer.' + scaleNote;
           compareEl.style.display = 'block';
         } else if (useDump && cludeOk && !baseOk) {
           compareEl.innerHTML = 'Clude retrieved the exact fact and answered correctly. The same model, given all the data, ' +
-            'could not pin it down in the noise. Retrieval is not just cheaper here, it is more reliable.';
+            'could not pin it down in the noise. Retrieval is not just cheaper, it is more reliable as the pile grows.' + scaleNote;
           compareEl.style.display = 'block';
         } else {
           compareEl.style.display = 'none';
