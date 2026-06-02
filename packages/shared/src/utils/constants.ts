@@ -36,6 +36,13 @@ export const RETRIEVAL_WEIGHT_RELEVANCE = 2.0;          // Keyword relevance
 export const RETRIEVAL_WEIGHT_IMPORTANCE = 2.0;         // Importance stays the same
 export const RETRIEVAL_WEIGHT_VECTOR = 4.0;             // Vector similarity dominates when available (works well for diverse memory corpus)
 
+// BM25 (exact lexical) boost added to a memory's score when full-text search found it.
+// Default 0.15 preserves the historical "small BM25-found bonus". Env-tunable because a
+// near-identical-sentence corpus (e.g. many "Solana slot N had X" facts that differ only
+// by an ID) needs lexical match to OUTRANK topically-similar vector hits — set higher there.
+// At the default this is byte-identical to prior behavior; production is unaffected unless set.
+export const RETRIEVAL_WEIGHT_BM25 = Number(process.env.RETRIEVAL_WEIGHT_BM25 ?? '0.15');
+
 // Knowledge type boost — semantic/procedural/self_model rank higher than raw episodic
 export const KNOWLEDGE_TYPE_BOOST: Record<string, number> = {
   semantic:   0.15,    // Distilled knowledge gets meaningful boost

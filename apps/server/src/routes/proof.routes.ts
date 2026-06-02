@@ -132,6 +132,20 @@ const { results: _hallucinationResults, examples: _hallucinationExamples, qa: _h
 // Build a quick lookup map: id → QA item
 const _qaById = new Map(_hallucinationQa.map((q) => [q.id, q]));
 
+// "Dump all the data" context: every QA fact as a one-line statement, built once at
+// module load. Used for the same-model-with-all-the-data column in the live ask demo —
+// the fair apples-to-apples comparison (both have the answer; Clude just reads less).
+// Capped so a pathologically large dataset can't blow the prompt; the frozen set is ~706.
+const DUMP_ALL_MAX_FACTS = 800;
+function qaFactStatement(q: { category: string; question: string; gold: string }): string {
+  // Reuse the question text + answer as a compact fact line: "Q -> A".
+  return `${q.question} ${q.gold}`;
+}
+const dumpAllFactCount = Math.min(_hallucinationQa.length, DUMP_ALL_MAX_FACTS);
+const dumpAllContext = _hallucinationQa.length > 0
+  ? _hallucinationQa.slice(0, DUMP_ALL_MAX_FACTS).map(qaFactStatement).join('\n')
+  : '';
+
 // Cache for /ask responses to avoid redundant LLM calls (normalized question → response)
 const _askCache = new Map<string, object>();
 
@@ -310,10 +324,18 @@ export function proofRoutes(): Router {
         groundedFrom = 'none';
       }
 
-      const [cludeAnswer, baselineAnswer, forcedAnswer] = await Promise.all([
+      // The Clude prompt: system + the single recalled/grounded fact + the question.
+      const cludeUser = `Context:\n${ctx}\n\nQuestion: ${query}\n\nAnswer:`;
+      // The "given all the data" prompt: same model, but the ENTIRE dataset dumped into
+      // context (what you'd do without a retrieval layer). This is the fair apples-to-
+      // apples comparison: both have the answer available, the difference is HOW MUCH
+      // context the model must read. dumpAllContext is built once at module load.
+      const dumpUser = `Solana mainnet data (Google BigQuery snapshot, frozen 2025-03-31):\n${dumpAllContext}\n\nQuestion: ${query}\n\nAnswer using only the data above.`;
+
+      const [cludeAnswer, baselineAnswer, forcedAnswer, dumpAnswer] = await Promise.all([
         generateOpenRouterResponse({
           systemPrompt: GROUNDED_SYS,
-          messages: [{ role: 'user', content: `Context:\n${ctx}\n\nQuestion: ${query}\n\nAnswer:` }],
+          messages: [{ role: 'user', content: cludeUser }],
           model,
           temperature: 0,
           maxTokens: 200,
@@ -333,6 +355,16 @@ export function proofRoutes(): Router {
           temperature: 0,
           maxTokens: 200,
         }),
+        // Dump-all condition: same model, given the full dataset (only when we have one).
+        dumpAllContext
+          ? generateOpenRouterResponse({
+              systemPrompt: GROUNDED_SYS,
+              messages: [{ role: 'user', content: dumpUser }],
+              model,
+              temperature: 0,
+              maxTokens: 200,
+            })
+          : Promise.resolve(''),
       ]);
 
       // Grade if we have ground truth
@@ -345,6 +377,16 @@ export function proofRoutes(): Router {
       const forcedCorrect = gold !== null && category !== null
         ? gradeAnswer(category, gold, forcedAnswer)
         : null;
+      const dumpCorrect = gold !== null && category !== null && dumpAnswer
+        ? gradeAnswer(category, gold, dumpAnswer)
+        : null;
+
+      // Input-token estimates (~4 chars/token) for the cost comparison. Clude reads only
+      // the recalled fact; dump-all reads the entire dataset. Estimated rather than from
+      // the API so we don't have to thread usage through the shared client.
+      const estTokens = (s: string) => Math.round((s || '').length / 4);
+      const cludeInTokens = estTokens(GROUNDED_SYS + cludeUser);
+      const dumpInTokens = dumpAllContext ? estTokens(GROUNDED_SYS + dumpUser) : 0;
 
       // Abstention is the single source of truth for "honest decline vs fabrication".
       const cludeAbstained = isAbstention(cludeAnswer);
@@ -366,7 +408,19 @@ export function proofRoutes(): Router {
           abstained: cludeAbstained,
           recalledCount: groundedFrom === 'memory' ? mems.length : groundedFrom === 'dataset' ? 1 : 0,
           grounded: groundedFrom,
+          inputTokens: cludeInTokens,
         },
+        // Same model, given the ENTIRE dataset in context (no retrieval layer). The fair
+        // comparison: both can find the answer; Clude just reads far fewer tokens.
+        dumpAll: dumpAllContext
+          ? {
+              answer: dumpAnswer,
+              correct: dumpCorrect,
+              abstained: isAbstention(dumpAnswer),
+              inputTokens: dumpInTokens,
+              factsInContext: dumpAllFactCount,
+            }
+          : null,
         baseline: {
           answer: baselineAnswer,
           correct: baselineCorrect,
