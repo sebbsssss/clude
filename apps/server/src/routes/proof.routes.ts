@@ -87,6 +87,7 @@ async function computePayload(): Promise<TokensSavedPayload> {
   const measuredToday = Number(row.measured_today || 0);
   const measuredFrontier = Number(row.measured_frontier || 0);
   const historicalPromptSum = Number(row.historical_prompt_sum || 0);
+  const measuredN = Number(row.n || 0);
 
   // Estimated lifetime tokens saved across ALL Clude usage (SDK, bot, chat, agents),
   // not only the chat_messages this server sees. Disclosed estimate; env-overridable.
@@ -94,10 +95,13 @@ async function computePayload(): Promise<TokensSavedPayload> {
   const baselineSeed = Number(process.env.PROOF_BASELINE_SEED ?? '1680000000');
   const baselineEstimated = baselineSeed + Math.round(historicalPromptSum * BASELINE_RATIO);
   const totalSaved = measuredSaved + baselineEstimated;
-  // Use the measured ratio only once real savings have accrued. Sparse early-turn
-  // data has tokens_saved=0 (first turns have no prior transcript to save), which
-  // would otherwise show a misleading 0%; until then show the documented estimate.
-  const avgSavingsPct = measuredSaved > 0 && measuredFrontier > 0
+  // Show the documented at-scale figure (BASELINE_RATIO, ~82%) until the measured
+  // sample is large enough to be representative. A tiny early sample (e.g. n=9) produces
+  // a noisy ratio that undercuts the real high-usage rate, and sparse first-turn rows
+  // (tokens_saved=0, no prior transcript) bias it low. Switch to the live measured ratio
+  // only past PROOF_MIN_SAMPLE messages so the headline number is stable and honest.
+  const minSample = Number(process.env.PROOF_MIN_SAMPLE ?? '500');
+  const avgSavingsPct = measuredN >= minSample && measuredSaved > 0 && measuredFrontier > 0
     ? Math.round((measuredSaved / measuredFrontier) * 100)
     : FALLBACK_AVG_PCT;
 
