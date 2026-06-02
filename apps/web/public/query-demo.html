@@ -227,43 +227,64 @@
     }
 
     /* ── SHOUT-OUT CALLOUTS (savings + grounding concept) ── */
+    /* Stacked as two full-width rows (savings, then never-fabricate). */
     .shout-row {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1fr;
       gap: 2px;
       background: var(--border);
       margin-bottom: 3rem;
     }
 
+    /* Row layout: big number left, copy fills the full remaining width. */
     .shout-card {
       background: var(--bg-warm);
-      padding: 3rem 2.5rem;
+      padding: 3rem 3.5rem;
+      display: flex;
+      align-items: center;
+      gap: 3.5rem;
+    }
+    .shout-card-num { flex: 0 0 auto; }
+    .shout-card-body {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
     }
 
     .shout-num {
       font-family: var(--mono);
-      font-size: clamp(56px, 8vw, 112px);
+      font-size: clamp(72px, 11vw, 168px);
       font-weight: 800;
       letter-spacing: -0.04em;
-      line-height: 1;
+      line-height: 0.92;
       font-variant-numeric: tabular-nums;
       font-feature-settings: "tnum" 1;
-      margin-bottom: 12px;
     }
     .shout-num.green { color: var(--green); }
-    .shout-num.blue  { color: var(--blue);  }
+    /* The text-style callout ("Never fabricate.") is intrinsically wider than a
+       short stat, so size it down a touch and use the sans face so it reads as a
+       statement and leaves the body copy room to stretch across the card. */
+    .shout-num.blue  {
+      color: var(--blue);
+      font-family: var(--sans);
+      font-size: clamp(52px, 7vw, 104px);
+      line-height: 0.96;
+    }
 
     .shout-label {
       font-family: var(--sans);
-      font-size: 18px; font-weight: 700;
-      color: var(--text); margin-bottom: 8px;
-      line-height: 1.2;
+      font-size: clamp(22px, 2.6vw, 34px); font-weight: 800;
+      color: var(--text);
+      line-height: 1.12;
+      letter-spacing: -0.02em;
     }
 
     .shout-sub {
       font-family: var(--mono);
-      font-size: 11px; color: var(--muted);
-      letter-spacing: 1px; line-height: 1.5;
+      font-size: 14px; color: var(--muted);
+      letter-spacing: 0.5px; line-height: 1.6;
     }
 
     .shout-sub em { font-style: normal; color: var(--faint); }
@@ -690,6 +711,65 @@
     }
     .cat-mini-fill { height: 100%; background: var(--green); transition: width 0.7s ease; }
 
+    /* ── HOW CLUDE DOES IT — 3-step mechanism strip ── */
+    .how-strip {
+      border: 1px solid var(--border);
+      background: var(--bg-warm);
+      margin-bottom: 2.5rem;
+    }
+    .how-strip-title {
+      font-family: var(--mono);
+      font-size: 11px; font-weight: 700;
+      letter-spacing: 2.5px; text-transform: uppercase;
+      color: var(--blue);
+      padding: 1.1rem 1.5rem 0;
+    }
+    .how-steps {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 1px;
+      background: var(--border);
+      margin: 1.1rem 0 0;
+      border-top: 1px solid var(--border);
+    }
+    .how-step {
+      background: var(--bg-warm);
+      padding: 1.4rem 1.5rem 1.6rem;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .how-step-n {
+      font-family: var(--mono);
+      font-size: 11px; font-weight: 700; letter-spacing: 2px;
+      color: var(--blue);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .how-step-n .num {
+      width: 22px; height: 22px; border-radius: 50%;
+      border: 1.5px solid var(--blue); color: var(--blue);
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 11px; flex-shrink: 0;
+    }
+    .how-step-title {
+      font-family: var(--sans);
+      font-size: 16px; font-weight: 800; color: var(--text);
+      letter-spacing: -0.01em; line-height: 1.2;
+    }
+    .how-step-body {
+      font-size: 13px; color: var(--muted); line-height: 1.6; font-weight: 500;
+    }
+    .how-step-body code {
+      font-family: var(--mono); font-size: 11px;
+      background: var(--bg-deep); padding: 1px 5px; border: 1px solid var(--border);
+      overflow-wrap: anywhere;
+    }
+    .how-strip-foot {
+      font-family: var(--mono);
+      font-size: 11px; color: var(--muted); letter-spacing: 0.5px; line-height: 1.6;
+      padding: 1.1rem 1.5rem;
+      border-top: 1px solid var(--border);
+    }
+    .how-strip-foot strong { color: var(--text); font-weight: 700; }
+
     /* ── SIDE-BY-SIDE EXAMPLES (grounding) ── */
 
     /* Clear labels above the grid */
@@ -721,6 +801,15 @@
     .example-card {
       background: var(--surface);
       padding: 1.5rem;
+      /* flex column so the verdict / verified footer pins to the bottom and the
+         two cards in a row line their footers up regardless of answer length */
+      display: flex;
+      flex-direction: column;
+      /* allow the grid item to shrink and long base58 strings to wrap instead
+         of overflowing the card */
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .example-side-label {
@@ -739,10 +828,16 @@
       margin-bottom: 10px;
       padding-bottom: 10px;
       border-bottom: 1px solid var(--border);
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .example-answer {
       font-size: 13px; color: var(--text); line-height: 1.55; font-weight: 500;
+      /* grow to fill the card height so the footer below pins to the bottom */
+      flex: 1 1 auto;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .example-empty {
@@ -1015,6 +1110,14 @@
     .ask-result-panel {
       background: var(--surface);
       padding: 1.4rem;
+      /* column layout so the verdict footer pins to the bottom and the two
+         panels line their footers up regardless of answer length */
+      display: flex;
+      flex-direction: column;
+      /* let the grid item shrink and long base58 strings wrap, not overflow */
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .ask-result-label {
@@ -1028,6 +1131,10 @@
 
     .ask-result-body {
       font-size: 13px; line-height: 1.55; color: var(--text-2); font-weight: 500;
+      /* grow to fill the panel so the verdict below it sits at the bottom */
+      flex: 1 1 auto;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .ask-grounded-tag {
@@ -1198,6 +1305,7 @@
       .section { padding: 3rem 0; }
       .vis-comparison      { grid-template-columns: 1fr; }
       .vis-before-after    { grid-template-columns: 1fr; }
+      .how-steps           { grid-template-columns: 1fr; }
       .examples-header     { grid-template-columns: 1fr; }
       .examples-grid       { grid-template-columns: 1fr; }
       .ask-result-header   { grid-template-columns: 1fr; }
@@ -1206,9 +1314,10 @@
       .grounding-live-stats{ grid-template-columns: 1fr; }
       .counter-block       { flex-direction: column; align-items: flex-start; gap: 2rem; }
       .counter-secondary   { flex-direction: row; gap: 2rem; }
-      .shout-row           { grid-template-columns: 1fr; }
       .grounding-concept   { flex-direction: column; gap: 1.5rem; }
       .grounding-concept-right { align-items: flex-start; }
+      /* Stack the number above the copy on narrow screens. */
+      .shout-card { flex-direction: column; align-items: flex-start; gap: 1.25rem; padding: 2.25rem 1.75rem; }
     }
     @media (max-width: 480px) {
       .counter-secondary { flex-direction: column; gap: 1.2rem; }
@@ -1365,14 +1474,18 @@
     <!-- Two big shout-out callouts -->
     <div class="shout-row" style="margin-top:4rem;">
       <div class="shout-card">
-        <div class="shout-num green" id="shoutSavingsPct">~82%</div>
-        <div class="shout-label">fewer tokens per session<br>at scale</div>
-        <div class="shout-sub">Measured from live chat sessions.<br><em id="shoutSavingsSource">Live rate updates as chats run.</em></div>
+        <div class="shout-card-num"><div class="shout-num green" id="shoutSavingsPct">~82%</div></div>
+        <div class="shout-card-body">
+          <div class="shout-label">fewer tokens per session, at scale</div>
+          <div class="shout-sub">Measured from live chat sessions. <em id="shoutSavingsSource">Live rate updates as chats run.</em></div>
+        </div>
       </div>
       <div class="shout-card">
-        <div class="shout-num blue">Never<br>fabricate.</div>
-        <div class="shout-label">Grounded or abstain.<br>Always.</div>
-        <div class="shout-sub">Clude answers from verified memory<br>or says "I don't know." No guessing.</div>
+        <div class="shout-card-num"><div class="shout-num blue">Never<br>fabricate.</div></div>
+        <div class="shout-card-body">
+          <div class="shout-label">Grounded or abstain.<br>Always.</div>
+          <div class="shout-sub">Clude answers from verified memory or says &ldquo;I don&rsquo;t know.&rdquo; No guessing.</div>
+        </div>
       </div>
     </div>
   </div>
@@ -1509,15 +1622,52 @@
     <div class="grounding-concept">
       <div class="grounding-concept-left">
         <div class="grounding-concept-headline">
-          Grounded or abstain.<br><span class="accent">Never fabricate.</span>
+          Same model. Same question.<br><span class="accent">Clude is the only variable.</span>
         </div>
         <p class="grounding-concept-body">
-          Clude consumes the on-chain data into local memory and answers by traversing that memory,
-          not by querying BigQuery at request time. Same model (Claude Haiku 4.5), with vs without
-          that memory: with it, Clude answers straight from the data; without it, a model can only
-          decline or guess. Abstaining ("I don't know") counts as <em>not</em> hallucinating, the right
-          behavior when the fact is not in memory. Clude is optimised for grounded-or-abstain, never guess.
+          This is an apples-to-apples test. Both columns are the exact same model (Claude Haiku 4.5)
+          answering the exact same question. The only difference is whether <strong>Clude's memory layer
+          retrieved the fact</strong> and put it in context. With Clude, the model answers precisely and
+          you can verify it on Solscan. Without it, the model has no way to know a specific historical
+          on-chain value, so it either declines (honest) or guesses (a hallucination). Clude is what turns
+          "can't answer" into "answers correctly."
         </p>
+      </div>
+    </div>
+
+    <!-- How Clude does it — 3-step mechanism strip -->
+    <div class="how-strip">
+      <div class="how-strip-title">How Clude does it</div>
+      <div class="how-steps">
+        <div class="how-step">
+          <div class="how-step-n"><span class="num">1</span> Ingest</div>
+          <div class="how-step-title">Store the data as memory</div>
+          <div class="how-step-body">
+            Solana on-chain facts from Google BigQuery are written into Clude's memory once, each as a
+            typed, embedded memory. No live query at answer time.
+          </div>
+        </div>
+        <div class="how-step">
+          <div class="how-step-n"><span class="num">2</span> Recall</div>
+          <div class="how-step-title">Retrieve the relevant fact</div>
+          <div class="how-step-body">
+            At question time, Clude runs hybrid <code>vector + keyword</code> recall over its memory and
+            surfaces the few memories that actually answer the question.
+          </div>
+        </div>
+        <div class="how-step">
+          <div class="how-step-n"><span class="num">3</span> Ground</div>
+          <div class="how-step-title">Answer only from what it found</div>
+          <div class="how-step-body">
+            The recalled fact goes into the model's context. It answers from that, or says "I don't know"
+            if recall came back empty. It never guesses.
+          </div>
+        </div>
+      </div>
+      <div class="how-strip-foot">
+        The right-hand column is that <strong>same model with step 2 removed</strong>: no memory, no
+        retrieved fact. That is the honest comparison. Not "Clude has a database and the model doesn't,"
+        but "the memory layer either found the fact or it didn't."
       </div>
     </div>
 
@@ -1574,13 +1724,13 @@
 
       <!-- Column headers for result (hidden until result appears) -->
       <div class="ask-result-header" id="askResultHeader" style="display:none;">
-        <div class="ask-result-header-cell clude">&#x2713;&nbsp; Clude: grounded in Solana data</div>
-        <div class="ask-result-header-cell base">Same model &middot; no access to the data</div>
+        <div class="ask-result-header-cell clude">&#x2713;&nbsp; Model + Clude memory</div>
+        <div class="ask-result-header-cell base">Same model &middot; memory removed</div>
       </div>
 
       <div class="ask-result" id="askResult">
         <div class="ask-result-panel">
-          <div class="ask-result-label clude"><strong>Clude: grounded in Solana data</strong></div>
+          <div class="ask-result-label clude"><strong>Model + Clude memory</strong></div>
           <div class="ask-result-body" id="askCludeAnswer">…</div>
           <div id="askGroundedTag" class="ask-grounded-tag"></div>
           <div class="ask-ground-truth" id="askGroundTruth">
@@ -1590,7 +1740,7 @@
           <div class="ask-verdict" id="askCludeVerdict"></div>
         </div>
         <div class="ask-result-panel">
-          <div class="ask-result-label base"><strong>Same model &middot; no access to the data</strong></div>
+          <div class="ask-result-label base" id="askBaseLabel"><strong>Same model &middot; memory removed</strong></div>
           <div class="ask-result-body" id="askBaseAnswer">…</div>
           <div class="ask-verdict" id="askBaseVerdict"></div>
         </div>
@@ -1599,12 +1749,12 @@
       <!-- Honest framing note — spans the full width of the result table, more prominent -->
       <div id="askFramingNote" style="display:none; margin-top:1.25rem;">
         <p style="font-family:var(--sans); font-size:14px; color:var(--text-2); line-height:1.7; font-weight:500; background:rgba(34,68,255,0.05); border-left:3px solid var(--blue); padding:1.1rem 1.4rem; margin:0;">
-          <strong style="color:var(--text);">Same model, same prompt.</strong> The only difference is whether it has the on-chain fact.
-          Clude retrieves it from memory and answers precisely. Without it, a general model cannot know
-          a specific historical value, so it declines (honest) or guesses (a hallucination).
+          <strong style="color:var(--text);">Same model, same question.</strong> The only difference is whether it has the on-chain fact.
+          Clude retrieves it from memory and answers precisely. The same model with no data, forced to commit to a value,
+          has to guess, and a guess on a specific historical fact is a hallucination.
           <strong style="color:var(--blue);">Clude&rsquo;s memory is what removes the guess.</strong>
-          <em style="color:var(--muted);">The measured hallucination rate comes from the benchmark across many questions; this
-          single live call demonstrates grounding.</em>
+          <em style="color:var(--muted);">Left free to decline, that bare model honestly says it cannot answer; the measured fabrication
+          rate comes from the forced condition across many questions.</em>
         </p>
       </div>
     </div>
@@ -1619,8 +1769,8 @@
 
       <!-- Persistent column header labels (always visible) -->
       <div class="examples-header" id="examplesHeader" style="display:none;">
-        <div class="examples-header-cell clude">&#x2713;&nbsp; Clude: grounded in Solana data</div>
-        <div class="examples-header-cell base">Same model &middot; no access to the data</div>
+        <div class="examples-header-cell clude">&#x2713;&nbsp; Model + Clude memory</div>
+        <div class="examples-header-cell base">Same model, memory removed (forced to answer)</div>
       </div>
 
       <div id="examplesContainer"></div>

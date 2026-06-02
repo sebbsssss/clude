@@ -1,16 +1,73 @@
 [
   {
-    "question": "Did Solana transaction 2P7TW2ypZpUdJHG4tNBowifK376kaQQchGeJD5YN62MuBun6AFepMhvxSvdvm3WoucDRJDox3JAMaYMvw3Jfdttf succeed or fail?",
-    "category": "tx_status",
-    "sourceRef": "tx:2P7TW2ypZpUdJHG4tNBowifK376kaQQchGeJD5YN62MuBun6AFepMhvxSvdvm3WoucDRJDox3JAMaYMvw3Jfdttf",
-    "groundTruth": "Success",
+    "question": "What was the block time (UTC) of Solana slot 328970103?",
+    "category": "block_time",
+    "sourceRef": "block:328970103",
+    "groundTruth": "2025-03-25T00:04:22Z",
     "clude": {
-      "answer": "According to the verified Solana mainnet data, transaction 2P7TW2ypZpUdJHG4tNBowifK376kaQQchGeJD5YN62MuBun6AFepMhvxSvdvm3WoucDRJDox3JAMaYMvw3Jfdttf **succeeded**.",
-      "correct": true
+      "answer": "The block time (UTC) of Solana slot 328970103 was 2025-03-25T00:04:22Z.",
+      "correct": true,
+      "abstained": false
     },
     "baseline": {
-      "answer": "I don't have the ability to query the Solana blockchain or access real-time transaction data. To check if that transaction succeeded or failed, you can use a Solana explorer like [Solscan.io](https://solscan.io), [Solana Beach](https://solanabeach.io), or [Magic Eden](https://magiceden.io) by pasting the transaction signature into the search bar.",
-      "correct": false
+      "answer": "2024-12-19T22:47:32Z",
+      "correct": false,
+      "abstained": false,
+      "hallucinated": true
+    },
+    "hallucinated": true
+  },
+  {
+    "question": "Which validator led Solana slot 328970103?",
+    "category": "block_leader",
+    "sourceRef": "block:328970103",
+    "groundTruth": "q9XWcZ7T1wP4bW9SB4XgNNwjnFEJ982nE8aVbbNuwot",
+    "clude": {
+      "answer": "Based on the verified Solana mainnet data provided, the validator that led Solana slot 328970103 is **q9XWcZ7T1wP4bW9SB4XgNNwjnFEJ982nE8aVbbNuwot**.",
+      "correct": true,
+      "abstained": false
+    },
+    "baseline": {
+      "answer": "7Np41ysQn3M92FmZzWwVVaNVqW4Be5jjquZw5MqYQcT",
+      "correct": false,
+      "abstained": false,
+      "hallucinated": true
+    },
+    "hallucinated": true
+  },
+  {
+    "question": "How many transactions were in Solana slot 328970096?",
+    "category": "block_txcount",
+    "sourceRef": "block:328970096",
+    "groundTruth": "1661",
+    "clude": {
+      "answer": "According to the verified Solana mainnet data, there were **1,661 transactions** in Solana slot 328970096.",
+      "correct": true,
+      "abstained": false
+    },
+    "baseline": {
+      "answer": "2847",
+      "correct": false,
+      "abstained": false,
+      "hallucinated": true
+    },
+    "hallucinated": true
+  },
+  {
+    "question": "What fee in lamports did Solana transaction 2P4iRKsqHKD1GhPFuEYU8NMsWYSgMgbmpM7GcCJrMxxtDdt33nuxtowWujN9xqzcD4rnSHCPhJiYt4psiXKRWb5L pay?",
+    "category": "tx_fee",
+    "sourceRef": "tx:2P4iRKsqHKD1GhPFuEYU8NMsWYSgMgbmpM7GcCJrMxxtDdt33nuxtowWujN9xqzcD4rnSHCPhJiYt4psiXKRWb5L",
+    "groundTruth": "7000",
+    "clude": {
+      "answer": "According to the verified Solana mainnet data, transaction 2P4iRKsqHKD1GhPFuEYU8NMsWYSgMgbmpM7GcCJrMxxtDdt33nuxtowWujN9xqzcD4rnSHCPhJiYt4psiXKRWb5L paid **7000 lamports** in fees.",
+      "correct": true,
+      "abstained": false
+    },
+    "baseline": {
+      "answer": "5000",
+      "correct": false,
+      "abstained": false,
+      "hallucinated": true
     },
     "hallucinated": true
   },
@@ -21,11 +78,14 @@
     "groundTruth": "11111111111111111111111111111111",
     "clude": {
       "answer": "The program that owns Solana account 7TQdKHJaUtNKqL2QNYmc9au6gnx3j2r4jGv8WvS2FovX is **11111111111111111111111111111111** (the System Program).",
-      "correct": true
+      "correct": true,
+      "abstained": false
     },
     "baseline": {
-      "answer": "I don't have real-time access to the Solana blockchain to look up account ownership information. To find which program owns that account, you can use tools like:\n\n- **Solana Explorer** (explorer.solana.com) - search the address and check the \"Owner\" field\n- **Solscan** (solscan.io) - similar interface showing account details",
-      "correct": false
+      "answer": "TokenkegQfeZyiNwAJsyFbPVwwQQfularLMGjLWmJ6",
+      "correct": false,
+      "abstained": false,
+      "hallucinated": true
     },
     "hallucinated": true
   },
@@ -36,57 +96,15 @@
     "groundTruth": "1447680",
     "clude": {
       "answer": "According to the verified Solana mainnet data from the snapshot frozen on 2025-03-31, the account 7TQdKHJaUtNKqL2QNYmc9au6gnx3j2r4jGv8WvS2FovX holds **1,447,680 lamports**.",
-      "correct": true
+      "correct": true,
+      "abstained": false
     },
     "baseline": {
-      "answer": "I don't have the ability to query the Solana blockchain in real-time. To check the balance of that account, you can use tools like:\n\n- **Solana Explorer** (explorer.solana.com) - paste the address in the search bar\n- **Solscan** (solscan.io) - another popular block explorer\n- **Solana CLI** - run `solana balance 7TQdKHJaUtNKqL2QNYmc9au6gnx3j2r4jGv8WvS2FovX`",
-      "correct": false
+      "answer": "0",
+      "correct": false,
+      "abstained": false,
+      "hallucinated": true
     },
     "hallucinated": true
-  },
-  {
-    "question": "What was the block time (UTC) of Solana slot 328970103?",
-    "category": "block_time",
-    "sourceRef": "block:328970103",
-    "groundTruth": "2025-03-25T00:04:22Z",
-    "clude": {
-      "answer": "The block time (UTC) of Solana slot 328970103 was 2025-03-25T00:04:22Z.",
-      "correct": true
-    },
-    "baseline": {
-      "answer": "I don't have access to real-time blockchain data or historical slot information for Solana. To find the block time for slot 328970103, you can query a Solana RPC endpoint using `getBlockTime(328970103)` or check block explorers like Solscan.com or Solana Beach.",
-      "correct": false
-    },
-    "hallucinated": false
-  },
-  {
-    "question": "Which validator led Solana slot 328970103?",
-    "category": "block_leader",
-    "sourceRef": "block:328970103",
-    "groundTruth": "q9XWcZ7T1wP4bW9SB4XgNNwjnFEJ982nE8aVbbNuwot",
-    "clude": {
-      "answer": "Based on the verified Solana mainnet data provided, the validator that led Solana slot 328970103 is **q9XWcZ7T1wP4bW9SB4XgNNwjnFEJ982nE8aVbbNuwot**.",
-      "correct": true
-    },
-    "baseline": {
-      "answer": "I don't have access to real-time blockchain data or historical slot information to tell you which validator led that specific slot. You can find this information by querying a Solana RPC endpoint using `getBlock(328970103)` or checking block explorers like Solscan or Solana Beach.",
-      "correct": false
-    },
-    "hallucinated": false
-  },
-  {
-    "question": "How many transactions were in Solana slot 328970103?",
-    "category": "block_txcount",
-    "sourceRef": "block:328970103",
-    "groundTruth": "1399",
-    "clude": {
-      "answer": "According to the verified Solana mainnet data, there were **1,399 transactions** in Solana slot 328970103.",
-      "correct": true
-    },
-    "baseline": {
-      "answer": "I don't have access to real-time blockchain data or historical slot information. To find the number of transactions in slot 328970103, you can query a Solana RPC endpoint using tools like Solana CLI (`solana slot <slot_number>`) or check block explorers like Solscan.com or Solana Beach.",
-      "correct": false
-    },
-    "hallucinated": false
   }
 ]
