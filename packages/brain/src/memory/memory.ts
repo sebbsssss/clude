@@ -12,6 +12,7 @@ import {
   RETRIEVAL_WEIGHT_RELEVANCE,
   RETRIEVAL_WEIGHT_IMPORTANCE,
   RETRIEVAL_WEIGHT_VECTOR,
+  RETRIEVAL_WEIGHT_BM25,
   RETRIEVAL_WEIGHT_GRAPH,
   RETRIEVAL_WEIGHT_COOCCURRENCE,
   VECTOR_MATCH_THRESHOLD,
@@ -993,7 +994,12 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
         return await bm25SearchMemories(opts.query!, {
           limit: limit * 2,
           minDecay: minDecay,
-          filterOwner: _ownerWallet || undefined,
+          // Use getOwnerWallet() (AsyncLocalStorage-aware), NOT the bare module-level
+          // _ownerWallet. withOwnerWallet() sets the async context, not the module var,
+          // so the bare var is null under hosted/wrapped calls and BM25 would search the
+          // ENTIRE table unscoped — burying the owner's exact-match facts. This is why
+          // BM25 silently never surfaced bench facts even after the RPC was fixed.
+          filterOwner: getOwnerWallet() || undefined,
           filterTypes: opts.memoryTypes || undefined,
           filterTags: opts.tags || undefined,
         });
@@ -1449,10 +1455,13 @@ export function scoreMemory(mem: Memory, opts: RecallOptions): number {
     rawScore += 0.10 * vectorSim; // small bonus for dual-signal agreement
   }
 
-  // BM25 boost: when full-text search found this memory, boost by TF-IDF rank
+  // BM25 boost: when full-text search found this memory, boost by TF-IDF rank.
+  // Weight is env-tunable (RETRIEVAL_WEIGHT_BM25, default 0.15 = prior behavior). For
+  // near-identical-sentence corpora where exact lexical match must outrank topically-
+  // similar vector hits, set it high so the BM25-found memory wins.
   const bm25Rank = opts._bm25Scores?.get(mem.id) || 0;
   if (bm25Rank > 0) {
-    rawScore += 0.15 * Math.min(bm25Rank, 1); // small BM25-found bonus
+    rawScore += RETRIEVAL_WEIGHT_BM25 * Math.min(bm25Rank, 1);
   }
 
   // Knowledge type boost: semantic/procedural/self_model rank above raw episodic
