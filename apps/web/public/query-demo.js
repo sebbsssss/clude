@@ -855,6 +855,7 @@
     if (pendingState)  pendingState.classList.add('hidden');
     if (resultHeader)  resultHeader.style.display = 'none';
     if (resultEl)      resultEl.classList.remove('visible');
+    var _cmp = $('askCompare'); if (_cmp) _cmp.style.display = 'none';
 
     // Capture and clear the pending questionId (so a subsequent free-text ask doesn't reuse it)
     const questionId = _pendingQuestionId;
@@ -897,11 +898,13 @@
       // clear status
       if (status) { status.textContent = ''; }
 
-      // Populate panels. The right panel shows the SAME model forced to answer
-      // (no data, escape hatch removed) when available, since that is where
-      // fabrication is demonstrated; otherwise fall back to the default baseline.
-      const rightCond    = (d.forced && typeof d.forced.answer === 'string') ? d.forced : d.baseline;
-      const usingForced  = rightCond === d.forced;
+      // Populate panels. The right panel is the apples-to-apples comparison: the SAME
+      // model given ALL the data in context (d.dumpAll) — both can find the answer, the
+      // difference is how many tokens each reads. Falls back to forced/baseline on older
+      // API responses that don't include dumpAll.
+      const useDump      = d.dumpAll && typeof d.dumpAll.answer === 'string' && d.dumpAll.answer.length > 0;
+      const rightCond    = useDump ? d.dumpAll : ((d.forced && typeof d.forced.answer === 'string') ? d.forced : d.baseline);
+      const usingForced  = !useDump && rightCond === d.forced;
       const cludeAns     = (d.clude && d.clude.answer)    || '(no answer)';
       const baseAns      = (rightCond && rightCond.answer) || '(no answer)';
       const cludeOk      = d.clude    && d.clude.correct === true;
@@ -909,6 +912,9 @@
       const groundTruth  = d.groundTruth || null;
       const grounded     = d.clude && d.clude.grounded; // 'dataset'|'memory'|'none'
       const sourceRef    = d.sourceRef || null; // e.g. "block:123456" | "tx:<sig>" | null
+      // Token counts for the cost comparison (Clude reads ~1 fact, dump-all reads everything).
+      const cludeTok     = d.clude && typeof d.clude.inputTokens === 'number' ? d.clude.inputTokens : null;
+      const rightTok     = useDump && typeof d.dumpAll.inputTokens === 'number' ? d.dumpAll.inputTokens : null;
 
       // Left panel: Clude
       const cludeAnswerEl  = $('askCludeAnswer');
@@ -1003,18 +1009,32 @@
         }
       }
 
-      // Right panel: the same model without the data (forced-to-answer when present).
-      // Distinguish honest decline/abstain from an actual hallucination.
+      // Right panel: in the apples-to-apples mode this is the SAME model given ALL the
+      // data in context; otherwise the legacy forced/no-memory condition.
       const baseAnswerEl  = $('askBaseAnswer');
       const baseVerdictEl = $('askBaseVerdict');
       const baseLabelEl   = $('askBaseLabel');
       if (baseAnswerEl)  baseAnswerEl.textContent  = baseAns;
-      // Relabel the right panel to match what we're actually showing.
       if (baseLabelEl) {
-        baseLabelEl.innerHTML = usingForced
-          ? '<strong>Same model, memory removed (forced to answer)</strong>'
-          : '<strong>Same model &middot; memory removed</strong>';
+        baseLabelEl.innerHTML = useDump
+          ? '<strong>Same model, given all ' + (d.dumpAll.factsInContext ? fmtInt(d.dumpAll.factsInContext) + ' ' : '') + 'facts</strong>'
+          : (usingForced
+              ? '<strong>Same model, memory removed (forced to answer)</strong>'
+              : '<strong>Same model &middot; memory removed</strong>');
       }
+
+      // Token + cost line per panel (Clude reads ~1 fact; dump-all reads everything).
+      function tokenLine(tok) {
+        if (typeof tok !== 'number') return '';
+        var costUsd = (tok / 1000000) * COST_PER_MTOK;
+        var costStr = costUsd >= 0.01 ? ('$' + costUsd.toFixed(2)) : ('$' + costUsd.toFixed(4));
+        return '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:0.5px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">' +
+          '<strong style="color:var(--text);">' + fmtInt(tok) + '</strong> input tokens &middot; ' + costStr + ' / query</div>';
+      }
+      var cludeTokEl = $('askCludeTokens');
+      var baseTokEl = $('askBaseTokens');
+      if (cludeTokEl) cludeTokEl.innerHTML = tokenLine(cludeTok);
+      if (baseTokEl)  baseTokEl.innerHTML  = useDump ? tokenLine(rightTok) : '';
 
       // Trust the API's flags (shared grader) for whichever condition we're showing.
       const baseAbstained = (rightCond && typeof rightCond.abstained === 'boolean')
@@ -1029,16 +1049,33 @@
           baseVerdictEl.textContent = '✓ Correct';
           baseVerdictEl.className   = 'ask-verdict correct';
         } else if (baseHallucinated) {
-          // Confident wrong answer → true hallucination
           baseVerdictEl.textContent = '✗ Hallucinated: confident wrong answer';
           baseVerdictEl.className   = 'ask-verdict wrong';
         } else if (baseAbstained) {
-          // Honest decline: no data access → not a hallucination
-          baseVerdictEl.textContent = 'Declined: no data access (honest)';
+          baseVerdictEl.textContent = useDump ? 'Could not find it in the data' : 'Declined: no data access (honest)';
           baseVerdictEl.className   = 'ask-verdict abstained';
         } else {
           baseVerdictEl.textContent = 'Answered';
           baseVerdictEl.className   = 'ask-verdict';
+        }
+      }
+
+      // Headline comparison: when both are correct, lead with the cost gap.
+      var compareEl = $('askCompare');
+      if (compareEl) {
+        if (useDump && cludeOk && baseOk && cludeTok && rightTok && cludeTok > 0) {
+          var ratio = Math.round(rightTok / cludeTok);
+          compareEl.innerHTML = 'Both got the right answer. Clude read <strong style="color:var(--blue);">' + fmtInt(cludeTok) +
+            '</strong> tokens; the same model reading all the data used <strong>' + fmtInt(rightTok) +
+            '</strong>. That is <strong style="color:var(--blue);">' + ratio + '× fewer tokens</strong> for the same answer. ' +
+            'At 3 EB of on-chain data you cannot fit it in a prompt at all; retrieval is the only way.';
+          compareEl.style.display = 'block';
+        } else if (useDump && cludeOk && !baseOk) {
+          compareEl.innerHTML = 'Clude retrieved the exact fact and answered correctly. The same model, given all the data, ' +
+            'could not pin it down in the noise. Retrieval is not just cheaper here, it is more reliable.';
+          compareEl.style.display = 'block';
+        } else {
+          compareEl.style.display = 'none';
         }
       }
 
