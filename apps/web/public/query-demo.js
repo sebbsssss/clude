@@ -1012,8 +1012,8 @@
       // Relabel the right panel to match what we're actually showing.
       if (baseLabelEl) {
         baseLabelEl.innerHTML = usingForced
-          ? '<strong>Same model, forced to answer</strong>'
-          : '<strong>Same model &middot; no access to the data</strong>';
+          ? '<strong>Same model, memory removed (forced to answer)</strong>'
+          : '<strong>Same model &middot; memory removed</strong>';
       }
 
       // Trust the API's flags (shared grader) for whichever condition we're showing.
