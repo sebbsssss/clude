@@ -122,12 +122,13 @@ const DATASET_VERSION = 'crypto_solana_mainnet_us@2025-03-31';
 
 // ── CLI Args ──────────────────────────────────────────────────────────────────
 
-function parseArgs(): { limit: number; runId: string; cleanup: boolean; skipCleanup: boolean } {
+function parseArgs(): { limit: number; runId: string; cleanup: boolean; skipCleanup: boolean; skipSeeding: boolean } {
   const args = process.argv.slice(2);
   let limit = DEFAULT_LIMIT;
   let runId = '';
   let cleanup = false;
   let skipCleanup = false;
+  let skipSeeding = false;
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
@@ -143,10 +144,15 @@ function parseArgs(): { limit: number; runId: string; cleanup: boolean; skipClea
       case '--skip-cleanup':
         skipCleanup = true;
         break;
+      case '--skip-seeding':
+        // Reuse memories already seeded+embedded under this run-id's wallet
+        // (resume after an interrupted run without re-seeding 636 facts).
+        skipSeeding = true;
+        break;
     }
   }
 
-  return { limit, runId, cleanup, skipCleanup };
+  return { limit, runId, cleanup, skipCleanup, skipSeeding };
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -343,6 +349,23 @@ async function embedSeededMemories(ids: number[], contents: string[]): Promise<v
 
 // ── LLM ──────────────────────────────────────────────────────────────────────
 
+// Retry transient network failures (OpenRouter connect timeouts, 5xx) so a single
+// blip during a long run doesn't abort the whole benchmark. Exponential backoff.
+async function withRetry<T>(fn: () => Promise<T>, label: string, attempts = 5): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      const wait = Math.min(1000 * Math.pow(2, i), 15000);
+      console.error(`  [retry ${i + 1}/${attempts}] ${label} failed: ${(err as Error)?.message || err}; waiting ${wait}ms`);
+      await new Promise((r) => setTimeout(r, wait));
+    }
+  }
+  throw lastErr;
+}
+
 const GROUNDED_SYSTEM = `You are a precise on-chain data assistant. Answer ONLY from the provided Solana memory context below. If the context does not contain the answer, respond with: "I don't have enough information to answer that."
 
 Be concise — 1-2 sentences maximum. Do NOT speculate or use general knowledge.`;
@@ -365,13 +388,13 @@ async function answerGrounded(
     ? `Memory context:\n${ctx}\n\nQuestion: ${question}`
     : `Question: ${question}`;
 
-  const answer = await generateOpenRouterResponse({
+  const answer = await withRetry(() => generateOpenRouterResponse({
     systemPrompt: GROUNDED_SYSTEM,
     messages: [{ role: 'user', content: userContent }],
     model: MODEL,
     temperature: 0,
     maxTokens: 200,
-  });
+  }), 'answerGrounded');
 
   return { answer, memoriesReturned: memories.length, latencyMs: ms(t0) };
 }
@@ -379,13 +402,13 @@ async function answerGrounded(
 async function answerBaseline(question: string): Promise<{ answer: string; latencyMs: number }> {
   const t0 = process.hrtime.bigint();
 
-  const answer = await generateOpenRouterResponse({
+  const answer = await withRetry(() => generateOpenRouterResponse({
     systemPrompt: BASELINE_SYSTEM,
     messages: [{ role: 'user', content: question }],
     model: MODEL,
     temperature: 0,
     maxTokens: 200,
-  });
+  }), 'answerBaseline');
 
   return { answer, latencyMs: ms(t0) };
 }
@@ -519,15 +542,20 @@ async function main(): Promise<void> {
   const qaMap = new Map<string, SolanaQA>(allItems.map(item => [item.id, item]));
 
   // ── Seed memories ──
-  console.log('\n[2/6] Seeding memories...');
-  const { ids: seededIds, contents: seededContents } = await seedMemories(seededItems, wallet);
-
-  // ── Embed ──
-  console.log('\n[3/6] Embedding memories...');
-  if (seededIds.length > 0) {
-    await embedSeededMemories(seededIds, seededContents);
+  if (opts.skipSeeding) {
+    console.log('\n[2/6] Seeding memories... SKIPPED (--skip-seeding; reusing existing wallet data)');
+    console.log('[3/6] Embedding memories... SKIPPED');
   } else {
-    console.log('  No memories to embed.');
+    console.log('\n[2/6] Seeding memories...');
+    const { ids: seededIds, contents: seededContents } = await seedMemories(seededItems, wallet);
+
+    // ── Embed ──
+    console.log('\n[3/6] Embedding memories...');
+    if (seededIds.length > 0) {
+      await embedSeededMemories(seededIds, seededContents);
+    } else {
+      console.log('  No memories to embed.');
+    }
   }
 
   // ── Evaluate ──
