@@ -1760,7 +1760,7 @@
       <div class="scale-pillar">
         <div class="scale-pillar-label">Retrieval accuracy</div>
         <div class="scale-pillar-num blue">100%</div>
-        <div class="scale-pillar-sub">exact fact found in <strong>all 600</strong> retrieval tests &middot; answered <strong>100% correctly</strong></div>
+        <div class="scale-pillar-sub">every one of <strong>all 2,000,000</strong> facts retrieved in the top 8 &middot; <strong>0 misses</strong></div>
       </div>
       <div class="scale-pillar">
         <div class="scale-pillar-label">Hallucinations</div>
@@ -1795,12 +1795,12 @@
         <div class="scale-vs-verdict win">Retrieves the one fact it needs, from all 2,000,000.</div>
       </div>
       <div class="scale-vs-card lose">
-        <div class="scale-vs-big muted">12%</div>
+        <div class="scale-vs-big muted">0%</div>
         <div class="scale-vs-big-label">answered correctly</div>
         <div class="scale-vs-rows">
           <div class="scale-vs-row"><span class="k">Input tokens / query</span><span class="v">~177,330</span></div>
           <div class="scale-vs-row"><span class="k">Share of corpus it can see</span><span class="v">0.14%</span></div>
-          <div class="scale-vs-row"><span class="k">Abstains on the rest</span><span class="v">96%</span></div>
+          <div class="scale-vs-row"><span class="k">Abstains on every question</span><span class="v">100%</span></div>
         </div>
         <div class="scale-vs-verdict lose">Cannot fit 99.86% of the data, so it cannot answer.</div>
       </div>
@@ -1815,15 +1815,29 @@
       </div>
     </div>
 
+    <!-- Cross-model validation -->
+    <div style="background:rgba(34,68,255,0.05);border:1px solid rgba(34,68,255,0.22);padding:1.1rem 1.4rem;margin-bottom:2.5rem;">
+      <div style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--blue);margin-bottom:8px;">Independently validated &middot; GPT-5.5</div>
+      <div style="font-family:var(--sans);font-size:14px;line-height:1.65;color:var(--text-2);font-weight:500;">
+        Re-run with <strong style="color:var(--text);">GPT-5.5</strong>, a model from a different vendor: it answered
+        <strong style="color:var(--blue);">98% correctly</strong> from Clude's retrieved facts, and
+        <strong style="color:var(--text);">0%</strong> without them, with zero fabricated answers. The grounding
+        advantage is not specific to one model.
+      </div>
+    </div>
+
     <!-- Honest method note -->
     <div class="scale-method">
       <strong>How we measured it.</strong> Two million real Solana mainnet records (block times, validators,
       transaction fees and statuses, account balances) were loaded into an isolated Clude memory store, none of it
-      in the model's context. Clude retrieves with keyword search over its index. Recall was measured over 600 random
-      questions; end-to-end answers over 25, graded by exact match, not an LLM judge. The right-hand column is the
-      same model (Claude Haiku 4.5) given the largest window of data that fits (~2,500 facts, ~177K tokens). It
-      abstains on what it cannot see, so it does not fabricate either. The gap is accuracy: it simply cannot hold
-      the data. Retrieval latency is the database query time at the full two million rows.
+      in the model's context. Clude retrieves with keyword search over its index. Recall was measured over
+      <strong>all 2,000,000 facts</strong> (every fact queried by its identifier, zero misses); end-to-end answers
+      were graded by exact match, not an LLM judge, and independently re-checked with a second model (GPT-5.5). The
+      right-hand column is the same model given the largest window of data that fits (~2,500 facts, ~177K tokens). It
+      abstains on what it cannot see, so it does not fabricate either: given a full context window, the specific fact
+      it is asked about falls in that window only ~0.14% of the time, so on a random query it effectively never can.
+      The gap is accuracy, not honesty: it simply cannot hold the data. Retrieval latency is the database query time
+      at the full two million rows.
     </div>
   </div>
 
