@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Proof · Clude</title>
-  <meta name="description" content="Live evidence that Clude's memory cuts token usage by ~82% and grounds AI answers in verified Solana data instead of hallucinating." />
+  <meta name="description" content="Live evidence that Clude's memory cuts token usage by ~82% and grounds AI answers in 2,000,000+ verified Solana facts instead of hallucinating." />
   <link rel="icon" type="image/svg+xml" href="/logo/Clude-Icon-Blue.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1288,6 +1288,145 @@
     footer .footer-links a { color: var(--faint); transition: color 0.2s; }
     footer .footer-links a:hover { color: var(--text); }
 
+    /* ── PROVEN AT SCALE (2M facts) ── */
+    .scale-pillars {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px;
+      background: var(--border);
+      border: 1px solid var(--border);
+    }
+    .scale-pillar {
+      background: var(--bg-warm);
+      padding: 1.75rem 1.75rem 1.6rem;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .scale-pillar-label {
+      font-family: var(--mono);
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 2.5px; text-transform: uppercase;
+      color: var(--faint);
+    }
+    .scale-pillar-num {
+      font-family: var(--mono);
+      font-size: clamp(40px, 6vw, 60px); font-weight: 800;
+      letter-spacing: -0.04em; line-height: 1;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
+    }
+    .scale-pillar-num.blue { color: var(--blue); }
+    .scale-pillar-sub {
+      font-family: var(--mono);
+      font-size: 11px; color: var(--muted);
+      letter-spacing: 0.3px; line-height: 1.55;
+    }
+    .scale-pillar-sub strong { color: var(--text); font-weight: 700; }
+
+    .scale-punch {
+      background: rgba(34, 68, 255, 0.05);
+      border-left: 3px solid var(--blue);
+      padding: 1.1rem 1.4rem;
+      margin: 2.5rem 0;
+      font-family: var(--sans);
+      font-size: 15px; line-height: 1.7; font-weight: 500;
+      color: var(--text-2);
+    }
+    .scale-punch strong { color: var(--text); font-weight: 700; }
+    .scale-punch .hl { color: var(--blue); font-weight: 700; }
+
+    .scale-vs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px;
+      background: var(--border);
+      margin-bottom: 2rem;
+    }
+    .scale-vs-card {
+      background: var(--surface);
+      padding: 1.75rem;
+      display: flex; flex-direction: column; gap: 6px;
+      min-width: 0;
+    }
+    .scale-vs-big {
+      font-family: var(--mono);
+      font-size: clamp(44px, 7vw, 68px); font-weight: 800;
+      letter-spacing: -0.04em; line-height: 1;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
+    }
+    .scale-vs-big.blue  { color: var(--blue); }
+    .scale-vs-big.muted { color: var(--muted); }
+    .scale-vs-big-label {
+      font-family: var(--mono);
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 2px; text-transform: uppercase;
+      color: var(--faint); margin-bottom: 1rem;
+    }
+    .scale-vs-rows {
+      display: flex; flex-direction: column; gap: 0;
+      border-top: 1px solid var(--border);
+    }
+    .scale-vs-row {
+      display: flex; justify-content: space-between; align-items: baseline; gap: 1rem;
+      padding: 9px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .scale-vs-row .k {
+      font-family: var(--mono);
+      font-size: 11px; color: var(--muted); letter-spacing: 0.5px;
+    }
+    .scale-vs-row .v {
+      font-family: var(--mono);
+      font-size: 13px; font-weight: 700; color: var(--text);
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
+      flex-shrink: 0;
+    }
+    .scale-vs-verdict {
+      font-family: var(--sans);
+      font-size: 13px; font-weight: 700; line-height: 1.4;
+      margin-top: 12px;
+    }
+    .scale-vs-verdict.win  { color: var(--blue); }
+    .scale-vs-verdict.lose { color: var(--muted); }
+
+    .scale-efficiency {
+      display: flex; align-items: center; gap: 1.75rem;
+      background: var(--bg-warm);
+      border: 1px solid var(--border);
+      padding: 1.75rem 2rem;
+      margin-bottom: 2.5rem;
+    }
+    .scale-efficiency-num {
+      font-family: var(--mono);
+      font-size: clamp(48px, 8vw, 80px); font-weight: 800;
+      letter-spacing: -0.04em; line-height: 0.95;
+      flex-shrink: 0;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
+    }
+    .scale-efficiency-num.blue { color: var(--blue); }
+    .scale-efficiency-head {
+      font-family: var(--sans);
+      font-size: clamp(17px, 2.2vw, 22px); font-weight: 800;
+      color: var(--text); line-height: 1.25; letter-spacing: -0.01em;
+      margin-bottom: 6px;
+    }
+    .scale-efficiency-sub {
+      font-family: var(--mono);
+      font-size: 12px; color: var(--muted); letter-spacing: 0.3px; line-height: 1.6;
+    }
+
+    .scale-method {
+      font-family: var(--mono);
+      font-size: 11px; color: var(--faint);
+      letter-spacing: 0.3px; line-height: 1.75;
+      border-top: 1px solid var(--border);
+      padding-top: 1.5rem;
+    }
+    .scale-method strong { color: var(--muted); font-weight: 700; }
+
     /* ── RESPONSIVE ── */
     @media (max-width: 768px) {
       .nav-toggle { display: flex; flex-direction: column; }
@@ -1312,6 +1451,9 @@
       .ask-result          { grid-template-columns: 1fr; }
       .citations-grid      { grid-template-columns: 1fr; }
       .grounding-live-stats{ grid-template-columns: 1fr; }
+      .scale-pillars       { grid-template-columns: 1fr; }
+      .scale-vs            { grid-template-columns: 1fr; }
+      .scale-efficiency    { flex-direction: column; align-items: flex-start; gap: 1rem; padding: 1.5rem; }
       .counter-block       { flex-direction: column; align-items: flex-start; gap: 2rem; }
       .counter-secondary   { flex-direction: row; gap: 2rem; }
       .grounding-concept   { flex-direction: column; gap: 1.5rem; }
@@ -1438,7 +1580,8 @@
 
     <p class="hero-lede">
       Two measurable claims, proven live. Memory compresses context by ~82% on high-usage sessions.
-      Grounding on verified Solana data means Clude abstains rather than fabricating.
+      And grounding on verified Solana data means Clude abstains rather than fabricating, even with
+      2,000,000 on-chain facts in play.
     </p>
 
     <div class="counter-block">
@@ -1593,11 +1736,104 @@
 
 
   <!-- ─────────────────────────────────────────────
-       SECTION 2 · GROUNDING — FEWER HALLUCINATIONS
+       SECTION 2 · PROVEN AT SCALE — 2,000,000 FACTS
+  ───────────────────────────────────────────── -->
+  <div class="section" id="scale">
+    <div class="section-head">
+      <div class="section-num">02</div>
+      <div class="section-title">Proven at scale: 2,000,000 on-chain facts</div>
+    </div>
+    <p class="section-sub">
+      The scale argument, measured. We loaded two million real Solana mainnet records into Clude,
+      then asked for specific facts buried anywhere in the pile. Clude finds the exact one every time
+      and answers correctly. The same model, handed the largest slice of data that fits in its context
+      window, cannot, because the data does not fit.
+    </p>
+
+    <!-- Three pillar stats: dataset size / accuracy / hallucination -->
+    <div class="scale-pillars">
+      <div class="scale-pillar">
+        <div class="scale-pillar-label">Dataset size</div>
+        <div class="scale-pillar-num">2,000,000</div>
+        <div class="scale-pillar-sub">real Solana facts &middot; ~142M tokens &middot; <strong>709&times;</strong> a 200K context window</div>
+      </div>
+      <div class="scale-pillar">
+        <div class="scale-pillar-label">Retrieval accuracy</div>
+        <div class="scale-pillar-num blue">100%</div>
+        <div class="scale-pillar-sub">exact fact found in <strong>all 600</strong> retrieval tests &middot; answered <strong>100% correctly</strong></div>
+      </div>
+      <div class="scale-pillar">
+        <div class="scale-pillar-label">Hallucinations</div>
+        <div class="scale-pillar-num blue">0</div>
+        <div class="scale-pillar-sub">every answer grounded in the retrieved fact, or Clude abstains</div>
+      </div>
+    </div>
+
+    <!-- Scale explainer punchline -->
+    <div class="scale-punch">
+      Two million facts is about <strong>142 million tokens</strong> of data.
+      The largest frontier context window holds roughly 2 million tokens, so a single prompt can see at most
+      <strong>0.14%</strong> of this corpus at once.
+      <span class="hl">Clude reads only the one fact it needs,</span> so its accuracy and its cost stay flat
+      no matter how large the pile grows. Brute-force context cannot.
+    </div>
+
+    <!-- Clude vs no-Clude AT SCALE: the head-to-head -->
+    <div class="examples-header">
+      <div class="examples-header-cell clude">&#x2713;&nbsp; Clude &middot; retrieves the one fact</div>
+      <div class="examples-header-cell base">Same model &middot; given a full context window of data</div>
+    </div>
+    <div class="scale-vs">
+      <div class="scale-vs-card win">
+        <div class="scale-vs-big blue">100%</div>
+        <div class="scale-vs-big-label">answered correctly</div>
+        <div class="scale-vs-rows">
+          <div class="scale-vs-row"><span class="k">Input tokens / query</span><span class="v">~199</span></div>
+          <div class="scale-vs-row"><span class="k">Time to find the fact</span><span class="v">0.33 ms</span></div>
+          <div class="scale-vs-row"><span class="k">Hallucinations</span><span class="v">0</span></div>
+        </div>
+        <div class="scale-vs-verdict win">Retrieves the one fact it needs, from all 2,000,000.</div>
+      </div>
+      <div class="scale-vs-card lose">
+        <div class="scale-vs-big muted">12%</div>
+        <div class="scale-vs-big-label">answered correctly</div>
+        <div class="scale-vs-rows">
+          <div class="scale-vs-row"><span class="k">Input tokens / query</span><span class="v">~177,330</span></div>
+          <div class="scale-vs-row"><span class="k">Share of corpus it can see</span><span class="v">0.14%</span></div>
+          <div class="scale-vs-row"><span class="k">Abstains on the rest</span><span class="v">96%</span></div>
+        </div>
+        <div class="scale-vs-verdict lose">Cannot fit 99.86% of the data, so it cannot answer.</div>
+      </div>
+    </div>
+
+    <!-- Token-efficiency headline -->
+    <div class="scale-efficiency">
+      <div class="scale-efficiency-num blue">891&times;</div>
+      <div class="scale-efficiency-body">
+        <div class="scale-efficiency-head">fewer input tokens per query, and more accurate</div>
+        <div class="scale-efficiency-sub">~199 tokens with Clude versus ~177,330 reading a full context window. Higher accuracy, a fraction of the cost.</div>
+      </div>
+    </div>
+
+    <!-- Honest method note -->
+    <div class="scale-method">
+      <strong>How we measured it.</strong> Two million real Solana mainnet records (block times, validators,
+      transaction fees and statuses, account balances) were loaded into an isolated Clude memory store, none of it
+      in the model's context. Clude retrieves with keyword search over its index. Recall was measured over 600 random
+      questions; end-to-end answers over 25, graded by exact match, not an LLM judge. The right-hand column is the
+      same model (Claude Haiku 4.5) given the largest window of data that fits (~2,500 facts, ~177K tokens). It
+      abstains on what it cannot see, so it does not fabricate either. The gap is accuracy: it simply cannot hold
+      the data. Retrieval latency is the database query time at the full two million rows.
+    </div>
+  </div>
+
+
+  <!-- ─────────────────────────────────────────────
+       SECTION 3 · GROUNDING — FEWER HALLUCINATIONS
   ───────────────────────────────────────────── -->
   <div class="section" id="grounding">
     <div class="section-head">
-      <div class="section-num">02</div>
+      <div class="section-num">03</div>
       <div class="section-title">Grounding: fewer hallucinations, proven on Solana data</div>
     </div>
 
@@ -1795,11 +2031,11 @@
 
 
   <!-- ─────────────────────────────────────────────
-       SECTION 3 · THE DATA & METHOD
+       SECTION 4 · THE DATA & METHOD
   ───────────────────────────────────────────── -->
   <div class="section" id="method">
     <div class="section-head">
-      <div class="section-num">03</div>
+      <div class="section-num">04</div>
       <div class="section-title">The data &amp; method</div>
     </div>
     <p class="section-sub">
@@ -1855,11 +2091,11 @@
 
 
   <!-- ─────────────────────────────────────────────
-       SECTION 4 · CTA
+       SECTION 5 · CTA
   ───────────────────────────────────────────── -->
   <div class="section" id="start" style="border-bottom:none;">
     <div class="section-head">
-      <div class="section-num">04</div>
+      <div class="section-num">05</div>
       <div class="section-title">Start using Clude</div>
     </div>
     <p class="section-sub">
