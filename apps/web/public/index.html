@@ -3,16 +3,16 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Clude — Cognitive memory for AI agents</title>
-  <meta name="description" content="Clude connects scattered context across docs, chats, and code into a single typed memory — so every agent you use understands what your team already knows. Open source. Live on npm." />
+  <title>Clude — The memory layer for AI agents</title>
+  <meta name="description" content="Clude is the memory layer for AI agents — built for developers. Your agent remembers your codebase, decisions, and taste across sessions. 1.96% hallucination rate. Free, open source, local-first." />
   <link rel="icon" type="image/svg+xml" href="/logo/Clude-Icon-Blue.svg" />
-  <meta property="og:title" content="Clude — Cognitive memory for AI agents" />
-  <meta property="og:description" content="One memory layer for every agent. ChatGPT, Claude, Cursor, MCP — all read from the same typed, decaying, cite-able store." />
+  <meta property="og:title" content="Clude — The memory layer for AI agents" />
+  <meta property="og:description" content="Instead of re-explaining yourself every session, your agent remembers. Typed, decaying, verifiable memory. 1.96% hallucination rate. Open source, local-first." />
   <meta property="og:url" content="https://clude.io" />
   <meta property="og:type" content="website" />
   <meta name="twitter:card" content="summary_large_image" />
   <link rel="stylesheet" href="/colors_and_type.css" />
-  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/site-v2.css" />
 </head>
 <body>
   <div id="root"></div>
@@ -21,8 +21,12 @@
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
 
-  <script type="text/babel" src="/screens.jsx"></script>
-  <script type="text/babel" src="/app.jsx"></script>
-  <script src="/live-demo.js" defer></script>
+  <!-- chat-mockup.jsx defines ChatMockup; must load before app-v2.jsx uses it -->
+  <script type="text/babel" src="/chat-mockup.jsx"></script>
+  <script type="text/babel" src="/app-v2.jsx"></script>
+  <script type="text/babel">
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<AppV2 />);
+  </script>
 </body>
 </html>
