@@ -1,0 +1,188 @@
+/* =========================================================================
+   Clude — linear-polish.css
+   The "smooth / radical" layer. Loaded LAST so it wins.
+   Reveal · grain · living aurora · cursor glass · seams · type · glow
+   ========================================================================= */
+
+/* ── 1. SCROLL REVEAL ─────────────────────────────────────────────────────
+   Base = visible end-state. We animate FROM hidden only when .reveal is set
+   by JS, so no-JS / print / reduced-motion show full content. */
+.reveal {
+  opacity: 0;
+  transform: translateY(26px);
+  filter: blur(10px);
+  transition:
+    opacity .85s cubic-bezier(0.22, 0.61, 0.36, 1) var(--rd, 0ms),
+    transform .85s cubic-bezier(0.22, 0.61, 0.36, 1) var(--rd, 0ms),
+    filter .85s cubic-bezier(0.22, 0.61, 0.36, 1) var(--rd, 0ms);
+  will-change: opacity, transform, filter;
+}
+.reveal.in { opacity: 1; transform: none; filter: none; }
+.reveal.instant { transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1 !important; transform: none !important; filter: none !important; transition: none !important; }
+}
+
+/* ── 2. FILM GRAIN + DEEPER VIGNETTE ──────────────────────────────────────*/
+body::after {
+  content: "";
+  position: fixed; inset: 0; z-index: 2; pointer-events: none;
+  opacity: 0.05; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ── 3. LIVING AURORA ─────────────────────────────────────────────────────*/
+.hero { --py: 0px; }
+.hero::before {
+  top: -200px;
+  width: 1500px; height: 820px;
+  background:
+    radial-gradient(44% 56% at 50% 0%, rgba(200, 206, 224, 0.20), transparent 70%),
+    radial-gradient(34% 50% at 22% 6%, rgba(150, 158, 196, 0.16), transparent 70%),
+    radial-gradient(32% 50% at 80% 2%, rgba(120, 130, 200, 0.14), transparent 72%);
+  filter: blur(36px);
+  transform: translateX(-50%) translateY(var(--py));
+  opacity: 0.92;
+}
+@media (prefers-reduced-motion: reduce) { .hero::before { animation: none; } }
+
+/* faint hero grid that fades into the dark */
+.hero .container::before {
+  content: "";
+  position: absolute; inset: -40px 0 0; z-index: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
+  background-size: 56px 56px;
+  -webkit-mask-image: radial-gradient(100% 70% at 50% 0%, #000 0%, transparent 72%);
+  mask-image: radial-gradient(100% 70% at 50% 0%, #000 0%, transparent 72%);
+}
+.hero-content, .hero-mockup { position: relative; z-index: 2; }
+
+/* ── 4. SHARPER, MORE RADICAL TYPE ────────────────────────────────────────*/
+.hero-title {
+  font-size: clamp(46px, 7.4vw, 90px);
+  letter-spacing: -0.045em;
+  line-height: 0.98;
+}
+/* animated sheen sweeping the headline */
+.hero-title {
+  background:
+    linear-gradient(180deg, #FFFFFF 24%, #AEB6C6 100%);
+  -webkit-background-clip: text; background-clip: text;
+}
+.hero-title::after {
+  content: "";
+  position: absolute; inset: 0; pointer-events: none;
+}
+.section-title { letter-spacing: -0.035em; }
+.halluc-num { font-size: clamp(120px, 21vw, 280px); letter-spacing: -0.06em; }
+.insight-text { letter-spacing: -0.04em; }
+
+/* ── 5. CURSOR-REACTIVE GLASS ─────────────────────────────────────────────*/
+.spot { position: relative; isolation: isolate; }
+.spot::after {
+  content: "";
+  position: absolute; inset: 0; border-radius: inherit; z-index: 0;
+  pointer-events: none; opacity: 0;
+  transition: opacity .35s ease;
+  background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 0%),
+    rgba(210, 216, 234, 0.10), transparent 60%);
+}
+.spot:hover::after { opacity: 1; }
+/* border catches the light too */
+.spot::before {
+  content: "";
+  position: absolute; inset: 0; border-radius: inherit; z-index: 0;
+  pointer-events: none; opacity: 0;
+  transition: opacity .35s ease;
+  padding: 1px;
+  background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 0%),
+    rgba(220, 226, 244, 0.42), transparent 55%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+}
+.spot:hover::before { opacity: 1; }
+.spot > * { position: relative; z-index: 1; }
+
+/* ── 6. SECTION SEAMS ─────────────────────────────────────────────────────
+   A hairline of light where major sections meet — Linear's signature stitch. */
+.halluc, .scale, .insight, .stats-band, .cta-band, .founder {
+  border-top: 1px solid var(--line);
+}
+.halluc::after, .scale::after, .stats-band::after, .cta-band::after {
+  content: "";
+  position: absolute; left: 0; right: 0; top: -1px; height: 1px; z-index: 2;
+  background: linear-gradient(90deg, transparent, rgba(210, 216, 234, 0.40), transparent);
+}
+
+/* ── 7. NAV CONDENSE ON SCROLL ────────────────────────────────────────────*/
+.nav { transition: background .25s ease, border-color .25s ease, box-shadow .25s ease; }
+.nav.scrolled {
+  background: rgba(8, 9, 10, 0.86);
+  box-shadow: 0 8px 30px -16px rgba(0, 0, 0, 0.9);
+}
+
+/* ── 8. BUTTON GLOW / MOCKUP FLOAT ────────────────────────────────────────*/
+.btn-primary.btn-lg {
+  position: relative;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 1px 2px rgba(0, 0, 0, 0.5),
+    0 0 0 0 rgba(46, 91, 255, 0);
+  animation: btnpulse 3.6s ease-in-out infinite;
+}
+@keyframes btnpulse {
+  0%, 100% { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 8px 26px -12px rgba(34, 68, 255, 0.55); }
+  50%      { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 12px 40px -12px rgba(46, 91, 255, 0.8); }
+}
+@media (prefers-reduced-motion: reduce) { .btn-primary.btn-lg { animation: none; } }
+
+.hero-mockup .chat-mockup {
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 60px 120px -40px rgba(0, 0, 0, 0.9),
+    0 0 80px -36px rgba(200, 206, 224, 0.3);
+}
+
+/* ── 9. LINK UNDERLINE SWEEP (nav) ────────────────────────────────────────*/
+.nav-link { position: relative; }
+.nav-link::after {
+  content: ""; position: absolute; left: 11px; right: 11px; bottom: 3px; height: 1px;
+  background: var(--brand-text); transform: scaleX(0); transform-origin: left;
+  transition: transform .28s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.nav-link:hover::after { transform: scaleX(1); }
+
+/* ── 10. EYEBROW PILL — subtle shimmer on the brand dot ───────────────────*/
+.eyebrow-pill.brand .dot { animation: dotpulse 2.4s ease-in-out infinite; }
+@keyframes dotpulse {
+  0%, 100% { box-shadow: 0 0 8px 1px rgba(160, 170, 210, 0.6); }
+  50%      { box-shadow: 0 0 16px 3px rgba(180, 190, 220, 0.85); }
+}
+@media (prefers-reduced-motion: reduce) { .eyebrow-pill.brand .dot { animation: none; } }
+
+/* ── 11. HERO LOAD-IN — Linear-style staggered fade/blur-up ───────────────
+   Base = hidden (under no-preference only); JS adds html.hero-in to play it.
+   The page is React-rendered, so "no JS" is a blank page anyway — safe to hide
+   by default. Reduced-motion users get the visible base with no hiding. */
+@media (prefers-reduced-motion: no-preference) {
+  .hero-content > *, .hero-mockup {
+    opacity: 0;
+    transform: translateY(28px);
+    filter: blur(10px);
+  }
+  html.hero-in .hero-content > * { animation: heroRise 0.92s cubic-bezier(0.22, 0.61, 0.36, 1) forwards; }
+  html.hero-in .hero-content > *:nth-child(1) { animation-delay: 0.06s; }
+  html.hero-in .hero-content > *:nth-child(2) { animation-delay: 0.16s; }
+  html.hero-in .hero-content > *:nth-child(3) { animation-delay: 0.27s; }
+  html.hero-in .hero-content > *:nth-child(4) { animation-delay: 0.38s; }
+  html.hero-in .hero-content > *:nth-child(5) { animation-delay: 0.48s; }
+  html.hero-in .hero-mockup { animation: heroRise 1.05s cubic-bezier(0.22, 0.61, 0.36, 1) 0.58s forwards; }
+
+  /* aurora glow + nav ease in too */
+  .hero::before { opacity: 0; }
+  html.hero-in .hero::before { animation: glowIn 1.5s ease 0.1s forwards; }
+  .nav { opacity: 0; transform: translateY(-8px); }
+  html.hero-in .nav { animation: navDrop 0.7s cubic-bezier(0.22, 0.61, 0.36, 1) forwards; }
+}
+@keyframes heroRise { to { opacity: 1; transform: none; filter: none; } }
+@keyframes glowIn { to { opacity: 0.92; } }
+@keyframes navDrop { to { opacity: 1; transform: none; } }
