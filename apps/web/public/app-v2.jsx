@@ -535,7 +535,7 @@ function Footer() {
               <li><a href="#">About</a></li>
               <li><a href="#">Careers</a></li>
               <li><a href="/privacy">Privacy</a></li>
-              <li><a href="https://x.com/Cludebot">X ↗</a></li>
+              <li><a href="https://x.com/cludeproject">X ↗</a></li>
             </ul>
           </div>
         </div>

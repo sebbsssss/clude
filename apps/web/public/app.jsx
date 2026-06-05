@@ -610,7 +610,7 @@ function Footer() {
             <h4>Company</h4>
             <ul>
               <li><a href="/privacy">Privacy</a></li>
-              <li><a href="https://x.com/Cludebot" target="_blank" rel="noopener">X / @Cludebot</a></li>
+              <li><a href="https://x.com/cludeproject" target="_blank" rel="noopener">X / @cludeproject</a></li>
               <li><a href="https://arxiv.org/abs/2304.03442" target="_blank" rel="noopener">Paper ↗</a></li>
               <li><a href="https://github.com/sebbsssss/clude" target="_blank" rel="noopener">GitHub</a></li>
             </ul>

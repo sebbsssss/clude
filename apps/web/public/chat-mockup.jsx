@@ -93,7 +93,7 @@ const TIMELINE = [
 const MEMORY_PANEL = [
   { type: "self-model",   text: "Calls me \"Seb\"; prefers short replies over long.", meta: "imp 1.00 · anchor" },
   { type: "semantic",     text: "Project: Clude main site. Stack: HTML, Funnel Sans.", meta: "imp 0.92 · consolidated" },
-  { type: "episodic",     text: "Liked littlebird.ai storytelling, wanted to remix.", meta: "imp 0.81 · today" },
+  { type: "episodic",     text: "Liked Ben's storytelling, wanted to remix.", meta: "imp 0.81 · today" },
   { type: "procedural",   text: "Always preserve v1 when iterating.", meta: "imp 0.87 · 3 uses" },
   { type: "introspective", text: "Reflection: dense > card UI by ~3:1 in feedback.", meta: "imp 0.62 · dream:08" },
 ];
@@ -120,10 +120,11 @@ function ChatMockup() {
   })();
   const activeModel = MODELS[activeModelIdx];
 
-  // Scroll the chat window when content grows
+  // Keep the latest message in view — instant, so rapid typing re-renders pin to bottom
   useEffect(() => {
-    if (!scrollRef.current) return;
-    scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
   }, [visible, typed, typingDone]);
 
   // Single async loop drives the whole timeline
