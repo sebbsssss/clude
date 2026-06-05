@@ -266,7 +266,7 @@ function HeroDashboard() {
           <div style={{display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:1, background:"var(--line)", border:"1px solid var(--line)", marginBottom:16}}>
             {[
               { label:"MEMORIES", val:"3,247", color:null },
-              { label:"HALUMEM", val:"1.96%", color:"var(--brand)" },
+              { label:"HALUMEM", val:"2%", color:"var(--brand)" },
               { label:"DREAM", val:"03:00", color:null },
             ].map(s => (
               <div key={s.label} style={{background:"var(--bg-1)", padding:"14px 12px"}}>
@@ -282,7 +282,7 @@ function HeroDashboard() {
           </div>
           <div style={{display:"flex", flexDirection:"column", border:"1px solid var(--line)"}}>
             {[
-              { type:"episodic",   text:"Seb showed me HaluMem: 1.96% vs 15.2% next best.", time:"14:02" },
+              { type:"episodic",   text:"Seb showed me HaluMem: 2% vs 15.2% next best.", time:"14:02" },
               { type:"semantic",   text:"Clinamen: lateral swerve recall.",                  time:"13:48" },
               { type:"procedural", text:"npx @clude/sdk setup writes ~/.clude/config.json.", time:"12:17" },
               { type:"self_model", text:"I prefer short, precise summaries. I cite when I claim.", time:"yest" },

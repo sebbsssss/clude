@@ -62,7 +62,7 @@ function Hero() {
             <a href="#how" className="btn btn-ghost btn-lg">See how it works</a>
           </div>
           <div className="hero-meta">
-            <b>1.96% hallucination rate.</b> Grounded or abstain. Never fabricate. Free, open source, local-first.
+            <b>2% hallucination rate.</b> Grounded or abstain. Never fabricate. Free, open source, local-first.
           </div>
         </div>
 
@@ -558,7 +558,7 @@ function Footer() {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// HALLUCINATION BAND — 1.96%, front & centre, grounded-or-abstain
+// HALLUCINATION BAND — 2%, front & centre, grounded-or-abstain
 // ────────────────────────────────────────────────────────────────────────────
 function HallucinationBand() {
   const steps = [
@@ -574,7 +574,7 @@ function HallucinationBand() {
         </div>
         <div className="halluc-cap">Hallucination rate · HaluMem benchmark</div>
         <div className="halluc-figure">
-          <span className="halluc-num">1.96<span className="pct">%</span></span>
+          <span className="halluc-num">2<span className="pct">%</span></span>
         </div>
         <h2 className="halluc-h">Grounded or abstain. <em>Never fabricate.</em></h2>
         <p className="halluc-sub">
