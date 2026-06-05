@@ -5,7 +5,7 @@
    ========================================================================= */
 
 /* ============================================================ */
-/* HALLUCINATION BAND — 1.96%, front & centre                   */
+/* HALLUCINATION BAND — 2%, front & centre                   */
 /* ============================================================ */
 .halluc { padding: 128px 0; position: relative; text-align: center; overflow: hidden; }
 .halluc::before {

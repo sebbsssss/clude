@@ -73,7 +73,7 @@ function Hero({ tokensSaved }) {
           </div>
           <div className="hero__signal">
             <div>
-              <strong>1.96%</strong>
+              <strong>2%</strong>
               HaluMem hallucination
             </div>
             <div>

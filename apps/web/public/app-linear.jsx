@@ -66,7 +66,7 @@ function Hero() {
             <a href="#get-started" className="btn btn-primary btn-lg">Install @clude/sdk <span className="arr">→</span></a>
             <a href="#how" className="btn btn-ghost btn-lg">See how it works</a>
           </div>
-          <div className="hero-meta"><b>1.96% hallucination rate.</b> Grounded or abstain. Never fabricate. Open source, local-first.</div>
+          <div className="hero-meta"><b>2% hallucination rate.</b> Grounded or abstain. Never fabricate. Open source, local-first.</div>
         </div>
         <div className="hero-mockup">
           <ChatMockup />
@@ -92,7 +92,7 @@ function Trusted() {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// HALLUCINATION BAND — 1.96%, front & centre
+// HALLUCINATION BAND — 2%, front & centre
 // ────────────────────────────────────────────────────────────────────────────
 function HallucinationBand() {
   const steps = [
@@ -104,7 +104,7 @@ function HallucinationBand() {
       <div className="container">
         <div className="eyebrow-row"><span className="eyebrow-pill brand"><span className="dot" />Trust the output</span></div>
         <div className="halluc-cap">Hallucination rate · HaluMem benchmark</div>
-        <div className="halluc-figure"><span className="halluc-num" data-count data-to="1.96" data-dec="2" data-display="1.96">1.96</span><span className="pct">%</span></div>
+        <div className="halluc-figure"><span className="halluc-num" data-count data-to="2" data-dec="0" data-display="2">2</span><span className="pct">%</span></div>
         <h2 className="halluc-h">Grounded or abstain. <em>Never fabricate.</em></h2>
         <p className="halluc-sub">
           Clude answers from verified memory, or says "I don't know." No guessing, no confident wrong answers. The lowest hallucination rate of any open memory system, by 7.8×.
