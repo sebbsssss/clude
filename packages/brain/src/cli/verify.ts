@@ -165,7 +165,7 @@ export async function runVerify(): Promise<void> {
   if (manifest.encryption) {
     console.log(`  ${c.bold}Encryption${c.reset}`);
     if (decryptionKey) {
-      const decrypted = records.filter((r) => !r.encrypted).length;
+      const decrypted = records.filter((r: { encrypted?: boolean }) => !r.encrypted).length;
       console.log(`    decrypted:   ${c.green}${decrypted}${c.reset} of ${records.length}`);
     } else {
       console.log(`    ${c.yellow}no --decrypt-key supplied; ${records.length - minimalRecords.length} record(s) excluded from minimalRecords${c.reset}`);
