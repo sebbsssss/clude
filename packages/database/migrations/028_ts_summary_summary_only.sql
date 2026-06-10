@@ -44,8 +44,14 @@
 --   user postgres.<project-ref>
 -- ────────────────────────────────────────────────────────────────────────────────
 
+-- IDEMPOTENT: DROP IF EXISTS handles every starting state — column absent (as found in
+-- prod 2026-06-01), plain (is_generated=NEVER), or already generated. The ADD then
+-- (re)creates it as a generated summary-only column. Run via psql Session pooler with
+-- statement_timeout=0; the ADD rewrites all rows (~744K = ~3-6 min) and CANNOT complete
+-- inside a Railway boot health-check window, which is why initDatabase's add-if-missing
+-- silently fails on a large table and the column can stay absent across deploys.
 BEGIN;
-  ALTER TABLE memories DROP COLUMN ts_summary;  -- also drops idx_memories_ts_summary
+  ALTER TABLE memories DROP COLUMN IF EXISTS ts_summary;  -- also drops idx_memories_ts_summary if present
   ALTER TABLE memories ADD  COLUMN ts_summary tsvector
     GENERATED ALWAYS AS (setweight(to_tsvector('english', COALESCE(summary, '')), 'A')) STORED;
 COMMIT;
