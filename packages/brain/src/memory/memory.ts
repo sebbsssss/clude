@@ -1392,8 +1392,11 @@ function extractQueryTerms(query: string): string[] {
 export function scoreMemory(mem: Memory, opts: RecallOptions): number {
   const now = Date.now();
 
-  // Recency: exponential decay from last access (paper: 0.995^hours)
-  const hoursSinceAccess = (now - new Date(mem.last_accessed).getTime()) / (1000 * 60 * 60);
+  // Recency: exponential decay from last access (paper: 0.995^hours).
+  // Clamped at 0 hours: a future-dated last_accessed (clock skew, seeded/imported data)
+  // makes the exponent negative and the recency term explode past 1.0, letting one memory
+  // dominate recall regardless of query relevance (the HaluMem recency-overflow bug).
+  const hoursSinceAccess = Math.max(0, (now - new Date(mem.last_accessed).getTime()) / (1000 * 60 * 60));
   const recency = Math.pow(RECENCY_DECAY_BASE, hoursSinceAccess);
 
   // Text similarity (keyword overlap with word boundaries + stopword filtering)

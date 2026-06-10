@@ -8,6 +8,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { createChatUploadsRouter } from './chat-uploads.routes';
+import { buildSystemPrompt, renderMemoryLine } from '../lib/memory-prompt';
 import { createHash } from 'crypto';
 import { authenticateAgent, authenticateAgentByDid, type AgentRegistration, findOrCreateAgentForWallet, findOrCreateAgentForDid } from '@clude/brain/features/agent-tier';
 import { requirePrivyAuth } from '@clude/brain/auth/privy-auth';
@@ -254,10 +255,11 @@ function fitToTokenBudget(
   const memoryBudget = remaining - historyTokens;
   const trimmedMemories: any[] = [];
   let memoryTokens = 0;
-  // Memories come pre-sorted by relevance from recall pipeline — keep that order
+  // Memories come pre-sorted by relevance from recall pipeline — keep that order.
+  // Estimate with the SAME rendering used in the prompt (dated line + content snippet),
+  // so the budget reflects what actually ships.
   for (const mem of memories) {
-    const memText = mem.summary || mem.content || '';
-    const memTokens = estimateTokens(memText) + 20; // overhead for XML tags etc
+    const memTokens = estimateTokens(renderMemoryLine(mem)) + 20; // overhead for XML tags etc
     if (memoryTokens + memTokens > memoryBudget) break;
     memoryTokens += memTokens;
     trimmedMemories.push(mem);
@@ -274,56 +276,8 @@ function fitToTokenBudget(
   return { messagesArray, trimmedMemories };
 }
 
-function buildSystemPrompt(memories: any[], opts?: { totalMemoryCount?: number; isGreeting?: boolean }): string {
-  const currentDate = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-  const semantic = memories.filter(m => m.memory_type === 'semantic');
-  const procedural = memories.filter(m => m.memory_type === 'procedural');
-  const selfModel = memories.filter(m => m.memory_type === 'self_model');
-  const episodic = memories.filter(m => m.memory_type === 'episodic' || m.memory_type === 'introspective');
-
-  const sections: string[] = [];
-
-  if (semantic.length > 0) {
-    sections.push('<knowledge>\n' + semantic.map(m => `- ${m.summary}`).join('\n') + '\n</knowledge>');
-  }
-  if (procedural.length > 0) {
-    sections.push('<behaviors>\n' + procedural.map(m => `- ${m.summary}`).join('\n') + '\n</behaviors>');
-  }
-  if (selfModel.length > 0) {
-    sections.push('<identity>\n' + selfModel.map(m => `- ${m.summary}`).join('\n') + '\n</identity>');
-  }
-  if (episodic.length > 0) {
-    sections.push('<recent>\n' + episodic.map(m => {
-      const date = m.created_at ? new Date(m.created_at).toISOString().slice(0, 10) : '';
-      return `- [${date}] ${m.summary}`;
-    }).join('\n') + '\n</recent>');
-  }
-
-  let memoryContext: string;
-  if (memories.length > 0) {
-    memoryContext = `\n\nYou have recalled ${memories.length} relevant memories for this user${opts?.totalMemoryCount ? ` (out of ${opts.totalMemoryCount} total stored)` : ''}.\n\n<memories count="${memories.length}">\n${sections.join('\n')}\n</memories>`;
-  } else if (opts?.totalMemoryCount && opts.totalMemoryCount > 0) {
-    memoryContext = `\n\nThis user has ${opts.totalMemoryCount} stored memories, but none matched this specific query. You still know them — offer to help with anything they need.`;
-  } else {
-    memoryContext = `\n\nThis is a new user with no stored memories yet. Welcome them and let them know you'll remember everything from your conversations going forward.`;
-  }
-
-  if (opts?.isGreeting) {
-    return `You are Clude — an AI with persistent, long-term memory. You remember everything users tell you across conversations.
-Today's date is ${currentDate}.
-
-This user just signed in. Greet them warmly and personally. If you have their memories, give a brief recap of what you remember about them and what they were last working on. Be conversational, not robotic. Don't list memories mechanically — weave them into a natural greeting. Keep it to 2-3 sentences.
-
-Never mention infrastructure providers or technical details about how you work. You ARE the memory system — you don't "query" it, you simply remember.${memoryContext}`;
-  }
-
-  return `You are Clude — an AI with persistent, long-term memory. You remember everything users tell you across conversations.
-Today's date is ${currentDate}.
-
-Use your memories naturally in conversation. Don't say "according to my records" or "I recall from my database" — just reference what you know like a person would. If a user asks about their memories, you can describe what you remember.
-
-Never mention infrastructure providers or technical details about how you work. Never tell users to check any external service. You ARE the memory system.${memoryContext}`;
-}
+// buildSystemPrompt + renderMemoryLine live in ../lib/memory-prompt.ts — the read-side
+// hallucination defense (grounding rules, dated lines, most-recent-wins, honest empty-recall).
 
 function resolveOpenRouterModel(modelId: string): string | null {
   const model = CHAT_MODELS.find(m => m.id === modelId);
