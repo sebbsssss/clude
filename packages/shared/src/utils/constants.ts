@@ -31,10 +31,14 @@ export const DECAY_RATES: Record<string, number> = {
 
 // Memory retrieval — additive scoring (Park et al. 2023, Generative Agents)
 export const RECENCY_DECAY_BASE = 0.995;               // Exponential: 0.995^hours since last access
-export const RETRIEVAL_WEIGHT_RECENCY = 1.0;            // Boosted: recent memories matter more
-export const RETRIEVAL_WEIGHT_RELEVANCE = 2.0;          // Keyword relevance
-export const RETRIEVAL_WEIGHT_IMPORTANCE = 2.0;         // Importance stays the same
-export const RETRIEVAL_WEIGHT_VECTOR = 4.0;             // Vector similarity dominates when available (works well for diverse memory corpus)
+// Retrieval weights are workload-configurable. Defaults are tuned for the live bot (a diverse,
+// time-sensitive corpus where recency + importance matter). For static fact-QA workloads, a
+// relevance/vector-first config avoids recency flooding single-entity queries (set _RECENCY /
+// _IMPORTANCE low). At the defaults this is byte-identical to prior behavior; prod is unaffected.
+export const RETRIEVAL_WEIGHT_RECENCY = Number(process.env.RETRIEVAL_WEIGHT_RECENCY ?? '1.0');      // recent memories matter more
+export const RETRIEVAL_WEIGHT_RELEVANCE = Number(process.env.RETRIEVAL_WEIGHT_RELEVANCE ?? '2.0');  // keyword relevance
+export const RETRIEVAL_WEIGHT_IMPORTANCE = Number(process.env.RETRIEVAL_WEIGHT_IMPORTANCE ?? '2.0');// importance
+export const RETRIEVAL_WEIGHT_VECTOR = Number(process.env.RETRIEVAL_WEIGHT_VECTOR ?? '4.0');        // vector similarity (dominant when available)
 
 // BM25 (exact lexical) boost added to a memory's score when full-text search found it.
 // Default 0.15 preserves the historical "small BM25-found bonus". Env-tunable because a
