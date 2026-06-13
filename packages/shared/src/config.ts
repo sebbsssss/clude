@@ -131,6 +131,23 @@ export const config = {
       | "anthropic"
       | "openrouter",
   },
+  // Local/pluggable memory-operations model (CludeMem). Empty provider = disabled,
+  // so memory ops stay on the frontier path. Opt-in only — never auto-enabled even
+  // when a local Ollama server is running (see specs design Section 9).
+  memoryModel: {
+    /** "" (disabled) | "ollama" | "anthropic" | "openrouter" */
+    provider: optional("MEMORY_MODEL_PROVIDER", "") as
+      | ""
+      | "ollama"
+      | "anthropic"
+      | "openrouter",
+    /** Model id/tag, e.g. an Ollama tag like "cludemem-e4b" or "gemma3:4b" */
+    model: optional("MEMORY_MODEL", ""),
+    /** Reuses OLLAMA_URL (shared with the local embedding provider) */
+    ollamaUrl: optional("OLLAMA_URL", "http://localhost:11434"),
+    /** Per-request timeout (ms) for local inference */
+    timeoutMs: parseInt(optional("MEMORY_MODEL_TIMEOUT_MS", "20000"), 10),
+  },
   tavily: {
     apiKey: optional("TAVILY_API_KEY", ""),
   },
