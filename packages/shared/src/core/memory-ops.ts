@@ -1,4 +1,3 @@
-import { config } from '../config';
 import { createChildLogger } from './logger';
 import { generateResponse as generateClaudeResponse } from './claude-client';
 import {
@@ -8,6 +7,7 @@ import {
 } from './openrouter-client';
 import { generateOllamaResponse } from './ollama-client';
 import { isOllamaEnabled } from './inference';
+import { getMemoryModelConfig } from './memory-model-config';
 
 const log = createChildLogger('memory-ops');
 
@@ -61,10 +61,11 @@ function buildUserContent(opts: MemoryOpOptions): string {
  */
 export async function generateMemoryOp(opts: MemoryOpOptions): Promise<string> {
   if (isOllamaEnabled() && isMemoryOp(opts.cognitiveFunction)) {
+    const mm = getMemoryModelConfig();
     try {
       return await generateOllamaResponse({
-        ollamaUrl: config.memoryModel.ollamaUrl,
-        model: config.memoryModel.model,
+        ollamaUrl: mm.ollamaUrl,
+        model: mm.model,
         systemPrompt: opts.systemPrompt,
         messages: [{ role: 'user', content: buildUserContent(opts) }],
         format: opts.format,
@@ -72,7 +73,7 @@ export async function generateMemoryOp(opts: MemoryOpOptions): Promise<string> {
           temperature: opts.temperature ?? 0,
           ...(opts.maxTokens ? { num_predict: opts.maxTokens } : {}),
         },
-        timeoutMs: config.memoryModel.timeoutMs,
+        timeoutMs: mm.timeoutMs,
       });
     } catch (err) {
       log.warn(

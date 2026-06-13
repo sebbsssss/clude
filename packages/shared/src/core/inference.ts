@@ -1,8 +1,8 @@
-import { config } from '../config';
 import { createChildLogger } from './logger';
 import { generateResponse as generateClaudeResponse } from './claude-client';
 import { generateOpenRouterResponse, isOpenRouterEnabled, type OpenRouterMessage } from './openrouter-client';
 import { generateOllamaResponse } from './ollama-client';
+import { getMemoryModelConfig } from './memory-model-config';
 
 const log = createChildLogger('inference');
 
@@ -26,12 +26,13 @@ export type InferenceProvider = 'anthropic' | 'openrouter' | 'ollama' | 'auto';
 
 /** True only when the local memory model is explicitly configured (opt-in). */
 export function isOllamaEnabled(): boolean {
-  return config.memoryModel.provider === 'ollama' && Boolean(config.memoryModel.model);
+  const mm = getMemoryModelConfig();
+  return mm.provider === 'ollama' && Boolean(mm.model);
 }
 
 /** True when any non-empty memory-model provider is configured (capability check). */
 export function isMemoryModelEnabled(): boolean {
-  return config.memoryModel.provider !== '';
+  return getMemoryModelConfig().provider !== '';
 }
 
 export interface InferenceConfig {
@@ -169,12 +170,13 @@ async function generateWithOllama(opts: GenerateOptions): Promise<string> {
     userContent = `${opts.context}\n\n---\n\n${opts.userMessage}`;
   }
 
+  const mm = getMemoryModelConfig();
   return generateOllamaResponse({
-    ollamaUrl: config.memoryModel.ollamaUrl,
-    model: config.memoryModel.model,
+    ollamaUrl: mm.ollamaUrl,
+    model: mm.model,
     systemPrompt,
     messages: [{ role: 'user', content: userContent }],
-    timeoutMs: config.memoryModel.timeoutMs,
+    timeoutMs: mm.timeoutMs,
     options: opts.maxTokens ? { num_predict: opts.maxTokens } : undefined,
   });
 }
