@@ -1,6 +1,8 @@
+import { config } from '../config';
 import { createChildLogger } from './logger';
 import { generateResponse as generateClaudeResponse } from './claude-client';
 import { generateOpenRouterResponse, isOpenRouterEnabled, type OpenRouterMessage } from './openrouter-client';
+import { generateOllamaResponse } from './ollama-client';
 
 const log = createChildLogger('inference');
 
@@ -13,11 +15,24 @@ const log = createChildLogger('inference');
 // Providers:
 // - anthropic: Claude (direct Anthropic API)
 // - openrouter: Unified router (all models via single key)
+// - ollama: local memory model (CludeMem). Opt-in only — never selected
+//   by 'auto', and an explicit ollama call surfaces failures rather than
+//   silently falling back to a frontier provider (see specs design Section 9).
 //
 // Priority in auto mode: OpenRouter > Anthropic
 // ============================================================
 
-export type InferenceProvider = 'anthropic' | 'openrouter' | 'auto';
+export type InferenceProvider = 'anthropic' | 'openrouter' | 'ollama' | 'auto';
+
+/** True only when the local memory model is explicitly configured (opt-in). */
+export function isOllamaEnabled(): boolean {
+  return config.memoryModel.provider === 'ollama' && Boolean(config.memoryModel.model);
+}
+
+/** True when any non-empty memory-model provider is configured (capability check). */
+export function isMemoryModelEnabled(): boolean {
+  return config.memoryModel.provider !== '';
+}
 
 export interface InferenceConfig {
   /** Primary provider (default: 'auto' — tries OpenRouter first, falls back to Anthropic) */
@@ -95,9 +110,12 @@ export async function generate(opts: GenerateOptions): Promise<string> {
   throw lastError || new Error('All inference providers failed');
 }
 
-function getProviderOrder(provider: InferenceProvider): Array<'anthropic' | 'openrouter'> {
+type ConcreteProvider = 'anthropic' | 'openrouter' | 'ollama';
+
+function getProviderOrder(provider: InferenceProvider): Array<ConcreteProvider> {
   if (provider === 'auto') {
-    const providers: Array<'anthropic' | 'openrouter'> = [];
+    // 'auto' never selects the local memory model — opt-in is explicit only.
+    const providers: Array<ConcreteProvider> = [];
     if (isOpenRouterEnabled()) {
       providers.push('openrouter');
     }
@@ -105,15 +123,21 @@ function getProviderOrder(provider: InferenceProvider): Array<'anthropic' | 'ope
     return providers;
   }
 
-  const providers: Array<'anthropic' | 'openrouter'> = [provider as 'anthropic' | 'openrouter'];
+  // Explicit local memory model: surface failures, never silently fall back to
+  // a frontier provider. Graceful fallback is added at the Spec 1b router level.
+  if (provider === 'ollama') {
+    return ['ollama'];
+  }
+
+  const providers: Array<ConcreteProvider> = [provider as ConcreteProvider];
   if (inferenceConfig.fallback && inferenceConfig.fallback !== provider) {
-    providers.push(inferenceConfig.fallback as 'anthropic' | 'openrouter');
+    providers.push(inferenceConfig.fallback as ConcreteProvider);
   }
   return providers;
 }
 
 async function generateWithProvider(
-  provider: InferenceProvider,
+  provider: ConcreteProvider,
   opts: GenerateOptions
 ): Promise<string> {
   switch (provider) {
@@ -121,9 +145,38 @@ async function generateWithProvider(
       return generateWithOpenRouter(opts);
     case 'anthropic':
       return generateWithAnthropic(opts);
+    case 'ollama':
+      return generateWithOllama(opts);
     default:
       throw new Error(`Unknown provider: ${provider}`);
   }
+}
+
+async function generateWithOllama(opts: GenerateOptions): Promise<string> {
+  if (!isOllamaEnabled()) {
+    throw new Error(
+      'Ollama memory model not configured — set MEMORY_MODEL_PROVIDER=ollama and MEMORY_MODEL',
+    );
+  }
+
+  let systemPrompt = opts.systemPrompt || 'You are Clude, an AI with persistent memory.';
+  if (opts.featureInstruction) {
+    systemPrompt += `\n\n${opts.featureInstruction}`;
+  }
+
+  let userContent = opts.userMessage;
+  if (opts.context) {
+    userContent = `${opts.context}\n\n---\n\n${opts.userMessage}`;
+  }
+
+  return generateOllamaResponse({
+    ollamaUrl: config.memoryModel.ollamaUrl,
+    model: config.memoryModel.model,
+    systemPrompt,
+    messages: [{ role: 'user', content: userContent }],
+    timeoutMs: config.memoryModel.timeoutMs,
+    options: opts.maxTokens ? { num_predict: opts.maxTokens } : undefined,
+  });
 }
 
 async function generateWithOpenRouter(opts: GenerateOptions): Promise<string> {
