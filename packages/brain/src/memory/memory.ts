@@ -42,7 +42,7 @@ import { setContentTokens } from './content-tokens';
 import { encryptForStorage, delegationStateForWrite } from './memory-encryption';
 import { isOpenRouterEnabled } from '@clude/shared/core/openrouter-client';
 import { generateMemoryOp } from '@clude/shared/core/memory-ops';
-import { isMemoryModelEnabled } from '@clude/shared/core/inference';
+import { isMemoryModelEnabled, isOllamaEnabled } from '@clude/shared/core/inference';
 import { isEncryptionEnabled, getEncryptionPubkey, encryptContent } from '@clude/shared/core/encryption';
 import { decryptMemories } from './memory-decryption';
 import { eventBus } from '../events/event-bus';
@@ -2272,7 +2272,17 @@ export async function scoreImportanceWithLLM(
   fallbackOpts?: Parameters<typeof calculateImportance>[0]
 ): Promise<number> {
   try {
-    const response = await generateImportanceScore(description);
+    // Local memory model (CludeMem) when enabled, else the existing Anthropic-direct path.
+    const response = isOllamaEnabled()
+      ? await generateMemoryOp({
+          cognitiveFunction: 'importance',
+          systemPrompt:
+            'You rate the importance of events for an AI agent. Respond with ONLY a single integer from 1 to 10. 1 = purely mundane. 5 = moderately important. 10 = extremely significant.',
+          userMessage: `Rate the importance of this event:\n"${description.slice(0, 500)}"\nRating (1-10):`,
+          maxTokens: 10,
+          temperature: 0,
+        })
+      : await generateImportanceScore(description);
     const parsed = parseInt(response.trim(), 10);
     if (!isNaN(parsed) && parsed >= 1 && parsed <= 10) {
       return parsed / 10;
