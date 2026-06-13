@@ -100,7 +100,14 @@ export type CognitiveFunction =
   | 'entity'          // Entity extraction (fast, lightweight)
   | 'importance'      // Importance scoring (fast, lightweight)
   | 'summarize'       // Memory compaction/summarization (general)
-  | 'web_search';     // Web-augmented responses (general + search)
+  | 'web_search'      // Web-augmented responses (general + search)
+  // Memory-op functions (CludeMem). Frontier models below are the fallback
+  // used when the local memory model is off; see core/memory-ops.ts.
+  | 'classify'        // Memory-type classification + importance/tags
+  | 'extract'         // Atomic memory/fact extraction
+  | 'temporal'        // Event-date + temporal-link extraction
+  | 'reconcile'       // Contradiction/duplicate verdicts
+  | 'query';          // Query understanding / expansion
 
 const COGNITIVE_MODEL_MAP: Record<CognitiveFunction, string> = {
   reply:       OPENROUTER_MODELS['claude-sonnet-4.6'],    // Quality matters for public replies
@@ -111,6 +118,11 @@ const COGNITIVE_MODEL_MAP: Record<CognitiveFunction, string> = {
   importance:  OPENROUTER_MODELS['llama-3b'],             // Fast importance scoring
   summarize:   OPENROUTER_MODELS['llama-70b'],            // Good enough for compaction
   web_search:  OPENROUTER_MODELS['llama-70b'],            // Fast, good at synthesis
+  classify:    OPENROUTER_MODELS['llama-3b'],             // Fast classification fallback
+  extract:     OPENROUTER_MODELS['llama-70b'],            // Extraction fallback
+  temporal:    OPENROUTER_MODELS['llama-3b'],             // Fast temporal fallback
+  reconcile:   OPENROUTER_MODELS['llama-70b'],            // Reconciliation fallback
+  query:       OPENROUTER_MODELS['llama-3b'],             // Fast query understanding fallback
 };
 
 /**
