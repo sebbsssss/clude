@@ -13,6 +13,19 @@ vi.mock('@clude/shared/core/logger', () => ({
   }),
 }));
 
+// Mock config so the transitive import chain (agent-tier → privy-wallet-resolver
+// → @clude/shared/config) doesn't throw on missing required env vars (X_API_KEY,
+// etc.) when tests run outside lightweight mode. Mirrors the auth/ sibling tests.
+vi.mock('@clude/shared/config', () => ({
+  config: {
+    privy: {
+      appId: 'test-app-id',
+      appSecret: 'test-app-secret',
+      jwksUrl: 'https://test.privy.io/jwks',
+    },
+  },
+}));
+
 import { getDb } from '@clude/shared/core/database';
 import { migrateOwnerWallet } from '../agent-tier.js';
 
