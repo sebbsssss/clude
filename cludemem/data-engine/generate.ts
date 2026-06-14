@@ -1,10 +1,18 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { SEED_SCRIPTS } from './life-script';
+import { generateScripts } from './script-generator';
 import { TemplateRenderer } from './render';
 import { deriveExamples } from './derive';
 import { runGauntlet } from './gauntlet';
 import type { Example, TaskName } from './taxonomy';
+
+// --count N  add N combinatorially-generated scripts (the volume lever).
+// --seed S   batch seed (use different seeds for disjoint shards / dev vs test).
+function argNum(name: string, def: number): number {
+  const i = process.argv.indexOf(`--${name}`);
+  return i >= 0 ? Number(process.argv[i + 1]) : def;
+}
 
 // ============================================================
 // Build a CludeMem training shard from the planted scripts.
@@ -30,9 +38,13 @@ function toChat(ex: Example) {
 }
 
 async function main() {
+  const count = argNum('count', 0);
+  const seed = argNum('seed', 0);
+  const scripts = [...SEED_SCRIPTS, ...generateScripts(count, seed)];
+
   const renderer = new TemplateRenderer();
   const all: Example[] = [];
-  for (const script of SEED_SCRIPTS) {
+  for (const script of scripts) {
     all.push(...(await deriveExamples(script, renderer)));
   }
 
@@ -53,10 +65,13 @@ async function main() {
   // Abstention coverage: at least one trained refusal.
   assert(kept.some((e) => e.task === 'ANSWER' && (e.output as { abstain: boolean }).abstain), 'no abstention examples');
 
-  // Write the shard.
+  // Write the shard. Default smoke -> sample.jsonl (committed, small);
+  // any scaled run -> train.jsonl (gitignored). Override with --out <file>.
+  const outArgIdx = process.argv.indexOf('--out');
+  const outName = outArgIdx >= 0 ? process.argv[outArgIdx + 1] : count > 0 ? 'train.jsonl' : 'sample.jsonl';
   const outDir = fileURLToPath(new URL('../data/', import.meta.url));
   mkdirSync(outDir, { recursive: true });
-  const outPath = `${outDir}sample.jsonl`;
+  const outPath = `${outDir}${outName}`;
   writeFileSync(outPath, kept.map((e) => JSON.stringify(toChat(e))).join('\n') + '\n');
 
   // Summary.
@@ -64,7 +79,7 @@ async function main() {
     .map((t) => `${t}=${kept.filter((e) => e.task === t).length}`)
     .join('  ');
   console.log(`CludeMem data engine — wrote ${kept.length} examples (0 rejected) to ${outPath}`);
-  console.log(`  scripts: ${SEED_SCRIPTS.length}   tasks: ${perTask}`);
+  console.log(`  scripts: ${scripts.length}   tasks: ${perTask}`);
   console.log(`  (offline TemplateRenderer; swap in TeacherRenderer + more scripts for scale)`);
 }
 

@@ -35,12 +35,24 @@ construction — the script IS the ground truth, so the model can't be taught a
 wrong label. Running it is the test (it asserts 0 gauntlet rejections + full task
 coverage + abstention examples).
 
-**Scale (teacher-rendered, 100K+):** swap `TemplateRenderer` → `TeacherRenderer`
-(see `data-engine/teacher.ts`) and multiply scripts. PERMITTED teachers only:
-DeepSeek (MIT), Qwen3 (Apache, self-hosted), Kimi K2, Mistral. **Never
-Claude/GPT/Gemini** — their terms forbid training a competing model on their
-outputs (design Section 6.2). `teacher.ts` hard-refuses a banned teacher. The
-gauntlet stays identical; expect to discard 50-80% of teacher-rendered rows.
+**Scale the count (offline, $0):** the volume lever is generating more scripts.
+```bash
+npx tsx cludemem/data-engine/generate.ts --count 3000 --out train.jsonl   # ~100K examples
+```
+Each script yields ~35 examples (3000 → ~103K). `script-generator.ts` assembles
+diverse personas+timelines combinatorially while GUARANTEEING the hard structures
+(a supersession, a contradiction, a temporal chain, 2 hard-negative unanswerables)
+with exact labels. It's seeded/deterministic — use different `--seed` values for
+disjoint dev/test shards (decontamination). To add variety, extend the pools and
+archetypes in `script-generator.ts`, or add hand-authored scripts to `SEED_SCRIPTS`.
+
+**Add naturalness (teacher-rendered):** swap `TemplateRenderer` → `TeacherRenderer`
+(see `data-engine/teacher.ts`) so the planted structure gets varied human-like
+phrasing. PERMITTED teachers only: DeepSeek (MIT), Qwen3 (Apache, self-hosted),
+Kimi K2, Mistral. **Never Claude/GPT/Gemini** — their terms forbid training a
+competing model on their outputs (design Section 6.2); `teacher.ts` hard-refuses a
+banned teacher. The gauntlet stays identical; expect to discard 50-80% of
+teacher-rendered rows. Labels never depend on phrasing, so they stay exact.
 
 ## 2. Train (GPU)
 
@@ -90,7 +102,7 @@ CludeMem with graceful frontier fallback; personality stays on frontier.
 
 ```
 cludemem/
-  data-engine/   taxonomy.ts life-script.ts render.ts derive.ts gauntlet.ts generate.ts teacher.ts
+  data-engine/   taxonomy.ts life-script.ts script-generator.ts render.ts derive.ts gauntlet.ts generate.ts teacher.ts
   training/      train_qlora.py requirements.txt
   packaging/     Modelfile build_and_push.sh
   eval/          memopseval.ts
