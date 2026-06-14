@@ -66,6 +66,20 @@ export class TeacherRenderer implements Renderer {
   }
 }
 
+/**
+ * Serves utterances pre-rendered (e.g. by a bounded concurrency pool), keyed by
+ * fact identity. Falls back to the template renderer for any fact not in the map
+ * (e.g. a teacher call that failed). Lets deriveExamples run fully synchronously
+ * after a single parallel rendering pass — see generate.ts mapPool.
+ */
+export class PrerenderedRenderer implements Renderer {
+  private fallback = new TemplateRenderer();
+  constructor(private map: Map<PlantedFact, string>) {}
+  render(fact: PlantedFact): string {
+    return this.map.get(fact) ?? this.fallback.render(fact);
+  }
+}
+
 /** Render every fact of a script into per-session dialogue blocks. */
 export async function renderSessions(
   script: LifeScript,

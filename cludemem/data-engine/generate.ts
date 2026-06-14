@@ -1,9 +1,9 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
-import { SEED_SCRIPTS } from './life-script';
+import { SEED_SCRIPTS, type PlantedFact } from './life-script';
 import { generateScripts } from './script-generator';
-import { TemplateRenderer, TeacherRenderer, type Renderer } from './render';
+import { TemplateRenderer, TeacherRenderer, PrerenderedRenderer, type Renderer } from './render';
 import { makeTeacher } from './teacher';
 import { deriveExamples } from './derive';
 import { runGauntlet } from './gauntlet';
@@ -17,6 +17,17 @@ dotenv.config({ path: fileURLToPath(new URL('../../.env', import.meta.url)) });
 function argNum(name: string, def: number): number {
   const i = process.argv.indexOf(`--${name}`);
   return i >= 0 ? Number(process.argv[i + 1]) : def;
+}
+
+// Bounded-concurrency map: run `fn` over `items` with at most `limit` in flight.
+async function mapPool<T, R>(items: T[], limit: number, fn: (item: T, i: number) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    for (let i = next++; i < items.length; i = next++) out[i] = await fn(items[i], i);
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, worker));
+  return out;
 }
 
 // ============================================================
@@ -56,8 +67,28 @@ async function main() {
       process.exit(1);
     }
     const t = makeTeacher({ apiKey, baseUrl: process.env.TEACHER_BASE_URL, model: process.env.TEACHER_MODEL });
-    renderer = new TeacherRenderer(t.complete, t.model);
-    console.log(`rendering with teacher ${t.model} @ ${process.env.TEACHER_BASE_URL ?? 'deepseek'}`);
+    const teacher = new TeacherRenderer(t.complete, t.model);
+    const fallback = new TemplateRenderer();
+    const conc = argNum('concurrency', 8);
+    const allFacts: PlantedFact[] = scripts.flatMap((s) => s.facts);
+    console.log(`rendering ${allFacts.length} facts with teacher ${t.model} (concurrency ${conc})`);
+    let done = 0;
+    let failed = 0;
+    const rendered = await mapPool(allFacts, conc, async (f) => {
+      let out: string;
+      try {
+        out = await teacher.render(f);
+      } catch {
+        failed++;
+        out = fallback.render(f); // graceful: a failed teacher call degrades to template
+      }
+      if (++done % 1000 === 0) console.log(`  rendered ${done}/${allFacts.length}${failed ? ` (${failed} fell back)` : ''}`);
+      return out;
+    });
+    const map = new Map<PlantedFact, string>();
+    allFacts.forEach((f, i) => map.set(f, rendered[i]));
+    if (failed) console.log(`  note: ${failed}/${allFacts.length} renders fell back to template (teacher errors)`);
+    renderer = new PrerenderedRenderer(map);
   } else {
     renderer = new TemplateRenderer();
   }
