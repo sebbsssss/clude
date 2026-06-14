@@ -1,11 +1,16 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
 import { SEED_SCRIPTS } from './life-script';
 import { generateScripts } from './script-generator';
-import { TemplateRenderer } from './render';
+import { TemplateRenderer, TeacherRenderer, type Renderer } from './render';
+import { makeTeacher } from './teacher';
 import { deriveExamples } from './derive';
 import { runGauntlet } from './gauntlet';
 import type { Example, TaskName } from './taxonomy';
+
+// Load worktree-root .env so --teacher can read TEACHER_* creds (never committed).
+dotenv.config({ path: fileURLToPath(new URL('../../.env', import.meta.url)) });
 
 // --count N  add N combinatorially-generated scripts (the volume lever).
 // --seed S   batch seed (use different seeds for disjoint shards / dev vs test).
@@ -40,9 +45,23 @@ function toChat(ex: Example) {
 async function main() {
   const count = argNum('count', 0);
   const seed = argNum('seed', 0);
+  const useTeacher = process.argv.includes('--teacher');
   const scripts = [...SEED_SCRIPTS, ...generateScripts(count, seed)];
 
-  const renderer = new TemplateRenderer();
+  let renderer: Renderer;
+  if (useTeacher) {
+    const apiKey = process.env.TEACHER_API_KEY;
+    if (!apiKey) {
+      console.error('--teacher needs TEACHER_API_KEY in .env');
+      process.exit(1);
+    }
+    const t = makeTeacher({ apiKey, baseUrl: process.env.TEACHER_BASE_URL, model: process.env.TEACHER_MODEL });
+    renderer = new TeacherRenderer(t.complete, t.model);
+    console.log(`rendering with teacher ${t.model} @ ${process.env.TEACHER_BASE_URL ?? 'deepseek'}`);
+  } else {
+    renderer = new TemplateRenderer();
+  }
+
   const all: Example[] = [];
   for (const script of scripts) {
     all.push(...(await deriveExamples(script, renderer)));
@@ -60,7 +79,11 @@ async function main() {
     }
   };
   assert(kept.length > 0, 'no examples produced');
-  assert(rejected.length === 0, `template data should fully pass the gauntlet, but ${rejected.length} rejected: ${rejected.slice(0, 3).map((r) => r.reason).join(' | ')}`);
+  // Template data must be perfectly clean; teacher-rendered data is EXPECTED to
+  // have some gauntlet rejections (drift) — that's the gauntlet doing its job.
+  if (!useTeacher) {
+    assert(rejected.length === 0, `template data should fully pass the gauntlet, but ${rejected.length} rejected: ${rejected.slice(0, 3).map((r) => r.reason).join(' | ')}`);
+  }
   for (const t of expectTasks) assert(tasksSeen.has(t), `task ${t} not represented`);
   // Abstention coverage: at least one trained refusal.
   assert(kept.some((e) => e.task === 'ANSWER' && (e.output as { abstain: boolean }).abstain), 'no abstention examples');
@@ -68,7 +91,8 @@ async function main() {
   // Write the shard. Default smoke -> sample.jsonl (committed, small);
   // any scaled run -> train.jsonl (gitignored). Override with --out <file>.
   const outArgIdx = process.argv.indexOf('--out');
-  const outName = outArgIdx >= 0 ? process.argv[outArgIdx + 1] : count > 0 ? 'train.jsonl' : 'sample.jsonl';
+  const outName =
+    outArgIdx >= 0 ? process.argv[outArgIdx + 1] : useTeacher ? 'teacher-sample.jsonl' : count > 0 ? 'train.jsonl' : 'sample.jsonl';
   const outDir = fileURLToPath(new URL('../data/', import.meta.url));
   mkdirSync(outDir, { recursive: true });
   const outPath = `${outDir}${outName}`;
@@ -78,9 +102,10 @@ async function main() {
   const perTask = expectTasks
     .map((t) => `${t}=${kept.filter((e) => e.task === t).length}`)
     .join('  ');
-  console.log(`CludeMem data engine — wrote ${kept.length} examples (0 rejected) to ${outPath}`);
-  console.log(`  scripts: ${scripts.length}   tasks: ${perTask}`);
-  console.log(`  (offline TemplateRenderer; swap in TeacherRenderer + more scripts for scale)`);
+  const rate = all.length ? ((100 * rejected.length) / all.length).toFixed(1) : '0';
+  console.log(`CludeMem data engine — wrote ${kept.length} examples (${rejected.length} rejected, ${rate}%) to ${outPath}`);
+  console.log(`  scripts: ${scripts.length}   renderer: ${useTeacher ? 'teacher' : 'template'}   tasks: ${perTask}`);
+  if (rejected.length) console.log(`  sample rejections: ${rejected.slice(0, 3).map((r) => r.reason).join(' | ')}`);
 }
 
 main().catch((err) => {

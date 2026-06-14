@@ -39,6 +39,18 @@ export function validateExample(ex: Example): GauntletResult {
     }
   }
 
+  // Groundedness: an entity label must survive into the (possibly teacher-paraphrased)
+  // input. Proper nouns survive paraphrase, so this catches a teacher that dropped
+  // an entity — the main way teacher rendering corrupts an otherwise-exact label.
+  if (ex.task === 'ENTITIES') {
+    const o = ex.output as { entities: { name: string }[] };
+    for (const e of o.entities) {
+      if (!ex.input.toLowerCase().includes(e.name.toLowerCase())) {
+        return { ok: false, reason: `entity "${e.name}" not grounded in rendered input` };
+      }
+    }
+  }
+
   return { ok: true };
 }
 

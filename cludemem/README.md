@@ -46,13 +46,22 @@ with exact labels. It's seeded/deterministic — use different `--seed` values f
 disjoint dev/test shards (decontamination). To add variety, extend the pools and
 archetypes in `script-generator.ts`, or add hand-authored scripts to `SEED_SCRIPTS`.
 
-**Add naturalness (teacher-rendered):** swap `TemplateRenderer` → `TeacherRenderer`
-(see `data-engine/teacher.ts`) so the planted structure gets varied human-like
-phrasing. PERMITTED teachers only: DeepSeek (MIT), Qwen3 (Apache, self-hosted),
-Kimi K2, Mistral. **Never Claude/GPT/Gemini** — their terms forbid training a
-competing model on their outputs (design Section 6.2); `teacher.ts` hard-refuses a
-banned teacher. The gauntlet stays identical; expect to discard 50-80% of
-teacher-rendered rows. Labels never depend on phrasing, so they stay exact.
+**Add naturalness (teacher-rendered):** the `--teacher` flag renders each planted
+fact as natural dialogue via a teacher API. Creds live in the gitignored `.env`:
+`TEACHER_API_KEY`, `TEACHER_BASE_URL`, `TEACHER_MODEL`. Labels never depend on
+phrasing, so they stay exact.
+```bash
+npx tsx cludemem/data-engine/generate.ts --count 3000 --teacher --out train.jsonl
+```
+PERMITTED teachers only — `teacher.ts` hard-refuses GPT/Claude/Gemini (their terms
+forbid training a competing model on their outputs; design Section 6.2). Clean
+options: DeepSeek (MIT, distillation explicitly allowed), Qwen/Mistral (Apache),
+Kimi K2. **On Ollama Cloud, do NOT use the Qwen3 models for rendering** — they are
+reasoning models that burn ~2,800 tokens to paraphrase one line (~120x waste).
+Use a fast non-thinking instruct model: `ministral-3:8b` (Apache, ~24 tok/render)
+or `deepseek-v3.2` (MIT). Teacher data gets ~10% gauntlet rejections (rendering
+drift drops a proper noun, breaking grounding) vs 0% on template — that's the
+gauntlet filtering bad examples, exactly as intended.
 
 ## 2. Train (GPU)
 
