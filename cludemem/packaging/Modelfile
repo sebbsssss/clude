@@ -1,0 +1,18 @@
+# CludeMem Ollama Modelfile.
+# Build:  ollama create cludemem-e4b -f Modelfile
+# Then:   ollama run cludemem-e4b
+#
+# Point FROM at the merged GGUF produced by train_qlora.py --export-gguf
+# (ship merged weights, not adapters). Replace the path/quant as needed.
+FROM ./cludemem-e4b-lora/unsloth.Q4_K_M.gguf
+
+# Deterministic structured output for memory ops.
+PARAMETER temperature 0
+PARAMETER top_p 0.95
+PARAMETER top_k 64
+PARAMETER num_ctx 16384
+
+# CludeMem is infrastructure: it emits strict JSON for memory operations and
+# does not chat. The per-task system prompt is supplied by the caller
+# (see core/memory-ops.ts); this is only a safe default.
+SYSTEM """You are CludeMem, a memory operations model. Given a memory task and input, respond with ONLY the strict JSON the task specifies. No prose, no markdown."""
