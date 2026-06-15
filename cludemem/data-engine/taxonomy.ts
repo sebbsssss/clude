@@ -70,6 +70,8 @@ export const ClassifyOut = z.object({
   importance: z.number().min(0).max(1),
   tags: z.array(z.string()),
   concepts: z.array(z.enum(CONCEPTS)),
+  // -1 (very negative) .. 0 (neutral) .. 1 (very positive)
+  emotional_valence: z.number().min(-1).max(1),
 });
 
 export const ExtractOut = z.object({
@@ -107,6 +109,14 @@ export const ConsolidateOut = z.object({
   insights: z.array(z.object({ content: z.string(), evidence: z.array(z.string()) })),
 });
 
+// COMPACT (task #6): squash an old memory group into one summary, keeping the
+// entities and the spanned date range so nothing load-bearing is lost.
+export const CompactOut = z.object({
+  summary: z.string(),
+  preserved_entities: z.array(z.string()),
+  date_range: z.object({ start: z.string().nullable(), end: z.string().nullable() }),
+});
+
 export const ReconcileOut = z.object({
   verdict: z.enum(['contradicts', 'consistent', 'supersedes', 'duplicate']),
   resolution: z.string(),
@@ -137,6 +147,7 @@ export const TASK_SCHEMAS = {
   ENTITIES: EntitiesOut,
   TEMPORAL: TemporalOut,
   CONSOLIDATE: ConsolidateOut,
+  COMPACT: CompactOut,
   RECONCILE: ReconcileOut,
   QUERY: QueryOut,
   ANSWER: AnswerOut,

@@ -102,7 +102,7 @@ async function main() {
 
   // Self-checks: the whole pipeline is correct iff these hold.
   const tasksSeen = new Set(kept.map((e) => e.task));
-  const expectTasks: TaskName[] = ['CLASSIFY', 'EXTRACT', 'ENTITIES', 'TEMPORAL', 'CONSOLIDATE', 'RECONCILE', 'QUERY', 'ANSWER'];
+  const expectTasks: TaskName[] = ['CLASSIFY', 'EXTRACT', 'ENTITIES', 'TEMPORAL', 'CONSOLIDATE', 'COMPACT', 'RECONCILE', 'QUERY', 'ANSWER'];
   const assert = (cond: boolean, msg: string) => {
     if (!cond) {
       console.error(`SELF-CHECK FAILED: ${msg}`);
@@ -118,6 +118,21 @@ async function main() {
   for (const t of expectTasks) assert(tasksSeen.has(t), `task ${t} not represented`);
   // Abstention coverage: at least one trained refusal.
   assert(kept.some((e) => e.task === 'ANSWER' && (e.output as { abstain: boolean }).abstain), 'no abstention examples');
+
+  // v1 difficulty quotas (design 6.1) — enforced at scale, where ratios are meaningful.
+  if (count > 0) {
+    const allFacts = scripts.flatMap((s) => s.facts);
+    const nonExplicit = allFacts.filter((f) => f.renderStyle !== 'explicit').length;
+    assert(nonExplicit / allFacts.length >= 0.4, `difficulty quota: only ${((100 * nonExplicit) / allFacts.length).toFixed(0)}% of facts non-explicit (<40%)`);
+
+    const negs = scripts.flatMap((s) => s.qa).filter((q) => !q.answerable);
+    const hardNeg = negs.filter((q) => q.negativeKind && q.negativeKind !== 'absent').length;
+    assert(negs.length > 0 && hardNeg / negs.length >= 0.5, `hard-negative quota: only ${((100 * hardNeg) / Math.max(1, negs.length)).toFixed(0)}% of unanswerables are hard negatives (<50%)`);
+
+    const longTasks = kept.filter((e) => e.task === 'CONSOLIDATE' || e.task === 'COMPACT' || e.task === 'ANSWER');
+    const longOnes = longTasks.filter((e) => e.input.length >= 4000).length;
+    assert(longTasks.length > 0 && longOnes / longTasks.length >= 0.2, `length stratification: only ${((100 * longOnes) / Math.max(1, longTasks.length)).toFixed(0)}% of long-context examples >=4000 chars (<20%)`);
+  }
 
   // Write the shard. Default smoke -> sample.jsonl (committed, small);
   // any scaled run -> train.jsonl (gitignored). Override with --out <file>.

@@ -33,7 +33,13 @@ This derives examples from the planted life scripts via the deterministic
 `TemplateRenderer` and runs the verification gauntlet. Labels are exact by
 construction — the script IS the ground truth, so the model can't be taught a
 wrong label. Running it is the test (it asserts 0 gauntlet rejections + full task
-coverage + abstention examples).
+coverage + abstention examples). For the full set of v1 invariants (temporal
+links, length stratification, hard-negative variety, decontamination, and the
+difficulty-quota ratios), run the dedicated check:
+
+```bash
+npx tsx cludemem/data-engine/engine.test.ts
+```
 
 **Scale the count (offline, $0):** the volume lever is generating more scripts.
 ```bash
@@ -102,7 +108,11 @@ CludeMem with graceful frontier fallback; personality stays on frontier.
 
 ## Status
 
-- ✅ **Data engine** — built, runs, self-validated (offline). The real IP.
+- ✅ **Data engine (v1)** — built, runs, self-validated offline. The real IP.
+  9 of 10 task types generated (RERANK deferred; design Section 8.1 ships it
+  gated/optional). Difficulty quotas, length stratification, hard-negative
+  variety, register noise, and a decontamination guard are enforced;
+  `engine.test.ts` locks the invariants.
 - ✅ **Training / packaging / eval scripts** — written, runnable on a GPU/Ollama box.
 - ⏳ **Real corpus + fine-tune** — needs a teacher API key + a GPU (your resources).
 - ⏳ Open decisions before publishing (model name, dataset release): design Section 13.
@@ -111,7 +121,7 @@ CludeMem with graceful frontier fallback; personality stays on frontier.
 
 ```
 cludemem/
-  data-engine/   taxonomy.ts life-script.ts script-generator.ts render.ts derive.ts gauntlet.ts generate.ts teacher.ts
+  data-engine/   taxonomy.ts life-script.ts script-generator.ts render.ts noise.ts derive.ts gauntlet.ts generate.ts teacher.ts engine.test.ts
   training/      train_qlora.py requirements.txt
   packaging/     Modelfile build_and_push.sh
   eval/          memopseval.ts

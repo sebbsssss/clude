@@ -39,6 +39,12 @@ export interface PlantedFact {
   supersedes?: string;
   /** id of a fact this directly conflicts with. */
   contradicts?: string;
+  /** id of an earlier fact this one duplicates (same content restated). */
+  duplicates?: string;
+  /** id of a fact this one corroborates without conflict (RECONCILE: consistent). */
+  consistentWith?: string;
+  /** -1..1 sentiment of the fact (drives CLASSIFY.emotional_valence). */
+  emotionalValence?: number;
   /** Which session reveals this fact. */
   session: number;
   /** How the renderer should surface it (difficulty control). */
@@ -62,6 +68,8 @@ export interface LifeScript {
   persona: { name: string; role: string };
   /** "Today" for temporal-relative reasoning. */
   referenceDate: string;
+  /** If set, the renderer injects register noise (logs/tables/code/JSON) into dialogue. */
+  registerNoise?: boolean;
   facts: PlantedFact[];
   qa: PlantedQA[];
 }
