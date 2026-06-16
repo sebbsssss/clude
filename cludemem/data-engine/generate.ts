@@ -57,7 +57,10 @@ async function main() {
   const count = argNum('count', 0);
   const seed = argNum('seed', 0);
   const useTeacher = process.argv.includes('--teacher');
-  const scripts = [...SEED_SCRIPTS, ...generateScripts(count, seed)];
+  // --no-seeds excludes the 2 hand-authored SEED_SCRIPTS so a held-out shard
+  // (a different --seed) stays fully disjoint from the training shard.
+  const noSeeds = process.argv.includes('--no-seeds');
+  const scripts = [...(noSeeds ? [] : SEED_SCRIPTS), ...generateScripts(count, seed)];
 
   let renderer: Renderer;
   if (useTeacher) {
