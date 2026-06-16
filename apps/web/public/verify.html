@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Verify a memory · Clude PMP</title>
+    <meta name="description" content="Verify that any Clude memory is original and unaltered, on-chain, without trusting Clude." />
+    <style>
+      :root {
+        --bg: #0a0a0a; --panel: rgba(255,255,255,0.035); --line: rgba(255,255,255,0.08);
+        --ink: #ffffff; --muted: #8a8a8a; --dim: #666; --cyan: #5ce1ff; --purple: #7c5cff;
+        --good: #5ce1ff; --warn: #c9a84a; --bad: #e06a6a;
+        --mono: "SF Mono", ui-monospace, "JetBrains Mono", monospace;
+        --sans: -apple-system, system-ui, "SF Pro Text", Inter, sans-serif;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { background: var(--bg); color: var(--ink); font-family: var(--sans);
+        min-height: 100vh; -webkit-font-smoothing: antialiased; line-height: 1.5; }
+      body::before { content: ''; position: fixed; inset: 0; pointer-events: none;
+        background: radial-gradient(ellipse at 50% 0%, rgba(92,181,255,0.05) 0%, transparent 55%); }
+      .wrap { max-width: 880px; margin: 0 auto; padding: 80px 28px 100px; position: relative; }
+
+      .eyebrow { font-size: 13px; font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase;
+        color: var(--cyan); margin-bottom: 22px; }
+      h1 { font-size: 52px; font-weight: 700; letter-spacing: -0.025em; line-height: 1.05; }
+      h1 .grad { background: linear-gradient(90deg, var(--purple), var(--cyan)); -webkit-background-clip: text;
+        background-clip: text; -webkit-text-fill-color: transparent; }
+      .lede { font-size: 20px; color: var(--muted); margin-top: 20px; max-width: 620px; }
+
+      .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; }
+      .search { margin-top: 44px; padding: 26px; display: flex; flex-direction: column; gap: 16px; }
+      .row { display: flex; gap: 12px; }
+      input { flex: 1; background: rgba(0,0,0,0.4); border: 1px solid var(--line); border-radius: 10px;
+        padding: 16px 18px; color: var(--ink); font-family: var(--mono); font-size: 16px; outline: none; }
+      input:focus { border-color: rgba(92,225,255,0.5); }
+      input::placeholder { color: #555; }
+      button.go { background: linear-gradient(90deg, var(--purple), var(--cyan)); color: #07111a;
+        border: none; border-radius: 10px; padding: 0 28px; font-size: 16px; font-weight: 700; cursor: pointer;
+        white-space: nowrap; }
+      button.go:disabled { opacity: 0.5; cursor: default; }
+      .examples { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+      .examples .label { font-size: 13px; color: var(--dim); margin-right: 4px; }
+      .chip { font-family: var(--mono); font-size: 13px; color: var(--cyan); background: rgba(92,225,255,0.08);
+        border: 1px solid rgba(92,225,255,0.18); border-radius: 20px; padding: 7px 14px; cursor: pointer; }
+      .chip:hover { background: rgba(92,225,255,0.14); }
+
+      .result { margin-top: 24px; padding: 30px; opacity: 0; transform: translateY(10px);
+        transition: opacity 0.4s ease, transform 0.4s ease; }
+      .result.show { opacity: 1; transform: none; }
+      .verdict { display: flex; align-items: center; gap: 14px; font-size: 26px; font-weight: 700; }
+      .verdict .badge { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center;
+        font-size: 22px; flex-shrink: 0; }
+      .verdict.ok .badge { background: rgba(92,225,255,0.15); color: var(--good); box-shadow: 0 0 24px rgba(92,225,255,0.3); }
+      .verdict.ok { color: var(--good); }
+      .verdict.warn .badge { background: rgba(201,168,74,0.15); color: var(--warn); }
+      .verdict.warn { color: var(--warn); }
+      .verdict.bad .badge { background: rgba(224,106,106,0.15); color: var(--bad); }
+      .verdict.bad { color: var(--bad); }
+      .verdict-sub { font-size: 15px; font-weight: 400; color: var(--muted); margin-top: 8px; margin-left: 52px; }
+
+      .field { margin-top: 26px; }
+      .field .k { font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); margin-bottom: 8px; }
+      .field .v { font-size: 16px; color: #ddd; }
+      .field .v.mono { font-family: var(--mono); font-size: 14px; color: var(--cyan); word-break: break-all; line-height: 1.5; }
+      .field .v.content { background: rgba(0,0,0,0.3); border: 1px solid var(--line); border-radius: 10px;
+        padding: 16px 18px; color: #ccc; font-size: 15px; max-height: 160px; overflow-y: auto; }
+      a.solscan { display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 14px;
+        color: var(--cyan); text-decoration: none; background: rgba(92,225,255,0.08);
+        border: 1px solid rgba(92,225,255,0.2); border-radius: 8px; padding: 12px 16px; word-break: break-all; }
+      a.solscan:hover { background: rgba(92,225,255,0.14); }
+      .err { color: var(--bad); font-size: 16px; }
+      .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.2);
+        border-top-color: var(--cyan); border-radius: 50%; animation: spin 0.7s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      .how { margin-top: 70px; }
+      .how h2 { font-size: 14px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); margin-bottom: 26px; }
+      .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+      .step { padding: 22px; }
+      .step .n { font-family: var(--mono); font-size: 14px; color: var(--cyan); margin-bottom: 12px; }
+      .step .t { font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+      .step .d { font-size: 14px; color: var(--muted); }
+      footer { margin-top: 80px; padding-top: 28px; border-top: 1px solid var(--line);
+        display: flex; justify-content: space-between; align-items: center; font-size: 14px; color: var(--dim); }
+      footer a { color: var(--muted); text-decoration: none; }
+      footer a:hover { color: var(--cyan); }
+      @media (max-width: 680px) {
+        h1 { font-size: 38px; } .steps { grid-template-columns: 1fr; } .row { flex-direction: column; }
+        button.go { padding: 16px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="eyebrow">Portable Memory Protocol</div>
+      <h1>Verify a memory.<br /><span class="grad">Don't trust us.</span></h1>
+      <p class="lede">
+        Every memory Clude stores gets a cryptographic fingerprint committed to Solana. Paste any memory ID and
+        check, yourself, that it is the original and has not been altered. The proof lives on a public chain, not in our database.
+      </p>
+
+      <div class="panel search">
+        <div class="row">
+          <input id="memId" type="text" placeholder="clude-11db4f18" autocomplete="off" spellcheck="false" />
+          <button id="go" class="go">Verify</button>
+        </div>
+        <div class="examples" id="examples">
+          <span class="label">Try one:</span>
+          <span class="chip" data-id="clude-11db4f18">clude-11db4f18</span>
+          <span class="chip" data-id="clude-11f87d9f">clude-11f87d9f</span>
+          <span class="chip" data-id="clude-6983ed42">clude-6983ed42</span>
+        </div>
+      </div>
+
+      <div id="result" class="panel result"></div>
+
+      <div class="how">
+        <h2>How verification works</h2>
+        <div class="steps">
+          <div class="step panel">
+            <div class="n">01</div><div class="t">Fingerprint</div>
+            <div class="d">At write time, a SHA-256 hash is taken over the memory's content and context. The same memory always produces the same hash.</div>
+          </div>
+          <div class="step panel">
+            <div class="n">02</div><div class="t">Commit on-chain</div>
+            <div class="d">That fingerprint is committed to the Solana blockchain. The proof is public. The content stays off-chain.</div>
+          </div>
+          <div class="step panel">
+            <div class="n">03</div><div class="t">Recompute and compare</div>
+            <div class="d">To verify, Clude recomputes the fingerprint and compares it to the chain. Match, and it is provably the original. Change one character, and the proof breaks.</div>
+          </div>
+        </div>
+      </div>
+
+      <footer>
+        <span>Clude · Portable Memory Protocol</span>
+        <span><a href="https://clude.io">clude.io</a></span>
+      </footer>
+    </div>
+
+    <script>
+      const API = location.origin.includes('clude.io') ? '' : 'https://clude.io';
+      const $ = (s) => document.querySelector(s);
+      const input = $('#memId'), btn = $('#go'), result = $('#result');
+      const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+      function render(html) { result.innerHTML = html; result.classList.add('show'); }
+
+      async function jget(path) {
+        const r = await fetch(API + path, { headers: { Accept: 'application/json' } });
+        if (!r.ok) { const e = new Error('http ' + r.status); e.status = r.status; throw e; }
+        return r.json();
+      }
+
+      async function verify(id) {
+        id = (id || '').trim();
+        if (!id) return;
+        btn.disabled = true;
+        render('<div class="verdict"><span class="spinner"></span> &nbsp;Checking the chain…</div>');
+        try {
+          // RETRIEVE (content) and VERIFY (proof) in parallel; retrieve is best-effort.
+          const [mem, v] = await Promise.all([
+            jget('/v1/memories/' + encodeURIComponent(id)).catch(() => null),
+            jget('/v1/memories/' + encodeURIComponent(id) + '/verify'),
+          ]);
+
+          const ok = v.verified === true;
+          const hasLink = !!v.solscan_url;
+          const legacy = (v.reason || '').includes('legacy');
+
+          let cls = 'bad', icon = '✕', head = 'Not verified', sub = v.reason || 'No matching commitment found.';
+          if (ok && hasLink) { cls = 'ok'; icon = '✓'; head = 'Verified on-chain'; sub = 'This memory is provably the original, unaltered since it was written.'; }
+          else if (ok && legacy) { cls = 'warn'; icon = '✓'; head = 'Verified (legacy commitment)'; sub = 'The fingerprint matches. This memory carries an earlier-format commitment without a public proof link.'; }
+          else if (ok) { cls = 'ok'; icon = '✓'; head = 'Verified'; sub = 'The recomputed fingerprint matches the commitment.'; }
+
+          let html = '';
+          html += '<div class="verdict ' + cls + '"><span class="badge">' + icon + '</span>' + head + '</div>';
+          html += '<div class="verdict-sub">' + esc(sub) + '</div>';
+
+          if (mem && mem.content) {
+            html += '<div class="field"><div class="k">Memory ' + esc(id) + (mem.type ? ' · ' + esc(mem.type) : '') + '</div>'
+                  + '<div class="v content">' + esc(mem.content) + '</div></div>';
+          } else {
+            html += '<div class="field"><div class="k">Memory</div><div class="v">' + esc(id) + '</div></div>';
+          }
+
+          if (v.recomputed_hash) {
+            html += '<div class="field"><div class="k">Recomputed fingerprint (SHA-256)</div>'
+                  + '<div class="v mono">' + esc(v.recomputed_hash) + '</div></div>';
+          }
+
+          if (hasLink) {
+            html += '<div class="field"><div class="k">On-chain commitment</div>'
+                  + '<a class="solscan" href="' + esc(v.solscan_url) + '" target="_blank" rel="noopener">View the transaction on Solana ↗</a></div>';
+          }
+
+          render(html);
+        } catch (e) {
+          if (e.status === 404) render('<div class="verdict bad"><span class="badge">?</span>Memory not found</div>'
+            + '<div class="verdict-sub">No memory with that ID is published. Check the ID and try again.</div>');
+          else render('<div class="err">Could not reach the verifier. Try again in a moment.</div>');
+        } finally { btn.disabled = false; }
+      }
+
+      btn.addEventListener('click', () => verify(input.value));
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') verify(input.value); });
+      document.querySelectorAll('.chip').forEach((c) =>
+        c.addEventListener('click', () => { input.value = c.dataset.id; verify(c.dataset.id); }));
+
+      // Deep-link: /verify.html?id=clude-xxxx auto-runs.
+      const qp = new URLSearchParams(location.search).get('id');
+      if (qp) { input.value = qp; verify(qp); }
+    </script>
+  </body>
+</html>
