@@ -132,8 +132,10 @@ export function staticRoutes(): Router {
   const samplesDir = path.join(webPublicDir, 'samples');
   router.use('/samples', express.static(samplesDir));
 
-  // Serve static files from apps/web/public/
-  router.use(express.static(webPublicDir));
+  // Serve static files from apps/web/public/. extensions:['html'] gives every
+  // page a clean extensionless URL (e.g. /verify serves verify.html), while the
+  // existing /page.html URLs keep working.
+  router.use(express.static(webPublicDir, { extensions: ['html'] }));
 
   return router;
 }
