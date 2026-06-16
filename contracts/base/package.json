@@ -1,0 +1,15 @@
+{
+  "name": "@clude/pmp-evm",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "PMP cross-chain commitment — EVM (Base) side. MemoryCommitment contract + viem client.",
+  "scripts": {
+    "compile": "node compile.mjs",
+    "test:e2e": "node e2e-cross-chain.mjs"
+  },
+  "devDependencies": {
+    "solc": "^0.8.26",
+    "viem": "^2.21.0"
+  }
+}

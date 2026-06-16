@@ -1,0 +1,81 @@
+{
+  "abi": [
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "fingerprint",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "committer",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint64",
+          "name": "timestamp",
+          "type": "uint64"
+        }
+      ],
+      "name": "Committed",
+      "type": "event"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "fingerprint",
+          "type": "bytes32"
+        }
+      ],
+      "name": "commit",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "name": "committedAt",
+      "outputs": [
+        {
+          "internalType": "uint64",
+          "name": "",
+          "type": "uint64"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "fingerprint",
+          "type": "bytes32"
+        }
+      ],
+      "name": "isCommitted",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x6080604052348015600e575f5ffd5b506101ef8061001c5f395ff3fe608060405234801561000f575f5ffd5b506004361061003f575f3560e01c8063054765a3146100435780636533d53f14610083578063f14fcbc8146100c5575b5f5ffd5b61006e6100513660046101a2565b5f9081526020819052604090205467ffffffffffffffff16151590565b60405190151581526020015b60405180910390f35b6100ac6100913660046101a2565b5f6020819052908152604090205467ffffffffffffffff1681565b60405167ffffffffffffffff909116815260200161007a565b6100d86100d33660046101a2565b6100da565b005b8061011f5760405162461bcd60e51b8152602060048201526011602482015270195b5c1d1e48199a5b99d95c9c1c9a5b9d607a1b604482015260640160405180910390fd5b5f8181526020819052604081205467ffffffffffffffff16900361019f575f8181526020818152604091829020805467ffffffffffffffff19164267ffffffffffffffff169081179091559151918252339183917f383bf7b9fa1b9617e9b6d9ef594f7fb1b445696c91e2053e48563a8a2be4b38c910160405180910390a35b50565b5f602082840312156101b2575f5ffd5b503591905056fea2646970667358221220743159d683cb868b815393bb3734a6169ebb9a5515e67c229f2121ca9d08693b64736f6c63430008230033"
+}
