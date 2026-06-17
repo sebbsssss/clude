@@ -2179,29 +2179,69 @@ export async function storeDreamLog(
 
 // ---- HELPERS ---- //
 
+/** Max characters of memory content rendered into one grounded context line. */
+const CONTEXT_CONTENT_MAX = 600;
+
+/**
+ * Temporal-scoped grounding rules for the recalled-memory block — the read-side
+ * hallucination defense for the bot AND every external clude SDK consumer
+ * (Cortex.formatContext). Mirrors apps/server/src/lib/memory-prompt.ts: the
+ * dominant remaining hallucination class is wrong-date / superseded-fact, so the
+ * conflict rule is scoped to the question's tense (latest-for-now, as-of-for-past)
+ * rather than blunt latest-wins. Disambiguation, not abstention.
+ */
+const CONTEXT_GROUNDING_RULES =
+  "Ground specific claims — facts, preferences, history, dates, numbers, names — in the memories above; if a detail isn't written here, say you don't remember it rather than guessing. Each line is dated: when two memories disagree, read them as a timeline — use the most recent value for a question about now, and the value that was in effect at the time for a question about a specific past date (\"as of …\"); never blend conflicting values. Don't invent memories or details that aren't above. General knowledge is unaffected — answer those normally.";
+
+/** Oldest→newest so conflicting facts read as a dated timeline; undated sink to end. */
+function byCreatedAtAsc(a: Memory, b: Memory): number {
+  const ta = a.created_at ? Date.parse(a.created_at) : NaN;
+  const tb = b.created_at ? Date.parse(b.created_at) : NaN;
+  if (Number.isNaN(ta) && Number.isNaN(tb)) return 0;
+  if (Number.isNaN(ta)) return 1;
+  if (Number.isNaN(tb)) return -1;
+  return ta - tb;
+}
+
+/** One dated, groundable line: "- [YYYY-MM-DD] summary — content snippet" + optional suffix. */
+function renderContextLine(m: Memory, suffix = ''): string {
+  const date = m.created_at ? new Date(m.created_at).toISOString().slice(0, 10) : '';
+  const stamp = date ? `[${date}] ` : '';
+  const summary = (m.summary || '').trim();
+  const content = (m.content || '').trim();
+  let body: string;
+  if (!content || content === summary) {
+    body = summary || content;
+  } else if (content.length <= CONTEXT_CONTENT_MAX) {
+    body = summary ? `${summary} — ${content}` : content;
+  } else {
+    const slice = content.slice(0, CONTEXT_CONTENT_MAX);
+    body = summary ? `${summary} — ${slice}…` : `${slice}…`;
+  }
+  return `- ${stamp}${body}${suffix}`;
+}
+
 export function formatMemoryContext(memories: Memory[]): string {
   if (memories.length === 0) return '';
 
   const lines: string[] = ['## Memory Recall'];
 
-  const episodic = memories.filter(m => m.memory_type === 'episodic');
-  const semantic = memories.filter(m => m.memory_type === 'semantic');
-  const procedural = memories.filter(m => m.memory_type === 'procedural');
-  const selfModel = memories.filter(m => m.memory_type === 'self_model');
-  const introspective = memories.filter(m => m.memory_type === 'introspective');
+  // Order each tier oldest→newest so conflicting facts render as a dated timeline.
+  // filter() returns fresh arrays, so sorting them never mutates the caller's input.
+  const episodic = memories.filter(m => m.memory_type === 'episodic').sort(byCreatedAtAsc);
+  const semantic = memories.filter(m => m.memory_type === 'semantic').sort(byCreatedAtAsc);
+  const procedural = memories.filter(m => m.memory_type === 'procedural').sort(byCreatedAtAsc);
+  const selfModel = memories.filter(m => m.memory_type === 'self_model').sort(byCreatedAtAsc);
+  const introspective = memories.filter(m => m.memory_type === 'introspective').sort(byCreatedAtAsc);
 
   if (episodic.length > 0) {
     lines.push('### Past Interactions');
-    for (const m of episodic) {
-      lines.push(`- [${timeAgo(m.created_at)}] ${m.summary}`);
-    }
+    for (const m of episodic) lines.push(renderContextLine(m));
   }
 
   if (semantic.length > 0) {
     lines.push('### Things You Know');
-    for (const m of semantic) {
-      lines.push(`- ${m.summary}`);
-    }
+    for (const m of semantic) lines.push(renderContextLine(m));
   }
 
   if (procedural.length > 0) {
@@ -2211,26 +2251,22 @@ export function formatMemoryContext(memories: Memory[]): string {
       const confidence = meta?.positiveRate != null
         ? ` [${Math.round(meta.positiveRate * 100)}% success rate, based on ${meta.basedOn || '?'} interactions]`
         : '';
-      lines.push(`- ${m.summary}${confidence}`);
+      lines.push(renderContextLine(m, confidence));
     }
   }
 
   if (introspective.length > 0) {
     lines.push('### Your Own Reflections');
-    for (const m of introspective) {
-      lines.push(`- [${timeAgo(m.created_at)}] ${m.summary}`);
-    }
+    for (const m of introspective) lines.push(renderContextLine(m));
   }
 
   if (selfModel.length > 0) {
     lines.push('### Self-Observations');
-    for (const m of selfModel) {
-      lines.push(`- ${m.summary}`);
-    }
+    for (const m of selfModel) lines.push(renderContextLine(m));
   }
 
   lines.push('');
-  lines.push('You REMEMBER these interactions and facts. Reference them naturally if relevant.');
+  lines.push(CONTEXT_GROUNDING_RULES);
   if (procedural.length > 0) {
     lines.push('');
     lines.push('IMPORTANT: You MUST follow the Learned Strategies above. They are behavioral rules you derived from analyzing your own past successes and failures. Apply them to this response.');
