@@ -1,5 +1,6 @@
 import { getDb } from '@clude/shared/core/database';
 import { createChildLogger } from '@clude/shared/core/logger';
+import { renderGroundedLine, byMemoryDateAsc } from '@clude/shared/core/memory-grounding';
 import {
   clamp,
   timeAgo,
@@ -2179,9 +2180,6 @@ export async function storeDreamLog(
 
 // ---- HELPERS ---- //
 
-/** Max characters of memory content rendered into one grounded context line. */
-const CONTEXT_CONTENT_MAX = 600;
-
 /**
  * Temporal-scoped grounding rules for the recalled-memory block — the read-side
  * hallucination defense for the bot AND every external clude SDK consumer
@@ -2193,34 +2191,6 @@ const CONTEXT_CONTENT_MAX = 600;
 const CONTEXT_GROUNDING_RULES =
   "Ground specific claims — facts, preferences, history, dates, numbers, names — in the memories above; if a detail isn't written here, say you don't remember it rather than guessing. Each line is dated: when two memories disagree, read them as a timeline — use the most recent value for a question about now, and the value that was in effect at the time for a question about a specific past date (\"as of …\"); never blend conflicting values. Don't invent memories or details that aren't above. General knowledge is unaffected — answer those normally.";
 
-/** Oldest→newest so conflicting facts read as a dated timeline; undated sink to end. */
-function byCreatedAtAsc(a: Memory, b: Memory): number {
-  const ta = a.created_at ? Date.parse(a.created_at) : NaN;
-  const tb = b.created_at ? Date.parse(b.created_at) : NaN;
-  if (Number.isNaN(ta) && Number.isNaN(tb)) return 0;
-  if (Number.isNaN(ta)) return 1;
-  if (Number.isNaN(tb)) return -1;
-  return ta - tb;
-}
-
-/** One dated, groundable line: "- [YYYY-MM-DD] summary — content snippet" + optional suffix. */
-function renderContextLine(m: Memory, suffix = ''): string {
-  const date = m.created_at ? new Date(m.created_at).toISOString().slice(0, 10) : '';
-  const stamp = date ? `[${date}] ` : '';
-  const summary = (m.summary || '').trim();
-  const content = (m.content || '').trim();
-  let body: string;
-  if (!content || content === summary) {
-    body = summary || content;
-  } else if (content.length <= CONTEXT_CONTENT_MAX) {
-    body = summary ? `${summary} — ${content}` : content;
-  } else {
-    const slice = content.slice(0, CONTEXT_CONTENT_MAX);
-    body = summary ? `${summary} — ${slice}…` : `${slice}…`;
-  }
-  return `- ${stamp}${body}${suffix}`;
-}
-
 export function formatMemoryContext(memories: Memory[]): string {
   if (memories.length === 0) return '';
 
@@ -2228,20 +2198,20 @@ export function formatMemoryContext(memories: Memory[]): string {
 
   // Order each tier oldest→newest so conflicting facts render as a dated timeline.
   // filter() returns fresh arrays, so sorting them never mutates the caller's input.
-  const episodic = memories.filter(m => m.memory_type === 'episodic').sort(byCreatedAtAsc);
-  const semantic = memories.filter(m => m.memory_type === 'semantic').sort(byCreatedAtAsc);
-  const procedural = memories.filter(m => m.memory_type === 'procedural').sort(byCreatedAtAsc);
-  const selfModel = memories.filter(m => m.memory_type === 'self_model').sort(byCreatedAtAsc);
-  const introspective = memories.filter(m => m.memory_type === 'introspective').sort(byCreatedAtAsc);
+  const episodic = memories.filter(m => m.memory_type === 'episodic').sort(byMemoryDateAsc);
+  const semantic = memories.filter(m => m.memory_type === 'semantic').sort(byMemoryDateAsc);
+  const procedural = memories.filter(m => m.memory_type === 'procedural').sort(byMemoryDateAsc);
+  const selfModel = memories.filter(m => m.memory_type === 'self_model').sort(byMemoryDateAsc);
+  const introspective = memories.filter(m => m.memory_type === 'introspective').sort(byMemoryDateAsc);
 
   if (episodic.length > 0) {
     lines.push('### Past Interactions');
-    for (const m of episodic) lines.push(renderContextLine(m));
+    for (const m of episodic) lines.push(renderGroundedLine(m));
   }
 
   if (semantic.length > 0) {
     lines.push('### Things You Know');
-    for (const m of semantic) lines.push(renderContextLine(m));
+    for (const m of semantic) lines.push(renderGroundedLine(m));
   }
 
   if (procedural.length > 0) {
@@ -2251,18 +2221,18 @@ export function formatMemoryContext(memories: Memory[]): string {
       const confidence = meta?.positiveRate != null
         ? ` [${Math.round(meta.positiveRate * 100)}% success rate, based on ${meta.basedOn || '?'} interactions]`
         : '';
-      lines.push(renderContextLine(m, confidence));
+      lines.push(renderGroundedLine(m, confidence));
     }
   }
 
   if (introspective.length > 0) {
     lines.push('### Your Own Reflections');
-    for (const m of introspective) lines.push(renderContextLine(m));
+    for (const m of introspective) lines.push(renderGroundedLine(m));
   }
 
   if (selfModel.length > 0) {
     lines.push('### Self-Observations');
-    for (const m of selfModel) lines.push(renderContextLine(m));
+    for (const m of selfModel) lines.push(renderGroundedLine(m));
   }
 
   lines.push('');

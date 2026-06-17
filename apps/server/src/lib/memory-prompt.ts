@@ -25,6 +25,8 @@
  *      explicit no-invention instruction.
  */
 
+import { renderGroundedLine, byMemoryDateAsc } from '@clude/shared/core/memory-grounding';
+
 export interface PromptMemory {
   memory_type?: string;
   summary?: string;
@@ -32,26 +34,10 @@ export interface PromptMemory {
   created_at?: string;
 }
 
-/** Max characters of memory content rendered into a prompt line. */
-const CONTENT_SNIPPET_MAX = 600;
-
-/** Render one memory as a dated, groundable prompt line. */
+/** Render one memory as a dated, groundable prompt line. Delegates to the shared
+ *  primitive so the chat, bot, and SDK readers can't drift. */
 export function renderMemoryLine(m: PromptMemory): string {
-  const date = m.created_at ? new Date(m.created_at).toISOString().slice(0, 10) : '';
-  const stamp = date ? `[${date}] ` : '';
-  const summary = (m.summary || '').trim();
-  const content = (m.content || '').trim();
-
-  let body: string;
-  if (!content || content === summary) {
-    body = summary || content;
-  } else if (content.length <= CONTENT_SNIPPET_MAX) {
-    body = summary ? `${summary} — ${content}` : content;
-  } else {
-    const slice = content.slice(0, CONTENT_SNIPPET_MAX);
-    body = summary ? `${summary} — ${slice}…` : `${slice}…`;
-  }
-  return `- ${stamp}${body}`;
+  return renderGroundedLine(m);
 }
 
 const GROUNDING_RULES = `
@@ -67,21 +53,13 @@ export function buildSystemPrompt(
   opts?: { totalMemoryCount?: number; isGreeting?: boolean },
 ): string {
   const currentDate = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-  // Order each section oldest→newest so conflicting facts read as a dated timeline
-  // (header note 2). filter() returns fresh arrays, so sorting them never mutates the
-  // caller's `memories`. Undated memories sink to the end of their section.
-  const byDateAsc = (a: PromptMemory, b: PromptMemory): number => {
-    const ta = a.created_at ? Date.parse(a.created_at) : NaN;
-    const tb = b.created_at ? Date.parse(b.created_at) : NaN;
-    if (Number.isNaN(ta) && Number.isNaN(tb)) return 0;
-    if (Number.isNaN(ta)) return 1;
-    if (Number.isNaN(tb)) return -1;
-    return ta - tb;
-  };
-  const semantic = memories.filter(m => m.memory_type === 'semantic').sort(byDateAsc);
-  const procedural = memories.filter(m => m.memory_type === 'procedural').sort(byDateAsc);
-  const selfModel = memories.filter(m => m.memory_type === 'self_model').sort(byDateAsc);
-  const episodic = memories.filter(m => m.memory_type === 'episodic' || m.memory_type === 'introspective').sort(byDateAsc);
+  // Order each section oldest→newest (shared comparator) so conflicting facts read as a
+  // dated timeline. filter() returns fresh arrays, so sorting never mutates the caller's
+  // `memories`; undated memories sink to the end of their section.
+  const semantic = memories.filter(m => m.memory_type === 'semantic').sort(byMemoryDateAsc);
+  const procedural = memories.filter(m => m.memory_type === 'procedural').sort(byMemoryDateAsc);
+  const selfModel = memories.filter(m => m.memory_type === 'self_model').sort(byMemoryDateAsc);
+  const episodic = memories.filter(m => m.memory_type === 'episodic' || m.memory_type === 'introspective').sort(byMemoryDateAsc);
 
   const sections: string[] = [];
   if (semantic.length > 0) {
