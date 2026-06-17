@@ -1719,15 +1719,24 @@ async function main() {
   // ── Clean previous benchmark data ─────────────────────────────
   if (opts.skipSeeding) {
     console.log('── Skipping cleanup + seeding (--skip-seeding) ──');
-    // Verify data exists
-    const { count } = await db.from('memories').select('id', { count: 'exact', head: true })
-      .eq('owner_wallet', BENCHMARK_OWNER_WALLET);
-    console.log(`  Existing memories: ${count}`);
-    if (!count || count === 0) {
-      console.error('  ERROR: No memories found for this wallet. Remove --skip-seeding to seed.');
-      process.exit(1);
+    if (opts.oracleBypass) {
+      // Oracle-bypass builds the reader context directly from each question's raw
+      // haystack sessions and never calls cortex.recall — so the DB is never read
+      // and an empty wallet is expected. This makes --oracle-bypass --skip-seeding a
+      // valid reader-only measurement mode (no seeding, no DB dependency).
+      console.log('  Oracle-bypass: reader-only, no seeded memories required');
+      console.log();
+    } else {
+      // Verify data exists
+      const { count } = await db.from('memories').select('id', { count: 'exact', head: true })
+        .eq('owner_wallet', BENCHMARK_OWNER_WALLET);
+      console.log(`  Existing memories: ${count}`);
+      if (!count || count === 0) {
+        console.error('  ERROR: No memories found for this wallet. Remove --skip-seeding to seed.');
+        process.exit(1);
+      }
+      console.log();
     }
-    console.log();
   }
 
   if (!opts.skipSeeding) {
