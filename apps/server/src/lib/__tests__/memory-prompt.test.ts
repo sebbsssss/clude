@@ -43,9 +43,16 @@ describe('buildSystemPrompt — grounding rules (hallucination defense)', () => 
     expect(prompt).toMatch(/say you don't remember it rather than guessing/i);
   });
 
-  it('includes the deterministic most-recent-wins conflict rule', () => {
+  it('states temporal-scoped conflict resolution — timeline, latest-for-now, as-of-for-past', () => {
     const prompt = buildSystemPrompt([mem()], { totalMemoryCount: 10 });
-    expect(prompt).toMatch(/most recent date is the current truth/i);
+    // Conflicting dated memories are a timeline, not a contradiction.
+    expect(prompt).toMatch(/timeline/i);
+    // A present-tense question resolves to the newest value…
+    expect(prompt).toMatch(/most recent/i);
+    // …but an as-of-a-past-date question resolves to the value in effect then.
+    // This is the fix for the wrong-date hallucination class (HaluMem Dynamic-Update 17%).
+    expect(prompt).toMatch(/as of|in effect (?:at|then)/i);
+    expect(prompt).toMatch(/never blend|don't blend/i);
   });
 
   it('scopes grounding to user claims — general knowledge stays answerable', () => {
@@ -94,5 +101,32 @@ describe('buildSystemPrompt — structure preserved', () => {
     const prompt = buildSystemPrompt([mem()], { totalMemoryCount: 1, isGreeting: true });
     expect(prompt).toContain('just signed in');
     expect(prompt).toContain('<memory_rules>');
+  });
+});
+
+describe('buildSystemPrompt — chronological timeline ordering', () => {
+  it('orders memories within a section oldest→newest so conflicts read as a timeline', () => {
+    const older = mem({ summary: 'Lives in Berlin', content: 'I live in Berlin', created_at: '2026-01-10T00:00:00Z' });
+    const newer = mem({ summary: 'Lives in Lisbon', content: 'I moved to Lisbon', created_at: '2026-05-01T00:00:00Z' });
+    // Passed newest-first (relevance order); output must be oldest-first so the
+    // model sees Berlin → Lisbon as a progression and can apply the as-of rule.
+    const prompt = buildSystemPrompt([newer, older], { totalMemoryCount: 2 });
+    expect(prompt.indexOf('Berlin')).toBeLessThan(prompt.indexOf('Lisbon'));
+  });
+
+  it('keeps undated memories from breaking the sort (they sink to the end of the section)', () => {
+    const dated = mem({ summary: 'fact AAA', created_at: '2026-03-01T00:00:00Z' });
+    const undated = mem({ summary: 'fact ZZZ', created_at: undefined });
+    const prompt = buildSystemPrompt([undated, dated], { totalMemoryCount: 2 });
+    expect(prompt.indexOf('AAA')).toBeLessThan(prompt.indexOf('ZZZ'));
+  });
+
+  it('does not mutate the caller-supplied array', () => {
+    const a = mem({ summary: 'first', created_at: '2026-05-01T00:00:00Z' });
+    const b = mem({ summary: 'second', created_at: '2026-01-01T00:00:00Z' });
+    const input = [a, b];
+    buildSystemPrompt(input, { totalMemoryCount: 2 });
+    expect(input[0]).toBe(a); // original order preserved in the caller's array
+    expect(input[1]).toBe(b);
   });
 });

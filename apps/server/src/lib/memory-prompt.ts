@@ -8,11 +8,15 @@
  *      grounding + selective abstention measurably cuts hallucination (30-50% across
  *      2025 studies) at near-zero coverage cost for general knowledge (rules are scoped
  *      to user-specific claims only).
- *   2. TIMESTAMPS ON EVERY LINE + MOST-RECENT-WINS — deterministic freshness rule for
- *      conflicting memories (the Zep/Graphiti convention). Clude appends rather than
- *      reconciles on write (for now), so stale + updated facts can coexist; dating every
- *      line and instructing recency-priority is the interim fix for the Dynamic-Update
- *      hallucination class (35.6% on HaluMem pre-fix).
+ *   2. TIMESTAMPS + CHRONOLOGICAL TIMELINE + TEMPORAL-SCOPED TRUTH — every line is dated
+ *      and each section is ordered oldest→newest, so conflicting facts read as a timeline
+ *      rather than a flat bag. The resolution rule is scoped to the question's tense: a
+ *      present-tense question takes the most-recent value (latest-wins); an "as of <past
+ *      date>" question takes the value that was in effect at that time. Blunt latest-wins
+ *      was the original fix, but it mis-answers as-of-past-date questions — the dominant
+ *      remaining hallucination class (wrong-date / superseded-fact; HaluMem Dynamic-Update
+ *      ~17%). The lever here is disambiguation, not abstention (a stricter abstain pass
+ *      was measured net-negative — it prunes correct answers without catching these).
  *   3. CONTENT SNIPPETS — the model can only ground in text it can see. Summaries alone
  *      force it to improvise details; a bounded slice of the underlying content gives it
  *      quotable facts (the same lesson LongMemEval taught: full content > truncated summary).
@@ -53,7 +57,7 @@ export function renderMemoryLine(m: PromptMemory): string {
 const GROUNDING_RULES = `
 <memory_rules>
 - Ground every claim about this user — their facts, preferences, history, dates, numbers, names — in the memories above. If a specific detail is not in the memories, say you don't remember it rather than guessing.
-- Memories are dated. If two memories conflict, the most recent date is the current truth; treat older ones as superseded.
+- Each memory is dated. When memories about the same thing disagree, read them as a timeline, not a contradiction — each was true as of its date. For a question about now (no date given), use the value from the most recent memory and treat older ones as superseded. For a question about a specific past time ("as of …", "back in March", "when I …"), use the value that was in effect at that time, not the latest one. Never blend conflicting values into a single answer.
 - Never invent memories, past conversations, or details that are not written above. "I don't have that in memory" is always better than a confident guess.
 - These rules apply to claims about the user and your shared history. General knowledge is unaffected — answer those questions normally.
 </memory_rules>`;
@@ -63,10 +67,21 @@ export function buildSystemPrompt(
   opts?: { totalMemoryCount?: number; isGreeting?: boolean },
 ): string {
   const currentDate = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-  const semantic = memories.filter(m => m.memory_type === 'semantic');
-  const procedural = memories.filter(m => m.memory_type === 'procedural');
-  const selfModel = memories.filter(m => m.memory_type === 'self_model');
-  const episodic = memories.filter(m => m.memory_type === 'episodic' || m.memory_type === 'introspective');
+  // Order each section oldest→newest so conflicting facts read as a dated timeline
+  // (header note 2). filter() returns fresh arrays, so sorting them never mutates the
+  // caller's `memories`. Undated memories sink to the end of their section.
+  const byDateAsc = (a: PromptMemory, b: PromptMemory): number => {
+    const ta = a.created_at ? Date.parse(a.created_at) : NaN;
+    const tb = b.created_at ? Date.parse(b.created_at) : NaN;
+    if (Number.isNaN(ta) && Number.isNaN(tb)) return 0;
+    if (Number.isNaN(ta)) return 1;
+    if (Number.isNaN(tb)) return -1;
+    return ta - tb;
+  };
+  const semantic = memories.filter(m => m.memory_type === 'semantic').sort(byDateAsc);
+  const procedural = memories.filter(m => m.memory_type === 'procedural').sort(byDateAsc);
+  const selfModel = memories.filter(m => m.memory_type === 'self_model').sort(byDateAsc);
+  const episodic = memories.filter(m => m.memory_type === 'episodic' || m.memory_type === 'introspective').sort(byDateAsc);
 
   const sections: string[] = [];
   if (semantic.length > 0) {
