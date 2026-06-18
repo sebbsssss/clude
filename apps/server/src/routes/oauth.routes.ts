@@ -41,6 +41,16 @@ function originOf(req: Request): string {
   return `${req.protocol}://${req.get('host')}`;
 }
 
+/** RFC 8707 resource indicator — the canonical MCP resource URI to bind the access token's
+ *  aud to. Claude sends `resource` in the token request (the URL the user entered); echo it
+ *  when present, else fall back to this server's /api/mcp URL. Claude rejects tokens whose
+ *  aud != the resource it requested, which surfaces as "Couldn't connect to the server". */
+function resourceFromRequest(req: Request): string {
+  const r = req.body && req.body.resource;
+  if (typeof r === 'string' && r.startsWith('http')) return r;
+  return `${originOf(req)}/api/mcp`;
+}
+
 function oauthError(res: Response, status: number, error: string, description?: string): void {
   res.status(status).json({ error, error_description: description });
 }
@@ -106,6 +116,7 @@ async function handleAuthCodeGrant(req: Request, res: Response): Promise<void> {
     scope: consumed.scope,
     clientId: consumed.clientId,
     issuer,
+    audience: resourceFromRequest(req),
   });
   const refresh = await issueRefreshToken({
     clientId: consumed.clientId,
@@ -136,6 +147,7 @@ async function handleRefreshGrant(req: Request, res: Response): Promise<void> {
     scope: rotated.ctx.scope,
     clientId: rotated.ctx.clientId,
     issuer,
+    audience: resourceFromRequest(req),
   });
   res.json({
     access_token: token,
