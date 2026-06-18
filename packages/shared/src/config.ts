@@ -139,6 +139,18 @@ export const config = {
     appSecret: optional("PRIVY_APP_SECRET", ""),
     jwksUrl: optional("PRIVY_JWKS_URL", ""),
   },
+  oauth: {
+    /** HMAC secret for signing OAuth access-token JWTs. Empty disables the OAuth AS — bearer API-key auth still works. */
+    signingSecret: optional("OAUTH_SIGNING_SECRET", ""),
+    /** Issuer/audience identifier baked into tokens. Falls back to the request origin when empty. */
+    issuer: optional("OAUTH_ISSUER", ""),
+    /** Access-token lifetime in seconds (default 1h). */
+    accessTtlSec: parseInt(optional("OAUTH_ACCESS_TTL_SEC", "3600"), 10),
+    /** Refresh-token lifetime in seconds (default 30d). */
+    refreshTtlSec: parseInt(optional("OAUTH_REFRESH_TTL_SEC", "2592000"), 10),
+    /** Authorization-code lifetime in seconds (default 60s). */
+    codeTtlSec: parseInt(optional("OAUTH_CODE_TTL_SEC", "60"), 10),
+  },
   executor: {
     pollMs: parseInt(optional("EXECUTOR_POLL_MS", "15000"), 10),
     maxConcurrent: parseInt(optional("EXECUTOR_MAX_CONCURRENT", "2"), 10),
