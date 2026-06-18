@@ -1,4 +1,5 @@
 import { createChildLogger } from './logger';
+import { modelRejectsSamplingParams } from './model-capabilities';
 
 const log = createChildLogger('openrouter');
 
@@ -270,7 +271,8 @@ export async function generateOpenRouterResponse(opts: {
         model,
         messages,
         max_tokens: maxTokens,
-        temperature: opts.temperature ?? 0.7,
+        // Opus 4.7+ via OpenRouter rejects temperature/top_p — strip for those models.
+        ...(modelRejectsSamplingParams(model) ? {} : { temperature: opts.temperature ?? 0.7 }),
       }),
     });
 
