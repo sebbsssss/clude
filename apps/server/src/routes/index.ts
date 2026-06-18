@@ -5,6 +5,7 @@ import { verifyRoutes } from '@clude/brain/verify-app/routes';
 import { agentRoutes } from './agent.routes.js';
 import { cortexRoutes } from './cortex.routes.js';
 import { mcpRoutes } from './mcp.routes.js';
+import { oauthRoutes } from './oauth.routes.js';
 import { graphRoutes } from './graph.routes.js';
 import { campaignRoutes } from './campaign.routes.js';
 import { chatRoutes } from './chat.routes.js';
@@ -107,6 +108,10 @@ export function mountApiRoutes(app: express.Application): void {
 
   // Remote MCP connector (Streamable HTTP transport for Claude Desktop / claude.ai)
   app.use('/api/mcp', mcpRoutes());
+
+  // OAuth 2.1 authorization server backing the MCP connector's "Connect" flow
+  // (DCR + PKCE authorization-code + refresh; Privy-login consent at /chat/authorize).
+  app.use('/api/oauth', oauthRoutes());
 
   // Knowledge Graph API (entity-centric memory visualization)
   app.use('/api/graph', graphRoutes());

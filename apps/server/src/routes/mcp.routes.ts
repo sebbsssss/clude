@@ -21,6 +21,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
 import { authenticateAgent, recordAgentInteraction } from '@clude/brain/features/agent-tier';
+import { verifyAccessToken as verifyOAuthAccessToken } from '../oauth/core.js';
 import { getDb } from '@clude/shared/core/database';
 import { withOwnerWallet } from '@clude/shared/core/owner-context';
 import {
@@ -41,7 +42,7 @@ const SERVER_INFO = {
   version: '1.0.0',
 };
 
-function buildServerForOwner(ownerWallet: string, agentId: string): McpServer {
+function buildServerForOwner(ownerWallet: string, agentId: string, scope: string): McpServer {
   const server = new McpServer(SERVER_INFO);
 
   server.tool(
@@ -115,12 +116,21 @@ function buildServerForOwner(ownerWallet: string, agentId: string): McpServer {
     {
       title: 'Store memory',
       readOnlyHint: false,
-      destructiveHint: false,
+      // Anthropic directory review expects write tools to set destructiveHint so
+      // Claude prompts before persisting. store_memory creates durable records;
+      // a missing/false write annotation is the single most common rejection cause.
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
     },
     async (args) => {
       try {
+        if (!scope.split(' ').includes('memory:write')) {
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify({ error: 'insufficient_scope: memory:write required' }) }],
+            isError: true,
+          };
+        }
         const stripHtml = (s: string) => s.replace(/<[^>]*>/g, '').trim();
         const memoryId = await withOwnerWallet(ownerWallet, async () =>
           storeMemory({
@@ -180,11 +190,26 @@ function buildServerForOwner(ownerWallet: string, agentId: string): McpServer {
   return server;
 }
 
-async function authFromBearer(authHeader: string | undefined): Promise<{ ownerWallet: string; agentId: string } | null> {
+interface McpAuth {
+  ownerWallet: string;
+  agentId: string;
+  scope: string;
+}
+
+async function authFromBearer(authHeader: string | undefined): Promise<McpAuth | null> {
   if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
-  const apiKey = authHeader.slice(7).trim();
-  if (!apiKey) return null;
-  const agent = await authenticateAgent(apiKey);
+  const token = authHeader.slice(7).trim();
+  if (!token) return null;
+
+  // 1) OAuth 2.1 access token (JWT). verifyOAuthAccessToken returns null when OAuth is
+  //    disabled or the token isn't ours, so we transparently fall through to API keys.
+  const claims = await verifyOAuthAccessToken(token);
+  if (claims) {
+    return { ownerWallet: claims.sub, agentId: `oauth:${claims.clientId || 'client'}`, scope: claims.scope };
+  }
+
+  // 2) Legacy Clude API key (clk_…) — kept working for existing SDK users.
+  const agent = await authenticateAgent(token);
   if (!agent) return null;
   let ownerWallet = agent.owner_wallet;
   if (!ownerWallet) {
@@ -194,7 +219,7 @@ async function authFromBearer(authHeader: string | undefined): Promise<{ ownerWa
     await db.from('agent_keys').update({ owner_wallet: ownerWallet }).eq('id', agent.id);
     log.info({ agentId: agent.agent_id }, 'Auto-assigned owner_wallet for MCP user');
   }
-  return { ownerWallet, agentId: agent.agent_id };
+  return { ownerWallet, agentId: agent.agent_id, scope: 'memory:read memory:write' };
 }
 
 function sendUnauthorized(res: Response, resourceMetadataUrl: string): void {
@@ -225,7 +250,7 @@ export function mcpRoutes(): Router {
     }
 
     try {
-      const server = buildServerForOwner(auth.ownerWallet, auth.agentId);
+      const server = buildServerForOwner(auth.ownerWallet, auth.agentId, auth.scope);
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
       res.on('close', () => {
         transport.close().catch(() => {});
