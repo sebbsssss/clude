@@ -12,7 +12,7 @@
  * The human never handles an API key — identity flows Privy DID -> findOrCreateAgentForDid ->
  * owner_wallet, the same tenancy unit the rest of the system already scopes to.
  */
-import { Router, Request, Response } from 'express';
+import express, { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { config } from '@clude/shared/config';
 import { createChildLogger } from '@clude/shared/core/logger';
@@ -148,6 +148,12 @@ async function handleRefreshGrant(req: Request, res: Response): Promise<void> {
 
 export function oauthRoutes(): Router {
   const router = Router();
+
+  // OAuth 2.0 token/registration requests arrive as application/x-www-form-urlencoded
+  // (RFC 6749 §4.1.3) — Claude's MCP client posts the token exchange as a form. The app only
+  // mounts express.json() globally, so without this the body is empty and the exchange fails
+  // with unsupported_grant_type. JSON bodies (the consent page) still work via the global parser.
+  router.use(express.urlencoded({ extended: true }));
 
   // Disable the whole AS cleanly when no signing secret is configured (e.g. local dev),
   // so we never advertise endpoints that then 500.
