@@ -151,6 +151,25 @@ describe('oauth routes', () => {
     expect(res.body.expires_in).toBe(3600);
   });
 
+  it('token: parses application/x-www-form-urlencoded (Claude posts a form, not JSON)', async () => {
+    const { verifier, challenge } = pkcePair();
+    mockCore.consumeAuthorizationCode.mockResolvedValue({
+      clientId: 'mcp_x', ownerWallet: 'wallet_1', redirectUri: REDIRECT,
+      scope: 'memory:read memory:write', codeChallenge: challenge, codeChallengeMethod: 'S256',
+    });
+    mockCore.issueRefreshToken.mockResolvedValue('refresh_1');
+    const res = await request(app)
+      .post('/api/oauth/token')
+      .type('form') // application/x-www-form-urlencoded, like a real OAuth client
+      .send({
+        grant_type: 'authorization_code', code: 'the_code', redirect_uri: REDIRECT,
+        client_id: 'mcp_x', code_verifier: verifier,
+      });
+    expect(res.status).toBe(200);
+    expect(typeof res.body.access_token).toBe('string');
+    expect(res.body.refresh_token).toBe('refresh_1');
+  });
+
   it('token: rejects a code whose redirect_uri does not match', async () => {
     const { verifier, challenge } = pkcePair();
     mockCore.consumeAuthorizationCode.mockResolvedValue({
