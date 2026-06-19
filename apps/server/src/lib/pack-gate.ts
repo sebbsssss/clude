@@ -47,6 +47,7 @@ export type UnlockFailureReason =
   | 'invalid_wallet'
   | 'invalid_signature'
   | 'not_token_holder'
+  | 'not_entitled'
   | 'rpc_unavailable';
 
 export interface UnlockOk {
@@ -118,14 +119,21 @@ export class SolanaPackOwnershipVerifier implements PackOwnershipVerifier {
 }
 
 /**
- * Verify an unlock request: signed-message format, replay window, signature
- * validity, and on-chain token ownership. Returns a structured success or
- * failure so the route can return the right HTTP status + reason.
+ * Verify ONLY the off-chain half of an unlock request: signed-message format, replay window,
+ * and Ed25519 signature validity. Proves the caller controls `walletAddress` and signed a
+ * fresh `unlock:<pack_id>:<ts>` message for THIS pack. Touches no chain and no DB — pure.
+ *
+ * Both unlock gates build on this:
+ *   - title/legacy packs → verifyUnlockRequest (this + an on-chain ownership check);
+ *   - copy-license packs → the route pairs this with hasActiveCopyEntitlement (§00 B2: copy
+ *     unlock reads pack_entitlements and must NOT touch the chain — a deliberately distinct
+ *     code path that does NOT route through holdsPackToken).
+ *
+ * On success returns the proven wallet; on failure a structured reason the route maps to a
+ * status. The reasons here never include 'not_token_holder'/'rpc_unavailable' — those are
+ * ownership concerns, layered on by the caller.
  */
-export async function verifyUnlockRequest(
-  input: VerifyUnlockInput,
-  verifier: PackOwnershipVerifier,
-): Promise<UnlockResult> {
+export function verifyUnlockSignature(input: VerifyUnlockInput): UnlockResult {
   // 1. Parse the message.
   if (!input.message.startsWith(UNLOCK_MESSAGE_PREFIX)) {
     return { ok: false, reason: 'malformed_message', detail: 'must start with "unlock:"' };
@@ -189,6 +197,25 @@ export async function verifyUnlockRequest(
   if (!valid) {
     return { ok: false, reason: 'invalid_signature', detail: 'ed25519 verify failed' };
   }
+
+  return { ok: true, walletAddress: input.walletAddress };
+}
+
+/**
+ * Verify an unlock request: signed-message format, replay window, signature
+ * validity, and on-chain token ownership. Returns a structured success or
+ * failure so the route can return the right HTTP status + reason.
+ *
+ * This is the TITLE / legacy token-gated path. Copy-license packs do NOT use it — they pair
+ * verifyUnlockSignature with the off-chain pack_entitlements gate (§00 B2).
+ */
+export async function verifyUnlockRequest(
+  input: VerifyUnlockInput,
+  verifier: PackOwnershipVerifier,
+): Promise<UnlockResult> {
+  // 1–3. Off-chain validation (message format, replay window, signature).
+  const sig = verifyUnlockSignature(input);
+  if (!sig.ok) return sig;
 
   // 4. On-chain token ownership.
   let holds: boolean;

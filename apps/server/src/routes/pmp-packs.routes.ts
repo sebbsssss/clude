@@ -28,8 +28,10 @@ import { getPdaMintClient } from '../lib/pda-mint-client.js';
 import {
   getDefaultPackOwnershipVerifier,
   verifyUnlockRequest,
+  verifyUnlockSignature,
   type UnlockFailureReason,
 } from '../lib/pack-gate.js';
+import { hasActiveCopyEntitlement } from '../lib/payments/entitlement-gate.js';
 import {
   buildPackPreview,
   verifyPackCommitment,
@@ -568,10 +570,10 @@ export function pmpPacksRoutes(): Router {
     try {
       const db = getDb();
 
-      // 1. Load Pack with its token address.
+      // 1. Load Pack with its token address + sale_mode (copy vs title gating).
       const { data: pack, error: packErr } = await db
         .from('memory_packs')
-        .select('pack_id, name, version, author_wallet, memory_count, merkle_root, pack_token_address')
+        .select('pack_id, name, version, author_wallet, memory_count, merkle_root, pack_token_address, sale_mode')
         .eq('pack_id', id)
         .limit(1)
         .maybeSingle();
@@ -592,6 +594,7 @@ export function pmpPacksRoutes(): Router {
         memory_count: number;
         merkle_root: string | null;
         pack_token_address: string | null;
+        sale_mode: string | null;
       };
       if (!packRow.merkle_root || !packRow.pack_token_address) {
         res.status(409).json({
@@ -601,18 +604,44 @@ export function pmpPacksRoutes(): Router {
         return;
       }
 
-      // 2. Verify caller controls the wallet AND that wallet holds the Pack token.
-      const verifier = getDefaultPackOwnershipVerifier();
-      const verifyResult = await verifyUnlockRequest(
-        {
+      // 2. Authorise the unlock. TWO DISTINCT GATES (§00 B2 — do NOT unify through the chain):
+      //    - sale_mode='copy'  → verify the wallet signature (off-chain, no chain), then read
+      //      pack_entitlements for an ACTIVE copy_license grant. A fiat buyer holds no on-chain
+      //      token (Risk R3); the entitlement is the sole authority. NEVER touches the chain.
+      //    - otherwise (title / legacy null) → the existing token-ownership path, unchanged.
+      let verifyResult: { ok: true; walletAddress: string } | { ok: false; reason: UnlockFailureReason; detail?: string };
+      if (packRow.sale_mode === 'copy') {
+        // Off-chain signature/replay/format check — proves the caller controls `wallet`.
+        const sig = verifyUnlockSignature({
           packId: id,
           packTokenAddress: packRow.pack_token_address,
           walletAddress: wallet,
           message,
           signature,
-        },
-        verifier,
-      );
+        });
+        if (!sig.ok) {
+          verifyResult = sig;
+        } else {
+          // Pure entitlement read — the copy gate. No Solana RPC on this path.
+          const entitled = await hasActiveCopyEntitlement(id, sig.walletAddress);
+          verifyResult = entitled
+            ? { ok: true, walletAddress: sig.walletAddress }
+            : { ok: false, reason: 'not_entitled' };
+        }
+      } else {
+        // Title / legacy path: verify caller controls the wallet AND it holds the Pack token.
+        const verifier = getDefaultPackOwnershipVerifier();
+        verifyResult = await verifyUnlockRequest(
+          {
+            packId: id,
+            packTokenAddress: packRow.pack_token_address,
+            walletAddress: wallet,
+            message,
+            signature,
+          },
+          verifier,
+        );
+      }
       if (!verifyResult.ok) {
         const status = unlockFailureStatus(verifyResult.reason);
         res.status(status).json({
@@ -739,6 +768,7 @@ function unlockFailureStatus(reason: UnlockFailureReason): number {
     case 'invalid_signature':
       return 401;
     case 'not_token_holder':
+    case 'not_entitled':
       return 403;
     case 'rpc_unavailable':
       return 503;
