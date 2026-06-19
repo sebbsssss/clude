@@ -30,6 +30,11 @@ import {
   verifyUnlockRequest,
   type UnlockFailureReason,
 } from '../lib/pack-gate.js';
+import {
+  buildPackPreview,
+  verifyPackCommitment,
+  type PreviewMemoryBody,
+} from '../lib/pack-preview.js';
 import { randomBytes } from 'node:crypto';
 
 const log = createChildLogger('pmp-packs-routes');
@@ -398,82 +403,50 @@ export function pmpPacksRoutes(): Router {
         return;
       }
 
-      // Rebuild the tree. Important: order by leaf_index so the root matches what was committed.
-      const leafHashes = contents.map((c) => c.content_hash);
-      const tree = buildPackTree(leafHashes);
-
-      // Safety check: the rebuilt root must match the on-chain commitment.
-      if (tree.root !== packRow.merkle_root) {
-        log.error(
-          { id, builtRoot: tree.root, committedRoot: packRow.merkle_root },
-          'preview: rebuilt root mismatches committed root',
-        );
-        res.status(500).json({ error: 'preview_failed', reason: 'root_mismatch' } satisfies PackErrorBody);
-        return;
-      }
-
-      // Reveal the first `count` leaves with their inclusion proofs.
-      const revealedSlice = contents.slice(0, Math.min(count, contents.length));
-      const revealMemoryIds = revealedSlice.map((r) => r.memory_id);
+      // Hydrate the bodies for just the slice we'll reveal (the helper re-slices identically).
+      const revealMemoryIds = contents.slice(0, Math.min(count, contents.length)).map((r) => r.memory_id);
       const { data: memoriesRaw } = await db
         .from('memories')
         .select('id, hash_id, memory_type, content, owner_wallet, created_at, tags, source, related_user, related_wallet')
         .in('id', revealMemoryIds);
 
-      const memoryById = new Map<number, {
-        id: number;
-        hash_id: string;
-        memory_type: string;
-        content: string;
-        owner_wallet: string | null;
-        created_at: string;
-        tags: string[] | null;
-        source: string | null;
-        related_user: string | null;
-        related_wallet: string | null;
-      }>();
-      for (const m of (memoriesRaw ?? []) as Array<typeof memoryById extends Map<unknown, infer V> ? V : never>) {
+      const memoryById = new Map<number, PreviewMemoryBody>();
+      for (const m of (memoriesRaw ?? []) as Array<PreviewMemoryBody>) {
         memoryById.set(m.id, m);
       }
 
-      const revealed = revealedSlice.map((row) => {
-        const proof = inclusionProof(tree, row.leaf_index);
-        const memory = memoryById.get(row.memory_id) ?? null;
-        return {
-          memory: memory
-            ? {
-                id: memory.hash_id,
-                type: memory.memory_type,
-                content: memory.content,
-                owner: memory.owner_wallet,
-                created_at: memory.created_at,
-                tags: memory.tags ?? [],
-              }
-            : null,
-          content_hash: row.content_hash,
-          leaf_index: row.leaf_index,
-          proof: {
-            leaf: proof.leaf,
-            leaf_index: proof.leafIndex,
-            siblings: proof.siblings,
-            algorithm: proof.algorithm,
-          },
-        };
-      });
-
-      res.json({
-        pack: {
-          id: packRow.pack_id,
+      // Rebuild the tree + reveal via the shared sealed-safe helper. It re-asserts
+      // the rebuilt root matches the on-chain commitment and fails closed on drift.
+      const preview = buildPackPreview(
+        {
+          pack_id: packRow.pack_id,
           name: packRow.name,
           version: packRow.version,
-          author: packRow.author_wallet,
+          author_wallet: packRow.author_wallet,
           memory_count: packRow.memory_count,
           merkle_root: packRow.merkle_root,
           pack_token_address: packRow.pack_token_address,
         },
-        revealed_count: revealed.length,
-        unrevealed_count: contents.length - revealed.length,
-        revealed,
+        contents,
+        memoryById,
+        { count },
+      );
+      if (!preview.ok) {
+        if (preview.reason === 'root_mismatch') {
+          log.error(
+            { id, builtRoot: preview.builtRoot, committedRoot: packRow.merkle_root },
+            'preview: rebuilt root mismatches committed root',
+          );
+        }
+        res.status(500).json({ error: 'preview_failed', reason: preview.reason } satisfies PackErrorBody);
+        return;
+      }
+
+      res.json({
+        pack: preview.pack,
+        revealed_count: preview.revealed_count,
+        unrevealed_count: preview.unrevealed_count,
+        revealed: preview.revealed,
         verifier_url: `${publicBaseUrl(req)}/v1/packs/${id}/verify`,
       });
     } catch (err) {
@@ -526,7 +499,11 @@ export function pmpPacksRoutes(): Router {
         .eq('pack_id', id)
         .order('leaf_index', { ascending: true });
       const contents = (contentsRaw ?? []) as Array<{ content_hash: string; leaf_index: number }>;
-      if (contents.length === 0) {
+      const commitment = verifyPackCommitment(
+        { merkle_root: row.merkle_root, memory_count: row.memory_count },
+        contents,
+      );
+      if (commitment.reason === 'no_contents') {
         res.json({
           id,
           verified: false,
@@ -536,15 +513,13 @@ export function pmpPacksRoutes(): Router {
         });
         return;
       }
-      const tree = buildPackTree(contents.map((c) => c.content_hash));
-      const verified = tree.root === row.merkle_root && contents.length === row.memory_count;
       res.json({
         id,
-        verified,
-        reason: verified ? 'verified' : 'drift_detected',
+        verified: commitment.verified,
+        reason: commitment.reason,
         memory_count: row.memory_count,
-        recomputed_root: tree.root,
-        committed_root: row.merkle_root,
+        recomputed_root: commitment.recomputedRoot,
+        committed_root: commitment.committedRoot,
         commitment: {
           chain: 'solana',
           asset_id: row.pack_token_address,
