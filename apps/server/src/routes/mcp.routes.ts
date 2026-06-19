@@ -107,7 +107,7 @@ function buildServerForOwner(ownerWallet: string, agentId: string, scope: string
     'Save a new memory to the user\'s persistent store. Use this when you learn something durable about the user — preferences, decisions, project state, key facts — that should survive across conversations.',
     {
       type: z.enum(MEMORY_TYPES).describe('episodic (events), semantic (facts), procedural (how-to), self_model (about-the-user), introspective (reflection)'),
-      content: z.string().max(5000).describe('Full memory text'),
+      content: z.string().trim().min(1, 'content cannot be empty').max(5000).describe('Full memory text'),
       summary: z.string().max(500).describe('Short summary used for recall matching'),
       tags: z.array(z.string()).optional().describe('Tags for filtering'),
       importance: z.number().min(0).max(1).optional().describe('Importance 0-1 (auto-scored if omitted)'),

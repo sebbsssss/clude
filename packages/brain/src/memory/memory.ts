@@ -23,7 +23,6 @@ import {
   MAX_AUTO_LINKS,
   LINK_CO_RETRIEVAL_BOOST,
   INTERNAL_MEMORY_SOURCES,
-  INTERNAL_IMPORTANCE_BOOST,
   BOND_TYPE_WEIGHTS,
 } from '@clude/shared/utils';
 import type { MemoryLinkType } from '@clude/shared/utils/constants';
@@ -280,6 +279,22 @@ export function inferConcepts(summary: string, source: string, tags: string[]): 
   return [...new Set(concepts)];
 }
 
+// Heuristic importance when caller omits it. Replaces the old flat-0.5 default
+// (41% of all rows were exactly 0.5). Tunable; explicit importance always wins.
+export function scoreImportanceOnWrite(opts: StoreMemoryOptions): number {
+  const base: Record<string, number> = {
+    self_model: 0.75, semantic: 0.70, procedural: 0.65, introspective: 0.60, episodic: 0.45,
+  };
+  let score = base[opts.type] ?? 0.5;
+  const len = (opts.content ?? '').trim().length;
+  score += Math.min(len / 1000, 0.15);            // longer = a bit more important (cap +0.15)
+  if (opts.tags && opts.tags.length) score += 0.05;
+  const concepts = opts.concepts ?? inferConcepts(opts.summary, opts.source, opts.tags || []);
+  if (concepts.length) score += 0.05;
+  if (INTERNAL_MEMORY_SOURCES.has(opts.source)) score -= 0.05;  // dream/reflection slightly lower
+  return Math.max(0, Math.min(1, score));
+}
+
 // ---- STORE DEDUP ---- //
 //
 // Prevents high-frequency external agents (e.g. Shiro trading cycles) from
@@ -424,6 +439,11 @@ async function ensureTopicEmbeddings(installedPackIds: string[]): Promise<Map<st
 // ---- STORE ---- //
 
 export async function storeMemory(opts: StoreMemoryOptions): Promise<number | null> {
+  // Reject empty-content memories outright — they skip embedding yet still surface in
+  // recall, wasting compute on nothing (see migration 022). The DB CHECK is defense-in-depth.
+  const trimmedContent = (opts.content ?? '').trim();
+  if (!trimmedContent) { log.warn({ source: opts.source }, 'Rejected empty-content memory'); return null; }
+
   // Skip duplicate writes from high-frequency external agent sources.
   // Applies to any source whose writes are repetitive by nature (shiro_* trading cycles, etc.)
   if (opts.source.startsWith('shiro_') && isDuplicateWrite(opts.source, opts.summary)) {
@@ -433,6 +453,9 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
 
   const db = getDb();
   const ownerWallet = getOwnerWallet();
+
+  // Heuristic auto-score when caller omits importance; explicit value always wins.
+  const importance = clamp(opts.importance ?? scoreImportanceOnWrite(opts), 0, 1);
 
   // Auto-classify concepts if not explicitly provided
   const concepts = opts.concepts || inferConcepts(opts.summary, opts.source, opts.tags || []);
@@ -455,7 +478,8 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
   try {
     // Encrypt content (content only — summary/tags/metadata stay plaintext). Precedence:
     // envelope (PMP §5) → legacy SDK scheme (configureEncryption, cortex.ts) → plaintext.
-    const plaintextContent = opts.content.slice(0, MEMORY_MAX_CONTENT_LENGTH);
+    // Store the trimmed text (see empty-content guard above).
+    const plaintextContent = trimmedContent.slice(0, MEMORY_MAX_CONTENT_LENGTH);
     const envelope = await encryptForStorage(plaintextContent, ownerWallet || null);
     const legacyEncrypt = !envelope && isEncryptionEnabled();
     const storedContent = envelope
@@ -474,7 +498,7 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
         tags: taggedTags,
         concepts,
         emotional_valence: clamp(opts.emotionalValence ?? 0, -1, 1),
-        importance: clamp(opts.importance ?? 0.5, 0, 1),
+        importance,
         source: opts.source,
         source_id: opts.sourceId || null,
         related_user: opts.relatedUser || null,
@@ -500,7 +524,7 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
       hashId: data.hash_id,
       type: opts.type,
       summary: opts.summary.slice(0, 60),
-      importance: opts.importance,
+      importance,
       concepts,
     }, 'Memory stored');
 
@@ -527,7 +551,7 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
 
     // Notify reflection trigger system (Park et al. 2023 — event-driven reflection)
     eventBus.emit('memory:stored', {
-      importance: clamp(opts.importance ?? 0.5, 0, 1),
+      importance,
       memoryType: opts.type,
       source: opts.source,
     });
@@ -1308,8 +1332,8 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
       }
     }
 
-    // Update access counts in parallel (skip for internal processing like dream cycles)
-    // Source-aware reinforcement: internal signals get gated boost to prevent confabulation
+    // Update access counts in parallel (skip for internal processing like dream cycles).
+    // Access tracking only — importance is no longer boosted on read (see migration 019).
     if (opts.trackAccess !== false) {
       const ids = results.map((m: Memory) => m.id);
       const sources = results.map((m: Memory) => m.source || '');
@@ -1579,22 +1603,16 @@ export async function hydrateMemories(ids: number[]): Promise<Memory[]> {
 
 // ---- ACCESS TRACKING ---- //
 
-async function updateMemoryAccess(ids: number[], sources: string[] = []): Promise<void> {
+// `sources` is retained for call-site signature stability (recall passes it positionally);
+// it is no longer read here now that importance is not boosted on read.
+async function updateMemoryAccess(ids: number[], _sources: string[] = []): Promise<void> {
   if (ids.length === 0) return;
   const db = getDb();
 
-  // Source-aware importance boosts: external sources get full reinforcement,
-  // internal sources (dreams, reflections) get gated boost to prevent confabulation spirals.
-  // Based on Source Monitoring Framework (Johnson et al.) and validation-gated Hebbian learning.
-  const importanceBoosts = ids.map((_, i) => {
-    const source = sources[i] || '';
-    return INTERNAL_MEMORY_SOURCES.has(source) ? INTERNAL_IMPORTANCE_BOOST : 0.02;
-  });
-
-  // Single RPC: increment access_count, refresh last_accessed, boost decay + importance
+  // Single RPC: increment access_count, refresh last_accessed, reactivate decay.
+  // Importance is NOT boosted on read — see migration 019 (read->rank->read feedback loop).
   const { error } = await db.rpc('batch_boost_memory_access', {
     memory_ids: ids,
-    importance_boosts: importanceBoosts,
   });
   if (error) {
     log.warn({ error: error.message, ids }, 'Batch memory access update failed');
@@ -2027,7 +2045,7 @@ export async function getMemoryStats(): Promise<MemoryStats> {
     for (let page = 0; page < MAX_PAGES; page++) {
       let pageQuery = db
         .from('memories')
-        .select('importance, decay_factor, created_at, related_user, tags, concepts')
+        .select('importance, decay_factor, created_at, related_user, owner_wallet, tags, concepts')
         .order('id', { ascending: true })
         .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
       pageQuery = scopeToOwner(pageQuery);
@@ -2050,6 +2068,9 @@ export async function getMemoryStats(): Promise<MemoryStats> {
         impSum += m.importance;
         decaySum += m.decay_factor;
         if (m.related_user) users.add(m.related_user);
+        // MCP writes leave related_user null; count the owner so a fresh owner with
+        // memories yields uniqueUsers >= 1 instead of 0.
+        if (m.owner_wallet) users.add(m.owner_wallet);
         if (m.tags) {
           for (const tag of m.tags) {
             tagCounts[tag] = (tagCounts[tag] || 0) + 1;
@@ -2081,9 +2102,11 @@ export async function getMemoryStats(): Promise<MemoryStats> {
       stats.newestMemory = sorted[sorted.length - 1] || null;
     }
 
-    const { count, error: dreamError } = await db
-      .from('dream_logs')
-      .select('id', { count: 'exact', head: true });
+    // Scope to the current owner (dream_logs.owner_wallet — migration 021); otherwise a
+    // brand-new owner sees the GLOBAL dream count (thousands of dreams on an empty store).
+    let dreamQuery = db.from('dream_logs').select('id', { count: 'exact', head: true });
+    dreamQuery = scopeToOwner(dreamQuery);
+    const { count, error: dreamError } = await dreamQuery;
     if (dreamError) {
       log.warn({ error: dreamError.message }, 'Failed to count dream logs');
     }
@@ -2171,6 +2194,8 @@ export async function storeDreamLog(
       input_memory_ids: inputMemoryIds,
       output: output.slice(0, MEMORY_MAX_CONTENT_LENGTH),
       new_memories_created: newMemoryIds,
+      // Stamp owner so getMemoryStats can scope the dream count (migration 021).
+      owner_wallet: getOwnerWallet() === SCOPE_BOT_OWN ? null : getOwnerWallet(),
     });
 
   if (error) {
