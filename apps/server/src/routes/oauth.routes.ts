@@ -15,6 +15,7 @@
 import express, { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { config } from '@clude/shared/config';
+import { getDb } from '@clude/shared/core/database';
 import { createChildLogger } from '@clude/shared/core/logger';
 import { findOrCreateAgentForDid } from '@clude/brain/features/agent-tier';
 import {
@@ -123,6 +124,18 @@ async function handleAuthCodeGrant(req: Request, res: Response): Promise<void> {
     ownerWallet: consumed.ownerWallet,
     scope: consumed.scope,
   });
+  // TEMP DEBUG — capture exactly what we mint + what the client sent (remove after diagnosing).
+  try {
+    await getDb().from('mcp_auth_debug').insert({
+      has_auth: true,
+      ua: 'TOKEN_MINT',
+      token_iss: issuer,
+      token_aud: resourceFromRequest(req),
+      token_sub: consumed.ownerWallet,
+      oauth_ok: true,
+      result: `mint resource=${String((req.body && req.body.resource) ?? 'NONE')} redirect=${consumed.redirectUri} client=${consumed.clientId}`,
+    });
+  } catch { /* debug only */ }
   res.json({
     access_token: token,
     token_type: 'Bearer',
