@@ -44,6 +44,13 @@ vi.mock('@clude/brain/auth/privy-auth', () => ({
   },
 }));
 
+// requireOwnership runs after the (mocked) requirePrivyAuth, which already set
+// verifiedWallet — pass through so the real DID-resolution middleware isn't hit in tests.
+vi.mock('@clude/brain/auth/require-ownership', () => ({
+  requireOwnership: (_req: Request, _res: Response, next: NextFunction) => next(),
+  optionalOwnership: (_req: Request, _res: Response, next: NextFunction) => next(),
+}));
+
 // ── Table-routed Supabase mock (same idiom as pack-marketplace.routes.test.ts) ──
 type Row = Record<string, any>;
 const tables: Record<string, Row[]> = {};

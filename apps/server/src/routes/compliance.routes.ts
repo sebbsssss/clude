@@ -28,6 +28,7 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { getDb } from '@clude/shared/core/database';
 import { requirePrivyAuth, optionalPrivyAuth } from '@clude/brain/auth/privy-auth';
+import { requireOwnership } from '@clude/brain/auth/require-ownership';
 import { createChildLogger } from '@clude/shared/core/logger';
 import { scanPack, type Finding } from '../lib/content-filter.js';
 import { evaluateGate, type GateInput } from '../lib/compliance-gate.js';
@@ -55,10 +56,9 @@ interface ErrorBody {
 }
 
 function ownerFromReq(req: Request): string | null {
-  if (req.verifiedWallet) return req.verifiedWallet;
-  const q = req.query.owner;
-  if (typeof q === 'string' && q.length > 0) return q;
-  return null;
+  // Only trust the wallet requireOwnership verified against the authenticated identity.
+  // NEVER fall back to a client-supplied ?owner= — that was an impersonation hole.
+  return req.verifiedWallet ?? null;
 }
 
 function clientIp(req: Request): string | null {
@@ -225,7 +225,7 @@ export function complianceRoutes(): Router {
   });
 
   // ─────────── GET /v1/legal/acceptances (must precede /v1/legal/:doc_id) ───────────
-  router.get('/v1/legal/acceptances', requirePrivyAuth, async (req: Request, res: Response) => {
+  router.get('/v1/legal/acceptances', requirePrivyAuth, requireOwnership, async (req: Request, res: Response) => {
     const owner = ownerFromReq(req);
     if (!owner) {
       res.status(401).json({ error: 'unauthenticated' } satisfies ErrorBody);
@@ -272,7 +272,7 @@ export function complianceRoutes(): Router {
   });
 
   // ─────────── POST /v1/legal/accept ───────────
-  router.post('/v1/legal/accept', requirePrivyAuth, async (req: Request, res: Response) => {
+  router.post('/v1/legal/accept', requirePrivyAuth, requireOwnership, async (req: Request, res: Response) => {
     const owner = ownerFromReq(req);
     if (!owner) {
       res.status(401).json({ error: 'unauthenticated' } satisfies ErrorBody);
@@ -319,7 +319,7 @@ export function complianceRoutes(): Router {
   });
 
   // ─────────── POST /v1/packs/:id/attest ───────────
-  router.post('/v1/packs/:id/attest', requirePrivyAuth, async (req: Request, res: Response) => {
+  router.post('/v1/packs/:id/attest', requirePrivyAuth, requireOwnership, async (req: Request, res: Response) => {
     const owner = ownerFromReq(req);
     if (!owner) {
       res.status(401).json({ error: 'unauthenticated' } satisfies ErrorBody);
@@ -407,7 +407,7 @@ export function complianceRoutes(): Router {
   });
 
   // ─────────── POST /v1/packs/:id/scan ───────────
-  router.post('/v1/packs/:id/scan', requirePrivyAuth, async (req: Request, res: Response) => {
+  router.post('/v1/packs/:id/scan', requirePrivyAuth, requireOwnership, async (req: Request, res: Response) => {
     const owner = ownerFromReq(req);
     if (!owner) {
       res.status(401).json({ error: 'unauthenticated' } satisfies ErrorBody);
@@ -510,7 +510,7 @@ export function complianceRoutes(): Router {
   });
 
   // ─────────── GET /v1/packs/:id/compliance ───────────
-  router.get('/v1/packs/:id/compliance', requirePrivyAuth, async (req: Request, res: Response) => {
+  router.get('/v1/packs/:id/compliance', requirePrivyAuth, requireOwnership, async (req: Request, res: Response) => {
     const owner = ownerFromReq(req);
     if (!owner) {
       res.status(401).json({ error: 'unauthenticated' } satisfies ErrorBody);

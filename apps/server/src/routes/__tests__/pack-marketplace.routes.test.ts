@@ -50,6 +50,13 @@ vi.mock('@clude/brain/auth/privy-auth', () => ({
   },
 }));
 
+// requireOwnership runs after the (mocked) requirePrivyAuth, which already set
+// verifiedWallet — pass through so the real DID-resolution middleware isn't hit in tests.
+vi.mock('@clude/brain/auth/require-ownership', () => ({
+  requireOwnership: (_req: Request, _res: Response, next: NextFunction) => next(),
+  optionalOwnership: (_req: Request, _res: Response, next: NextFunction) => next(),
+}));
+
 // ── Table-routed Supabase mock ───────────────────────────────────────────────
 // Each table is backed by an in-memory array of rows. The chain records the
 // filters/ops applied and resolves them against that array on a terminal call

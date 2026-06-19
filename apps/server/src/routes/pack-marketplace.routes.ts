@@ -31,6 +31,7 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { getDb } from '@clude/shared/core/database';
 import { requirePrivyAuth, optionalPrivyAuth } from '@clude/brain/auth/privy-auth';
+import { requireOwnership } from '@clude/brain/auth/require-ownership';
 import { createChildLogger } from '@clude/shared/core/logger';
 import { evaluateGate, type GateInput, type GateBlockingReason } from '../lib/compliance-gate.js';
 import { buildPackPreview, type PreviewMemoryBody } from '../lib/pack-preview.js';
@@ -76,10 +77,10 @@ interface ErrorBody {
 }
 
 function ownerFromReq(req: Request): string | null {
-  if (req.verifiedWallet) return req.verifiedWallet;
-  const q = req.query.owner;
-  if (typeof q === 'string' && q.length > 0) return q;
-  return null;
+  // Only trust the wallet requireOwnership verified against the authenticated identity.
+  // NEVER fall back to a client-supplied ?owner= — that was an impersonation hole (any
+  // authed user could act as any wallet). requireOwnership precedes every route using this.
+  return req.verifiedWallet ?? null;
 }
 
 function publicBaseUrl(req: Request): string {
@@ -296,7 +297,7 @@ export function packMarketplaceRoutes(): Router {
    * `license_type` may only be 'copy' in this slice; 'title' → 422.
    * `content_category` / `sale_mode` are IGNORED if sent — derived from the pack.
    */
-  router.post('/v1/listings', requirePrivyAuth, async (req: Request, res: Response) => {
+  router.post('/v1/listings', requirePrivyAuth, requireOwnership, async (req: Request, res: Response) => {
     const owner = ownerFromReq(req);
     if (!owner) {
       res.status(401).json({ error: 'unauthenticated' } satisfies ErrorBody);
@@ -401,7 +402,7 @@ export function packMarketplaceRoutes(): Router {
    * Refuses any attempt to set an immutable field (status/content_category/pack_id/…).
    * `status` only moves via publish/delist.
    */
-  router.patch('/v1/listings/:id', requirePrivyAuth, async (req: Request, res: Response) => {
+  router.patch('/v1/listings/:id', requirePrivyAuth, requireOwnership, async (req: Request, res: Response) => {
     const owner = ownerFromReq(req);
     if (!owner) {
       res.status(401).json({ error: 'unauthenticated' } satisfies ErrorBody);
@@ -476,7 +477,7 @@ export function packMarketplaceRoutes(): Router {
    * passes. Re-resolves the gate from persisted facts (category read server-side
    * from memory_packs). Secrets / personal / unclassified / un-scanned all 422.
    */
-  router.post('/v1/listings/:id/publish', requirePrivyAuth, async (req: Request, res: Response) => {
+  router.post('/v1/listings/:id/publish', requirePrivyAuth, requireOwnership, async (req: Request, res: Response) => {
     const owner = ownerFromReq(req);
     if (!owner) {
       res.status(401).json({ error: 'unauthenticated' } satisfies ErrorBody);
@@ -549,7 +550,7 @@ export function packMarketplaceRoutes(): Router {
   });
 
   /** POST /v1/listings/:id/delist — listed → delisted. */
-  router.post('/v1/listings/:id/delist', requirePrivyAuth, async (req: Request, res: Response) => {
+  router.post('/v1/listings/:id/delist', requirePrivyAuth, requireOwnership, async (req: Request, res: Response) => {
     const owner = ownerFromReq(req);
     if (!owner) {
       res.status(401).json({ error: 'unauthenticated' } satisfies ErrorBody);
@@ -594,7 +595,7 @@ export function packMarketplaceRoutes(): Router {
   });
 
   /** GET /v1/listings/mine — the caller's own listings (auth required). */
-  router.get('/v1/listings/mine', requirePrivyAuth, async (req: Request, res: Response) => {
+  router.get('/v1/listings/mine', requirePrivyAuth, requireOwnership, async (req: Request, res: Response) => {
     const owner = ownerFromReq(req);
     if (!owner) {
       res.status(401).json({ error: 'unauthenticated' } satisfies ErrorBody);
