@@ -225,10 +225,30 @@ const SECRET_DETECTORS: Detector[] = [
     regex: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY-----/g,
   },
   {
-    // EVM private key: 0x + exactly 64 hex (word-bounded so a longer hash doesn't match).
+    // EVM private key: 0x/0X + exactly 64 hex (word-bounded so a longer hash doesn't match).
     category: 'secret_private_key',
     severity: 'reject',
-    regex: /\b0x[0-9a-fA-F]{64}\b/g,
+    regex: /\b0[xX][0-9a-fA-F]{64}\b/g,
+  },
+  {
+    // Bare 64-hex run (EVM private key WITHOUT the 0x prefix). A 64-hex string is also the
+    // shape of a SHA-256 hash, but raw hashes almost never appear inside natural-language
+    // memory CONTENT (pack hashes / merkle roots live in metadata columns, which /scan does
+    // not read), so rejecting is the safe choice — a leaked private key is catastrophic.
+    // Placed after the 0x rule so a prefixed key is attributed once (span-claim dedupes).
+    category: 'secret_private_key',
+    severity: 'reject',
+    regex: /\b[0-9a-fA-F]{64}\b/g,
+  },
+  {
+    // Bare 32-hex run (MD5-style token / Twilio auth token / unprefixed short key). This
+    // also matches MD5 hashes / dashless UUIDs, but per the founder's "block secrets first"
+    // rule a flagged ambiguous hex blob (the creator removes it) beats leaking a 32-hex
+    // credential into a sold pack. Ordered after the 64-hex rule so a 64-hex key is never
+    // split into two 32-hex findings (the 64-hex span is claimed first; no \b mid-run).
+    category: 'secret_api_key',
+    severity: 'reject',
+    regex: /\b[0-9a-fA-F]{32}\b/g,
   },
   {
     // Solana JSON keypair: a 64-element array of 0–255 ints (the `id.json` export shape).
@@ -252,10 +272,11 @@ const SECRET_DETECTORS: Detector[] = [
     regex: /\bsk-ant-[A-Za-z0-9-]{16,}\b/g,
   },
   {
-    // OpenAI: sk-… and sk-proj-… (16+ body chars to avoid matching "sk-" prose).
+    // OpenAI: sk-… and sk-proj-… Real project keys interleave '-'/'_' in the body, so the
+    // body class allows them (start+end alnum, 20+ total to avoid matching "sk-" prose).
     category: 'secret_api_key',
     severity: 'reject',
-    regex: /\bsk-(?:proj-)?[A-Za-z0-9]{20,}\b/g,
+    regex: /\bsk-(?:proj-)?[A-Za-z0-9][A-Za-z0-9_-]{18,}[A-Za-z0-9]/g,
   },
   {
     // Stripe secret / restricted keys.
@@ -287,6 +308,30 @@ const SECRET_DETECTORS: Detector[] = [
     category: 'secret_api_key',
     severity: 'reject',
     regex: /\bgh[pousr]_[A-Za-z0-9]{20,}\b/g,
+  },
+  {
+    // GitHub fine-grained PAT (github_pat_…), not covered by the gh[pousr]_ shape.
+    category: 'secret_api_key',
+    severity: 'reject',
+    regex: /\bgithub_pat_[A-Za-z0-9_]{20,}\b/g,
+  },
+  {
+    // Google OAuth client secret.
+    category: 'secret_api_key',
+    severity: 'reject',
+    regex: /\bGOCSPX-[A-Za-z0-9_-]{20,}\b/g,
+  },
+  {
+    // SendGrid API key (SG.<id>.<secret>).
+    category: 'secret_api_key',
+    severity: 'reject',
+    regex: /\bSG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\b/g,
+  },
+  {
+    // Slack incoming-webhook URL (the secret is in the path).
+    category: 'secret_api_key',
+    severity: 'reject',
+    regex: /hooks\.slack\.com\/services\/[A-Z0-9]+\/[A-Z0-9]+\/[A-Za-z0-9]+/g,
   },
   {
     // GitLab personal access token.
@@ -344,6 +389,16 @@ const SECRET_DETECTORS: Detector[] = [
     category: 'secret_password',
     severity: 'reject',
     regex: /(?:^|[^a-z0-9])(?:password|passwd|pwd)\s*[=:]\s*["']?(\S{6,})["']?/gi,
+    group: 1,
+  },
+  {
+    // Generic credential assignment: <api_key|secret|token|auth_token|…> = <value>.
+    // Captures a 16+ contiguous secret-ish value regardless of provider — converts the long
+    // tail of "KEY=<random>" leaks (Twilio, Azure, custom) into a hard reject. Natural prose
+    // almost never has one of these keywords immediately followed by `=`/`:` + 16+ contiguous.
+    category: 'secret_api_key',
+    severity: 'reject',
+    regex: /(?:^|[^a-z0-9])(?:api[_-]?key|secret(?:[_-]?key)?|access[_-]?token|auth[_-]?token|client[_-]?secret|private[_-]?key|access[_-]?key)\s*[=:]\s*["']?([A-Za-z0-9_\-./+]{16,})["']?/gi,
     group: 1,
   },
 ];
