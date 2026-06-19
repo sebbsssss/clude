@@ -60,6 +60,7 @@ describe('oauth core — access tokens', () => {
       scope: 'memory:read memory:write',
       clientId: 'mcp_test',
       issuer: 'https://clude.io',
+      audience: 'https://clude.io/api/mcp',
     });
     expect(expiresIn).toBe(3600);
     const claims = await verifyAccessToken(token);
@@ -74,8 +75,23 @@ describe('oauth core — access tokens', () => {
       scope: 'memory:read',
       clientId: 'c',
       issuer: 'i',
+      audience: 'https://clude.io/api/mcp',
     });
     expect(await verifyAccessToken(`${token}tampered`)).toBeNull();
+  });
+
+  it('binds the token audience to the requested resource (RFC 8707) and still verifies', async () => {
+    const { token } = await mintAccessToken({
+      ownerWallet: 'w',
+      scope: 'memory:read',
+      clientId: 'c',
+      issuer: 'https://clude.io',
+      audience: 'https://clude.io/api/mcp',
+    });
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+    expect(payload.aud).toBe('https://clude.io/api/mcp'); // not the old "clude:mcp"
+    const claims = await verifyAccessToken(token);
+    expect(claims?.sub).toBe('w'); // verification no longer pins a fixed audience
   });
 
   it('reports enabled when a signing secret is set', () => {

@@ -27,8 +27,6 @@ export const OAUTH_SCOPES = ['memory:read', 'memory:write'] as const;
 export type OAuthScope = (typeof OAUTH_SCOPES)[number];
 export const DEFAULT_SCOPE = OAUTH_SCOPES.join(' ');
 
-const AUDIENCE = 'clude:mcp';
-
 export function isOAuthEnabled(): boolean {
   return Boolean(config.oauth.signingSecret);
 }
@@ -79,14 +77,17 @@ export async function mintAccessToken(params: {
   scope: string;
   clientId: string;
   issuer: string;
+  /** RFC 8707 resource indicator — the MCP server URI the client requested. The client
+   *  (Claude) validates that the token's aud equals the resource it asked for. */
+  audience: string;
 }): Promise<{ token: string; expiresIn: number }> {
   const expiresIn = config.oauth.accessTtlSec;
   const { SignJWT } = await loadJose();
   const token = await new SignJWT({ scope: params.scope, client_id: params.clientId })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(params.ownerWallet)
-    .setAudience(AUDIENCE)
-    .setIssuer(params.issuer || AUDIENCE)
+    .setAudience(params.audience)
+    .setIssuer(params.issuer || params.audience)
     .setIssuedAt()
     .setExpirationTime(`${expiresIn}s`)
     .sign(signingKey());
@@ -96,7 +97,10 @@ export async function mintAccessToken(params: {
 export async function verifyAccessToken(token: string): Promise<AccessTokenClaims | null> {
   try {
     const { jwtVerify } = await loadJose();
-    const { payload } = await jwtVerify(token, signingKey(), { audience: AUDIENCE });
+    // No audience constraint: this AS issues tokens only for its own MCP resource, so a valid
+    // signature + expiry is sufficient. The aud is the RFC 8707 resource URI the client
+    // requested (set at mint time); the client validates aud against its requested resource.
+    const { payload } = await jwtVerify(token, signingKey());
     if (!payload.sub) return null;
     return {
       sub: payload.sub,
