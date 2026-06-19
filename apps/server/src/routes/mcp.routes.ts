@@ -222,6 +222,38 @@ async function authFromBearer(authHeader: string | undefined): Promise<McpAuth |
   return { ownerWallet, agentId: agent.agent_id, scope: 'memory:read memory:write' };
 }
 
+// TEMPORARY debug capture — records what Claude's MCP request carries (token claims + verify
+// result) so we can see it on prod. Remove after diagnosing the connector. Never throws.
+async function logMcpDebug(req: Request, auth: McpAuth | null): Promise<void> {
+  try {
+    const authHeader = req.headers['authorization'] as string | undefined;
+    let iss: string | null = null, aud: string | null = null, sub: string | null = null, exp: number | null = null;
+    if (authHeader?.startsWith('Bearer ')) {
+      const parts = authHeader.slice(7).trim().split('.');
+      if (parts.length === 3) {
+        try {
+          const p = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+          iss = p.iss ?? null;
+          aud = Array.isArray(p.aud) ? p.aud.join(',') : (p.aud ?? null);
+          sub = p.sub ?? null;
+          exp = typeof p.exp === 'number' ? p.exp : null;
+        } catch { /* not a JWT */ }
+      }
+    }
+    const isOauth = !!auth && auth.agentId.startsWith('oauth:');
+    await getDb().from('mcp_auth_debug').insert({
+      has_auth: !!authHeader,
+      ua: ((req.headers['user-agent'] as string | undefined) ?? '').slice(0, 160) || null,
+      token_iss: iss,
+      token_aud: aud,
+      token_sub: sub,
+      token_exp: exp,
+      oauth_ok: isOauth,
+      result: auth ? (isOauth ? 'oauth' : 'legacy') : 'unauthorized',
+    });
+  } catch { /* debug logging must never break the request */ }
+}
+
 function sendUnauthorized(res: Response, resourceMetadataUrl: string): void {
   // RFC 9728: tell Claude where to find the protected-resource metadata so
   // its OAuth client can negotiate auth automatically in future.
@@ -244,6 +276,7 @@ export function mcpRoutes(): Router {
   router.post('/', async (req: Request, res: Response) => {
     const resourceMetadataUrl = `${req.protocol}://${req.get('host')}${resourceMetadataPath}`;
     const auth = await authFromBearer(req.headers['authorization'] as string | undefined);
+    await logMcpDebug(req, auth);
     if (!auth) {
       sendUnauthorized(res, resourceMetadataUrl);
       return;
