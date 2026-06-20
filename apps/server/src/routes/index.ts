@@ -22,6 +22,7 @@ import { pmpRoutes } from './pmp.routes.js';
 import { encryptionRoutes } from './encryption.routes.js';
 import { pmpPacksRoutes } from './pmp-packs.routes.js';
 import { pmpArtifactsRoutes } from './pmp-artifacts.routes.js';
+import { pmpDevicesRoutes } from './pmp-devices.routes.js';
 import { pmpAdminRoutes } from './pmp-admin.routes.js';
 import { complianceRoutes } from './compliance.routes.js';
 import { packMarketplaceRoutes } from './pack-marketplace.routes.js';
@@ -80,6 +81,12 @@ export function mountApiRoutes(app: express.Application): void {
   // PMP artifacts — the SERVER side of the desktop .pmp integration (Part C).
   // POST /v1/pmp/export, GET /v1/pmp/artifacts(/:id), POST /v1/pmp/verify (public), /import.
   app.use(pmpArtifactsRoutes());
+
+  // PMP desktop device pairing — the secure server contract the desktop (Tauri) app links to
+  // (Part C, Task 3). Anti-phishing pairing handshake + device-signed memory pull.
+  // POST /v1/pmp/devices/pair/{init,claim,complete}, GET /v1/pmp/devices, POST /:id/revoke,
+  // POST /v1/pmp/desktop/memories (device-signed, owner-scoped, ±120s).
+  app.use(pmpDevicesRoutes());
 
   // PMP admin — backfill control (X-Admin-Token gated, disabled unless
   // PMP_ADMIN_TOKEN is set). POST/GET /v1/admin/backfill, /backfill/stop.

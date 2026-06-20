@@ -142,4 +142,31 @@ CREATE TABLE IF NOT EXISTS pmp_pairing_codes (
   expires_at TIMESTAMPTZ NOT NULL                          -- enforces the <2 min pairing window
 );
 
+-- A device_pubkey may have one LIVE pending/claimed code at a time — re-running pair/init for the
+-- same device replaces the prior code rather than accumulating claimable rows (and shrinks the
+-- attack surface to exactly one outstanding code per device).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pmp_pairing_codes_live_device
+  ON pmp_pairing_codes(device_pubkey) WHERE status IN ('pending', 'claimed');
+
+-- ─────────── DESKTOP PAIRING: device events (anti-phishing notification log) ───────────
+-- The durable audit trail behind the "notify on a new device pair" anti-phishing requirement
+-- (§00 MINOR 11) and the large-export egress alert (Risk R9). A pairing 'claimed'/'paired' row,
+-- or a 'memory_pull' row over a size threshold, is what a notification worker reads to alert the
+-- owner — exactly the pattern pack_listing_events / pack_access_events follow elsewhere. Append
+-- only; owner-scoped. device_id is nullable because a 'claimed' event precedes the pmp_devices row.
+CREATE TABLE IF NOT EXISTS pmp_device_events (
+  event_id BIGSERIAL PRIMARY KEY,
+  owner_wallet TEXT NOT NULL,
+  device_id TEXT,                                          -- the pmp_devices row, once it exists
+  device_pubkey TEXT,
+  event_type TEXT NOT NULL
+    CHECK (event_type IN ('pair_claimed', 'paired', 'revoked', 'memory_pull')),
+  device_name TEXT,
+  platform TEXT,
+  metadata JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_pmp_device_events_owner
+  ON pmp_device_events(owner_wallet, created_at DESC);
+
 COMMIT;
