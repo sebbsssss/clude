@@ -904,6 +904,67 @@ describe('POST /v1/pmp/export — selection path', () => {
     expect(res.status).toBe(422);
     expect(writeMemoryPack).not.toHaveBeenCalled();
   });
+
+  it('PAGINATION: gathers ALL owner memories past the 1000-row REST cap (not capped at one page)', async () => {
+    authedWallet = OWNER;
+    // 1500 OWNER rows > SELECTION_PAGE_SIZE (1000): a single .range() page would silently cap at
+    // 1000. The gather must page (.range in a while-loop) until a short page, so all 1500 land.
+    const TOTAL = 1500;
+    const rows = Array.from({ length: TOTAL }, (_v, i) => {
+      const n = String(i).padStart(5, '0'); // zero-pad so created_at string-orders == index order
+      return {
+        id: 5000 + i,
+        hash_id: `clude-pg-${n}`,
+        memory_type: 'episodic',
+        content: `pg-${n}`,
+        summary: `s-${n}`,
+        owner_wallet: OWNER,
+        // distinct, monotonically increasing ISO timestamps so ORDER BY created_at is stable
+        created_at: `2026-04-01T00:00:${'00'}.${n.slice(-3)}Z`,
+        tags: ['bulk'],
+        source: 'chat',
+        related_user: null,
+        related_wallet: null,
+        content_hash: `lh:pg-${n}`,
+        importance: 0.5,
+        tokenization_status: 'stored',
+      };
+    });
+    // One OTHER-owned row that would slip in if the owner scope were dropped on any page.
+    rows.push({
+      id: 999999,
+      hash_id: 'clude-pg-other',
+      memory_type: 'episodic',
+      content: 'pg-other-secret',
+      summary: 's',
+      owner_wallet: OTHER,
+      created_at: '2026-04-01T00:00:00.500Z',
+      tags: ['bulk'],
+      source: 'chat',
+      related_user: null,
+      related_wallet: null,
+      content_hash: 'lh:pg-other-secret',
+      importance: 0.9,
+      tokenization_status: 'stored',
+    });
+    seed('memories', rows);
+
+    const res = await request(app())
+      .post('/v1/pmp/export')
+      .send({ selection: { scope: 'tag', tags: ['bulk'] }, name: 'Bulk', category: 'knowledge' });
+
+    expect(res.status).toBe(201);
+    const [, writtenRecords] = writeMemoryPack.mock.calls[0] as [string, any[], any];
+    // ALL 1500 OWNER rows present — proves the second page was fetched, not capped at 1000.
+    expect(writtenRecords).toHaveLength(TOTAL);
+    expect(res.body.artifact.record_count).toBe(TOTAL);
+    // The OTHER-owned colliding row never leaked, on any page.
+    expect(writtenRecords.some((r) => r.content === 'pg-other-secret')).toBe(false);
+    // First + last by content confirm the full ordered range was assembled across both pages.
+    const contents = writtenRecords.map((r) => r.content);
+    expect(contents).toContain('pg-00000');
+    expect(contents).toContain('pg-01499');
+  });
 });
 
 // ───────────────── POST /v1/pmp/export/preview ─────────────────
