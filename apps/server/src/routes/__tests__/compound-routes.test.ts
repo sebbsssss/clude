@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
 import http from 'http';
 
-vi.mock('../../core/logger', () => ({
+// Post brain-refactor, compound.routes.ts imports from @clude/shared/* and
+// @clude/brain/* — NOT the old relative paths. The mocks must target the exact
+// specifiers the route imports, or the real modules load and hit the live DB.
+vi.mock('@clude/shared/core/logger', () => ({
   createChildLogger: () => ({
     info: vi.fn(),
     warn: vi.fn(),
@@ -14,12 +17,12 @@ vi.mock('../../core/logger', () => ({
 const mockRecallMemories = vi.fn();
 const mockHydrateMemories = vi.fn();
 
-vi.mock('../../memory', () => ({
+vi.mock('@clude/brain/memory', () => ({
   recallMemories: (...args: any[]) => mockRecallMemories(...args),
   hydrateMemories: (...args: any[]) => mockHydrateMemories(...args),
 }));
 
-vi.mock('../../features/compound', () => ({
+vi.mock('@clude/brain/features/compound', () => ({
   getAccuracyStats: vi.fn().mockResolvedValue({
     totalPredictions: 0,
     totalResolved: 0,
@@ -31,9 +34,18 @@ vi.mock('../../features/compound', () => ({
   isCompoundRunning: vi.fn().mockReturnValue(false),
 }));
 
-vi.mock('../../features/compound/market-adapters', () => ({
+vi.mock('@clude/brain/features/compound/market-adapters', () => ({
   createAdapters: vi.fn().mockReturnValue([]),
   fetchAllMarkets: vi.fn().mockResolvedValue([]),
+}));
+
+// The route also imports getDb (used by GET /markets?source=memory). None of the
+// tests below exercise that branch, but mock it anyway so module load never
+// initializes a real Supabase client or touches the network.
+vi.mock('@clude/shared/core/database', () => ({
+  getDb: vi.fn(() => {
+    throw new Error('getDb() is not stubbed for this test — no DB branch should be exercised here');
+  }),
 }));
 
 import { compoundRoutes } from '../compound.routes.js';
