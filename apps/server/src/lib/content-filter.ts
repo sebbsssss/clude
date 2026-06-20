@@ -411,10 +411,14 @@ const PII_DETECTORS: Detector[] = [
     regex: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g,
   },
   {
-    // US SSN — checked BEFORE phone so 3-2-4 isn't mis-read as a phone fragment.
+    // US SSN — 3-2-4 with a dash, single space, OR dot separator (all three are in
+    // everyday use). Checked BEFORE phone so 3-2-4 isn't mis-read as a phone fragment;
+    // since SSN is 9 digits and the phone shape needs 10 (3-3-4) they never collide.
+    // A separator is REQUIRED — a bare 9-digit run is too false-positive-prone (any
+    // order/zip/id number) to flag, so `123456789` is intentionally not matched.
     category: 'pii_ssn',
     severity: 'hold',
-    regex: /\b\d{3}-\d{2}-\d{4}\b/g,
+    regex: /\b\d{3}[-. ]\d{2}[-. ]\d{4}\b/g,
   },
   {
     // US phone: optional (area) then 3-4 with space/dash separators.
