@@ -142,7 +142,7 @@ function seed(table: string, rows: Row[]) {
 }
 
 interface Filter {
-  kind: 'eq' | 'in' | 'overlaps' | 'or' | 'contains';
+  kind: 'eq' | 'in' | 'overlaps' | 'or' | 'contains' | 'gte' | 'lte';
   col?: string;
   val?: any;
   vals?: any[];
@@ -153,6 +153,9 @@ function applyFilters(rows: Row[], filters: Filter[]): Row[] {
     filters.every((f) => {
       if (f.kind === 'eq') return row[f.col!] === f.val;
       if (f.kind === 'in') return (f.vals ?? []).includes(row[f.col!]);
+      // gte/lte compare lexically — created_at is an ISO string, so string ordering = time ordering.
+      if (f.kind === 'gte') return row[f.col!] >= f.val;
+      if (f.kind === 'lte') return row[f.col!] <= f.val;
       if (f.kind === 'overlaps') {
         const have: any[] = Array.isArray(row[f.col!]) ? row[f.col!] : [];
         return (f.vals ?? []).some((v) => have.includes(v));
@@ -175,12 +178,15 @@ function makeChain(table: string) {
   let pendingDelete = false;
   let orderCol: { col: string; ascending: boolean } | null = null;
   let limitN: number | null = null;
+  let rangeBounds: { from: number; to: number } | null = null;
+  let countMode = false;
+  let headOnly = false;
 
-  const settle = (): Promise<{ data: any; error: any }> => {
+  const settle = (): Promise<{ data: any; count: number | null; error: any }> => {
     if (forceError && forceError.table === table) {
       const err = forceError.error;
       forceError = null;
-      return Promise.resolve({ data: null, error: err });
+      return Promise.resolve({ data: null, count: null, error: err });
     }
 
     // INSERT (memories get a fresh BIGSERIAL id when one isn't supplied, so the route can read it back)
@@ -189,7 +195,7 @@ function makeChain(table: string) {
       pendingInsert = null;
       if (forceUniqueViolation === table) {
         forceUniqueViolation = null;
-        return Promise.resolve({ data: null, error: { code: '23505', message: 'duplicate key value' } });
+        return Promise.resolve({ data: null, count: null, error: { code: '23505', message: 'duplicate key value' } });
       }
       const stamped = rows.map((r) => {
         const copy = { ...r };
@@ -200,6 +206,7 @@ function makeChain(table: string) {
       insertedRows.push({ table, rows: stamped.map((r) => ({ ...r })) });
       return Promise.resolve({
         data: stamped.length === 1 ? { ...stamped[0] } : stamped.map((r) => ({ ...r })),
+        count: null,
         error: null,
       });
     }
@@ -210,7 +217,7 @@ function makeChain(table: string) {
       pendingUpdate = null;
       const matched = applyFilters(tables[table] ?? [], filters);
       for (const row of matched) Object.assign(row, patch);
-      return Promise.resolve({ data: matched.map((r) => ({ ...r })), error: null });
+      return Promise.resolve({ data: matched.map((r) => ({ ...r })), count: null, error: null });
     }
 
     // DELETE
@@ -219,7 +226,7 @@ function makeChain(table: string) {
       const keep = (tables[table] ?? []).filter((r) => !applyFilters([r], filters).length);
       const removed = (tables[table] ?? []).filter((r) => applyFilters([r], filters).length);
       tables[table] = keep;
-      return Promise.resolve({ data: removed.map((r) => ({ ...r })), error: null });
+      return Promise.resolve({ data: removed.map((r) => ({ ...r })), count: null, error: null });
     }
 
     // SELECT
@@ -232,19 +239,40 @@ function makeChain(table: string) {
         return (av < bv ? -1 : 1) * (orderCol!.ascending ? 1 : -1);
       });
     }
+    // count:exact reports the FILTERED total (before range/limit) — matches PostgREST semantics.
+    const matchCount = rows.length;
+    // .range(from,to) is an inclusive slice applied after ordering (the export pagination path).
+    if (rangeBounds) rows = rows.slice(rangeBounds.from, rangeBounds.to + 1);
     if (limitN !== null) rows = rows.slice(0, limitN);
-    return Promise.resolve({ data: rows.map((r) => ({ ...r })), error: null });
+    return Promise.resolve({
+      // head:true → no rows hydrated, only the count is meaningful (preview path).
+      data: headOnly ? null : rows.map((r) => ({ ...r })),
+      count: countMode ? matchCount : null,
+      error: null,
+    });
   };
 
   const chain: Record<string, any> = {};
   Object.assign(chain, {
-    select: () => chain,
+    select: (_cols?: string, opts?: { count?: 'exact' | 'planned' | 'estimated'; head?: boolean }) => {
+      if (opts?.count) countMode = true;
+      if (opts?.head) headOnly = true;
+      return chain;
+    },
     eq: (col: string, val: any) => {
       filters.push({ kind: 'eq', col, val });
       return chain;
     },
     in: (col: string, vals: any[]) => {
       filters.push({ kind: 'in', col, vals });
+      return chain;
+    },
+    gte: (col: string, val: any) => {
+      filters.push({ kind: 'gte', col, val });
+      return chain;
+    },
+    lte: (col: string, val: any) => {
+      filters.push({ kind: 'lte', col, val });
       return chain;
     },
     overlaps: (col: string, vals: any[]) => {
@@ -266,6 +294,10 @@ function makeChain(table: string) {
     },
     limit: (n: number) => {
       limitN = n;
+      return chain;
+    },
+    range: (from: number, to: number) => {
+      rangeBounds = { from, to };
       return chain;
     },
     insert: (rows: Row | Row[]) => {
@@ -368,6 +400,115 @@ function seedOwnedPack(packId = 'pack-aaaa') {
     },
   ]);
   return packId;
+}
+
+/**
+ * A free-floating memory corpus (NOT tied to any pack) for the selection-export path.
+ *   OWNER: 2 episodic, 1 semantic, 1 procedural — spread across distinct dates + tags.
+ *   OTHER: rows that DELIBERATELY collide on type ('episodic'), tag ('solana') and date so a
+ *          selection that forgets the owner scope would wrongly pull them. They must never appear.
+ * Content strings are unique → the mock memoryContentHash gives each a distinct leaf.
+ */
+function seedSelectionCorpus() {
+  seed('memories', [
+    {
+      id: 10,
+      hash_id: 'clude-sel-0010',
+      memory_type: 'episodic',
+      content: 'sel-ep-one',
+      summary: 'ep one',
+      owner_wallet: OWNER,
+      created_at: '2026-03-01T00:00:00.000Z',
+      tags: ['solana', 'trade'],
+      source: 'chat',
+      related_user: null,
+      related_wallet: null,
+      content_hash: 'lh:sel-ep-one',
+      importance: 0.6,
+      tokenization_status: 'stored',
+    },
+    {
+      id: 11,
+      hash_id: 'clude-sel-0011',
+      memory_type: 'episodic',
+      content: 'sel-ep-two',
+      summary: 'ep two',
+      owner_wallet: OWNER,
+      created_at: '2026-03-05T00:00:00.000Z',
+      tags: ['defi'],
+      source: 'chat',
+      related_user: null,
+      related_wallet: null,
+      content_hash: 'lh:sel-ep-two',
+      importance: 0.4,
+      tokenization_status: 'stored',
+    },
+    {
+      id: 12,
+      hash_id: 'clude-sel-0012',
+      memory_type: 'semantic',
+      content: 'sel-sem-one',
+      summary: 'sem one',
+      owner_wallet: OWNER,
+      created_at: '2026-03-10T00:00:00.000Z',
+      tags: ['solana'],
+      source: 'chat',
+      related_user: null,
+      related_wallet: null,
+      content_hash: 'lh:sel-sem-one',
+      importance: 0.8,
+      tokenization_status: 'stored',
+    },
+    {
+      id: 13,
+      hash_id: 'clude-sel-0013',
+      memory_type: 'procedural',
+      content: 'sel-proc-one',
+      summary: 'proc one',
+      owner_wallet: OWNER,
+      created_at: '2026-03-20T00:00:00.000Z',
+      tags: ['howto'],
+      source: 'chat',
+      related_user: null,
+      related_wallet: null,
+      content_hash: 'lh:sel-proc-one',
+      importance: 0.5,
+      tokenization_status: 'stored',
+    },
+    // ── OTHER tenant — colliding type/tag/date, MUST stay invisible to OWNER selections ──
+    {
+      id: 90,
+      hash_id: 'clude-other-0090',
+      memory_type: 'episodic',
+      content: 'other-ep-secret',
+      summary: 'secret',
+      owner_wallet: OTHER,
+      created_at: '2026-03-02T00:00:00.000Z',
+      tags: ['solana', 'trade'],
+      source: 'chat',
+      related_user: null,
+      related_wallet: null,
+      content_hash: 'lh:other-ep-secret',
+      importance: 0.9,
+      tokenization_status: 'stored',
+    },
+    {
+      id: 91,
+      hash_id: 'clude-other-0091',
+      memory_type: 'semantic',
+      content: 'other-sem-secret',
+      summary: 'secret',
+      owner_wallet: OTHER,
+      created_at: '2026-03-11T00:00:00.000Z',
+      tags: ['solana'],
+      source: 'chat',
+      related_user: null,
+      related_wallet: null,
+      content_hash: 'lh:other-sem-secret',
+      importance: 0.9,
+      tokenization_status: 'stored',
+    },
+  ]);
 }
 
 /**
@@ -509,6 +650,371 @@ describe('POST /v1/pmp/export', () => {
     authedWallet = OWNER;
     const res = await request(app()).post('/v1/pmp/export').send({ pack_id: 'pack-missing' });
     expect(res.status).toBe(404);
+  });
+});
+
+// ───────────────── POST /v1/pmp/export — SELECTION path (no pack_id) ─────────────────
+// The new gather: build a .pmp from the caller's OWN memories matching a selection filter,
+// reusing the exact write+register tail the pack path uses. The four acceptance guarantees:
+//   1. scope type/all build a pack from the matching owner memories (records + Merkle root).
+//   2. a selection NEVER returns another wallet's memory (owner-scope is mandatory).
+//   3. missing name OR missing category → 422 (selection metadata is required).
+//   4. an empty match → 409 empty_selection.
+
+describe('POST /v1/pmp/export — selection path', () => {
+  it('scope=type builds a .pmp from the owner memories matching the type filter', async () => {
+    authedWallet = OWNER;
+    seedSelectionCorpus(); // OWNER: 2 episodic + 1 semantic + 1 procedural
+
+    const res = await request(app())
+      .post('/v1/pmp/export')
+      .send({
+        selection: { scope: 'type', types: ['episodic'] },
+        name: 'My Episodics',
+        category: 'personal',
+      });
+
+    expect(res.status).toBe(201);
+    // Wrote a pack via the REUSED writer with exactly the 2 OWNER episodic records.
+    expect(writeMemoryPack).toHaveBeenCalledTimes(1);
+    const [, writtenRecords] = writeMemoryPack.mock.calls[0] as [string, any[], any];
+    expect(writtenRecords).toHaveLength(2);
+    expect(writtenRecords.map((r) => r.content).sort()).toEqual(['sel-ep-one', 'sel-ep-two']);
+
+    // Registered an owner-scoped artifact carrying the selection metadata + null pack_id.
+    const reg = insertedRows.find((r) => r.table === 'pmp_artifacts');
+    expect(reg).toBeTruthy();
+    const row = reg!.rows[0];
+    expect(row.owner_wallet).toBe(OWNER);
+    expect(row.pack_id).toBeNull(); // a selection is not tied to a saved pack
+    expect(row.title).toBe('My Episodics');
+    expect(row.license_type).toBe('copy');
+    expect(row.record_count).toBe(2);
+    expect(res.body.artifact.artifact_id).toMatch(/^pmpa-/);
+    // The writer is handed the pmp identity block so verify can read the root back (round-trip).
+    expect(writeMemoryPack).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Array),
+      expect.objectContaining({ pmp: expect.objectContaining({ merkle_root: row.merkle_root }) }),
+    );
+  });
+
+  it('scope=all builds a .pmp from EVERY owner memory (and nothing belonging to another wallet)', async () => {
+    authedWallet = OWNER;
+    seedSelectionCorpus(); // OWNER has 4 rows; OTHER has 2 colliding rows
+
+    const res = await request(app())
+      .post('/v1/pmp/export')
+      .send({ selection: { scope: 'all' }, name: 'Everything', category: 'knowledge' });
+
+    expect(res.status).toBe(201);
+    const [, writtenRecords] = writeMemoryPack.mock.calls[0] as [string, any[], any];
+    // All 4 OWNER memories, none of OTHER's.
+    expect(writtenRecords).toHaveLength(4);
+    const contents = writtenRecords.map((r) => r.content).sort();
+    expect(contents).toEqual(['sel-ep-one', 'sel-ep-two', 'sel-proc-one', 'sel-sem-one']);
+    expect(contents).not.toContain('other-ep-secret');
+    expect(contents).not.toContain('other-sem-secret');
+
+    const row = insertedRows.find((r) => r.table === 'pmp_artifacts')!.rows[0];
+    expect(row.content_source).toBeUndefined(); // content_source lives in the pmp block, not the row
+    expect(row.record_count).toBe(4);
+  });
+
+  it('scope=tag gathers only the owner memories overlapping the tag', async () => {
+    authedWallet = OWNER;
+    seedSelectionCorpus();
+
+    const res = await request(app())
+      .post('/v1/pmp/export')
+      .send({ selection: { scope: 'tag', tags: ['solana'] }, name: 'Solana', category: 'knowledge' });
+
+    expect(res.status).toBe(201);
+    const [, writtenRecords] = writeMemoryPack.mock.calls[0] as [string, any[], any];
+    // OWNER rows tagged 'solana': sel-ep-one + sel-sem-one. OTHER's 'solana' rows excluded.
+    expect(writtenRecords.map((r) => r.content).sort()).toEqual(['sel-ep-one', 'sel-sem-one']);
+  });
+
+  it('scope=range gathers only the owner memories created within [from, to]', async () => {
+    authedWallet = OWNER;
+    seedSelectionCorpus();
+
+    const res = await request(app())
+      .post('/v1/pmp/export')
+      .send({
+        selection: { scope: 'range', from: '2026-03-04T00:00:00.000Z', to: '2026-03-12T00:00:00.000Z' },
+        name: 'Early March',
+        category: 'personal',
+      });
+
+    expect(res.status).toBe(201);
+    const [, writtenRecords] = writeMemoryPack.mock.calls[0] as [string, any[], any];
+    // In-window OWNER rows: sel-ep-two (03-05) + sel-sem-one (03-10). 03-01 + 03-20 excluded.
+    expect(writtenRecords.map((r) => r.content).sort()).toEqual(['sel-ep-two', 'sel-sem-one']);
+  });
+
+  it('OWNER-SCOPE: a selection NEVER pulls another wallet memory even when type+tag collide', async () => {
+    authedWallet = OWNER;
+    seedSelectionCorpus(); // OTHER has an episodic 'solana'+'trade' row that overlaps this filter
+
+    const res = await request(app())
+      .post('/v1/pmp/export')
+      .send({
+        selection: { scope: 'tag', tags: ['solana', 'trade'] },
+        name: 'Solana Trades',
+        category: 'personal',
+      });
+
+    expect(res.status).toBe(201);
+    const [, writtenRecords] = writeMemoryPack.mock.calls[0] as [string, any[], any];
+    // overlaps() is array-OR: OWNER rows sharing ANY of {solana, trade} → sel-ep-one + sel-sem-one.
+    // The point of THIS test is the owner scope: OTHER's clude-other-0090 ALSO carries solana+trade
+    // (and is episodic), yet is absent because its owner_wallet differs from the caller's.
+    expect(writtenRecords.map((r) => r.content).sort()).toEqual(['sel-ep-one', 'sel-sem-one']);
+    expect(writtenRecords.some((r) => r.content === 'other-ep-secret')).toBe(false);
+    expect(writtenRecords.some((r) => r.content === 'other-sem-secret')).toBe(false);
+    // And the persisted artifact is the caller's.
+    expect(insertedRows.find((r) => r.table === 'pmp_artifacts')!.rows[0].owner_wallet).toBe(OWNER);
+  });
+
+  it('422 when name is missing on a selection export', async () => {
+    authedWallet = OWNER;
+    seedSelectionCorpus();
+    const res = await request(app())
+      .post('/v1/pmp/export')
+      .send({ selection: { scope: 'all' }, category: 'personal' });
+    expect(res.status).toBe(422);
+    expect(writeMemoryPack).not.toHaveBeenCalled();
+    expect(insertedRows.find((r) => r.table === 'pmp_artifacts')).toBeFalsy();
+  });
+
+  it('422 when name is present but empty/whitespace', async () => {
+    authedWallet = OWNER;
+    seedSelectionCorpus();
+    const res = await request(app())
+      .post('/v1/pmp/export')
+      .send({ selection: { scope: 'all' }, name: '   ', category: 'personal' });
+    expect(res.status).toBe(422);
+    expect(writeMemoryPack).not.toHaveBeenCalled();
+  });
+
+  it('422 when category is missing on a selection export', async () => {
+    authedWallet = OWNER;
+    seedSelectionCorpus();
+    const res = await request(app())
+      .post('/v1/pmp/export')
+      .send({ selection: { scope: 'all' }, name: 'No Category' });
+    expect(res.status).toBe(422);
+    expect(writeMemoryPack).not.toHaveBeenCalled();
+  });
+
+  it('422 when category is not one of personal|knowledge|agent', async () => {
+    authedWallet = OWNER;
+    seedSelectionCorpus();
+    const res = await request(app())
+      .post('/v1/pmp/export')
+      .send({ selection: { scope: 'all' }, name: 'Bad Cat', category: 'enterprise' });
+    expect(res.status).toBe(422);
+    expect(writeMemoryPack).not.toHaveBeenCalled();
+  });
+
+  it('409 empty_selection when no owner memory matches the filter', async () => {
+    authedWallet = OWNER;
+    seedSelectionCorpus(); // OWNER has no 'self_model' memories
+    const res = await request(app())
+      .post('/v1/pmp/export')
+      .send({ selection: { scope: 'type', types: ['self_model'] }, name: 'None', category: 'personal' });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('empty_selection');
+    expect(writeMemoryPack).not.toHaveBeenCalled();
+    expect(insertedRows.find((r) => r.table === 'pmp_artifacts')).toBeFalsy();
+  });
+
+  it('409 empty_selection when the only matching memories belong to ANOTHER wallet', async () => {
+    authedWallet = OWNER;
+    // Seed ONLY OTHER-owned rows; an OWNER 'all' selection must gather nothing → 409.
+    seed('memories', [
+      {
+        id: 200,
+        hash_id: 'clude-only-other',
+        memory_type: 'semantic',
+        content: 'only-other',
+        summary: 's',
+        owner_wallet: OTHER,
+        created_at: '2026-03-01T00:00:00.000Z',
+        tags: [],
+        source: 'chat',
+        related_user: null,
+        related_wallet: null,
+        content_hash: 'lh:only-other',
+        importance: 0.5,
+        tokenization_status: 'stored',
+      },
+    ]);
+    const res = await request(app())
+      .post('/v1/pmp/export')
+      .send({ selection: { scope: 'all' }, name: 'Mine', category: 'personal' });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('empty_selection');
+  });
+
+  it('401 when unauthenticated on a selection export', async () => {
+    authedWallet = null;
+    const res = await request(app())
+      .post('/v1/pmp/export')
+      .send({ selection: { scope: 'all' }, name: 'X', category: 'personal' });
+    expect(res.status).toBe(401);
+  });
+
+  it('a selection export DEDUPES on UNIQUE(owner_wallet, manifest_hash) → 200 deduped', async () => {
+    authedWallet = OWNER;
+    seedSelectionCorpus();
+
+    const first = await request(app())
+      .post('/v1/pmp/export')
+      .send({ selection: { scope: 'type', types: ['procedural'] }, name: 'Procs', category: 'knowledge' });
+    expect(first.status).toBe(201);
+    const firstId = first.body.artifact.artifact_id;
+
+    // Same selection again → the next pmp_artifacts insert collides → existing row returned.
+    forceUniqueViolation = 'pmp_artifacts';
+    const second = await request(app())
+      .post('/v1/pmp/export')
+      .send({ selection: { scope: 'type', types: ['procedural'] }, name: 'Procs', category: 'knowledge' });
+    expect(second.status).toBe(200);
+    expect(second.body.deduped).toBe(true);
+    expect(second.body.artifact.artifact_id).toBe(firstId);
+  });
+
+  it('a selection with scope=pack + pack_id routes through the PACK path (not the new gather)', async () => {
+    authedWallet = OWNER;
+    const packId = seedOwnedPack();
+    // No name/category supplied — proves scope:'pack' is the pack path, which does not require them.
+    const res = await request(app())
+      .post('/v1/pmp/export')
+      .send({ selection: { scope: 'pack', pack_id: packId } });
+    expect(res.status).toBe(201);
+    // The pack path persists the pack_id on the artifact row.
+    expect(insertedRows.find((r) => r.table === 'pmp_artifacts')!.rows[0].pack_id).toBe(packId);
+  });
+
+  it('422 when neither pack_id nor a non-pack selection is supplied', async () => {
+    authedWallet = OWNER;
+    const res = await request(app()).post('/v1/pmp/export').send({ name: 'orphan', category: 'personal' });
+    expect(res.status).toBe(422);
+    expect(writeMemoryPack).not.toHaveBeenCalled();
+  });
+});
+
+// ───────────────── POST /v1/pmp/export/preview ─────────────────
+
+describe('POST /v1/pmp/export/preview', () => {
+  it('returns total + by_type counts for an owner all-selection (owner-scoped)', async () => {
+    authedWallet = OWNER;
+    seedSelectionCorpus(); // OWNER: 2 episodic, 1 semantic, 1 procedural; OTHER: 2 rows
+
+    const res = await request(app())
+      .post('/v1/pmp/export/preview')
+      .send({ selection: { scope: 'all' } });
+
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBe(4); // OWNER only — OTHER's 2 rows are NOT counted
+    expect(res.body.by_type).toEqual({ episodic: 2, semantic: 1, procedural: 1 });
+  });
+
+  it('by_type reflects a type-scoped selection (only the requested types count)', async () => {
+    authedWallet = OWNER;
+    seedSelectionCorpus();
+
+    const res = await request(app())
+      .post('/v1/pmp/export/preview')
+      .send({ selection: { scope: 'type', types: ['episodic'] } });
+
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBe(2);
+    expect(res.body.by_type).toEqual({ episodic: 2 });
+  });
+
+  it('by_type reflects a tag-scoped selection', async () => {
+    authedWallet = OWNER;
+    seedSelectionCorpus();
+
+    const res = await request(app())
+      .post('/v1/pmp/export/preview')
+      .send({ selection: { scope: 'tag', tags: ['solana'] } });
+
+    expect(res.status).toBe(200);
+    // OWNER 'solana' rows: sel-ep-one (episodic) + sel-sem-one (semantic).
+    expect(res.body.total).toBe(2);
+    expect(res.body.by_type).toEqual({ episodic: 1, semantic: 1 });
+  });
+
+  it('OWNER-SCOPE: the preview never counts another wallet rows', async () => {
+    authedWallet = OWNER;
+    // ONLY OTHER-owned rows exist → an OWNER preview must total 0.
+    seed('memories', [
+      {
+        id: 300,
+        hash_id: 'clude-x-300',
+        memory_type: 'episodic',
+        content: 'x',
+        owner_wallet: OTHER,
+        created_at: '2026-03-01T00:00:00.000Z',
+        tags: ['solana'],
+        source: 'chat',
+        content_hash: 'lh:x',
+        importance: 0.5,
+      },
+    ]);
+    const res = await request(app())
+      .post('/v1/pmp/export/preview')
+      .send({ selection: { scope: 'all' } });
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBe(0);
+    expect(res.body.by_type).toEqual({});
+  });
+
+  it('total 0 / empty by_type when the owner has no memories', async () => {
+    authedWallet = OWNER;
+    const res = await request(app())
+      .post('/v1/pmp/export/preview')
+      .send({ selection: { scope: 'all' } });
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBe(0);
+    expect(res.body.by_type).toEqual({});
+  });
+
+  it('401 when unauthenticated', async () => {
+    authedWallet = null;
+    const res = await request(app())
+      .post('/v1/pmp/export/preview')
+      .send({ selection: { scope: 'all' } });
+    expect(res.status).toBe(401);
+  });
+
+  it('422 when the selection body is malformed (bad scope)', async () => {
+    authedWallet = OWNER;
+    const res = await request(app())
+      .post('/v1/pmp/export/preview')
+      .send({ selection: { scope: 'nonsense' } });
+    expect(res.status).toBe(422);
+  });
+
+  it('422 when the selection is missing entirely', async () => {
+    authedWallet = OWNER;
+    const res = await request(app()).post('/v1/pmp/export/preview').send({});
+    expect(res.status).toBe(422);
+  });
+
+  it('500 preview_failed when a count query errors', async () => {
+    authedWallet = OWNER;
+    seedSelectionCorpus();
+    forceError = { table: 'memories', error: { message: 'count blew up' } };
+    const res = await request(app())
+      .post('/v1/pmp/export/preview')
+      .send({ selection: { scope: 'all' } });
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('preview_failed');
   });
 });
 

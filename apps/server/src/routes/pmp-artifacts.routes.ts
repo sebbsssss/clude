@@ -31,6 +31,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { z } from 'zod';
 import {
   MEMORYPACK_VERSION,
   writeMemoryPack,
@@ -51,13 +52,77 @@ const LEAF_HASH_ALGORITHM = 'memory-hash-v1';
 const MERKLE_ALGORITHM = 'sha256-merkle-v1';
 const RECORD_SCHEMA = 'clude-memory-v1';
 const MAX_RECORDS = 10_000;
-const VALID_MEMORY_TYPES = new Set<MemoryType>([
+/** Supabase REST caps a SELECT at 1000 rows; the selection path pages with .range() at this size. */
+const SELECTION_PAGE_SIZE = 1000;
+const MEMORY_TYPE_VALUES = [
   'episodic',
   'semantic',
   'procedural',
   'self_model',
   'introspective',
-]);
+] as const;
+const VALID_MEMORY_TYPES = new Set<MemoryType>(MEMORY_TYPE_VALUES);
+const CONTENT_CATEGORY_VALUES = ['personal', 'knowledge', 'agent'] as const;
+
+// ─────────── Selection contract (mirrors @clude/ui ExportSelection — keep in lockstep) ───────────
+// The panel sends EITHER a pack_id (the existing pack path) OR a `selection` describing which of
+// the caller's OWN memories to gather. `scope` drives which extra filter is applied on top of the
+// mandatory owner-scope (.eq('owner_wallet', owner)); a selection must NEVER pull another tenant's
+// rows, so the owner filter is unconditional and the scope filters only ever NARROW the set.
+
+const memoryTypeSchema = z.enum(MEMORY_TYPE_VALUES);
+
+const exportSelectionSchema = z
+  .object({
+    scope: z.enum(['all', 'type', 'tag', 'range', 'pack']),
+    types: z.array(memoryTypeSchema).optional(),
+    tags: z.array(z.string()).optional(),
+    from: z.string().optional(),
+    to: z.string().optional(),
+    pack_id: z.string().optional(),
+  })
+  .strict();
+
+type ExportSelection = z.infer<typeof exportSelectionSchema>;
+
+const contentCategorySchema = z.enum(CONTENT_CATEGORY_VALUES);
+
+/** POST /v1/pmp/export body — pack path (pack_id) XOR selection path (selection + name + category). */
+const exportBodySchema = z
+  .object({
+    pack_id: z.string().optional(),
+    selection: exportSelectionSchema.optional(),
+    name: z.string().optional(),
+    description: z.string().nullish(),
+    category: contentCategorySchema.optional(),
+    encrypt: z.boolean().optional(),
+  })
+  .strict();
+
+/** POST /v1/pmp/export/preview body. */
+const previewBodySchema = z
+  .object({ selection: exportSelectionSchema })
+  .strict();
+
+/** The memory columns the export mapper + leaf hash need. One source of truth for both paths. */
+interface MemoryRow {
+  id: number;
+  hash_id: string;
+  memory_type: string;
+  content: string;
+  summary: string | null;
+  owner_wallet: string | null;
+  created_at: string;
+  tags: string[] | null;
+  source: string | null;
+  related_user: string | null;
+  related_wallet: string | null;
+  content_hash: string | null;
+  importance: number | null;
+}
+
+const MEMORY_SELECT_COLUMNS =
+  'id, hash_id, memory_type, content, summary, owner_wallet, created_at, tags, source, related_user, related_wallet, content_hash, importance';
 
 interface ErrorBody {
   error: string;
@@ -149,6 +214,104 @@ function recordMemoryType(kind: string): MemoryType {
   return VALID_MEMORY_TYPES.has(kind as MemoryType) ? (kind as MemoryType) : 'semantic';
 }
 
+// ─────────── Memory → { record, leaf } — the ONE mapping both export paths share ───────────
+// Both the pack path (members of memory_pack_contents) and the selection path (owner memories
+// matching a filter) hand their hydrated `memories` rows through THIS function, so a record built
+// either way hashes byte-identically (same leaf input → same leaf, same MemoryPackRecord shape →
+// same writeMemoryPack output → same Merkle root → same manifest_hash). If the two paths diverged,
+// the same memory could produce two different artifacts.
+
+interface MappedMemory {
+  record: MemoryPackRecord;
+  leaf: string;
+}
+
+function mapMemoryToRecord(m: MemoryRow): MappedMemory {
+  const leafInput: LeafInput = {
+    content: m.content,
+    memory_type: recordMemoryType(m.memory_type),
+    owner_wallet: m.owner_wallet,
+    created_at: m.created_at,
+    tags: Array.isArray(m.tags) ? m.tags : [],
+    source: m.source,
+    related_user: m.related_user,
+    related_wallet: m.related_wallet,
+  };
+  const leaf = leafHashFor(leafInput);
+  const record: MemoryPackRecord = {
+    id: m.hash_id,
+    created_at: m.created_at,
+    kind: m.memory_type,
+    content: m.content,
+    tags: Array.isArray(m.tags) ? m.tags : [],
+    importance: typeof m.importance === 'number' ? m.importance : 0.5,
+    source: typeof m.source === 'string' ? m.source : 'pack',
+    metadata: {
+      leaf_hash: leaf,
+      owner_wallet: m.owner_wallet,
+      related_user: m.related_user,
+      related_wallet: m.related_wallet,
+    },
+  };
+  return { record, leaf };
+}
+
+// ─────────── Selection → owner-scoped `memories` query ───────────
+// `applySelectionFilter` is the SINGLE place the scope→filter mapping lives, reused by the export
+// gather (which paginates + hydrates) and the preview counts (head-only, no hydration). The owner
+// .eq() is applied by the CALLER unconditionally; this only layers the scope-specific narrowing,
+// so it can never widen past the owner. `q` is the loosely-typed Supabase query builder.
+
+function applySelectionFilter<Q extends {
+  in(col: string, vals: readonly unknown[]): Q;
+  overlaps(col: string, vals: readonly unknown[]): Q;
+  gte(col: string, val: unknown): Q;
+  lte(col: string, val: unknown): Q;
+}>(q: Q, selection: ExportSelection): Q {
+  let out = q;
+  if (selection.scope === 'type') {
+    out = out.in('memory_type', selection.types ?? []);
+  } else if (selection.scope === 'tag') {
+    out = out.overlaps('tags', selection.tags ?? []);
+  } else if (selection.scope === 'range') {
+    if (selection.from) out = out.gte('created_at', selection.from);
+    if (selection.to) out = out.lte('created_at', selection.to);
+  }
+  // scope 'all' adds nothing beyond the caller's owner scope; 'pack' is never routed here.
+  return out;
+}
+
+/**
+ * Gather ALL owner memories matching a selection, oldest-first, paging past Supabase's 1000-row
+ * REST cap. Owner-scoping is enforced here (`.eq('owner_wallet', owner)`) so a selection can never
+ * read another tenant's rows. Returns the rows in created_at ASC order across every page.
+ */
+async function gatherSelectionMemories(
+  db: ReturnType<typeof getDb>,
+  owner: string,
+  selection: ExportSelection,
+): Promise<MemoryRow[]> {
+  const out: MemoryRow[] = [];
+  let offset = 0;
+  // Page until a short page (fewer than the page size) signals the last batch.
+  for (;;) {
+    const base = db
+      .from('memories')
+      .select(MEMORY_SELECT_COLUMNS)
+      .eq('owner_wallet', owner);
+    const filtered = applySelectionFilter(base, selection)
+      .order('created_at', { ascending: true })
+      .range(offset, offset + SELECTION_PAGE_SIZE - 1);
+    const { data, error } = await filtered;
+    if (error) throw error;
+    const rows = (data ?? []) as MemoryRow[];
+    out.push(...rows);
+    if (rows.length < SELECTION_PAGE_SIZE) break;
+    offset += SELECTION_PAGE_SIZE;
+  }
+  return out;
+}
+
 /**
  * The leaf hash a record DECLARES, if any. Prefers the spec's top-level `leaf_hash` record
  * field (§4: "MemoryPackRecord + leaf_hash per line"); falls back to `metadata.leaf_hash`
@@ -217,6 +380,165 @@ function pmpBlock(manifest: MemoryPackManifest): PmpManifestPmpBlock {
   return ((manifest as unknown as { pmp?: PmpManifestPmpBlock }).pmp ?? {}) as PmpManifestPmpBlock;
 }
 
+// ─────────── Shared write + register + respond tail ───────────
+// The pack path and the selection path build identical { records, leaves } and per-artifact
+// parameters, then hand them HERE. Everything below (Merkle root → pmp identity → writeMemoryPack →
+// manifest_hash → register, with the UNIQUE(owner_wallet, manifest_hash) dedup branch) is the SAME
+// for both, so the two flows can never drift on how an artifact is built or persisted. Always sends
+// a response; returns { handled: true } so the caller knows the response was written.
+
+interface WriteRegisterArgs {
+  req: Request;
+  res: Response;
+  db: ReturnType<typeof getDb>;
+  owner: string;
+  artifactId: string;
+  records: MemoryPackRecord[];
+  leaves: string[];
+  title: string;
+  description: string | null;
+  licenseType: 'copy' | 'title';
+  contentSource: 'personal' | 'knowledge' | 'agent' | null;
+  /** pmp_artifacts.pack_id — the saved pack for the pack path, null for a selection. */
+  packIdColumn: string | null;
+  anchorChain: 'solana' | null;
+  /** Base name for the staged `.pmp` file (pack id, or artifact id for a selection). */
+  pmpFilenameBase: string;
+  logContext: Record<string, unknown>;
+  /** Lazily create the staging dir so the route's finally{} can clean it up. */
+  mkStagedDir: () => string;
+}
+
+async function writeRegisterRespond(args: WriteRegisterArgs): Promise<{ handled: boolean }> {
+  const {
+    req,
+    res,
+    db,
+    owner,
+    artifactId,
+    records,
+    leaves,
+    title,
+    description,
+    licenseType,
+    contentSource,
+    packIdColumn,
+    anchorChain,
+    pmpFilenameBase,
+    logContext,
+    mkStagedDir,
+  } = args;
+
+  // 5. Compute the pack-level Merkle root (REUSE buildPackTree).
+  const tree = buildPackTree(leaves);
+
+  // 6. Build the artifact identity (`pmp` block) BEFORE writing so it is PERSISTED into the
+  //    .pmp manifest — this makes the artifact SELF-VERIFIABLE: POST /v1/pmp/verify recomputes
+  //    the pack Merkle root and compares it to pmp.merkle_root, no server trust. The block carries
+  //    NO per-export id and the hash excludes the wall-clock created_at, so two exports of the same
+  //    content yield the same merkle_root + manifest_hash (the dedup collision, §00 MINOR 14).
+  const pmpIdentity: Record<string, unknown> = {
+    pmp_version: PMP_FORMAT_VERSION,
+    title,
+    description,
+    license_type: licenseType,
+    content_source: contentSource,
+    record_count: records.length,
+    leaf_hash_algorithm: LEAF_HASH_ALGORITHM,
+    merkle_algorithm: MERKLE_ALGORITHM,
+    merkle_root: tree.root,
+    creator_pubkey: owner,
+  };
+
+  // 7. Write the .pmp tarball via the REUSED writer, EMBEDDING the pmp block (so verify can read
+  //    pmp.merkle_root back out of the file). Producer public_key is the owner (provenance).
+  const stagedDir = mkStagedDir();
+  const outFile = join(stagedDir, `${pmpFilenameBase}.pmp`);
+  writeMemoryPack(outFile, records, {
+    producer: { name: 'clude-server', version: MEMORYPACK_VERSION, public_key: owner },
+    record_schema: RECORD_SCHEMA,
+    format: 'tarball',
+    anchor_chain: anchorChain ?? undefined,
+    pmp: pmpIdentity,
+  });
+
+  // 8. Compute manifest_hash over the canonical manifest (sig removed) using the SAME pmp block
+  //    that was written to disk, so the stored hash describes the actual artifact.
+  const manifestForHash: MemoryPackManifest = {
+    memorypack_version: MEMORYPACK_VERSION,
+    producer: { name: 'clude-server', version: MEMORYPACK_VERSION, public_key: owner },
+    created_at: '', // excluded from identity — stable across exports
+    record_count: records.length,
+    record_schema: RECORD_SCHEMA,
+    pmp: pmpIdentity,
+  };
+  const manifestHash = computeManifestHash(manifestForHash);
+
+  let byteSize: number | null = null;
+  try {
+    byteSize = readFileSync(outFile).byteLength;
+  } catch {
+    byteSize = null;
+  }
+
+  // 9. Register the artifact. UNIQUE(owner_wallet, manifest_hash) (§00 MINOR 14): a repeat export of
+  //    the same content collides — treat the conflict as "already registered".
+  const nowIso = new Date().toISOString();
+  const artifactRow = {
+    artifact_id: artifactId,
+    pack_id: packIdColumn,
+    owner_wallet: owner,
+    pmp_version: PMP_FORMAT_VERSION,
+    title,
+    description,
+    license_type: licenseType,
+    record_count: records.length,
+    merkle_root: tree.root,
+    manifest_hash: manifestHash,
+    creator_pubkey: owner,
+    manifest_sig: '', // server export is unsigned-by-user; desktop signs the title path
+    encryption_scope: 'none' as const,
+    storage_url: null,
+    byte_size: byteSize,
+    source_kind: 'web' as const,
+    signing_device_id: null,
+    anchor_chain: anchorChain,
+    anchor_tx_sig: null,
+    created_at: nowIso,
+  };
+
+  const { error: insErr } = await db.from('pmp_artifacts').insert(artifactRow);
+  if (insErr) {
+    if ((insErr as { code?: string }).code === '23505') {
+      // Already registered for this owner — return the existing artifact metadata.
+      const { data: existing } = await db
+        .from('pmp_artifacts')
+        .select('*')
+        .eq('owner_wallet', owner)
+        .eq('manifest_hash', manifestHash)
+        .limit(1)
+        .maybeSingle();
+      if (existing) {
+        res.status(200).json({
+          artifact: existing,
+          download: `${publicBaseUrl(req)}/v1/pmp/artifacts/${(existing as { artifact_id: string }).artifact_id}/download`,
+          deduped: true,
+        });
+        return { handled: true };
+      }
+    }
+    log.warn({ err: insErr, ...logContext, artifactId }, 'export: artifact insert failed');
+    res.status(500).json({ error: 'export_failed' } satisfies ErrorBody);
+    return { handled: true };
+  }
+
+  res.status(201).json({
+    artifact: artifactRow,
+    download: `${publicBaseUrl(req)}/v1/pmp/artifacts/${artifactId}/download`,
+  });
+  return { handled: true };
+}
+
 // ─────────── Route module ───────────
 
 export function pmpArtifactsRoutes(): Router {
@@ -234,15 +556,22 @@ export function pmpArtifactsRoutes(): Router {
   });
 
   /**
-   * POST /v1/pmp/export — build a `.pmp` from a pack the caller owns and register it.
+   * POST /v1/pmp/export — build a `.pmp` and register it. TWO gather paths, ONE writer/register tail.
    *
-   * Body: { pack_id }
-   *   - Loads the owner's pack + its member memories (owner-scoped; 403 if not the author).
-   *   - Maps each member to a MemoryPackRecord + recomputes its leaf hash (memory-hash-v1).
-   *   - writeMemoryPack (tarball) stages the file; buildPackTree gives the pack-level root.
-   *   - Computes manifest_hash over the canonical manifest (sig removed), inserts a
-   *     pmp_artifacts row scoped to (owner_wallet, manifest_hash), returns the metadata + an
-   *     owned download ref (the artifact id — streaming lands in a later task).
+   * Body: EITHER { pack_id } OR { selection, name, category, description? } (see @clude/ui
+   *   ExportSelection / ExportRequest). pack_id and a non-pack selection are mutually exclusive.
+   *
+   *   pack_id path (unchanged):
+   *     - Loads the owner's pack + its member memories (owner-scoped; 403 if not the author).
+   *
+   *   selection path (scope all|type|tag|range — `pack` scope is treated as the pack_id path):
+   *     - Gathers the caller's OWN memories matching the filter (owner-scoped, paginated past the
+   *       1000-row REST cap). `name` (pack title) + `category` (content_source) are REQUIRED.
+   *
+   *   Both paths then map each memory → { record, leaf } via the SAME mapMemoryToRecord (so an
+   *   identical memory hashes byte-identically), buildPackTree → writeMemoryPack (embedding the pmp
+   *   block) → register a pmp_artifacts row scoped to (owner_wallet, manifest_hash). A repeat of the
+   *   same content collides on that unique key and returns the existing artifact (deduped).
    */
   router.post(
     '/v1/pmp/export',
@@ -255,16 +584,123 @@ export function pmpArtifactsRoutes(): Router {
         return;
       }
 
-      const body = req.body ?? {};
-      const packId = typeof body.pack_id === 'string' ? body.pack_id.trim() : '';
-      if (!packId) {
-        res.status(422).json({ error: 'invalid_body', hint: 'pack_id is required' } satisfies ErrorBody);
+      const parsed = exportBodySchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        res
+          .status(422)
+          .json({ error: 'invalid_body', hint: parsed.error.issues[0]?.message ?? 'malformed body' } satisfies ErrorBody);
         return;
       }
+      const body = parsed.data;
+
+      // A selection with scope 'pack' is just the pack_id path; everything else is the new gather.
+      const packIdFromBody = body.pack_id?.trim() || body.selection?.pack_id?.trim() || '';
+      const useSelection =
+        !!body.selection && body.selection.scope !== 'pack' && !packIdFromBody;
+
+      if (!useSelection && !packIdFromBody) {
+        res
+          .status(422)
+          .json({ error: 'invalid_body', hint: 'pack_id or a non-pack selection is required' } satisfies ErrorBody);
+        return;
+      }
+
+      // Track packId for the catch logger (selection path leaves it null).
+      const packId: string | null = useSelection ? null : packIdFromBody;
 
       let stagedDir: string | null = null;
       try {
         const db = getDb();
+
+        // ── Per-path parameters the shared tail consumes ───────────────────────────────
+        // The pack path reads these off the pack row; the selection path off the validated body.
+        // Both feed the SAME write+register tail so the only thing that differs is the gather.
+        let records: MemoryPackRecord[];
+        let leaves: string[];
+        let title: string;
+        let description: string | null;
+        let licenseType: 'copy' | 'title';
+        let contentSource: 'personal' | 'knowledge' | 'agent' | null;
+        let packIdColumn: string | null;
+        let anchorChain: 'solana' | null;
+        let pmpFilenameBase: string;
+
+        if (useSelection) {
+          // ── Selection path: gather the caller's OWN memories matching the filter ──
+          const selection = body.selection!;
+          const name = body.name?.trim() ?? '';
+          if (!name) {
+            res.status(422).json({ error: 'invalid_body', hint: 'name is required for a selection export' } satisfies ErrorBody);
+            return;
+          }
+          if (!body.category) {
+            res
+              .status(422)
+              .json({ error: 'invalid_body', hint: 'category (personal|knowledge|agent) is required for a selection export' } satisfies ErrorBody);
+            return;
+          }
+
+          let memories: MemoryRow[];
+          try {
+            memories = await gatherSelectionMemories(db, owner, selection);
+          } catch (gatherErr) {
+            log.warn({ err: gatherErr, scope: selection.scope }, 'export: selection gather failed');
+            res.status(500).json({ error: 'export_failed' } satisfies ErrorBody);
+            return;
+          }
+          if (memories.length === 0) {
+            res.status(409).json({ error: 'empty_selection', hint: 'no memories match this selection' } satisfies ErrorBody);
+            return;
+          }
+
+          records = [];
+          leaves = [];
+          for (const m of memories) {
+            const { record, leaf } = mapMemoryToRecord(m);
+            records.push(record);
+            leaves.push(leaf);
+          }
+
+          const artifactId = generateArtifactId();
+          title = name;
+          description = body.description ?? null;
+          licenseType = 'copy'; // selection exports are the server `copy` path
+          contentSource = body.category;
+          packIdColumn = null; // not tied to a saved pack
+          anchorChain = null; // selection packs are not anchored on chain
+          pmpFilenameBase = artifactId;
+
+          // The shared tail below registers with `artifactId`; build it once and reuse.
+          const result = await writeRegisterRespond({
+            req,
+            res,
+            db,
+            owner,
+            artifactId,
+            records,
+            leaves,
+            title,
+            description,
+            licenseType,
+            contentSource,
+            packIdColumn,
+            anchorChain,
+            pmpFilenameBase,
+            logContext: { scope: selection.scope },
+            mkStagedDir: () => {
+              stagedDir = mkdtempSync(join(tmpdir(), 'pmp-out-'));
+              return stagedDir;
+            },
+          });
+          if (!result.handled) {
+            // writeRegisterRespond always responds; this is unreachable but keeps the type honest.
+            res.status(500).json({ error: 'export_failed' } satisfies ErrorBody);
+          }
+          return;
+        }
+
+        // ── Pack path (unchanged behaviour) ──
+        const effectivePackId = packId!;
 
         // 1. Load the pack. Ownership is enforced against author_wallet (never a client field).
         const { data: packData, error: packErr } = await db
@@ -272,11 +708,11 @@ export function pmpArtifactsRoutes(): Router {
           .select(
             'pack_id, author_wallet, name, description, version, memory_count, merkle_root, pack_token_address, content_category, sale_mode',
           )
-          .eq('pack_id', packId)
+          .eq('pack_id', effectivePackId)
           .limit(1)
           .maybeSingle();
         if (packErr) {
-          log.warn({ err: packErr, packId }, 'export: pack lookup failed');
+          log.warn({ err: packErr, packId: effectivePackId }, 'export: pack lookup failed');
           res.status(500).json({ error: 'export_failed' } satisfies ErrorBody);
           return;
         }
@@ -305,10 +741,10 @@ export function pmpArtifactsRoutes(): Router {
         const { data: contentsRaw, error: contentsErr } = await db
           .from('memory_pack_contents')
           .select('memory_id, leaf_index, content_hash')
-          .eq('pack_id', packId)
+          .eq('pack_id', effectivePackId)
           .order('leaf_index', { ascending: true });
         if (contentsErr) {
-          log.warn({ err: contentsErr, packId }, 'export: contents lookup failed');
+          log.warn({ err: contentsErr, packId: effectivePackId }, 'export: contents lookup failed');
           res.status(500).json({ error: 'export_failed' } satisfies ErrorBody);
           return;
         }
@@ -327,192 +763,133 @@ export function pmpArtifactsRoutes(): Router {
         const memberIds = contents.map((c) => c.memory_id);
         const { data: memsRaw, error: memsErr } = await db
           .from('memories')
-          .select(
-            'id, hash_id, memory_type, content, summary, owner_wallet, created_at, tags, source, related_user, related_wallet, content_hash, importance',
-          )
+          .select(MEMORY_SELECT_COLUMNS)
           .in('id', memberIds)
           .eq('owner_wallet', owner);
         if (memsErr) {
-          log.warn({ err: memsErr, packId }, 'export: member hydrate failed');
+          log.warn({ err: memsErr, packId: effectivePackId }, 'export: member hydrate failed');
           res.status(500).json({ error: 'export_failed' } satisfies ErrorBody);
           return;
         }
-        const memById = new Map<number, {
-          id: number;
-          hash_id: string;
-          memory_type: string;
-          content: string;
-          summary: string | null;
-          owner_wallet: string | null;
-          created_at: string;
-          tags: string[] | null;
-          source: string | null;
-          related_user: string | null;
-          related_wallet: string | null;
-          content_hash: string | null;
-          importance: number | null;
-        }>();
-        for (const m of (memsRaw ?? []) as Array<ReturnType<typeof memById.get> extends infer V ? V extends undefined ? never : V : never>) {
+        const memById = new Map<number, MemoryRow>();
+        for (const m of (memsRaw ?? []) as MemoryRow[]) {
           if (m) memById.set(m.id, m);
         }
 
-        // 4. Build records + leaf hashes in tree order. Skip any id that failed the owner scope.
-        const records: MemoryPackRecord[] = [];
-        const leaves: string[] = [];
+        // 4. Build records + leaf hashes in tree order via the SHARED mapper. Skip any id that
+        //    failed the owner scope.
+        records = [];
+        leaves = [];
         for (const c of contents) {
           const m = memById.get(c.memory_id);
           if (!m) continue;
-          const leafInput: LeafInput = {
-            content: m.content,
-            memory_type: recordMemoryType(m.memory_type),
-            owner_wallet: m.owner_wallet,
-            created_at: m.created_at,
-            tags: Array.isArray(m.tags) ? m.tags : [],
-            source: m.source,
-            related_user: m.related_user,
-            related_wallet: m.related_wallet,
-          };
-          const leaf = leafHashFor(leafInput);
+          const { record, leaf } = mapMemoryToRecord(m);
+          records.push(record);
           leaves.push(leaf);
-          records.push({
-            id: m.hash_id,
-            created_at: m.created_at,
-            kind: m.memory_type,
-            content: m.content,
-            tags: Array.isArray(m.tags) ? m.tags : [],
-            importance: typeof m.importance === 'number' ? m.importance : 0.5,
-            source: typeof m.source === 'string' ? m.source : 'pack',
-            metadata: {
-              leaf_hash: leaf,
-              owner_wallet: m.owner_wallet,
-              related_user: m.related_user,
-              related_wallet: m.related_wallet,
-            },
-          });
         }
         if (records.length === 0) {
           res.status(409).json({ error: 'empty_pack', reason: 'no_owned_members' } satisfies ErrorBody);
           return;
         }
 
-        // 5. Compute the pack-level Merkle root (REUSE buildPackTree).
-        const tree = buildPackTree(leaves);
+        licenseType = pack.sale_mode === 'title' ? 'title' : 'copy';
+        title = pack.name;
+        description = pack.description;
+        contentSource = pack.content_category;
+        packIdColumn = effectivePackId;
+        anchorChain = pack.pack_token_address ? 'solana' : null;
+        pmpFilenameBase = effectivePackId;
 
-        // 6. Build the artifact identity (`pmp` block) BEFORE writing so it is PERSISTED into the
-        //    .pmp manifest — this is what makes the artifact SELF-VERIFIABLE: POST /v1/pmp/verify
-        //    recomputes the pack Merkle root and compares it to pmp.merkle_root, no server trust.
-        //    The block carries NO per-export id and the hash excludes the wall-clock created_at,
-        //    so two exports of the same pack yield the same merkle_root + manifest_hash (the
-        //    UNIQUE(owner_wallet, manifest_hash) collision that the dedup path treats as
-        //    "already registered", §00 MINOR 14).
-        const licenseType: 'copy' | 'title' = pack.sale_mode === 'title' ? 'title' : 'copy';
-        const pmpIdentity: Record<string, unknown> = {
-          pmp_version: PMP_FORMAT_VERSION,
-          title: pack.name,
-          description: pack.description,
-          license_type: licenseType,
-          content_source: pack.content_category,
-          record_count: records.length,
-          leaf_hash_algorithm: LEAF_HASH_ALGORITHM,
-          merkle_algorithm: MERKLE_ALGORITHM,
-          merkle_root: tree.root,
-          creator_pubkey: owner,
-        };
-
-        // 7. Write the .pmp tarball via the REUSED writer, EMBEDDING the pmp block (so verify can
-        //    read pmp.merkle_root back out of the file). Producer public_key is the pack author's
-        //    wallet (provenance). Title artifacts SHOULD be desktop-signed (§4.2) — this server
-        //    export is the `copy` path which MAY accept server-side packaging.
-        stagedDir = mkdtempSync(join(tmpdir(), 'pmp-out-'));
-        const outFile = join(stagedDir, `${packId}.pmp`);
-        writeMemoryPack(outFile, records, {
-          producer: { name: 'clude-server', version: MEMORYPACK_VERSION, public_key: owner },
-          record_schema: RECORD_SCHEMA,
-          format: 'tarball',
-          anchor_chain: pack.pack_token_address ? 'solana' : undefined,
-          pmp: pmpIdentity,
+        const result = await writeRegisterRespond({
+          req,
+          res,
+          db,
+          owner,
+          artifactId: generateArtifactId(),
+          records,
+          leaves,
+          title,
+          description,
+          licenseType,
+          contentSource,
+          packIdColumn,
+          anchorChain,
+          pmpFilenameBase,
+          logContext: { packId: effectivePackId },
+          mkStagedDir: () => {
+            stagedDir = mkdtempSync(join(tmpdir(), 'pmp-out-'));
+            return stagedDir;
+          },
         });
-
-        // 8. Compute manifest_hash over the canonical manifest (sig removed) using the SAME pmp
-        //    block that was written to disk, so the stored hash describes the actual artifact.
-        const artifactId = generateArtifactId();
-        const manifestForHash: MemoryPackManifest = {
-          memorypack_version: MEMORYPACK_VERSION,
-          producer: { name: 'clude-server', version: MEMORYPACK_VERSION, public_key: owner },
-          created_at: '', // excluded from identity — stable across exports
-          record_count: records.length,
-          record_schema: RECORD_SCHEMA,
-          pmp: pmpIdentity,
-        };
-        const manifestHash = computeManifestHash(manifestForHash);
-
-        let byteSize: number | null = null;
-        try {
-          byteSize = readFileSync(outFile).byteLength;
-        } catch {
-          byteSize = null;
-        }
-
-        // 8. Register the artifact. UNIQUE(owner_wallet, manifest_hash) (§00 MINOR 14): a repeat
-        //    export of the same pack collides — treat the conflict as "already registered".
-        const nowIso = new Date().toISOString();
-        const artifactRow = {
-          artifact_id: artifactId,
-          pack_id: packId,
-          owner_wallet: owner,
-          pmp_version: PMP_FORMAT_VERSION,
-          title: pack.name,
-          description: pack.description,
-          license_type: licenseType,
-          record_count: records.length,
-          merkle_root: tree.root,
-          manifest_hash: manifestHash,
-          creator_pubkey: owner,
-          manifest_sig: '', // server export is unsigned-by-user; desktop signs the title path
-          encryption_scope: 'none' as const,
-          storage_url: null,
-          byte_size: byteSize,
-          source_kind: 'web' as const,
-          signing_device_id: null,
-          anchor_chain: pack.pack_token_address ? 'solana' : null,
-          anchor_tx_sig: null,
-          created_at: nowIso,
-        };
-
-        const { error: insErr } = await db.from('pmp_artifacts').insert(artifactRow);
-        if (insErr) {
-          if ((insErr as { code?: string }).code === '23505') {
-            // Already registered for this owner — return the existing artifact metadata.
-            const { data: existing } = await db
-              .from('pmp_artifacts')
-              .select('*')
-              .eq('owner_wallet', owner)
-              .eq('manifest_hash', manifestHash)
-              .limit(1)
-              .maybeSingle();
-            if (existing) {
-              res.status(200).json({
-                artifact: existing,
-                download: `${publicBaseUrl(req)}/v1/pmp/artifacts/${(existing as { artifact_id: string }).artifact_id}/download`,
-                deduped: true,
-              });
-              return;
-            }
-          }
-          log.warn({ err: insErr, packId, artifactId }, 'export: artifact insert failed');
+        if (!result.handled) {
           res.status(500).json({ error: 'export_failed' } satisfies ErrorBody);
-          return;
         }
-
-        res.status(201).json({
-          artifact: artifactRow,
-          download: `${publicBaseUrl(req)}/v1/pmp/artifacts/${artifactId}/download`,
-        });
       } catch (err) {
         log.error({ err, packId }, 'POST /v1/pmp/export failed');
         res.status(500).json({ error: 'export_failed' } satisfies ErrorBody);
       } finally {
         if (stagedDir) rmSync(stagedDir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  /**
+   * POST /v1/pmp/export/preview — cheap pre-flight for the panel. Returns the count of the caller's
+   * OWN memories a selection would gather, broken down by memory_type — NO row hydration, just
+   * head-only COUNT queries (count:exact, head:true) per type under the SAME owner-scoped filter the
+   * real export uses. Owner-scoping is mandatory: a preview can never count another tenant's rows.
+   *
+   * Body: { selection } -> { total, by_type }
+   */
+  router.post(
+    '/v1/pmp/export/preview',
+    requirePrivyAuth,
+    requireOwnership,
+    async (req: Request, res: Response) => {
+      const owner = ownerFromReq(req);
+      if (!owner) {
+        res.status(401).json({ error: 'unauthenticated' } satisfies ErrorBody);
+        return;
+      }
+
+      const parsed = previewBodySchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        res
+          .status(422)
+          .json({ error: 'invalid_body', hint: parsed.error.issues[0]?.message ?? 'malformed body' } satisfies ErrorBody);
+        return;
+      }
+      const { selection } = parsed.data;
+
+      try {
+        const db = getDb();
+
+        // One head-only COUNT per memory_type, each under the owner scope + the selection filter.
+        // When the selection itself constrains memory_type (scope 'type'), a type not in the list
+        // simply counts 0 — the filter excludes it — so the per-type loop stays correct.
+        const byType: Partial<Record<MemoryType, number>> = {};
+        let total = 0;
+        for (const memType of MEMORY_TYPE_VALUES) {
+          const base = db
+            .from('memories')
+            .select('id', { count: 'exact', head: true })
+            .eq('owner_wallet', owner)
+            .eq('memory_type', memType);
+          const { count, error } = await applySelectionFilter(base, selection);
+          if (error) {
+            log.warn({ err: error, scope: selection.scope, memType }, 'preview: count query failed');
+            res.status(500).json({ error: 'preview_failed' } satisfies ErrorBody);
+            return;
+          }
+          const n = typeof count === 'number' ? count : 0;
+          if (n > 0) byType[memType] = n;
+          total += n;
+        }
+
+        res.json({ total, by_type: byType });
+      } catch (err) {
+        log.error({ err }, 'POST /v1/pmp/export/preview failed');
+        res.status(500).json({ error: 'preview_failed' } satisfies ErrorBody);
       }
     },
   );
