@@ -8,6 +8,7 @@
  */
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { requirePrivyAuth } from '@clude/brain/auth/privy-auth';
+import { requireOwnership } from '@clude/brain/auth/require-ownership';
 import { revokeMemory, redelegateMemory } from '@clude/brain/memory';
 import { getDb } from '@clude/shared/core/database';
 import { createChildLogger } from '@clude/shared/core/logger';
@@ -29,7 +30,7 @@ export function encryptionRoutes(): Router {
   });
 
   // Revoke the provider's access to a single memory (owner-only).
-  router.post('/v1/memories/:id/revoke', requirePrivyAuth, async (req: Request, res: Response) => {
+  router.post('/v1/memories/:id/revoke', requirePrivyAuth, requireOwnership, async (req: Request, res: Response) => {
     const wallet = req.verifiedWallet;
     if (!wallet) {
       res.status(401).json({ error: 'unauthenticated' });
@@ -69,7 +70,7 @@ export function encryptionRoutes(): Router {
 
   // Restore the provider's access to a single revoked memory (owner-only). The client posts a
   // provider re-wrap of the DEK; redelegateMemory validates it by decrypting the stored ciphertext.
-  router.post('/v1/memories/:id/redelegate', requirePrivyAuth, async (req: Request, res: Response) => {
+  router.post('/v1/memories/:id/redelegate', requirePrivyAuth, requireOwnership, async (req: Request, res: Response) => {
     const wallet = req.verifiedWallet;
     if (!wallet) {
       res.status(401).json({ error: 'unauthenticated' });
@@ -122,7 +123,7 @@ export function encryptionRoutes(): Router {
   });
 
   // Revoke every delegated memory the caller owns (paced sequential loop).
-  router.post('/v1/keys/revoke-all', requirePrivyAuth, async (req: Request, res: Response) => {
+  router.post('/v1/keys/revoke-all', requirePrivyAuth, requireOwnership, async (req: Request, res: Response) => {
     const wallet = req.verifiedWallet;
     if (!wallet) {
       res.status(401).json({ error: 'unauthenticated' });

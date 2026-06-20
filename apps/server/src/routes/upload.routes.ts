@@ -19,6 +19,8 @@ import { createChildLogger } from "@clude/shared/core/logger";
 import { config } from "@clude/shared/config";
 import { isOpenRouterEnabled } from "@clude/shared/core/openrouter-client";
 import { drainPending } from "@clude/brain/services/upload-processor";
+import { requirePrivyAuth } from "@clude/brain/auth/privy-auth";
+import { requireOwnership } from "@clude/brain/auth/require-ownership";
 
 const log = createChildLogger("upload");
 
@@ -124,16 +126,19 @@ function chunkText(text: string): string[] {
 export function uploadRoutes(): Router {
   const router = Router();
 
-  // GET /check-access — verify if wallet has access
-  router.get("/check-access", (req: Request, res: Response) => {
-    const wallet = req.query.wallet as string;
+  // GET /check-access — report whether the AUTHENTICATED caller's own wallet is
+  // allowlisted. requireOwnership proves the caller owns req.verifiedWallet, so
+  // this can only ever report on the caller's own access — not an arbitrary
+  // ?wallet= probe of the allowlist.
+  router.get("/check-access", requirePrivyAuth, requireOwnership, (req: Request, res: Response) => {
+    const wallet = req.verifiedWallet;
     res.json({ allowed: wallet ? ALLOWED_WALLETS.has(wallet) : false });
   });
 
-  // GET /batches — list upload batches for this wallet
-  router.get("/batches", async (req: Request, res: Response) => {
+  // GET /batches — list upload batches for the authenticated caller's own wallet
+  router.get("/batches", requirePrivyAuth, requireOwnership, async (req: Request, res: Response) => {
     try {
-      const wallet = req.query.wallet as string;
+      const wallet = req.verifiedWallet;
       if (!wallet || !ALLOWED_WALLETS.has(wallet)) {
         res.status(403).json({ error: "Access denied" });
         return;
@@ -198,10 +203,15 @@ export function uploadRoutes(): Router {
   // POST /process — upload file, extract text, run LLM, store memories
   router.post(
     "/process",
+    requirePrivyAuth,
     upload.single("file"),
+    requireOwnership,
     async (req: Request, res: Response) => {
       const file = req.file;
-      const wallet = req.body.wallet || (req.query.wallet as string);
+      // requireOwnership (after multer, so it can read the multipart wallet field)
+      // proved the caller owns this wallet — never trust a raw body/query value for
+      // a route that INGESTS memories into a brain.
+      const wallet = req.verifiedWallet;
       const docTitle = req.body.title || file?.originalname || "Untitled";
 
       if (!wallet || !ALLOWED_WALLETS.has(wallet)) {
@@ -288,10 +298,10 @@ export function uploadRoutes(): Router {
     },
   );
 
-  // GET /batch/:id — get status of a specific batch
-  router.get("/batch/:id", async (req: Request, res: Response) => {
+  // GET /batch/:id — get status of a specific batch (caller's own wallet only)
+  router.get("/batch/:id", requirePrivyAuth, requireOwnership, async (req: Request, res: Response) => {
     try {
-      const wallet = req.query.wallet as string;
+      const wallet = req.verifiedWallet;
       if (!wallet || !ALLOWED_WALLETS.has(wallet)) {
         res.status(403).json({ error: "Access denied" });
         return;

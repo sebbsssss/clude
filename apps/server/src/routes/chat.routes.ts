@@ -12,6 +12,7 @@ import { buildSystemPrompt, renderMemoryLine } from '../lib/memory-prompt';
 import { createHash } from 'crypto';
 import { authenticateAgent, authenticateAgentByDid, type AgentRegistration, findOrCreateAgentForWallet, findOrCreateAgentForDid } from '@clude/brain/features/agent-tier';
 import { requirePrivyAuth } from '@clude/brain/auth/privy-auth';
+import { resolveWalletsForDid } from '@clude/brain/auth/privy-wallet-resolver';
 import { withOwnerWallet } from '@clude/shared/core/owner-context';
 import { recallMemories, storeMemory } from '@clude/brain/memory';
 import { checkInputContent } from '@clude/shared/core/guardrails';
@@ -179,10 +180,26 @@ async function chatAuth(req: Request, res: Response, next: NextFunction): Promis
   if (req.privyUser) {
     const wallet = req.query.wallet as string;
 
-    // If wallet provided, validate and use it (existing behavior)
+    // If a wallet is provided, validate its format AND verify the caller actually
+    // OWNS it before scoping the session to it. SECURITY: without the ownership
+    // check, an authenticated user could pass ?wallet=<victim> and run a chat
+    // session against the victim's memories (reading them back via responses)
+    // while billing the victim. Mirrors requireOwnership's Privy path.
     if (wallet) {
       if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet)) {
         res.status(400).json({ error: 'Valid Solana wallet address required as ?wallet= query param' });
+        return;
+      }
+      try {
+        const idToken = req.headers['x-privy-id-token'] as string | undefined;
+        const linked = await resolveWalletsForDid(req.privyUser.userId, idToken);
+        if (!linked.includes(wallet)) {
+          res.status(403).json({ error: 'Wallet not linked to your account' });
+          return;
+        }
+      } catch (err) {
+        log.error({ err: (err as Error).message }, 'chat wallet ownership check failed');
+        res.status(500).json({ error: 'Could not verify wallet ownership' });
         return;
       }
       (req as ChatRequest).ownerWallet = wallet;

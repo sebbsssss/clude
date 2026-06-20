@@ -19,6 +19,14 @@ vi.mock('@clude/brain/auth/privy-auth', () => ({
   },
 }));
 
+// requireOwnership runs after the (mocked) requirePrivyAuth, which already set
+// verifiedWallet — pass it through so the real Privy DID-resolution middleware
+// isn't hit in tests. The route's own `mem.owner_wallet !== wallet` check (and
+// the WALLET_A vs other-owner fixtures) still exercise the 403 path.
+vi.mock('@clude/brain/auth/require-ownership', () => ({
+  requireOwnership: (_req: Request, _res: Response, next: NextFunction) => next(),
+}));
+
 // revokeMemory + redelegateMemory mocks (the route imports them from @clude/brain/memory)
 const revokeMemoryMock = vi.fn(); // default impl set in beforeEach
 const redelegateMemoryMock = vi.fn();
