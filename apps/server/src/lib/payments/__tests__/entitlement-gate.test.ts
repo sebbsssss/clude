@@ -138,3 +138,17 @@ describe('hasActiveCopyEntitlement — fail-closed on DB error (never throws an 
     await expect(hasActiveCopyEntitlement(PACK, BUYER)).resolves.toBe(false);
   });
 });
+
+describe('hasActiveCopyEntitlement — empty-arg guard (deny before touching the DB)', () => {
+  it('returns false for an empty packId without issuing a query', async () => {
+    // Even if a (matching-everything) grant were present, a blank pack id must deny up front — a
+    // missing identifier can never authorise an unlock.
+    seed('pack_entitlements', [activeCopyGrant({ pack_id: '' })]);
+    await expect(hasActiveCopyEntitlement('', BUYER)).resolves.toBe(false);
+  });
+
+  it('returns false for an empty holderWallet without issuing a query', async () => {
+    seed('pack_entitlements', [activeCopyGrant({ holder_wallet: '' })]);
+    await expect(hasActiveCopyEntitlement(PACK, '')).resolves.toBe(false);
+  });
+});

@@ -33,10 +33,20 @@ vi.mock('@clude/shared/core/logger', () => ({
 type Row = Record<string, any>;
 const tables: Record<string, Row[]> = {};
 const insertCalls: Array<{ table: string; rows: Row[] }> = [];
+/** When set, the NEXT marketplace_orders insert returns this error (and is consumed). */
+let failNextInsertWith: { code?: string; message: string } | null = null;
+/**
+ * When true, a marketplace_orders insert returns 23505 (a conflict) but the re-SELECT for the
+ * winning row finds NOTHING — the pathological "conflict but no resolvable row" branch. Consumed
+ * on the first insert so the post-conflict findByIdempotency genuinely misses.
+ */
+let forceConflictWithoutRow = false;
 
 function resetDb() {
   for (const k of Object.keys(tables)) delete tables[k];
   insertCalls.length = 0;
+  failNextInsertWith = null;
+  forceConflictWithoutRow = false;
 }
 function seed(table: string, rows: Row[]) {
   tables[table] = (tables[table] ?? []).concat(rows.map((r) => ({ ...r })));
@@ -65,8 +75,20 @@ function makeChain(table: string) {
     const row = pendingInsert!;
     pendingInsert = null;
     const arr = tables[table] ?? (tables[table] = []);
-    // Simulate uq_orders_idem: UNIQUE(buyer_wallet, client_token).
     if (table === 'marketplace_orders') {
+      // Injected generic DB failure (consumed once) — exercises the non-23505 error path.
+      if (failNextInsertWith) {
+        const err = failNextInsertWith;
+        failNextInsertWith = null;
+        return { data: null, error: err };
+      }
+      // Injected "conflict but no resolvable row" (consumed once): return 23505 WITHOUT persisting,
+      // so the orchestrator's post-conflict re-SELECT genuinely finds nothing.
+      if (forceConflictWithoutRow) {
+        forceConflictWithoutRow = false;
+        return { data: null, error: { code: '23505', message: 'duplicate key value violates uq_orders_idem' } };
+      }
+      // Simulate uq_orders_idem: UNIQUE(buyer_wallet, client_token).
       const dup = arr.find(
         (x) => x.buyer_wallet === row.buyer_wallet && x.client_token === row.client_token,
       );
@@ -223,6 +245,46 @@ describe('createOrder — idempotency on (buyer_wallet, client_token)', () => {
     await expect(createOrder(baseInput({ clientToken: '' }))).rejects.toThrow(/client_token/i);
     expect(insertCalls).toHaveLength(0);
   });
+
+  it('rejects a missing seller_wallet before any DB write (every order must name a payee)', async () => {
+    await expect(createOrder(baseInput({ sellerWallet: '' }))).rejects.toThrow(/seller/i);
+    expect(insertCalls).toHaveLength(0);
+  });
+
+  it('rejects a non-numeric amount before any DB write (never charge an un-parseable amount)', async () => {
+    await expect(createOrder(baseInput({ amount: 'free' }))).rejects.toThrow(/amount/i);
+    // An empty amount is likewise refused (Number('') === 0 → not > 0).
+    await expect(createOrder(baseInput({ amount: '' }))).rejects.toThrow(/amount/i);
+    expect(insertCalls).toHaveLength(0);
+  });
+
+  it('idempotency identity is per-buyer: the SAME client_token from a DIFFERENT buyer is a new order', async () => {
+    const a = await createOrder(baseInput({ buyerWallet: BUYER, clientToken: 'ct-shared' }));
+    const b = await createOrder(baseInput({ buyerWallet: 'OtherBuyer9999', clientToken: 'ct-shared' }));
+    expect(a.created).toBe(true);
+    expect(b.created).toBe(true);
+    expect(b.order.order_id).not.toBe(a.order.order_id);
+    // Two distinct rows: the (buyer_wallet, client_token) UNIQUE is on the PAIR, not the token alone.
+    expect((tables.marketplace_orders ?? []).length).toBe(2);
+  });
+
+  it('a generic (non-23505) insert failure surfaces as an error and does NOT swallow into a fake order', async () => {
+    // Force the create insert to fail with an unexpected DB error (not the idempotency conflict).
+    // The orchestrator must throw — never invent an order row on an opaque write failure.
+    failNextInsertWith = { code: '40001', message: 'serialization failure' };
+    await expect(createOrder(baseInput())).rejects.toThrow(/failed to create order/i);
+    // Nothing was persisted.
+    expect((tables.marketplace_orders ?? []).length).toBe(0);
+  });
+
+  it('a 23505 whose row is then UN-findable surfaces the conflict rather than guessing a row', async () => {
+    // Pathological race: the INSERT collides on the UNIQUE index (23505) but the re-SELECT finds
+    // nothing (e.g. the winning row was deleted in between). The orchestrator must NOT fabricate an
+    // order — it surfaces an explicit "could not be resolved" error so a caller never double-charges
+    // against an order it cannot actually see.
+    forceConflictWithoutRow = true;
+    await expect(createOrder(baseInput())).rejects.toThrow(/could not be resolved/i);
+  });
 });
 
 describe('order-status DAG — pure transition helpers', () => {
@@ -249,6 +311,27 @@ describe('order-status DAG — pure transition helpers', () => {
     expect(canTransition('awaiting_payment', 'failed')).toBe(true);
     expect(canTransition('awaiting_payment', 'expired')).toBe(true);
     expect(canTransition('created', 'expired')).toBe(true);
+  });
+
+  it('FORBIDS expiring or failing an order once money has changed hands (paid and beyond)', () => {
+    // Expiry is for STALE UNPAID intents only — the sweeper expires created/awaiting_payment. An
+    // order that has been paid (or delivered/settled) must NEVER be silently expired or marked
+    // failed: the buyer's money is in. Those states route through refund, not expiry.
+    for (const post of ['paid', 'delivering', 'delivered', 'settled'] as OrderStatus[]) {
+      expect(canTransition(post, 'expired'), `${post}→expired must be forbidden`).toBe(false);
+    }
+    // 'paid' may fail (a capture/settlement problem) but delivered/settled cannot — only refund.
+    expect(canTransition('delivered', 'failed')).toBe(false);
+    expect(canTransition('settled', 'failed')).toBe(false);
+  });
+
+  it('a refunding order can only complete (refunded) or fail — never silently re-enter the happy path', () => {
+    expect(canTransition('refunding', 'refunded')).toBe(true);
+    expect(canTransition('refunding', 'failed')).toBe(true);
+    // No path back to delivered/settled/paid from refunding (money is being returned).
+    for (const fwd of ['paid', 'delivering', 'delivered', 'settled'] as OrderStatus[]) {
+      expect(canTransition('refunding', fwd), `refunding→${fwd} must be forbidden`).toBe(false);
+    }
   });
 
   it('FORBIDS skipping straight from paid to delivered (delivery must pass through delivering)', () => {

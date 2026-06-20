@@ -74,11 +74,20 @@ type Row = Record<string, any>;
 const tables: Record<string, Row[]> = {};
 const insertCalls: Array<{ table: string; rows: Row[] }> = [];
 let nextMemoryId = 1000;
+/** Next pack_entitlements insert returns this generic (non-23505) error, consumed once. */
+let failEntitlementInsertWith: { code?: string; message: string } | null = null;
+/**
+ * Simulate a concurrent sweep: just before grantCopy's own pack_entitlements insert lands, push a
+ * matching (pack, holder, copy_license) row so the real UNIQUE check fires 23505. Consumed once.
+ */
+let insertConcurrentEntitlementBeforeInsert = false;
 
 function resetDb() {
   for (const k of Object.keys(tables)) delete tables[k];
   insertCalls.length = 0;
   nextMemoryId = 1000;
+  failEntitlementInsertWith = null;
+  insertConcurrentEntitlementBeforeInsert = false;
 }
 function seed(table: string, rows: Row[]) {
   tables[table] = (tables[table] ?? []).concat(rows.map((r) => ({ ...r })));
@@ -96,6 +105,27 @@ function makeChain(table: string) {
   const settleInsert = (): { data: any; error: any } => {
     const rows = pendingInsert!;
     const arr = tables[table] ?? (tables[table] = []);
+    if (table === 'pack_entitlements') {
+      // Injected generic (non-23505) entitlement-insert failure, consumed once.
+      if (failEntitlementInsertWith) {
+        const err = failEntitlementInsertWith;
+        failEntitlementInsertWith = null;
+        return { data: null, error: err };
+      }
+      // Injected concurrent sweep: land a matching grant FIRST so our insert collides on the UNIQUE.
+      if (insertConcurrentEntitlementBeforeInsert) {
+        insertConcurrentEntitlementBeforeInsert = false;
+        for (const row of rows) {
+          arr.push({
+            pack_id: row.pack_id,
+            holder_wallet: row.holder_wallet,
+            grant_kind: row.grant_kind,
+            status: 'active',
+            order_id: 'ord-concurrent-sweep',
+          });
+        }
+      }
+    }
     // UNIQUE(pack_id, holder_wallet, grant_kind) on pack_entitlements.
     if (table === 'pack_entitlements') {
       for (const row of rows) {
@@ -323,6 +353,84 @@ describe('grantCopy — idempotent (worker crash-resume)', () => {
     expect(tables.memories!.filter((m) => m.owner_wallet === BUYER)).toHaveLength(0);
     expect(tables.pack_entitlements!).toHaveLength(1);
     expect(insertCalls.some((c) => c.table === 'memories')).toBe(false);
+  });
+
+  it('UNIQUE backstop: a concurrent sweep that inserts the entitlement between our pre-check and insert → 23505 is an idempotent no-op (not an error)', async () => {
+    seedPlaintextPack(3);
+    // The active-entitlement pre-check MISSES (no row yet), so grantCopy proceeds to clone. But a
+    // concurrent sweep inserts the (pack, buyer, copy_license) grant just before our own entitlement
+    // insert — the DB UNIQUE(pack_id, holder_wallet, grant_kind) raises 23505. grantCopy must treat
+    // that as the idempotent no-op it is (the other sweep's delivery won), NOT surface an error.
+    insertConcurrentEntitlementBeforeInsert = true;
+
+    await expect(grantCopy(order())).resolves.toBeUndefined();
+
+    // Exactly ONE entitlement exists (the concurrent sweep's) — our insert collided and did not add a
+    // second. The grant is active; the buyer is entitled exactly once.
+    const ents = tables.pack_entitlements ?? [];
+    expect(ents).toHaveLength(1);
+    expect(ents[0].grant_kind).toBe('copy_license');
+    expect(ents[0].status).toBe('active');
+  });
+
+  it('a generic (non-23505) entitlement insert failure throws so the dispatcher leaves the order recoverable', async () => {
+    seedPlaintextPack(2);
+    // The final entitlement insert fails with an opaque DB error (not the idempotency conflict).
+    // grantCopy must throw → the dispatcher leaves the order at 'delivering' (recoverable) and a
+    // later sweep retries. (grantCopy is idempotent, so the retry is safe.)
+    failEntitlementInsertWith = { code: '53300', message: 'too many connections' };
+    await expect(grantCopy(order())).rejects.toThrow(/insert entitlement/i);
+  });
+});
+
+describe('grantCopy — fail-closed guards (never half-deliver)', () => {
+  it('throws when the pack is not found (cannot deliver a phantom pack)', async () => {
+    // No memory_packs row seeded → the pack lookup misses.
+    seed('memory_pack_contents', [{ pack_id: PACK, memory_id: 1, leaf_index: 0, content_hash: 'h0' }]);
+    await expect(grantCopy(order())).rejects.toThrow(/not found/i);
+    // No entitlement, no clones written on a failed delivery.
+    expect(tables.pack_entitlements ?? []).toHaveLength(0);
+  });
+
+  it('throws when the pack has NO member memories (an empty pack is undeliverable, not a silent success)', async () => {
+    seed('memory_packs', [{ pack_id: PACK, author_wallet: AUTHOR, name: 'Empty', memory_count: 0 }]);
+    // memory_pack_contents intentionally empty.
+    await expect(grantCopy(order())).rejects.toThrow(/no member memories/i);
+    expect(tables.pack_entitlements ?? []).toHaveLength(0);
+  });
+
+  it('refuses to deliver when member memories are NOT owned by the pack author (tampered contents row)', async () => {
+    // Defence in depth: a tampered memory_pack_contents points at a memory owned by SOMEONE ELSE.
+    // The author-scoped hydrate (.eq("owner_wallet", author)) drops it → no owner-verified members
+    // → grantCopy refuses rather than pulling another tenant's memory into the buyer's brain.
+    seed('memory_packs', [{ pack_id: PACK, author_wallet: AUTHOR, name: 'Tampered', memory_count: 1 }]);
+    seed('memory_pack_contents', [{ pack_id: PACK, memory_id: 99, leaf_index: 0, content_hash: 'h' }]);
+    seed('memories', [
+      { id: 99, memory_type: 'semantic', content: 'someone elses', summary: 's', tags: [], concepts: [], owner_wallet: 'NotTheAuthor', encrypted: false, created_at: new Date().toISOString() },
+    ]);
+    await expect(grantCopy(order())).rejects.toThrow(/not owned by author/i);
+    expect(tables.memories!.filter((m) => m.owner_wallet === BUYER)).toHaveLength(0);
+    expect(tables.pack_entitlements ?? []).toHaveLength(0);
+  });
+
+  it('an ENCRYPTED pack whose buyer has NOT published an encryption key fails closed (no key → no half-sealed copy)', async () => {
+    // Encrypted member (carries a provider DEK wrap) but NO encryption_keys row for the buyer.
+    // grantCopy must throw (the order stays recoverable) rather than clone ciphertext the buyer can
+    // never decrypt or — worse — leave a half-sealed copy.
+    seed('memory_packs', [{ pack_id: PACK, author_wallet: AUTHOR, name: 'Encrypted', memory_count: 1 }]);
+    seed('memory_pack_contents', [{ pack_id: PACK, memory_id: 1, leaf_index: 0, content_hash: 'h0' }]);
+    seed('memories', [
+      { id: 1, memory_type: 'semantic', content: 'enc', summary: 's', tags: [], concepts: [], owner_wallet: AUTHOR, encrypted: true, provider_delegated: true, created_at: new Date().toISOString() },
+    ]);
+    seed('memory_dek_wraps', [
+      { memory_id: 1, recipient: 'provider', wrapped_dek: 'provider-wrap-of-dek0', wrap_pubkey: 'pk' },
+    ]);
+    // No encryption_keys row for BUYER.
+
+    await expect(grantCopy(order())).rejects.toThrow(/no published encryption key/i);
+    // No entitlement minted, no buyer DEK wrap written.
+    expect(tables.pack_entitlements ?? []).toHaveLength(0);
+    expect((tables.memory_dek_wraps ?? []).filter((w) => w.recipient === 'owner')).toHaveLength(0);
   });
 });
 

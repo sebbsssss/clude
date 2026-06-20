@@ -56,7 +56,7 @@ vi.mock('@clude/brain/auth/require-ownership', () => ({
 // ── Payments libs — unit-mocked so the route is isolated from Stripe + delivery. ──
 // vi.hoisted so these spies exist at the (hoisted) vi.mock factory time — referencing a
 // plain top-level const inside an async factory trips "cannot access before initialization".
-const { verifyWebhook, parseEvent, createIntent, createOrder, markOrderPaid, dispatchPendingDeliveries, grantCopy, clawbackCopy } =
+const { verifyWebhook, parseEvent, createIntent, createOrder, markOrderPaid, dispatchPendingDeliveries, grantCopy, clawbackCopy, railCtorThrows } =
   vi.hoisted(() => ({
     verifyWebhook: vi.fn(),
     parseEvent: vi.fn(),
@@ -66,6 +66,8 @@ const { verifyWebhook, parseEvent, createIntent, createOrder, markOrderPaid, dis
     dispatchPendingDeliveries: vi.fn(),
     grantCopy: vi.fn(),
     clawbackCopy: vi.fn(),
+    // When set true, constructing StripeRail throws (rail unconfigured on this deploy). Reset per test.
+    railCtorThrows: { value: false },
   }));
 
 vi.mock('../../lib/payments/stripe-rail.js', () => ({
@@ -74,6 +76,9 @@ vi.mock('../../lib/payments/stripe-rail.js', () => ({
     verifyWebhook = verifyWebhook;
     parseEvent = parseEvent;
     createIntent = createIntent;
+    constructor() {
+      if (railCtorThrows.value) throw new Error('Stripe rail not configured: STRIPE_SECRET_KEY is empty');
+    }
   },
 }));
 
@@ -252,6 +257,7 @@ beforeEach(() => {
   dispatchPendingDeliveries.mockReset();
   grantCopy.mockReset();
   clawbackCopy.mockReset();
+  railCtorThrows.value = false;
   delete process.env.PMP_ADMIN_TOKEN;
 });
 
@@ -379,6 +385,92 @@ describe('POST /v1/market/orders', () => {
   });
 });
 
+// ───────────────── POST /v1/market/orders — NUMERIC money precision (no float drift) ─────────────────
+
+/**
+ * The price row is stored in NUMERIC minor units (e.g. 999 cents). The route converts it to the
+ * decimal MAJOR-unit string the orchestrator + rail consume via minorUnitsToMajorString — exact
+ * integer-string slicing, NEVER float division. These pin that the amount handed to createOrder is
+ * byte-for-byte correct across the cases that float math would corrupt: large values past 2^53, the
+ * 9.99→998.999… rounding trap, sub-dollar amounts, zero-decimal currencies, and >2 decimals.
+ *
+ * This is the load-bearing money-precision boundary: a wrong amount here mis-charges every buyer.
+ */
+describe('POST /v1/market/orders — NUMERIC amount precision (server-priced, no float drift)', () => {
+  /** Seed a listing whose stripe price row is `(amount, currency, decimals)`, then create an order. */
+  async function orderWithPrice(amount: string | number, currency: string, decimals: number) {
+    authedWallet = BUYER;
+    seedListing('lst-1', 'pak-1');
+    tables['pack_listing_prices'][0] = {
+      listing_id: 'lst-1',
+      rail: 'stripe',
+      amount,
+      currency,
+      decimals,
+      enabled: true,
+    };
+    const created = { order_id: 'ord-prec', pack_id: 'pak-1', buyer_wallet: BUYER, seller_wallet: SELLER, status: 'created', rail: 'stripe' };
+    seed('marketplace_orders', [created]);
+    createOrder.mockResolvedValue({ order: { ...created }, created: true });
+    createIntent.mockResolvedValue({ rail_ref: 'pi_p', client_secret: 'cs_p' });
+    const res = await request(app())
+      .post('/v1/market/orders')
+      .send({ listing_id: 'lst-1', rail: 'stripe', client_token: 'ct-prec' });
+    return res;
+  }
+
+  it('999 cents (decimals=2) → exactly "9.99" (the classic 9.99*100=998.999… trap)', async () => {
+    const res = await orderWithPrice('999', 'usd', 2);
+    expect(res.status).toBe(201);
+    expect(createOrder.mock.calls[0][0].amount).toBe('9.99');
+    expect(res.body.amount).toBe('9.99');
+    // The SAME exact string is handed to the rail (so Stripe charges exactly this).
+    expect(createIntent.mock.calls[0][0].amount).toBe('9.99');
+  });
+
+  it('a sub-dollar amount (5 cents) pads correctly to "0.05" (never "0.5" or "5")', async () => {
+    const res = await orderWithPrice('5', 'usd', 2);
+    expect(res.status).toBe(201);
+    expect(createOrder.mock.calls[0][0].amount).toBe('0.05');
+  });
+
+  it('a LARGE amount past 2^53 minor units keeps every digit (float division would corrupt it)', async () => {
+    // 9_007_199_254_740_993 cents = 2^53 + 1 — the first integer Number cannot represent exactly.
+    // Integer-string slicing must preserve the trailing digits float math would round away.
+    const res = await orderWithPrice('9007199254740993', 'usd', 2);
+    expect(res.status).toBe(201);
+    expect(createOrder.mock.calls[0][0].amount).toBe('90071992547409.93');
+  });
+
+  it('a zero-decimal currency (jpy, decimals=0) is the major unit verbatim — no decimal point added', async () => {
+    const res = await orderWithPrice('500', 'jpy', 0);
+    expect(res.status).toBe(201);
+    expect(createOrder.mock.calls[0][0].amount).toBe('500');
+    expect(createOrder.mock.calls[0][0].currency).toBe('jpy');
+  });
+
+  it('more than 2 decimals (decimals=4) slices correctly: 12345 → "1.2345"', async () => {
+    const res = await orderWithPrice('12345', 'usd', 4);
+    expect(res.status).toBe(201);
+    expect(createOrder.mock.calls[0][0].amount).toBe('1.2345');
+  });
+
+  it('accepts a NUMERIC amount returned as a JS number (Supabase NUMERIC may deserialize as number)', async () => {
+    // pg can hand back NUMERIC as a number; the route stringifies before slicing. 1299 → "12.99".
+    const res = await orderWithPrice(1299, 'usd', 2);
+    expect(res.status).toBe(201);
+    expect(createOrder.mock.calls[0][0].amount).toBe('12.99');
+  });
+
+  it('a malformed (non-integer) price string is refused with 500, never a mis-charge', async () => {
+    // A corrupt price row (e.g. "9.99" already-major, or "abc") must not silently produce a wrong
+    // minor-unit conversion. The route surfaces 500 (order_failed) and never calls createOrder.
+    const res = await orderWithPrice('9.99', 'usd', 2);
+    expect(res.status).toBe(500);
+    expect(createOrder).not.toHaveBeenCalled();
+  });
+});
+
 // ─────────────────────────── GET /v1/market/orders/:id ───────────────────────────
 
 describe('GET /v1/market/orders/:id', () => {
@@ -416,6 +508,22 @@ describe('GET /v1/market/orders/:id', () => {
     authedWallet = BUYER;
     const res = await request(app()).get('/v1/market/orders/ord-nope');
     expect(res.status).toBe(404);
+  });
+
+  it('422s an over-long order id (>64 chars) before any DB read (input-size guard)', async () => {
+    authedWallet = BUYER;
+    const res = await request(app()).get(`/v1/market/orders/${'x'.repeat(65)}`);
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('invalid_id');
+  });
+
+  it('401s an unauthenticated reader (no order leaked to an anonymous caller)', async () => {
+    authedWallet = null;
+    seed('marketplace_orders', [
+      { order_id: 'ord-1', buyer_wallet: BUYER, seller_wallet: SELLER, status: 'paid', amount: '9.99', currency: 'usd', rail: 'stripe' },
+    ]);
+    const res = await request(app()).get('/v1/market/orders/ord-1');
+    expect(res.status).toBe(401);
   });
 });
 
@@ -486,6 +594,64 @@ describe('POST /v1/market/orders/:id/refund', () => {
     expect(res.status).toBe(200);
     expect(clawbackCopy).toHaveBeenCalledTimes(1);
   });
+
+  it('404s a refund for an unknown order (no clawback on a phantom order)', async () => {
+    authedWallet = BUYER;
+    const res = await request(app()).post('/v1/market/orders/ord-nope/refund').send({});
+    expect(res.status).toBe(404);
+    expect(clawbackCopy).not.toHaveBeenCalled();
+  });
+
+  it('a WRONG admin token alone (no Privy session) does not authorise a refund — 401, no clawback', async () => {
+    // The admin-token path bypasses Privy ONLY for a correct token. A wrong token presented with no
+    // wallet/session leaves the caller unidentified: maybeOwnership passes through (admin header
+    // present), the handler finds no verified wallet AND an invalid admin token → 401, never a refund.
+    process.env.PMP_ADMIN_TOKEN = 'sekret-admin';
+    authedWallet = null; // no Privy session — relying solely on the (wrong) admin token
+    seed('marketplace_orders', [
+      { order_id: 'ord-1', pack_id: 'pak-1', buyer_wallet: BUYER, seller_wallet: SELLER, status: 'delivered', rail: 'stripe', amount: '9.99', currency: 'usd' },
+    ]);
+    const res = await request(app())
+      .post('/v1/market/orders/ord-1/refund')
+      .set('X-Admin-Token', 'wrong-token')
+      .send({});
+    expect(res.status).toBe(401);
+    expect(clawbackCopy).not.toHaveBeenCalled();
+    expect(tables['marketplace_orders'][0].status).toBe('delivered');
+  });
+
+  it('an authenticated NON-PARTY presenting a wrong admin token is forbidden (403), no clawback', async () => {
+    // A Privy-authenticated caller who is neither buyer nor seller, also presenting a bad admin token.
+    // Sending `wallet` in the body routes maybeOwnership through Privy (verifiedWallet set to OTHER);
+    // OTHER is not a party and the admin token is wrong → 403, never a refund.
+    process.env.PMP_ADMIN_TOKEN = 'sekret-admin';
+    authedWallet = OTHER;
+    seed('marketplace_orders', [
+      { order_id: 'ord-1', pack_id: 'pak-1', buyer_wallet: BUYER, seller_wallet: SELLER, status: 'delivered', rail: 'stripe', amount: '9.99', currency: 'usd' },
+    ]);
+    const res = await request(app())
+      .post('/v1/market/orders/ord-1/refund')
+      .set('X-Admin-Token', 'wrong-token')
+      .send({ wallet: OTHER });
+    expect(res.status).toBe(403);
+    expect(clawbackCopy).not.toHaveBeenCalled();
+    expect(tables['marketplace_orders'][0].status).toBe('delivered');
+  });
+
+  it('refund of a delivered order still moves to refunding even if clawback is a no-op (already clawed)', async () => {
+    // The order is delivered but the clones were already removed (clawback ran earlier and the order
+    // status write was lost). The refund route must still advance to 'refunding' and re-run the
+    // idempotent clawback — the money state must reach 'refunding' regardless of clone presence.
+    authedWallet = SELLER; // the seller initiates the refund
+    seed('marketplace_orders', [
+      { order_id: 'ord-1', pack_id: 'pak-1', buyer_wallet: BUYER, seller_wallet: SELLER, status: 'settled', rail: 'stripe', amount: '9.99', currency: 'usd' },
+    ]);
+    clawbackCopy.mockResolvedValue(undefined);
+    const res = await request(app()).post('/v1/market/orders/ord-1/refund').send({});
+    expect(res.status).toBe(200);
+    expect(tables['marketplace_orders'][0].status).toBe('refunding');
+    expect(clawbackCopy).toHaveBeenCalledTimes(1);
+  });
 });
 
 // ─────────────────────────── POST /v1/market/payout-account ───────────────────────────
@@ -529,6 +695,28 @@ describe('POST /webhook/stripe/marketplace', () => {
     expect(markOrderPaid).not.toHaveBeenCalled();
     expect(parseEvent).not.toHaveBeenCalled();
     // Order untouched.
+    expect(tables['marketplace_orders'][0].status).toBe('awaiting_payment');
+  });
+
+  it('rejects (500 stripe_not_configured) when the Stripe rail is unconfigured — fail closed, no DB write', async () => {
+    // The deploy has no Stripe key → constructing StripeRail throws. The webhook cannot verify, so
+    // it must reject (fail closed) rather than trust an unverifiable body. No event is processed.
+    railCtorThrows.value = true;
+    seed('marketplace_orders', [
+      { order_id: 'ord-1', buyer_wallet: BUYER, seller_wallet: SELLER, status: 'awaiting_payment', rail: 'stripe', amount: '9.99', currency: 'usd' },
+    ]);
+
+    const res = await request(app())
+      .post('/webhook/stripe/marketplace')
+      .set('Content-Type', 'application/json')
+      .set('Stripe-Signature', 'whatever')
+      .send(Buffer.from(JSON.stringify({ id: 'evt_1', type: 'payment_intent.succeeded' })));
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('stripe_not_configured');
+    // Verification never ran; the order is untouched.
+    expect(verifyWebhook).not.toHaveBeenCalled();
+    expect(markOrderPaid).not.toHaveBeenCalled();
     expect(tables['marketplace_orders'][0].status).toBe('awaiting_payment');
   });
 
@@ -626,6 +814,68 @@ describe('POST /webhook/stripe/marketplace', () => {
 
     expect(res.status).toBe(200);
     expect(markOrderPaid).not.toHaveBeenCalled();
+    expect(clawbackCopy).not.toHaveBeenCalled();
+  });
+
+  it('a refund event carrying NO order_id is a 200 no-op (nothing to claw back), no clawback call', async () => {
+    const event = { id: 'evt_norefund', type: 'charge.refunded' };
+    verifyWebhook.mockReturnValue(event);
+    // A verified refund event that does not resolve to an order — the handler records nothing to
+    // claw back and answers 200 (so Stripe stops retrying), but must NOT call clawbackCopy.
+    parseEvent.mockReturnValue({ rail_event_id: 'evt_norefund', type: 'charge.refunded', order_id: null, status: 'refunding' });
+
+    const res = await request(app())
+      .post('/webhook/stripe/marketplace')
+      .set('Content-Type', 'application/json')
+      .set('Stripe-Signature', 'good')
+      .send(Buffer.from(JSON.stringify(event)));
+
+    expect(res.status).toBe(200);
+    expect(res.body.noop).toBe('no_order');
+    expect(clawbackCopy).not.toHaveBeenCalled();
+  });
+
+  it('a paid event whose markOrderPaid THROWS → 500 so Stripe retries (idempotent on replay)', async () => {
+    const event = { id: 'evt_boom', type: 'payment_intent.succeeded' };
+    verifyWebhook.mockReturnValue(event);
+    parseEvent.mockReturnValue({ rail_event_id: 'evt_boom', type: 'payment_intent.succeeded', order_id: 'ord-1', status: 'paid' });
+    // A genuine processing failure AFTER verification (e.g. the DB write errored). The webhook must
+    // return 500 so Stripe re-delivers; markOrderPaid is idempotent so the retry is safe.
+    markOrderPaid.mockRejectedValue(new Error('db write failed'));
+
+    const res = await request(app())
+      .post('/webhook/stripe/marketplace')
+      .set('Content-Type', 'application/json')
+      .set('Stripe-Signature', 'good')
+      .send(Buffer.from(JSON.stringify(event)));
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('webhook_processing_failed');
+    // No delivery nudge fired on a failed paid-record.
+    expect(dispatchPendingDeliveries).not.toHaveBeenCalled();
+  });
+
+  it('a refunding event on an UNPAID order (illegal refund) → the handler 500s (NOT_REFUNDABLE bubbles), Stripe retries', async () => {
+    // A 'created' order can never transition to 'refunding' (the DAG forbids it). A refund webhook
+    // for such an order makes refundOrder throw NOT_REFUNDABLE; the webhook's catch returns 500.
+    // (A 500 is acceptable here — Stripe retries; the order genuinely is not refundable yet. The
+    // owner/admin REST refund route maps this same case to a precise 409, pinned separately below.)
+    seed('marketplace_orders', [
+      { order_id: 'ord-1', pack_id: 'pak-1', buyer_wallet: BUYER, seller_wallet: SELLER, status: 'created', rail: 'stripe', amount: '9.99', currency: 'usd' },
+    ]);
+    const event = { id: 'evt_badrefund', type: 'charge.refunded' };
+    verifyWebhook.mockReturnValue(event);
+    parseEvent.mockReturnValue({ rail_event_id: 'evt_badrefund', type: 'charge.refunded', order_id: 'ord-1', status: 'refunding' });
+
+    const res = await request(app())
+      .post('/webhook/stripe/marketplace')
+      .set('Content-Type', 'application/json')
+      .set('Stripe-Signature', 'good')
+      .send(Buffer.from(JSON.stringify(event)));
+
+    expect(res.status).toBe(500);
+    // The illegal order was NOT moved + no clawback ran (the transition was rejected up front).
+    expect(tables['marketplace_orders'][0].status).toBe('created');
     expect(clawbackCopy).not.toHaveBeenCalled();
   });
 });
