@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { path: '/brain', label: 'Brain Map', icon: '◈' },
   { path: '/decay', label: 'Decay', icon: '◇' },
   { path: '/packs', label: 'Memory Packs', icon: '▩' },
+  { path: '/export', label: 'Export .pmp', icon: '⤓' },
   { path: '/settings', label: 'Settings', icon: '⚙' },
 ];
 

@@ -9,6 +9,7 @@ import { Timeline } from './pages/Timeline';
 import { EntityMap } from './pages/EntityMap';
 import { DecayHeatmap } from './pages/DecayHeatmap';
 import { MemoryPacks } from './pages/MemoryPacks';
+import { ExportMemories } from './pages/ExportMemories';
 import { WikiPacks } from './pages/WikiPacks';
 import { Settings } from './pages/Settings';
 import { Setup } from './pages/Setup';
@@ -30,6 +31,7 @@ function AuthenticatedApp() {
           <Route path="/wiki" element={<Wiki />} />
           <Route path="/decay" element={<DecayHeatmap />} />
           <Route path="/packs" element={<MemoryPacks />} />
+          <Route path="/export" element={<ExportMemories />} />
           <Route path="/wiki-packs" element={<WikiPacks />} />
           <Route path="/file-memory" element={<FileMemory />} />
           <Route path="/explore" element={<Explore />} />

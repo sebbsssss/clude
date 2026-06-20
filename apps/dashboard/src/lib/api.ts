@@ -1,4 +1,11 @@
 import type { Memory, MemoryStats, KnowledgeGraph, MemoryPack, Agent } from '../types/memory';
+import type {
+  ExportRequest,
+  ExportResult,
+  ExportSelection,
+  PmpArtifact,
+  SelectionPreview,
+} from '@clude/ui';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '';
 
@@ -334,6 +341,40 @@ class CludeAPI {
       return [];
     }
     return this.fetch('/api/memory-packs');
+  }
+
+  // ── Portable Memory Pack (.pmp) ──
+  // Drives the @clude/ui MemoryExportPanel. These hit the owner-scoped
+  // /v1/pmp/* endpoints and reuse the same Bearer-token auth (and 401
+  // auth-expiry handling) as every other authed call above.
+
+  /** Cheap count-only preview for the current selection. */
+  async pmpPreview(selection: ExportSelection): Promise<SelectionPreview> {
+    return this.fetch('/v1/pmp/export/preview', {
+      method: 'POST',
+      body: JSON.stringify({ selection }),
+    });
+  }
+
+  /** Build (or idempotently re-register) a .pmp artifact for a selection. */
+  async pmpExport(req: ExportRequest): Promise<ExportResult> {
+    return this.fetch('/v1/pmp/export', {
+      method: 'POST',
+      body: JSON.stringify({
+        selection: req.selection,
+        name: req.name,
+        description: req.description,
+        category: req.category,
+        encrypt: req.encrypt,
+      }),
+    });
+  }
+
+  /** List the caller's previously-exported .pmp artifacts. */
+  async pmpListArtifacts(): Promise<PmpArtifact[]> {
+    const result = await this.fetch<any>('/v1/pmp/artifacts');
+    if (Array.isArray(result)) return result;
+    return result?.artifacts ?? [];
   }
 
   // ── Explore (Memory Graph + Search) ──
