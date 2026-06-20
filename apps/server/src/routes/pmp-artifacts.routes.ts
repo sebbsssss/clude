@@ -398,32 +398,15 @@ export function pmpArtifactsRoutes(): Router {
         // 5. Compute the pack-level Merkle root (REUSE buildPackTree).
         const tree = buildPackTree(leaves);
 
-        // 6. Write the .pmp tarball via the REUSED writer. Producer public_key is the pack
-        //    author's wallet (provenance). Title artifacts SHOULD be desktop-signed (§4.2) —
-        //    this server export is the `copy` path which MAY accept server-side packaging.
+        // 6. Build the artifact identity (`pmp` block) BEFORE writing so it is PERSISTED into the
+        //    .pmp manifest — this is what makes the artifact SELF-VERIFIABLE: POST /v1/pmp/verify
+        //    recomputes the pack Merkle root and compares it to pmp.merkle_root, no server trust.
+        //    The block carries NO per-export id and the hash excludes the wall-clock created_at,
+        //    so two exports of the same pack yield the same merkle_root + manifest_hash (the
+        //    UNIQUE(owner_wallet, manifest_hash) collision that the dedup path treats as
+        //    "already registered", §00 MINOR 14).
         const licenseType: 'copy' | 'title' = pack.sale_mode === 'title' ? 'title' : 'copy';
-        stagedDir = mkdtempSync(join(tmpdir(), 'pmp-out-'));
-        const outFile = join(stagedDir, `${packId}.pmp`);
-        writeMemoryPack(outFile, records, {
-          producer: { name: 'clude-server', version: MEMORYPACK_VERSION, public_key: owner },
-          record_schema: RECORD_SCHEMA,
-          format: 'tarball',
-          anchor_chain: pack.pack_token_address ? 'solana' : undefined,
-        });
-
-        // 7. Build the manifest `pmp` block + compute manifest_hash (sig removed).
-        const artifactId = generateArtifactId();
-        const manifestForHash: MemoryPackManifest = {
-          memorypack_version: MEMORYPACK_VERSION,
-          producer: { name: 'clude-server', version: MEMORYPACK_VERSION, public_key: owner },
-          created_at: '', // excluded from identity — see note below
-          record_count: records.length,
-          record_schema: RECORD_SCHEMA,
-        };
-        // The artifact identity (`pmp` block) is what binds title/license/count/root under one
-        // hash. created_at is volatile, so we hash a STABLE identity object, not the file's
-        // wall-clock manifest — two exports of the same pack must yield the same manifest_hash.
-        const pmpIdentity = {
+        const pmpIdentity: Record<string, unknown> = {
           pmp_version: PMP_FORMAT_VERSION,
           title: pack.name,
           description: pack.description,
@@ -435,7 +418,32 @@ export function pmpArtifactsRoutes(): Router {
           merkle_root: tree.root,
           creator_pubkey: owner,
         };
-        (manifestForHash as unknown as { pmp: unknown }).pmp = pmpIdentity;
+
+        // 7. Write the .pmp tarball via the REUSED writer, EMBEDDING the pmp block (so verify can
+        //    read pmp.merkle_root back out of the file). Producer public_key is the pack author's
+        //    wallet (provenance). Title artifacts SHOULD be desktop-signed (§4.2) — this server
+        //    export is the `copy` path which MAY accept server-side packaging.
+        stagedDir = mkdtempSync(join(tmpdir(), 'pmp-out-'));
+        const outFile = join(stagedDir, `${packId}.pmp`);
+        writeMemoryPack(outFile, records, {
+          producer: { name: 'clude-server', version: MEMORYPACK_VERSION, public_key: owner },
+          record_schema: RECORD_SCHEMA,
+          format: 'tarball',
+          anchor_chain: pack.pack_token_address ? 'solana' : undefined,
+          pmp: pmpIdentity,
+        });
+
+        // 8. Compute manifest_hash over the canonical manifest (sig removed) using the SAME pmp
+        //    block that was written to disk, so the stored hash describes the actual artifact.
+        const artifactId = generateArtifactId();
+        const manifestForHash: MemoryPackManifest = {
+          memorypack_version: MEMORYPACK_VERSION,
+          producer: { name: 'clude-server', version: MEMORYPACK_VERSION, public_key: owner },
+          created_at: '', // excluded from identity — stable across exports
+          record_count: records.length,
+          record_schema: RECORD_SCHEMA,
+          pmp: pmpIdentity,
+        };
         const manifestHash = computeManifestHash(manifestForHash);
 
         let byteSize: number | null = null;

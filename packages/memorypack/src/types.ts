@@ -57,6 +57,16 @@ export interface MemoryPackManifest {
 
   /** Number of attachments declared in blobs/index.jsonl. */
   blobs_count?: number;
+
+  /**
+   * Optional PMP-artifact identity block. A generic extension slot the
+   * higher-level `.pmp` artifact layer writes to bind pack-level identity
+   * (e.g. `merkle_root`, title, license) into the manifest so the artifact
+   * is SELF-VERIFIABLE: a reader can recompute the pack Merkle root and
+   * compare it to `pmp.merkle_root` without trusting any server. The format
+   * library treats it as opaque pass-through — producers define the shape.
+   */
+  pmp?: Record<string, unknown>;
 }
 
 /**

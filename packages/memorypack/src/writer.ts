@@ -84,6 +84,13 @@ export interface WriterOptions {
    * Default: `() => new Date().toISOString()`.
    */
   clock?: () => string;
+  /**
+   * Optional PMP-artifact identity block, written verbatim to the manifest's
+   * `pmp` field. The artifact layer uses this to embed `merkle_root` (and
+   * title/license/etc.) so the `.pmp` is self-verifiable — a reader recomputes
+   * the pack root and compares it to `pmp.merkle_root` with no server trust.
+   */
+  pmp?: Record<string, unknown>;
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -224,6 +231,7 @@ function writeDirectory(
           scope: encryption.scope!,
         }
       : undefined,
+    pmp: opts.pmp,
   };
   writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2));
 

@@ -465,6 +465,15 @@ describe('POST /v1/pmp/export', () => {
     expect(typeof row.manifest_hash).toBe('string');
     expect(row.manifest_hash.length).toBeGreaterThan(0);
     expect(res.body.artifact.manifest_hash).toBe(row.manifest_hash);
+    // REGRESSION GUARD (export→verify round-trip): the writer MUST be handed the pmp identity
+    // block so the merkle_root is PERSISTED into the .pmp. If export stops passing it, verify
+    // reads a null declared root and silently returns verified:false for every real artifact.
+    // Tie what's embedded in the file to what's registered in the DB — they must be the same root.
+    expect(writeMemoryPack).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Array),
+      expect.objectContaining({ pmp: expect.objectContaining({ merkle_root: row.merkle_root }) }),
+    );
     // A signed/owned download ref is returned (not a public link).
     expect(res.body.artifact.artifact_id).toMatch(/^pmpa-/);
     expect(res.body.download).toBeTruthy();
