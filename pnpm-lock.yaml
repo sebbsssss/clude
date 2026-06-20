@@ -121,6 +121,9 @@ importers:
       '@ai-sdk/react':
         specifier: ^3.0.147
         version: 3.0.147(react@19.2.4)(zod@4.3.6)
+      '@clude/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@paper-design/shaders-react':
         specifier: latest
         version: 0.0.76(@types/react@19.2.14)(react@19.2.4)
