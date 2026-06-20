@@ -169,6 +169,38 @@ function stopServer(s: http.Server): Promise<void> {
   return new Promise((resolve) => s.close(() => resolve()));
 }
 
+/**
+ * Run an async request whose handler performs setTimeout-based retry backoff,
+ * WITHOUT waiting the real wall-clock delay.
+ *
+ * The verified /topup/confirm path calls verifyTransactionViaRPC, which sleeps
+ * across a 7-attempt backoff window (~79s total) when the parsed-tx RPC mock
+ * keeps returning null. That's the intended on-chain "still confirming" retry
+ * loop — not a network call (getParsedTransaction is fully stubbed) — but its
+ * real setTimeout sleeps blow the test timeout. We fake timers ONLY for the
+ * duration of the in-flight request and pump runAllTimersAsync() so each sleep()
+ * resolves immediately, while the real fetch/HTTP round-trip still completes.
+ */
+async function withFastBackoff<T>(action: () => Promise<T>): Promise<T> {
+  vi.useFakeTimers();
+  try {
+    const resultP = action();
+    let settled = false;
+    const tracked = resultP.then(
+      (v) => { settled = true; return v; },
+      (e) => { settled = true; throw e; },
+    );
+    // Pump pending timers + microtasks until the handler finishes its backoff
+    // and the HTTP response is produced. Bounded so a genuine hang still fails.
+    for (let i = 0; i < 1000 && !settled; i++) {
+      await vi.runAllTimersAsync();
+    }
+    return await tracked;
+  } finally {
+    vi.useRealTimers();
+  }
+}
+
 // ---- Helius Webhook Tests ----
 
 describe('POST /webhook/helius/usdc — Helius webhook', () => {
@@ -569,16 +601,18 @@ describe('POST /api/chat/topup/confirm — RPC-verified top-up', () => {
   it('returns 400 when RPC cannot find the transaction', async () => {
     mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
     mockDbQueue.push({ data: null, error: null }); // SELECT — not found (no duplicate)
-    // Must return null for all retry attempts (3 total)
+    // Return null on every retry attempt → handler exhausts its backoff window.
     mockGetParsedTransaction.mockResolvedValue(null);
-    const r = await req(server, 'POST', '/api/chat/topup/confirm', {
-      headers: CORTEX_AUTH,
-      body: { tx_hash: VALID_TX_HASH },
-    });
+    const r = await withFastBackoff(() =>
+      req(server, 'POST', '/api/chat/topup/confirm', {
+        headers: CORTEX_AUTH,
+        body: { tx_hash: VALID_TX_HASH },
+      }),
+    );
     expect(r.status).toBe(400);
     expect(r.body.error).toMatch(/not found|retries/i);
     mockGetParsedTransaction.mockReset();
-  }, 15_000);
+  });
 
   it('returns 400 when on-chain tx has an error', async () => {
     mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
@@ -899,16 +933,18 @@ describe('POST /api/chat/topup/confirm — intent_id path', () => {
       data: { id: 'intent-1', status: 'pending', amount_usdc: '10.00', reference: 'ref123', wallet_address: AGENT_MOCK.owner_wallet, chain: 'solana' },
       error: null,
     });
-    // Must return null for all retry attempts (3 total)
+    // Return null on every retry attempt → handler exhausts its backoff window.
     mockGetParsedTransaction.mockResolvedValue(null);
-    const r = await req(server, 'POST', '/api/chat/topup/confirm', {
-      headers: CORTEX_AUTH,
-      body: { tx_hash: VALID_TX_HASH, intent_id: 'intent-1' },
-    });
+    const r = await withFastBackoff(() =>
+      req(server, 'POST', '/api/chat/topup/confirm', {
+        headers: CORTEX_AUTH,
+        body: { tx_hash: VALID_TX_HASH, intent_id: 'intent-1' },
+      }),
+    );
     expect(r.status).toBe(400);
     expect(r.body.error).toMatch(/not found|retries/i);
     mockGetParsedTransaction.mockReset();
-  }, 15_000);
+  });
 
   it('returns 500 on DB update error for intent', async () => {
     mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
