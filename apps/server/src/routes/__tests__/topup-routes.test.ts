@@ -33,6 +33,14 @@ vi.mock('@clude/brain/features/agent-tier', () => ({
   authenticateAgentByDid: vi.fn().mockResolvedValue(null),
 }));
 
+// Privy wallet-ownership resolver — controllable linked-wallet set, NO network.
+// topupAuth's Privy path calls resolveWalletsForDid(did, idToken) to decide
+// whether a client-supplied ?wallet= is actually owned by the caller.
+const mockResolveWalletsForDid = vi.fn<(...args: any[]) => Promise<string[]>>();
+vi.mock('@clude/brain/auth/privy-wallet-resolver', () => ({
+  resolveWalletsForDid: (...args: any[]) => mockResolveWalletsForDid(...args),
+}));
+
 vi.mock('@clude/shared/config', () => ({
   config: {
     helius: { webhookSecret: 'test-webhook-secret' },
@@ -1077,5 +1085,135 @@ describe('POST /webhook/helius/usdc — reference-based intent matching', () => 
     });
     expect(r.status).toBe(200);
     expect(r.body).toMatchObject({ ok: true, credited: 1, skipped: 0 });
+  });
+});
+
+// ---- Security regression: forged ?wallet= on the Privy path (owner-trust fix) ----
+
+describe('topupAuth Privy path — forged ?wallet= cannot read another user’s billing', () => {
+  /**
+   * VULN CLASS: a handler scoping PRIVATE owner-data (balance + top-up history)
+   * by a CLIENT-SUPPLIED ?wallet= without proving ownership. Before the fix, any
+   * authenticated Privy user could pass ?wallet=<VICTIM> and read the victim's
+   * balance and full top-up history — and act on their billing.
+   *
+   * The fix makes topupAuth resolve the caller's Privy-linked wallets via
+   * resolveWalletsForDid() and 403 any ?wallet= the caller does NOT own, before
+   * it is ever used to scope a DB query. These tests pin that:
+   *   - forged victim wallet  → 403, no balance/history leak, DB never queried
+   *   - caller's own wallet   → 200, scoped to the verified wallet
+   *   - clk_ API-key path     → unaffected, still works
+   */
+
+  // The wallet a real, honest Privy user owns (returned by the resolver mock).
+  const CALLER_OWNED = 'Ca11erWa11et1111111111111111111111111111111'; // base58, 43 chars
+  // A different user's wallet the attacker tries to read via ?wallet=.
+  const VICTIM_WALLET = 'V1ct1mWa11et2222222222222222222222222222222'; // base58, 43 chars
+  // topupAuth still requires an Authorization: Bearer header to pass its first
+  // guard; on the Privy path the JWT itself is trusted via req.privyUser (set by
+  // requirePrivyAuth upstream / privyMiddleware here), not re-validated. A
+  // non-clk_ token routes into the Privy branch.
+  const PRIVY_HEADERS = {
+    Authorization: 'Bearer privy.jwt.token',
+    'x-privy-id-token': 'fake-id-token',
+  };
+
+  let server: http.Server;
+  // createApiApp installs privyMiddleware → every request carries req.privyUser
+  // (an authenticated Privy session). The wallet arg is unused by the middleware.
+  beforeAll(async () => { server = await startServer(createApiApp({ wallet: 'unused' })); });
+  afterAll(async () => stopServer(server));
+  beforeEach(() => {
+    mockDbQueue.length = 0;
+    mockAuthenticateAgent.mockReset();
+    mockResolveWalletsForDid.mockReset();
+    // Honest user: the caller only owns CALLER_OWNED, never the victim's wallet.
+    mockResolveWalletsForDid.mockResolvedValue([CALLER_OWNED]);
+  });
+
+  it('CRITICAL: GET /balance with a forged victim ?wallet= → 403, no balance leaked', async () => {
+    const r = await req(server, 'GET', `/api/chat/balance?wallet=${VICTIM_WALLET}`, {
+      headers: PRIVY_HEADERS,
+    });
+    expect(r.status).toBe(403);
+    expect(r.body.error).toMatch(/not linked/i);
+    // No victim data must come back.
+    expect(r.body.balance_usdc).toBeUndefined();
+    // The forged wallet must never reach a DB query — auth rejected first.
+    expect(mockDbQueue.length).toBe(0);
+    expect(mockResolveWalletsForDid).toHaveBeenCalledWith('did:privy:testuser', 'fake-id-token');
+  });
+
+  it('CRITICAL: GET /topup/history with a forged victim ?wallet= → 403, no history leaked', async () => {
+    const r = await req(server, 'GET', `/api/chat/topup/history?wallet=${VICTIM_WALLET}`, {
+      headers: PRIVY_HEADERS,
+    });
+    expect(r.status).toBe(403);
+    expect(r.body.error).toMatch(/not linked/i);
+    expect(r.body.topups).toBeUndefined();
+    expect(mockDbQueue.length).toBe(0);
+  });
+
+  it('the legitimate owner CAN read /balance for a wallet they actually own (200, scoped)', async () => {
+    // SELECT chat_balances for the caller's own wallet.
+    mockDbQueue.push({
+      data: { balance_usdc: '42.00', total_deposited: '50.00', total_spent: '8.00', updated_at: '2026-06-20T00:00:00Z' },
+      error: null,
+    });
+    const r = await req(server, 'GET', `/api/chat/balance?wallet=${CALLER_OWNED}`, {
+      headers: PRIVY_HEADERS,
+    });
+    expect(r.status).toBe(200);
+    expect(r.body.wallet).toBe(CALLER_OWNED); // scoped to the proven wallet
+    expect(r.body.balance_usdc).toBe(42.0);
+  });
+
+  it('the legitimate owner CAN read /topup/history for a wallet they actually own (200)', async () => {
+    mockDbQueue.push({
+      data: [
+        { id: 'mine', amount_usdc: '5.00', chain: 'solana', tx_hash: VALID_TX_HASH, status: 'confirmed', created_at: '2026-06-20T00:00:00Z', confirmed_at: '2026-06-20T00:00:10Z' },
+      ],
+      error: null,
+    });
+    const r = await req(server, 'GET', `/api/chat/topup/history?wallet=${CALLER_OWNED}`, {
+      headers: PRIVY_HEADERS,
+    });
+    expect(r.status).toBe(200);
+    expect(r.body.count).toBe(1);
+    expect(r.body.topups[0].amount_usdc).toBe(5.0);
+  });
+
+  it('returns 400 for a malformed ?wallet= before any ownership/DB work', async () => {
+    const r = await req(server, 'GET', '/api/chat/balance?wallet=not-a-valid-address!', {
+      headers: PRIVY_HEADERS,
+    });
+    expect(r.status).toBe(400);
+    expect(mockResolveWalletsForDid).not.toHaveBeenCalled();
+    expect(mockDbQueue.length).toBe(0);
+  });
+
+  it('returns 500 (fail-closed) — never leaks data — if ownership resolution throws', async () => {
+    mockResolveWalletsForDid.mockRejectedValueOnce(new Error('privy down'));
+    const r = await req(server, 'GET', `/api/chat/balance?wallet=${VICTIM_WALLET}`, {
+      headers: PRIVY_HEADERS,
+    });
+    expect(r.status).toBe(500);
+    expect(r.body.balance_usdc).toBeUndefined();
+    expect(mockDbQueue.length).toBe(0);
+  });
+
+  it('the clk_ API-key path is unaffected and still serves the key owner’s balance', async () => {
+    // clk_ path bypasses the Privy ?wallet= ownership check entirely; the key's
+    // own owner_wallet is authoritative, so the resolver is never consulted.
+    mockAuthenticateAgent.mockResolvedValueOnce(AGENT_MOCK);
+    mockDbQueue.push({
+      data: { balance_usdc: '7.00', total_deposited: '7.00', total_spent: '0', updated_at: '2026-06-20T00:00:00Z' },
+      error: null,
+    });
+    const r = await req(server, 'GET', '/api/chat/balance', { headers: CORTEX_AUTH });
+    expect(r.status).toBe(200);
+    expect(r.body.wallet).toBe(AGENT_MOCK.owner_wallet);
+    expect(r.body.balance_usdc).toBe(7.0);
+    expect(mockResolveWalletsForDid).not.toHaveBeenCalled();
   });
 });
