@@ -93,6 +93,43 @@ function generateListingId(): string {
   return `lst-${randomBytes(4).toString('hex')}`;
 }
 
+type SupplyKind = 'unlimited' | 'limited' | 'single';
+
+/**
+ * Resolve a coherent (supply_kind, supply_total) pair, fail-closed.
+ *
+ * Invariants enforced here (the DB CHECK constraints do not cover these):
+ *   - unlimited        ⇒ supply_total is NULL (any client total is dropped).
+ *   - single           ⇒ supply_total is pinned to exactly 1 (a "single" listing is
+ *                        one copy by definition; a client claiming N>1 is incoherent).
+ *   - limited          ⇒ supply_total MUST be an integer ≥ 1 AND ≥ minSold; a limit
+ *                        with no number, a non-positive limit, or a cap below what has
+ *                        already sold (supply_sold) is rejected. supply_sold must never
+ *                        exceed supply_total.
+ *
+ * Returns the resolved total, or `{ error }` describing why the config is invalid.
+ */
+function resolveSupplyTotal(
+  kind: SupplyKind,
+  rawTotal: unknown,
+  minSold = 0,
+): { ok: true; total: number | null } | { ok: false; hint: string } {
+  if (kind === 'unlimited') return { ok: true, total: null };
+  if (kind === 'single') return { ok: true, total: 1 };
+  // limited: a positive integer cap is mandatory and must cover what already sold.
+  if (!Number.isInteger(rawTotal)) {
+    return { ok: false, hint: 'supply_total (a positive integer) is required for a limited listing' };
+  }
+  const total = rawTotal as number;
+  if (total < 1) {
+    return { ok: false, hint: 'supply_total must be a positive integer for a limited listing' };
+  }
+  if (total < minSold) {
+    return { ok: false, hint: 'supply_total cannot be lower than the number of copies already sold' };
+  }
+  return { ok: true, total };
+}
+
 // ─────────── Pack rows (server source of truth for category + sale_mode) ───────────
 
 interface PackRow {
@@ -330,10 +367,15 @@ export function packMarketplaceRoutes(): Router {
       if (!pack) return; // response already written
 
       // Supply: default unlimited. (Title would force single, but title is blocked here.)
-      const supplyKind: 'unlimited' | 'limited' | 'single' =
+      const supplyKind: SupplyKind =
         body.supply_kind === 'limited' || body.supply_kind === 'single' ? body.supply_kind : 'unlimited';
-      const supplyTotal =
-        supplyKind === 'unlimited' ? null : Number.isInteger(body.supply_total) ? body.supply_total : null;
+      // Resolve a coherent total fail-closed (single→1, limited→positive int, unlimited→null).
+      const supplyResolved = resolveSupplyTotal(supplyKind, body.supply_total);
+      if (!supplyResolved.ok) {
+        res.status(422).json({ error: 'invalid_supply', hint: supplyResolved.hint } satisfies ErrorBody);
+        return;
+      }
+      const supplyTotal = supplyResolved.total;
       const previewSampleCount = Number.isInteger(body.preview_sample_count)
         ? Math.max(0, Math.min(body.preview_sample_count, PREVIEW_MAX_REVEAL))
         : 1;
@@ -434,9 +476,31 @@ export function packMarketplaceRoutes(): Router {
       if (typeof body.title === 'string' && body.title.trim()) patch.title = body.title.trim();
       if ('description' in body) patch.description = typeof body.description === 'string' ? body.description : null;
       if (Array.isArray(body.tags)) patch.tags = body.tags.filter((t: unknown) => typeof t === 'string');
-      if (body.supply_kind === 'unlimited' || body.supply_kind === 'limited' || body.supply_kind === 'single')
-        patch.supply_kind = body.supply_kind;
-      if (Number.isInteger(body.supply_total)) patch.supply_total = body.supply_total;
+      // Supply edits must stay coherent: resolve the EFFECTIVE (kind, total) from the
+      // patch over the existing row, then validate fail-closed (single→1, limited→a
+      // positive int that still covers supply_sold). Touching either field re-validates
+      // both so we never persist a half-applied/incoherent supply config.
+      const touchingSupply =
+        body.supply_kind === 'unlimited' ||
+        body.supply_kind === 'limited' ||
+        body.supply_kind === 'single' ||
+        'supply_total' in body;
+      if (touchingSupply) {
+        const nextKind: SupplyKind =
+          body.supply_kind === 'unlimited' || body.supply_kind === 'limited' || body.supply_kind === 'single'
+            ? body.supply_kind
+            : listing.supply_kind;
+        // For a limited listing the raw total is the patched value if provided, else the
+        // existing total (so a bare `supply_kind: 'limited'` flip with no number is caught).
+        const rawTotal = 'supply_total' in body ? body.supply_total : listing.supply_total;
+        const resolved = resolveSupplyTotal(nextKind, rawTotal, listing.supply_sold ?? 0);
+        if (!resolved.ok) {
+          res.status(422).json({ error: 'invalid_supply', hint: resolved.hint } satisfies ErrorBody);
+          return;
+        }
+        patch.supply_kind = nextKind;
+        patch.supply_total = resolved.total;
+      }
       if (Number.isInteger(body.preview_sample_count))
         patch.preview_sample_count = Math.max(0, Math.min(body.preview_sample_count, PREVIEW_MAX_REVEAL));
       if (['none', 'mask_entities', 'summary_only'].includes(body.preview_redaction))
