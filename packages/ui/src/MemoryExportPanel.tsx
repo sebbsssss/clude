@@ -407,7 +407,13 @@ export function MemoryExportPanel(props: MemoryExportPanelProps) {
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
-        placeholder="Pack name (e.g. My working memory — Jun 2026)"
+        placeholder="Pack name (e.g. My working memory, Jun 2026)"
+        style={{ ...inputStyle(p), marginBottom: 10 }}
+      />
+      <input
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder="Description (optional)"
         style={{ ...inputStyle(p), marginBottom: 10 }}
       />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
@@ -509,7 +515,6 @@ export function MemoryExportPanel(props: MemoryExportPanelProps) {
         <ResultCard
           p={p}
           result={result}
-          category={category}
           listable={listable}
           onDownload={handleDownload}
           onSendToDesktop={onSendToDesktop}
@@ -631,7 +636,6 @@ function ScanStatus({ p, flagged }: { p: Palette; flagged: number }) {
 function ResultCard({
   p,
   result,
-  category,
   listable,
   onDownload,
   onSendToDesktop,
@@ -639,7 +643,6 @@ function ResultCard({
 }: {
   p: Palette;
   result: ExportResult;
-  category: ContentCategory;
   listable: boolean;
   onDownload: () => void;
   onSendToDesktop?: (a: ExportResult['artifact']) => void;
