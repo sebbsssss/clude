@@ -38,7 +38,7 @@ vi.mock('@clude/shared/config', () => ({ config: { owner: { wallet: H.OWNER_WALL
 vi.mock('@clude/brain/auth/privy-auth', () => ({
   requirePrivyAuth: (req: Request, res: Response, next: NextFunction) => {
     if (!H.state.loggedIn) { res.status(401).json({ error: 'auth required' }); return; }
-    (req as Request & { privyUser?: unknown }).privyUser = { userId: 'did:test' };
+    (req as Request & { privyUser?: unknown }).privyUser = { userId: 'did:test', appId: 'test-app' };
     next();
   },
 }));
@@ -171,5 +171,79 @@ describe('dashboard owner gate — privilege-escalation regression', () => {
     H.state.loggedIn = false;
     const res = await request(app()).get('/api/dashboard/agents');
     expect(res.status).toBe(401);
+  });
+
+  // ── Mutation-route coverage: the owner gate must hold on WRITES, not just
+  //    the task-execution endpoints. These pin the `ownerOnly` array so a
+  //    future refactor that drops assertOwnerWallet (or only guards /tasks)
+  //    can't silently re-open agent-fleet CRUD to a forged wallet.
+
+  it('CRITICAL: PUT /agents/:id is not writable by forging ?wallet=<OWNER_WALLET>', async () => {
+    H.state.callerOwnedWallet = 'ATTACKER0000'; // logged in, owns a different wallet
+    const res = await request(app())
+      .put(`/api/dashboard/agents/some-agent-id?wallet=${H.OWNER_WALLET}`)
+      .send({ name: 'pwned', budget_monthly_usd: 999999 });
+    expect(res.status).toBe(403); // requireOwnership rejects the forged wallet
+  });
+
+  it('CRITICAL: DELETE /agents/:id is not reachable by forging ?wallet=<OWNER_WALLET>', async () => {
+    H.state.callerOwnedWallet = 'ATTACKER0000';
+    const res = await request(app())
+      .delete(`/api/dashboard/agents/some-agent-id?wallet=${H.OWNER_WALLET}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('CRITICAL: a forged wallet in the JSON BODY (not query) is also blocked on POST /agents', async () => {
+    // The real extractClaimedWallet falls back to body.wallet, so the attack
+    // surface includes a forged wallet smuggled through the request body.
+    H.state.callerOwnedWallet = 'ATTACKER0000';
+    const res = await request(app())
+      .post('/api/dashboard/agents')
+      .send({ name: 'pwned-agent', wallet: H.OWNER_WALLET });
+    expect(res.status).toBe(403);
+  });
+
+  it('CRITICAL: a proven non-owner cannot forge the body wallet to reach task execution', async () => {
+    H.state.callerOwnedWallet = 'ATTACKER0000';
+    const res = await request(app())
+      .post('/api/dashboard/tasks/t1/execute')
+      .send({ wallet: H.OWNER_WALLET });
+    expect(res.status).toBe(403);
+    expect(H.executeTaskManually).not.toHaveBeenCalled();
+  });
+
+  it('an authenticated user proving their OWN wallet still cannot mutate the fleet (PUT /agents/:id)', async () => {
+    H.state.callerOwnedWallet = 'SOMEUSER1234'; // proven owner of their own wallet, not bot owner
+    const res = await request(app())
+      .put('/api/dashboard/agents/some-agent-id?wallet=SOMEUSER1234')
+      .send({ name: 'still-not-allowed' });
+    expect(res.status).toBe(403); // assertOwnerWallet: verifiedWallet !== OWNER_WALLET
+  });
+
+  it('the proven owner CAN perform a mutation (PUT /agents/:id passes the gate, reaches the handler)', async () => {
+    // Positive path for a WRITE route: the gate must not over-block the real
+    // owner. A 403 here would mean assertOwnerWallet wrongly rejected the bot
+    // owner; a 401 would mean requireOwnership failed to verify. Anything else
+    // (the mock returns a 2xx from the handler) proves the gate let the owner
+    // through to the handler — which is the contract under test.
+    H.state.callerOwnedWallet = H.OWNER_WALLET;
+    const res = await request(app())
+      .put(`/api/dashboard/agents/some-agent-id?wallet=${H.OWNER_WALLET}`)
+      .send({ name: 'legit-rename' });
+    expect(res.status).not.toBe(403); // gate did NOT block the owner
+    expect(res.status).not.toBe(401);
+    expect(res.status).toBeLessThan(300); // reached the handler successfully
+  });
+
+  it('the clk_ / DID path (no ?wallet=) is honoured when the resolved wallet IS the owner', async () => {
+    // requireOwnership also accepts an email-only / Cortex-API-key caller with
+    // NO ?wallet= and resolves verifiedWallet from the agent row. The mock
+    // models that as callerOwnedWallet with no claimed wallet in the request.
+    H.state.callerOwnedWallet = H.OWNER_WALLET;
+    const res = await request(app())
+      .post('/api/dashboard/tasks/t1/execute')
+      .send({}); // no ?wallet=, no body.wallet — pure resolved-owner path
+    expect(res.status).toBe(200);
+    expect(H.executeTaskManually).toHaveBeenCalledWith('t1');
   });
 });
