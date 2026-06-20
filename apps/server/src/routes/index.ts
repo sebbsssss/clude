@@ -21,6 +21,7 @@ import { wikiPacksRoutes } from './wiki-packs.routes.js';
 import { pmpRoutes } from './pmp.routes.js';
 import { encryptionRoutes } from './encryption.routes.js';
 import { pmpPacksRoutes } from './pmp-packs.routes.js';
+import { pmpArtifactsRoutes } from './pmp-artifacts.routes.js';
 import { pmpAdminRoutes } from './pmp-admin.routes.js';
 import { complianceRoutes } from './compliance.routes.js';
 import { packMarketplaceRoutes } from './pack-marketplace.routes.js';
@@ -75,6 +76,10 @@ export function mountApiRoutes(app: express.Application): void {
   // PMP Pack endpoints (spec-reserved for v0.2, implementation shipping early)
   // POST /v1/packs, GET /v1/packs/:id, /preview, /verify — marketplace surface.
   app.use(pmpPacksRoutes());
+
+  // PMP artifacts — the SERVER side of the desktop .pmp integration (Part C).
+  // POST /v1/pmp/export, GET /v1/pmp/artifacts(/:id), POST /v1/pmp/verify (public), /import.
+  app.use(pmpArtifactsRoutes());
 
   // PMP admin — backfill control (X-Admin-Token gated, disabled unless
   // PMP_ADMIN_TOKEN is set). POST/GET /v1/admin/backfill, /backfill/stop.
