@@ -694,3 +694,458 @@ describe('POST /v1/pmp/import', () => {
     expect(res.status).toBe(422);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  COVERAGE-HARDENING — edge cases, failure modes, and cross-leg invariants the
+//  four happy-path acceptance tests above do not exercise. Same harness/idiom.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Build a readMemoryPack stub from an explicit record list + declared root. Lets each
+ * hardening test drive verify/import with exactly the bytes it wants (ciphertext records,
+ * intra-pack duplicate leaves, an empty record list, etc.) without the fixed 2-record shape.
+ */
+function stubReadPmp(opts: {
+  records: any[];
+  declaredRoot?: string | null;
+  producerPubkey?: string | null;
+  creatorPubkey?: string | null;
+  artifactId?: string;
+}) {
+  const producer =
+    opts.producerPubkey === null
+      ? { name: 'd', version: '1' }
+      : { name: 'clude-desktop', version: '1.0.0', public_key: opts.producerPubkey ?? 'CreatorPubKey' };
+  readMemoryPack.mockReturnValue({
+    manifest: {
+      memorypack_version: '0.2',
+      producer,
+      record_count: opts.records.length,
+      record_schema: 'clude-memory-v1',
+      pmp: {
+        pmp_version: '0.8',
+        artifact_id: opts.artifactId ?? 'pmpa-source01',
+        title: 'Some Pack',
+        license_type: 'copy',
+        ...(opts.declaredRoot !== undefined ? { merkle_root: opts.declaredRoot } : {}),
+        ...(opts.creatorPubkey !== undefined ? { creator_pubkey: opts.creatorPubkey } : {}),
+        manifest_sig: 'base58:sig',
+      },
+    },
+    records: opts.records,
+    minimalRecords: opts.records,
+    verifiedRecords: new Set<string>(),
+    unsignedRecords: new Set<string>(),
+    anchors: [],
+    verifiedBlobs: new Set<string>(),
+    verifiedAnchors: new Set<string>(),
+    revocations: [],
+    revokedRecordHashes: new Set<string>(),
+    revocationAnchors: [],
+    verifiedRevocationAnchors: new Set<string>(),
+    warnings: [],
+  });
+}
+
+function plainRecord(content: string, extra: Record<string, any> = {}) {
+  return {
+    id: `clude-${content}`,
+    created_at: '2026-01-01T00:00:00.000Z',
+    kind: 'semantic',
+    content,
+    tags: [],
+    importance: 0.5,
+    source: 'chat',
+    ...extra,
+  };
+}
+
+const b64 = (s: string) => Buffer.from(s).toString('base64');
+
+// ───────────────────── export → verify round-trip (closed loop) ─────────────────────
+// The four acceptance tests verify EACH leg with hand-stubbed records, but never feed
+// export's ACTUAL written output into verify. This closes the loop: take the records +
+// pmp identity the route handed to writeMemoryPack, replay them through readMemoryPack,
+// and assert verify says verified:true — then tamper a byte and assert verified:false.
+
+describe('export → verify round-trip', () => {
+  it('an intact exported pack verifies true when its own written bytes are replayed through verify', async () => {
+    authedWallet = OWNER;
+    const packId = seedOwnedPack();
+
+    const exp = await request(app()).post('/v1/pmp/export').send({ pack_id: packId });
+    expect(exp.status).toBe(201);
+
+    // Capture exactly what the route handed the writer: the records + the embedded pmp block.
+    expect(writeMemoryPack).toHaveBeenCalledTimes(1);
+    const [, writtenRecords, writeOpts] = writeMemoryPack.mock.calls[0] as [string, any[], any];
+    expect(writeOpts.pmp.merkle_root).toBe(exp.body.artifact.merkle_root);
+
+    // Replay those bytes through the reader the way a download → verify would.
+    stubReadPmp({ records: writtenRecords, declaredRoot: writeOpts.pmp.merkle_root });
+
+    const ver = await request(app()).post('/v1/pmp/verify').send({ pmp_base64: b64('exported') });
+    expect(ver.status).toBe(200);
+    expect(ver.body.verified).toBe(true);
+    // The root verify reports is the very root export embedded + registered (single source of truth).
+    expect(ver.body.recomputed_root).toBe(writeOpts.pmp.merkle_root);
+    expect(ver.body.root).toBe(exp.body.artifact.merkle_root);
+  });
+
+  it('verify rejects the exported pack once a single record body is mutated post-export', async () => {
+    authedWallet = OWNER;
+    const packId = seedOwnedPack();
+    const exp = await request(app()).post('/v1/pmp/export').send({ pack_id: packId });
+    const [, writtenRecords, writeOpts] = writeMemoryPack.mock.calls[0] as [string, any[], any];
+
+    // Tamper ONE record's content after export; the declared root still describes the original.
+    const tampered = writtenRecords.map((r, i) => (i === 0 ? { ...r, content: `${r.content}-EVIL` } : r));
+    stubReadPmp({ records: tampered, declaredRoot: writeOpts.pmp.merkle_root });
+
+    const ver = await request(app()).post('/v1/pmp/verify').send({ pmp_base64: b64('tampered') });
+    expect(ver.status).toBe(200);
+    expect(ver.body.verified).toBe(false);
+    expect(ver.body.recomputed_root).not.toBe(ver.body.root);
+  });
+});
+
+// ───────────────────── export edge cases ─────────────────────
+
+describe('POST /v1/pmp/export — edge cases', () => {
+  it('422 when pack_id is missing from the body', async () => {
+    authedWallet = OWNER;
+    const res = await request(app()).post('/v1/pmp/export').send({});
+    expect(res.status).toBe(422);
+    expect(writeMemoryPack).not.toHaveBeenCalled();
+  });
+
+  it('409 empty_pack when the owned pack has zero member memories', async () => {
+    authedWallet = OWNER;
+    // Pack exists + is owned, but no memory_pack_contents rows.
+    seed('memory_packs', [
+      {
+        pack_id: 'pack-empty',
+        author_wallet: OWNER,
+        name: 'Empty',
+        description: null,
+        version: '1.0.0',
+        memory_count: 0,
+        merkle_root: null,
+        pack_token_address: null,
+        content_category: 'knowledge',
+        sale_mode: 'copy',
+      },
+    ]);
+
+    const res = await request(app()).post('/v1/pmp/export').send({ pack_id: 'pack-empty' });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('empty_pack');
+    // Nothing written, nothing registered.
+    expect(writeMemoryPack).not.toHaveBeenCalled();
+    expect(insertedRows.find((r) => r.table === 'pmp_artifacts')).toBeFalsy();
+  });
+
+  it('409 when contents reference members that fail the owner scope (no owned records to write)', async () => {
+    authedWallet = OWNER;
+    // Pack + contents exist, but the referenced memories belong to OTHER, so the
+    // owner-scoped hydrate returns nothing → zero records → 409 (defence in depth).
+    seed('memory_packs', [
+      {
+        pack_id: 'pack-foreign',
+        author_wallet: OWNER,
+        name: 'Foreign members',
+        description: null,
+        version: '1.0.0',
+        memory_count: 1,
+        merkle_root: null,
+        pack_token_address: null,
+        content_category: 'knowledge',
+        sale_mode: 'copy',
+      },
+    ]);
+    seed('memory_pack_contents', [
+      { pack_id: 'pack-foreign', memory_id: 99, leaf_index: 0, content_hash: 'lh:ghost' },
+    ]);
+    seed('memories', [
+      {
+        id: 99,
+        hash_id: 'clude-ghost',
+        memory_type: 'semantic',
+        content: 'ghost',
+        owner_wallet: OTHER, // NOT the caller — owner-scoped hydrate skips it
+        created_at: '2026-01-01T00:00:00.000Z',
+        tags: [],
+        source: 'chat',
+        related_user: null,
+        related_wallet: null,
+        content_hash: 'lh:ghost',
+      },
+    ]);
+
+    const res = await request(app()).post('/v1/pmp/export').send({ pack_id: 'pack-foreign' });
+    expect(res.status).toBe(409);
+    expect(writeMemoryPack).not.toHaveBeenCalled();
+    expect(insertedRows.find((r) => r.table === 'pmp_artifacts')).toBeFalsy();
+  });
+
+  it('a duplicate export of the same pack dedupes on UNIQUE(owner_wallet, manifest_hash) → 200 deduped', async () => {
+    authedWallet = OWNER;
+    const packId = seedOwnedPack();
+
+    // First export registers the artifact (201).
+    const first = await request(app()).post('/v1/pmp/export').send({ pack_id: packId });
+    expect(first.status).toBe(201);
+    const firstId = first.body.artifact.artifact_id;
+
+    // Force the NEXT pmp_artifacts insert to hit the unique violation — the row from the first
+    // export is already in the table, so the dedupe branch reads it back and returns it.
+    forceUniqueViolation = 'pmp_artifacts';
+    const second = await request(app()).post('/v1/pmp/export').send({ pack_id: packId });
+
+    expect(second.status).toBe(200);
+    expect(second.body.deduped).toBe(true);
+    // Returns the EXISTING artifact (same id), not a freshly minted one.
+    expect(second.body.artifact.artifact_id).toBe(firstId);
+    expect(second.body.download).toContain(firstId);
+    // Only one artifact row ever persisted for this owner+hash.
+    expect(tables['pmp_artifacts'].filter((r) => r.owner_wallet === OWNER)).toHaveLength(1);
+  });
+
+  it('500 export_failed when the pack lookup errors', async () => {
+    authedWallet = OWNER;
+    seedOwnedPack();
+    forceError = { table: 'memory_packs', error: { message: 'db down' } };
+    const res = await request(app()).post('/v1/pmp/export').send({ pack_id: 'pack-aaaa' });
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('export_failed');
+  });
+});
+
+// ───────────────────── verify edge cases ─────────────────────
+
+describe('POST /v1/pmp/verify — edge cases', () => {
+  it('verified:false with reason no_records for a pack carrying zero records', async () => {
+    stubReadPmp({ records: [], declaredRoot: 'root()' });
+    const res = await request(app()).post('/v1/pmp/verify').send({ pmp_base64: b64('empty') });
+    expect(res.status).toBe(200);
+    expect(res.body.verified).toBe(false);
+    expect(res.body.reason).toBe('no_records');
+    expect(res.body.recomputed_root).toBeNull();
+  });
+
+  it('verified:false when the manifest declares NO merkle_root (nothing to compare against)', async () => {
+    // A well-formed pack body, but the pmp block omits merkle_root → cannot be vouched for.
+    stubReadPmp({ records: [plainRecord('alpha')], declaredRoot: undefined });
+    const res = await request(app()).post('/v1/pmp/verify').send({ pmp_base64: b64('norootdecl') });
+    expect(res.status).toBe(200);
+    expect(res.body.verified).toBe(false);
+    expect(res.body.root).toBeNull();
+    // It still recomputed a root from the bytes; it just had nothing trusted to match it to.
+    expect(res.body.recomputed_root).toBe('root(lh:alpha)');
+  });
+
+  it('422 unreadable_pmp when the artifact cannot be parsed', async () => {
+    readMemoryPack.mockImplementation(() => {
+      throw new Error('not a tarball');
+    });
+    const res = await request(app()).post('/v1/pmp/verify').send({ pmp_base64: b64('garbage') });
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('unreadable_pmp');
+  });
+});
+
+// ───────────────────── import edge cases / invariants ─────────────────────
+
+describe('POST /v1/pmp/import — edge cases and invariants', () => {
+  it('the receipt records source_pubkey + rejected_count and is owner-scoped', async () => {
+    authedWallet = OWNER;
+    // One good record, one whose declared leaf_hash disagrees (rejected), provenance pubkey present.
+    stubReadPmp({
+      records: [
+        plainRecord('keep', { leaf_hash: 'lh:keep' }),
+        plainRecord('tampered', { leaf_hash: 'lh:WRONG' }),
+      ],
+      producerPubkey: 'AuthorPubKey99',
+    });
+
+    const res = await request(app()).post('/v1/pmp/import').send({ pmp_base64: b64('mixed') });
+    expect(res.status).toBe(201);
+    expect(res.body.rejected_count).toBe(1);
+    expect(res.body.imported_count).toBe(1);
+    expect(res.body.source_pubkey).toBe('AuthorPubKey99');
+
+    const receipt = insertedRows.find((r) => r.table === 'pmp_imports');
+    expect(receipt).toBeTruthy();
+    const row = receipt!.rows[0];
+    expect(row.owner_wallet).toBe(OWNER);
+    expect(row.source_pubkey).toBe('AuthorPubKey99');
+    expect(row.rejected_count).toBe(1);
+    expect(row.imported_count).toBe(1);
+    expect(row.record_count).toBe(2);
+    // The receipt binds the artifact identity it ingested (non-empty manifest hash).
+    expect(typeof row.artifact_manifest_hash).toBe('string');
+    expect(row.artifact_manifest_hash.length).toBeGreaterThan(0);
+  });
+
+  it('REJECTS an encrypted (ciphertext-without-key) record — it cannot be leaf-verified', async () => {
+    authedWallet = OWNER;
+    stubReadPmp({
+      records: [
+        plainRecord('clear'),
+        plainRecord('ZW5jcnlwdGVkLWJ5dGVz', { encrypted: true }), // ciphertext, no key
+      ],
+    });
+
+    const res = await request(app()).post('/v1/pmp/import').send({ pmp_base64: b64('hasciphertext') });
+    expect(res.status).toBe(201);
+    expect(res.body.rejected_count).toBe(1);
+    expect(res.body.imported_count).toBe(1);
+
+    const imported = insertedRows.filter((r) => r.table === 'memories').flatMap((r) => r.rows);
+    expect(imported).toHaveLength(1);
+    expect(imported[0].content).toBe('clear');
+    // The ciphertext NEVER landed as a memory row.
+    expect(imported.some((m) => m.content === 'ZW5jcnlwdGVkLWJ5dGVz')).toBe(false);
+  });
+
+  it('dedupes WITHIN the batch: two records hashing identically are ingested once', async () => {
+    authedWallet = OWNER;
+    // Two distinct record ids but identical content → identical leaf (lh:dup) under the mock hash.
+    stubReadPmp({
+      records: [
+        plainRecord('dup', { id: 'clude-dup-1' }),
+        plainRecord('dup', { id: 'clude-dup-2' }),
+      ],
+    });
+
+    const res = await request(app()).post('/v1/pmp/import').send({ pmp_base64: b64('intradup') });
+    expect(res.status).toBe(201);
+    expect(res.body.record_count).toBe(2);
+    expect(res.body.imported_count).toBe(1);
+    expect(res.body.deduped_count).toBe(1);
+
+    const imported = insertedRows.filter((r) => r.table === 'memories').flatMap((r) => r.rows);
+    expect(imported).toHaveLength(1);
+    expect(imported[0].content_hash).toBe('lh:dup');
+  });
+
+  it('OWNER-SCOPING: a colliding content_hash owned by ANOTHER wallet does NOT dedupe the caller', async () => {
+    authedWallet = OWNER;
+    stubReadPmp({ records: [plainRecord('shared')] }); // leaf lh:shared
+    // OTHER already has a memory with the SAME content_hash. Because the dedupe lookup is
+    // owner-scoped, the caller must still ingest its own copy — no cross-tenant dedupe.
+    seed('memories', [
+      {
+        id: 77,
+        hash_id: 'clude-others',
+        owner_wallet: OTHER,
+        content: 'shared',
+        content_hash: 'lh:shared',
+        memory_type: 'semantic',
+        tags: [],
+        created_at: '2026-01-01T00:00:00.000Z',
+      },
+    ]);
+
+    const res = await request(app()).post('/v1/pmp/import').send({ pmp_base64: b64('crosstenant') });
+    expect(res.status).toBe(201);
+    expect(res.body.imported_count).toBe(1);
+    expect(res.body.deduped_count).toBe(0);
+
+    const imported = insertedRows.filter((r) => r.table === 'memories').flatMap((r) => r.rows);
+    expect(imported).toHaveLength(1);
+    // It landed in the CALLER's namespace, not OTHER's.
+    expect(imported[0].owner_wallet).toBe(OWNER);
+  });
+
+  it('an all-deduped import inserts ZERO memory rows but still writes a receipt', async () => {
+    authedWallet = OWNER;
+    stubReadPmp({ records: [plainRecord('already')] }); // leaf lh:already
+    seed('memories', [
+      {
+        id: 60,
+        hash_id: 'clude-have',
+        owner_wallet: OWNER,
+        content: 'already',
+        content_hash: 'lh:already',
+        memory_type: 'semantic',
+        tags: [],
+        created_at: '2026-01-01T00:00:00.000Z',
+      },
+    ]);
+
+    const res = await request(app()).post('/v1/pmp/import').send({ pmp_base64: b64('alldup') });
+    expect(res.status).toBe(201);
+    expect(res.body.imported_count).toBe(0);
+    expect(res.body.deduped_count).toBe(1);
+
+    // No memory insert happened (the route guards `toInsert.length > 0`).
+    expect(insertedRows.filter((r) => r.table === 'memories')).toHaveLength(0);
+    // But the accounting receipt is still written.
+    const receipt = insertedRows.find((r) => r.table === 'pmp_imports');
+    expect(receipt).toBeTruthy();
+    expect(receipt!.rows[0].imported_count).toBe(0);
+    expect(receipt!.rows[0].deduped_count).toBe(1);
+  });
+
+  it('still returns 201 (memories already landed) when the receipt insert fails', async () => {
+    authedWallet = OWNER;
+    stubReadPmp({ records: [plainRecord('survivor')] });
+    // The memories insert succeeds; the receipt insert errors. The route logs + reports, not 500.
+    forceError = { table: 'pmp_imports', error: { message: 'receipt table down' } };
+
+    const res = await request(app()).post('/v1/pmp/import').send({ pmp_base64: b64('receiptfail') });
+    expect(res.status).toBe(201);
+    expect(res.body.imported_count).toBe(1);
+    const imported = insertedRows.filter((r) => r.table === 'memories').flatMap((r) => r.rows);
+    expect(imported).toHaveLength(1);
+  });
+
+  it('500 import_failed when the dedupe lookup errors (no partial ingest)', async () => {
+    authedWallet = OWNER;
+    stubReadPmp({ records: [plainRecord('alpha')] });
+    forceError = { table: 'memories', error: { message: 'select blew up' } };
+
+    const res = await request(app()).post('/v1/pmp/import').send({ pmp_base64: b64('dedupeerr') });
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('import_failed');
+    // The dedupe SELECT failed BEFORE any insert — nothing was written.
+    expect(insertedRows.filter((r) => r.table === 'memories')).toHaveLength(0);
+    expect(insertedRows.filter((r) => r.table === 'pmp_imports')).toHaveLength(0);
+  });
+
+  it('422 unreadable_pmp when the uploaded artifact cannot be parsed', async () => {
+    authedWallet = OWNER;
+    readMemoryPack.mockImplementation(() => {
+      throw new Error('corrupt tarball');
+    });
+    const res = await request(app()).post('/v1/pmp/import').send({ pmp_base64: b64('junk') });
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('unreadable_pmp');
+  });
+
+  it('422 too_many_records when the pack exceeds the import cap', async () => {
+    authedWallet = OWNER;
+    const many = Array.from({ length: 10_001 }, (_, i) => plainRecord(`r${i}`, { id: `clude-${i}` }));
+    stubReadPmp({ records: many });
+    const res = await request(app()).post('/v1/pmp/import').send({ pmp_base64: b64('toomany') });
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('too_many_records');
+    expect(insertedRows.filter((r) => r.table === 'memories')).toHaveLength(0);
+  });
+
+  it('imports records with NO declared leaf_hash at their recomputed hash (accepted, not rejected)', async () => {
+    authedWallet = OWNER;
+    // No leaf_hash field at all → accepted at the recomputed leaf (spec: undeclared = trust recompute).
+    stubReadPmp({ records: [plainRecord('undeclared')] });
+    const res = await request(app()).post('/v1/pmp/import').send({ pmp_base64: b64('nodeclared') });
+    expect(res.status).toBe(201);
+    expect(res.body.imported_count).toBe(1);
+    expect(res.body.rejected_count).toBe(0);
+    const imported = insertedRows.filter((r) => r.table === 'memories').flatMap((r) => r.rows);
+    expect(imported[0].content_hash).toBe('lh:undeclared');
+    // Ingest carries the provenance import tag + owner scope.
+    expect(imported[0].owner_wallet).toBe(OWNER);
+    expect(imported[0].tags).toContain('imported_from_pmp:pmpa-source01');
+  });
+});
