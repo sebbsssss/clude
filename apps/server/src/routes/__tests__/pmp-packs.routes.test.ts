@@ -44,11 +44,15 @@ vi.mock('@clude/shared/core/owner-context', () => ({
   withOwnerWallet: async <T>(_w: string, fn: () => Promise<T>): Promise<T> => fn(),
 }));
 
-// ── Auth injection ──
+// ── Auth injection. Mirrors PRODUCTION — requirePrivyAuth sets only req.privyUser;
+//    requireOwnership is the ONLY middleware that verifies a claimed wallet against
+//    the authenticated identity and sets req.verifiedWallet. (Same idiom as
+//    account-routes.test.ts.) This separation is what lets the regression test
+//    below prove a client-supplied ?owner= can no longer impersonate a wallet. ──
 let authedWallet: string | null = null;
 vi.mock('@clude/brain/auth/privy-auth', () => ({
   optionalPrivyAuth: (req: Request, _res: Response, next: NextFunction) => {
-    if (authedWallet) (req as Request & { verifiedWallet?: string }).verifiedWallet = authedWallet;
+    if (authedWallet) (req as Request & { privyUser?: { userId: string } }).privyUser = { userId: `did:privy:${authedWallet}`, appId: 'test-app' };
     next();
   },
   requirePrivyAuth: (req: Request, res: Response, next: NextFunction) => {
@@ -56,7 +60,24 @@ vi.mock('@clude/brain/auth/privy-auth', () => ({
       res.status(401).json({ error: 'unauthenticated' });
       return;
     }
+    (req as Request & { privyUser?: { userId: string } }).privyUser = { userId: `did:privy:${authedWallet}`, appId: 'test-app' };
+    next();
+  },
+}));
+
+// requireOwnership verifies the caller's wallet and sets req.verifiedWallet. It NEVER
+// trusts a client-supplied ?owner=. The mock sets verifiedWallet to the authed wallet.
+vi.mock('@clude/brain/auth/require-ownership', () => ({
+  requireOwnership: (req: Request, res: Response, next: NextFunction) => {
+    if (!authedWallet) {
+      res.status(401).json({ error: 'unauthenticated' });
+      return;
+    }
     (req as Request & { verifiedWallet?: string }).verifiedWallet = authedWallet;
+    next();
+  },
+  optionalOwnership: (req: Request, _res: Response, next: NextFunction) => {
+    if (authedWallet) (req as Request & { verifiedWallet?: string }).verifiedWallet = authedWallet;
     next();
   },
 }));
@@ -245,6 +266,26 @@ describe('POST /v1/packs', () => {
       .send({ name: 'Test', memory_hash_ids: ['mem-a', 'mem-b'] });
     expect(res.status).toBe(409);
     expect(res.body.error).toBe('memories_not_tokenised');
+  });
+
+  // ── Impersonation guard: ?owner= must NOT let an authed caller act as another wallet ──
+  it('ignores ?owner= and scopes ownership checks to the verified wallet', async () => {
+    authedWallet = 'attacker-wallet';
+    // The memory is owned by the VICTIM. If ?owner=victim were honored, the
+    // ownership check (row.owner_wallet === owner) would pass and a pack would be
+    // minted on the victim's behalf. With the fix, owner = the verified (attacker)
+    // wallet, so the victim-owned memory trips the not_owner guard → 403.
+    stepQueue.push({
+      table: 'memories',
+      data: [
+        { id: 1, hash_id: 'mem-a', content_hash: fakeHash('a'), owner_wallet: 'victim-wallet', tokenization_status: 'minted' },
+      ],
+    });
+    const res = await request(app())
+      .post('/v1/packs?owner=victim-wallet')
+      .send({ name: 'Heist', memory_hash_ids: ['mem-a'] });
+    expect(res.status).toBe(403);
+    expect(res.body.reason).toBe('not_owner');
   });
 
   it('returns 201 with attestation on happy path', async () => {

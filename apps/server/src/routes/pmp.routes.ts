@@ -32,6 +32,7 @@ import {
   optionalPrivyAuth,
   requirePrivyAuth,
 } from '@clude/brain/auth/privy-auth';
+import { requireOwnership, optionalOwnership } from '@clude/brain/auth/require-ownership';
 import { withOwnerWallet } from '@clude/shared/core/owner-context';
 import { createChildLogger } from '@clude/shared/core/logger';
 import {
@@ -132,10 +133,10 @@ function publicBaseUrl(req: Request): string {
 }
 
 function ownerFromReq(req: Request): string | null {
-  if (req.verifiedWallet) return req.verifiedWallet;
-  const q = req.query.owner;
-  if (typeof q === 'string' && q.length > 0) return q;
-  return null;
+  // Only trust the wallet that requireOwnership / optionalOwnership verified against
+  // the authenticated identity. NEVER fall back to a client-supplied ?owner= — that
+  // was an impersonation hole (any caller could act as any wallet).
+  return req.verifiedWallet ?? null;
 }
 
 async function withOptionalOwner<T>(req: Request, fn: () => Promise<T>): Promise<T> {
@@ -163,9 +164,12 @@ export function pmpRoutes(): Router {
 
   /**
    * DISCOVER — GET /v1/memories
-   * Query params: query, tags[], owner, limit (default 25), memory_types
+   * Query params: query, tags[], limit (default 25), memory_types.
+   * Owner scope: public/unscoped by default; an authenticated caller sees their OWN
+   * memories by passing a verified ?wallet= (optionalOwnership confirms ownership and
+   * sets req.verifiedWallet). A client-supplied ?owner= is ignored.
    */
-  router.get('/v1/memories', optionalPrivyAuth, async (req: Request, res: Response) => {
+  router.get('/v1/memories', optionalPrivyAuth, optionalOwnership, async (req: Request, res: Response) => {
     try {
       const query = typeof req.query.query === 'string' ? req.query.query : undefined;
       const limit = Math.min(parseInt(String(req.query.limit ?? '25'), 10) || 25, 100);
@@ -378,7 +382,7 @@ export function pmpRoutes(): Router {
    * Body: { content, type, tags?, summary?, importance?, source? }
    * Auth required.
    */
-  router.post('/v1/memories', requirePrivyAuth, async (req: Request, res: Response) => {
+  router.post('/v1/memories', requirePrivyAuth, requireOwnership, async (req: Request, res: Response) => {
     const owner = ownerFromReq(req);
     if (!owner) {
       res.status(401).json({ error: 'unauthenticated' } satisfies PmpError);

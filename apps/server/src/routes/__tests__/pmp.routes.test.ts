@@ -20,16 +20,21 @@ vi.mock('@clude/shared/core/logger', () => ({
   }),
 }));
 
-// ── Owner-context passthrough ──
+// ── Owner-context: spy so a test can assert which wallet a handler scopes to ──
+const { withOwnerWalletSpy } = vi.hoisted(() => ({ withOwnerWalletSpy: vi.fn() }));
 vi.mock('@clude/shared/core/owner-context', () => ({
-  withOwnerWallet: async <T>(_w: string, fn: () => Promise<T>): Promise<T> => fn(),
+  withOwnerWallet: (wallet: string, fn: () => Promise<unknown>) => withOwnerWalletSpy(wallet, fn),
 }));
 
-// ── Auth: per-test injection ──
+// ── Auth: per-test injection. Mirrors PRODUCTION — requirePrivyAuth sets only
+//    req.privyUser; requireOwnership is the ONLY middleware that verifies a claimed
+//    wallet against the authenticated identity and sets req.verifiedWallet. (Same
+//    idiom as account-routes.test.ts.) Keeping these distinct is what lets the
+//    regression tests below prove the ?owner= fallback is gone. ──
 let authedWallet: string | null = null;
 vi.mock('@clude/brain/auth/privy-auth', () => ({
   optionalPrivyAuth: (req: Request, _res: Response, next: NextFunction) => {
-    if (authedWallet) (req as Request & { verifiedWallet?: string }).verifiedWallet = authedWallet;
+    if (authedWallet) (req as Request & { privyUser?: { userId: string } }).privyUser = { userId: `did:privy:${authedWallet}`, appId: 'test-app' };
     next();
   },
   requirePrivyAuth: (req: Request, res: Response, next: NextFunction) => {
@@ -37,7 +42,25 @@ vi.mock('@clude/brain/auth/privy-auth', () => ({
       res.status(401).json({ error: 'unauthenticated' });
       return;
     }
+    (req as Request & { privyUser?: { userId: string } }).privyUser = { userId: `did:privy:${authedWallet}`, appId: 'test-app' };
+    next();
+  },
+}));
+
+// requireOwnership verifies the caller's wallet and sets req.verifiedWallet. It NEVER
+// trusts a client-supplied ?owner=. The mock sets verifiedWallet to the authed wallet,
+// so a route that (incorrectly) read ?owner= would diverge and the test would catch it.
+vi.mock('@clude/brain/auth/require-ownership', () => ({
+  requireOwnership: (req: Request, res: Response, next: NextFunction) => {
+    if (!authedWallet) {
+      res.status(401).json({ error: 'unauthenticated' });
+      return;
+    }
     (req as Request & { verifiedWallet?: string }).verifiedWallet = authedWallet;
+    next();
+  },
+  optionalOwnership: (req: Request, _res: Response, next: NextFunction) => {
+    if (authedWallet) (req as Request & { verifiedWallet?: string }).verifiedWallet = authedWallet;
     next();
   },
 }));
@@ -134,6 +157,8 @@ beforeEach(() => {
   recallMemoriesMock.mockReset();
   decryptOneContentMock.mockReset();
   decryptOneContentMock.mockImplementation(async (row: { content: string }) => row.content);
+  withOwnerWalletSpy.mockReset();
+  withOwnerWalletSpy.mockImplementation(async (_w: string, fn: () => Promise<unknown>) => fn());
   fakeMint.reset();
 });
 
@@ -208,6 +233,24 @@ describe('DISCOVER — GET /v1/memories', () => {
     recallMemoriesMock.mockResolvedValue([]);
     await request(buildApp()).get('/v1/memories?limit=500');
     expect(recallMemoriesMock.mock.calls[0]![0].limit).toBe(100);
+  });
+
+  // ── Impersonation guard: ?owner= must NEVER scope the query (cross-tenant authZ fix) ──
+  it('ignores ?owner= for an unauthenticated caller (no cross-tenant read leak)', async () => {
+    authedWallet = null; // unauthenticated — verifiedWallet is never set in prod
+    recallMemoriesMock.mockResolvedValue([]);
+    const res = await request(buildApp()).get('/v1/memories?owner=victim-wallet');
+    expect(res.status).toBe(200);
+    // The handler must NOT scope recall to the attacker-supplied owner.
+    expect(withOwnerWalletSpy).not.toHaveBeenCalled();
+  });
+
+  it('scopes an authenticated DISCOVER to the verified wallet, never to ?owner=', async () => {
+    authedWallet = 'wallet-1';
+    recallMemoriesMock.mockResolvedValue([]);
+    await request(buildApp()).get('/v1/memories?owner=victim-wallet');
+    expect(withOwnerWalletSpy).toHaveBeenCalledWith('wallet-1', expect.any(Function));
+    expect(withOwnerWalletSpy).not.toHaveBeenCalledWith('victim-wallet', expect.any(Function));
   });
 });
 
@@ -520,5 +563,31 @@ describe('CONTRIBUTE — POST /v1/memories', () => {
       .send({ content: 'x', type: 'episodic' });
     expect(res.status).toBe(500);
     expect(res.body.error).toBe('store_failed');
+  });
+
+  // ── Impersonation guard: an authed caller must not write to another wallet via ?owner= ──
+  it('scopes the write to the verified wallet and ignores attacker-supplied ?owner=', async () => {
+    authedWallet = 'attacker-wallet';
+    storeMemoryMock.mockResolvedValue(42);
+    queryQueue.push({
+      data: {
+        hash_id: 'mem-x',
+        memory_type: 'episodic',
+        content: 'x',
+        owner_wallet: 'attacker-wallet',
+        created_at: '2026-05-13T12:00:00.000Z',
+        tags: [],
+        source: 'pmp-contribute',
+        related_user: null,
+        related_wallet: null,
+      },
+      error: null,
+    });
+    await request(buildApp())
+      .post('/v1/memories?owner=victim-wallet')
+      .send({ content: 'x', type: 'episodic' });
+    // The memory is stored under the verified wallet — never the ?owner= param.
+    expect(withOwnerWalletSpy).toHaveBeenCalledWith('attacker-wallet', expect.any(Function));
+    expect(withOwnerWalletSpy).not.toHaveBeenCalledWith('victim-wallet', expect.any(Function));
   });
 });

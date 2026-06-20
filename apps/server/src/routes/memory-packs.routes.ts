@@ -10,14 +10,13 @@ const log = createChildLogger('memory-packs-routes');
 
 /**
  * Resolve owner scope from request.
- * Priority: req.verifiedWallet (set by requireOwnership/optionalOwnership) > ?wallet= param.
- * DID fallback is handled upstream by ownership middleware.
+ * Only trusts req.verifiedWallet, set by requireOwnership / optionalOwnership after the
+ * claimed wallet is verified against the authenticated identity. NEVER falls back to a
+ * client-supplied ?wallet= — doing so would let any caller scope a query to an arbitrary
+ * wallet on a route missing the ownership middleware (impersonation / cross-tenant leak).
  */
 function getRequestOwner(req: Request): string | null {
-  if (req.verifiedWallet) return req.verifiedWallet;
-  const wallet = req.query.wallet as string | undefined;
-  if (wallet) return wallet;
-  return null;
+  return req.verifiedWallet ?? null;
 }
 
 export function memoryPacksRoutes(): Router {

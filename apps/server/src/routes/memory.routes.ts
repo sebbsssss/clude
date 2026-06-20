@@ -16,14 +16,13 @@ const log = createChildLogger('memory-routes');
 
 /**
  * Resolve owner scope from request.
- * Priority: req.verifiedWallet (set by requireOwnership) > ?wallet= param.
- * DID fallback is handled upstream by requireOwnership middleware.
+ * Only trusts req.verifiedWallet, set by requireOwnership / optionalOwnership after the
+ * claimed wallet is verified against the authenticated identity (Privy DID or API key).
+ * NEVER falls back to a client-supplied ?wallet= — doing so would let any caller scope to
+ * an arbitrary wallet on a route that is missing the ownership middleware (impersonation).
  */
 function getRequestOwner(req: Request): string | null {
-  if (req.verifiedWallet) return req.verifiedWallet;
-  const wallet = req.query.wallet as string | undefined;
-  if (wallet) return wallet;
-  return null;
+  return req.verifiedWallet ?? null;
 }
 
 async function withRequestScope<T>(req: Request, fn: () => Promise<T>): Promise<T | null> {
