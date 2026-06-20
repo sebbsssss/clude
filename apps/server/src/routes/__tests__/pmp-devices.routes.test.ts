@@ -715,3 +715,417 @@ describe('POST /v1/pmp/desktop/memories (device-signed, owner-scoped, paginated 
     expect(ids1.filter((x: number) => ids2.includes(x))).toHaveLength(0);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// COVERAGE-HARDENING — failure modes, invariants, and edge cases not pinned above.
+// Every block below models on the green marketplace test idiom (table-routed getDb,
+// real tweetnacl/bs58, per-test authedWallet flip) and runs fully offline.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ───────────── pair/init — collision + server-error branches ─────────────
+
+describe('POST /v1/pmp/devices/pair/init (failure modes)', () => {
+  it('409 pairing_in_progress when a live code for this device already exists (unique violation)', async () => {
+    const device = makeDeviceKey();
+    // The scoped unique index (one live pending/claimed code per device_pubkey) trips on insert.
+    forceUniqueViolation = 'pmp_pairing_codes';
+    const res = await request(app())
+      .post('/v1/pmp/devices/pair/init')
+      .send({ device_pubkey: device.pubkey, device_name: 'dup', platform: 'macos' });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('pairing_in_progress');
+  });
+
+  it('500 pair_init_failed on a non-unique insert error (no code leaked)', async () => {
+    const device = makeDeviceKey();
+    forceError = { table: 'pmp_pairing_codes', error: { code: '42703', message: 'boom' } };
+    const res = await request(app())
+      .post('/v1/pmp/devices/pair/init')
+      .send({ device_pubkey: device.pubkey });
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('pair_init_failed');
+    // No plaintext code is returned on the error path.
+    expect(res.body.code).toBeUndefined();
+  });
+
+  it('422 when device_pubkey is missing entirely', async () => {
+    const res = await request(app())
+      .post('/v1/pmp/devices/pair/init')
+      .send({ device_name: 'no key' });
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('invalid_device_pubkey');
+    expect(insertedRows.find((r) => r.table === 'pmp_pairing_codes')).toBeFalsy();
+  });
+
+  it('422 when device_pubkey decodes but is NOT 32 bytes (wrong-length key)', async () => {
+    // 16 valid base58 bytes — decodes fine, but is not an ed25519 pubkey.
+    const shortKey = bs58.encode(Buffer.alloc(16, 7));
+    const res = await request(app())
+      .post('/v1/pmp/devices/pair/init')
+      .send({ device_pubkey: shortKey });
+    expect(res.status).toBe(422);
+    expect(insertedRows.find((r) => r.table === 'pmp_pairing_codes')).toBeFalsy();
+  });
+});
+
+// ───────────── pair/claim — non-pending, race, malformed, normalization ─────────────
+
+describe('POST /v1/pmp/devices/pair/claim (failure modes + invariants)', () => {
+  function seedCode(device: { pubkey: string }, code: string, status: string, owner: string | null = null) {
+    seed('pmp_pairing_codes', [
+      {
+        code_hash: sha256Hex(code),
+        device_pubkey: device.pubkey,
+        device_name: 'Seb MacBook',
+        platform: 'macos',
+        owner_wallet: owner,
+        status,
+        created_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 110_000).toISOString(),
+      },
+    ]);
+  }
+
+  it('409 code_not_claimable when the code was ALREADY claimed (single-use, no re-bind)', async () => {
+    authedWallet = OTHER; // a different authed user tries to re-claim an already-claimed code
+    const device = makeDeviceKey();
+    const code = 'CLMD2345';
+    seedCode(device, code, 'claimed', OWNER);
+
+    const res = await request(app()).post('/v1/pmp/devices/pair/claim').send({ code });
+    expect(res.status).toBe(409);
+    expect(res.body.reason).toBe('claimed');
+    // The original owner binding is NOT overwritten by the second claimer.
+    expect(tables['pmp_pairing_codes'][0].owner_wallet).toBe(OWNER);
+  });
+
+  it('409 code_not_claimable when the code was already CONSUMED', async () => {
+    authedWallet = OWNER;
+    const device = makeDeviceKey();
+    const code = 'CNSM2345';
+    seedCode(device, code, 'consumed', OWNER);
+    const res = await request(app()).post('/v1/pmp/devices/pair/claim').send({ code });
+    expect(res.status).toBe(409);
+    expect(res.body.reason).toBe('consumed');
+  });
+
+  it('422 invalid_body when the code is missing/empty', async () => {
+    authedWallet = OWNER;
+    const res = await request(app()).post('/v1/pmp/devices/pair/claim').send({});
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('invalid_body');
+  });
+
+  it('normalizes a lowercase code to uppercase before hashing (the displayed alphabet is uppercase)', async () => {
+    authedWallet = OWNER;
+    const device = makeDeviceKey();
+    const code = 'ABCD2345'; // server stores sha256 of the UPPERCASE code
+    seedCode(device, code, 'pending');
+    // The user types it lowercase; the route .toUpperCase()s before hashing → must still match.
+    const res = await request(app()).post('/v1/pmp/devices/pair/claim').send({ code: code.toLowerCase() });
+    expect(res.status).toBe(200);
+    expect(tables['pmp_pairing_codes'][0].status).toBe('claimed');
+    expect(tables['pmp_pairing_codes'][0].owner_wallet).toBe(OWNER);
+  });
+
+  it('INVARIANT: binds req.verifiedWallet and IGNORES a client-supplied body.owner (anti-impersonation)', async () => {
+    authedWallet = OWNER;
+    const device = makeDeviceKey();
+    const code = 'BIND2345';
+    seedCode(device, code, 'pending');
+    // The client tries to bind the code to a wallet it does NOT own.
+    const res = await request(app())
+      .post('/v1/pmp/devices/pair/claim')
+      .send({ code, owner: OTHER, owner_wallet: OTHER, verifiedWallet: OTHER });
+    expect(res.status).toBe(200);
+    // The binding is the AUTHENTICATED wallet, never the injected one.
+    expect(tables['pmp_pairing_codes'][0].owner_wallet).toBe(OWNER);
+    const ev = insertedRows.find((r) => r.table === 'pmp_device_events');
+    expect(ev!.rows[0].owner_wallet).toBe(OWNER);
+  });
+
+  it('500 pair_claim_failed on a lookup error', async () => {
+    authedWallet = OWNER;
+    forceError = { table: 'pmp_pairing_codes', error: { message: 'db down' } };
+    const res = await request(app()).post('/v1/pmp/devices/pair/claim').send({ code: 'ANYC2345' });
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('pair_claim_failed');
+  });
+});
+
+// ───────────── pair/complete — expired-claimed, already-paired, defensive, malformed ─────────────
+
+describe('POST /v1/pmp/devices/pair/complete (failure modes + invariants)', () => {
+  function seedClaimed(device: { pubkey: string }, code: string, opts: { owner?: string | null; expired?: boolean } = {}) {
+    seed('pmp_pairing_codes', [
+      {
+        code_hash: sha256Hex(code),
+        device_pubkey: device.pubkey,
+        device_name: 'Seb MacBook',
+        platform: 'macos',
+        owner_wallet: opts.owner === undefined ? OWNER : opts.owner,
+        status: 'claimed',
+        created_at: new Date().toISOString(),
+        expires_at: opts.expired
+          ? new Date(Date.now() - 1_000).toISOString()
+          : new Date(Date.now() + 110_000).toISOString(),
+      },
+    ]);
+  }
+  function completeBody(device: ReturnType<typeof makeDeviceKey>, ts = Math.floor(Date.now() / 1000)) {
+    const message = `pmp-pair-complete:${device.pubkey}:${ts}`;
+    return { device_pubkey: device.pubkey, timestamp: ts, signature: device.sign(message) };
+  }
+
+  it('410 code_expired when the claim window lapsed before the device completed (no device row)', async () => {
+    const device = makeDeviceKey();
+    seedClaimed(device, 'EXPC1234', { expired: true });
+    const res = await request(app()).post('/v1/pmp/devices/pair/complete').send(completeBody(device));
+    expect(res.status).toBe(410);
+    expect(res.body.error).toBe('code_expired');
+    expect(insertedRows.find((r) => r.table === 'pmp_devices')).toBeFalsy();
+    // The stalled claim is marked expired (cannot be retried).
+    expect(tables['pmp_pairing_codes'][0].status).toBe('expired');
+  });
+
+  it('409 device_already_paired when the device_pubkey already has a pmp_devices row (unique violation)', async () => {
+    const device = makeDeviceKey();
+    seedClaimed(device, 'DUPD1234');
+    forceUniqueViolation = 'pmp_devices'; // global unique index on device_pubkey trips
+    const res = await request(app()).post('/v1/pmp/devices/pair/complete').send(completeBody(device));
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('device_already_paired');
+    // The code is NOT consumed when the device insert collides.
+    expect(tables['pmp_pairing_codes'][0].status).toBe('claimed');
+  });
+
+  it('409 pairing_not_bound (defensive) when a claimed row carries a NULL owner', async () => {
+    const device = makeDeviceKey();
+    seedClaimed(device, 'NULO1234', { owner: null });
+    const res = await request(app()).post('/v1/pmp/devices/pair/complete').send(completeBody(device));
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('pairing_not_bound');
+    expect(insertedRows.find((r) => r.table === 'pmp_devices')).toBeFalsy();
+  });
+
+  it('422 invalid_body when the signature is missing', async () => {
+    const device = makeDeviceKey();
+    seedClaimed(device, 'NOSG1234');
+    const ts = Math.floor(Date.now() / 1000);
+    const res = await request(app())
+      .post('/v1/pmp/devices/pair/complete')
+      .send({ device_pubkey: device.pubkey, timestamp: ts });
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('invalid_body');
+    expect(insertedRows.find((r) => r.table === 'pmp_devices')).toBeFalsy();
+  });
+
+  it('422 invalid_body when the timestamp is non-numeric', async () => {
+    const device = makeDeviceKey();
+    seedClaimed(device, 'NANTS123');
+    const res = await request(app())
+      .post('/v1/pmp/devices/pair/complete')
+      .send({ device_pubkey: device.pubkey, timestamp: 'soon', signature: 'x'.repeat(80) });
+    expect(res.status).toBe(422);
+  });
+
+  it('INVARIANT: completion binds the OWNER from the claim, not anything in the device request body', async () => {
+    const device = makeDeviceKey();
+    seedClaimed(device, 'OWNB1234', { owner: OWNER });
+    const ts = Math.floor(Date.now() / 1000);
+    const message = `pmp-pair-complete:${device.pubkey}:${ts}`;
+    // The device tries to smuggle an owner_wallet in the body — it must be ignored.
+    const res = await request(app())
+      .post('/v1/pmp/devices/pair/complete')
+      .send({ device_pubkey: device.pubkey, timestamp: ts, signature: device.sign(message), owner_wallet: OTHER });
+    expect(res.status).toBe(201);
+    const dev = insertedRows.find((r) => r.table === 'pmp_devices');
+    expect(dev!.rows[0].owner_wallet).toBe(OWNER); // from the claim, never the body
+    // Default scopes are applied from the server constant.
+    expect(dev!.rows[0].scopes).toEqual(['memories:read', 'pmp:export']);
+  });
+});
+
+// ───────────── revoke — idempotency + input validation ─────────────
+
+describe('POST /v1/pmp/devices/:id/revoke (idempotency + validation)', () => {
+  it('is IDEMPOTENT — revoking an already-revoked device returns already_revoked, no second event', async () => {
+    authedWallet = OWNER;
+    seed('pmp_devices', [
+      { device_id: 'dev-gone', owner_wallet: OWNER, device_pubkey: 'PkG', device_name: 'Old', platform: 'linux', paired_at: '2026-01-01T00:00:00Z', revoked_at: '2026-01-15T00:00:00Z', scopes: ['memories:read'] },
+    ]);
+    const res = await request(app()).post('/v1/pmp/devices/dev-gone/revoke').send({});
+    expect(res.status).toBe(200);
+    expect(res.body.already_revoked).toBe(true);
+    expect(res.body.revoked).toBe(true);
+    // No revoked event is emitted on the idempotent path (the device was already revoked).
+    expect(insertedRows.find((r) => r.table === 'pmp_device_events')).toBeFalsy();
+  });
+
+  it('401 when unauthenticated', async () => {
+    authedWallet = null;
+    const res = await request(app()).post('/v1/pmp/devices/dev-x/revoke').send({});
+    expect(res.status).toBe(401);
+  });
+
+  it('422 invalid_id when the device id is absurdly long', async () => {
+    authedWallet = OWNER;
+    const longId = 'd'.repeat(65); // > 64-char ceiling
+    const res = await request(app()).post(`/v1/pmp/devices/${longId}/revoke`).send({});
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('invalid_id');
+  });
+});
+
+// ───────────── desktop/memories — scope gate, clamping, egress event, last_seen ─────────────
+
+describe('POST /v1/pmp/desktop/memories (scope gate, clamping, egress)', () => {
+  function seedPaired(device: { pubkey: string }, owner = OWNER, scopes: string[] | null = ['memories:read', 'pmp:export']) {
+    seed('pmp_devices', [
+      {
+        device_id: 'dev-scope1',
+        owner_wallet: owner,
+        device_pubkey: device.pubkey,
+        device_name: 'Seb MacBook',
+        platform: 'macos',
+        paired_at: '2026-02-01T00:00:00Z',
+        last_seen_at: null,
+        revoked_at: null,
+        scopes,
+      },
+    ]);
+  }
+  function seedMems(owner = OWNER, n = 3, startId = 100) {
+    const rows = [];
+    for (let i = 0; i < n; i++) {
+      rows.push({
+        id: startId + i,
+        hash_id: `clude-m${startId + i}`,
+        memory_type: 'semantic',
+        content: `m${i}`,
+        summary: `s${i}`,
+        owner_wallet: owner,
+        created_at: '2026-01-01T00:00:00.000Z',
+        tags: [],
+        source: 'chat',
+        content_hash: `lh:${startId + i}`,
+        importance: 0.5,
+      });
+    }
+    seed('memories', rows);
+  }
+  function headers(device: ReturnType<typeof makeDeviceKey>, ts = Math.floor(Date.now() / 1000)) {
+    const message = `pmp-pull:${device.pubkey}:${ts}`;
+    return { 'x-pmp-device': device.pubkey, 'x-pmp-timestamp': String(ts), 'x-pmp-signature': device.sign(message) };
+  }
+
+  it('403 insufficient_scope when the device lacks the memories:read scope', async () => {
+    const device = makeDeviceKey();
+    seedPaired(device, OWNER, ['pmp:export']); // scoped, but NOT memories:read
+    seedMems(OWNER, 3);
+    const res = await request(app()).post('/v1/pmp/desktop/memories').set(headers(device)).send({});
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('insufficient_scope');
+    expect(res.body.memories).toBeUndefined();
+  });
+
+  it('bumps last_seen_at on a successful pull (the device liveness signal)', async () => {
+    const device = makeDeviceKey();
+    seedPaired(device);
+    seedMems(OWNER, 2);
+    const res = await request(app()).post('/v1/pmp/desktop/memories').set(headers(device)).send({});
+    expect(res.status).toBe(200);
+    expect(tables['pmp_devices'][0].last_seen_at).toBeTruthy();
+  });
+
+  it('does NOT emit an egress event on a SMALL pull (below the large-pull threshold)', async () => {
+    const device = makeDeviceKey();
+    seedPaired(device);
+    seedMems(OWNER, 3);
+    await request(app()).post('/v1/pmp/desktop/memories').set(headers(device)).send({ limit: 50 });
+    expect(insertedRows.find((r) => r.table === 'pmp_device_events')).toBeFalsy();
+  });
+
+  it('emits a memory_pull egress event on a LARGE pull (Risk R9 alert at >=250 rows)', async () => {
+    const device = makeDeviceKey();
+    seedPaired(device);
+    seedMems(OWNER, 300); // over LARGE_PULL_THRESHOLD (250)
+    const res = await request(app())
+      .post('/v1/pmp/desktop/memories')
+      .set(headers(device))
+      .send({ limit: 500 }); // page big enough to cross the threshold in one pull
+    expect(res.status).toBe(200);
+    expect(res.body.memories.length).toBeGreaterThanOrEqual(250);
+    const ev = insertedRows.find((r) => r.table === 'pmp_device_events' && r.rows[0].event_type === 'memory_pull');
+    expect(ev).toBeTruthy();
+    expect(ev!.rows[0].owner_wallet).toBe(OWNER);
+    expect(ev!.rows[0].metadata.count).toBeGreaterThanOrEqual(250);
+  });
+
+  it('CLAMPS an over-max limit to MAX_PULL_LIMIT (500) — a caller cannot pull unbounded', async () => {
+    const device = makeDeviceKey();
+    seedPaired(device);
+    seedMems(OWNER, 600); // more rows than the ceiling
+    const res = await request(app())
+      .post('/v1/pmp/desktop/memories')
+      .set(headers(device))
+      .send({ limit: 100_000 }); // absurd ask
+    expect(res.status).toBe(200);
+    expect(res.body.limit).toBe(500); // echoed clamped limit
+    expect(res.body.memories).toHaveLength(500);
+    // A full page means there is a next page.
+    expect(res.body.next_offset).toBe(500);
+  });
+
+  it('falls back to the default limit when limit is invalid/negative', async () => {
+    const device = makeDeviceKey();
+    seedPaired(device);
+    seedMems(OWNER, 150);
+    const res = await request(app())
+      .post('/v1/pmp/desktop/memories')
+      .set(headers(device))
+      .send({ limit: -5 }); // invalid → DEFAULT_PULL_LIMIT (100)
+    expect(res.status).toBe(200);
+    expect(res.body.limit).toBe(100);
+    expect(res.body.memories).toHaveLength(100);
+  });
+
+  it('next_offset is null on the FINAL (short) page', async () => {
+    const device = makeDeviceKey();
+    seedPaired(device);
+    seedMems(OWNER, 3);
+    const res = await request(app())
+      .post('/v1/pmp/desktop/memories')
+      .set(headers(device))
+      .send({ limit: 50 }); // 3 < 50 → last page
+    expect(res.status).toBe(200);
+    expect(res.body.next_offset).toBeNull();
+  });
+
+  it('INVARIANT: scopes the page to the DEVICE owner, ignoring any client-supplied owner in the body', async () => {
+    const device = makeDeviceKey();
+    seedPaired(device, OWNER);
+    seedMems(OWNER, 2, 100);
+    seedMems(OTHER, 2, 500); // another tenant's rows
+    const res = await request(app())
+      .post('/v1/pmp/desktop/memories')
+      .set(headers(device))
+      // Attacker-style body trying to redirect the scope to another wallet.
+      .send({ owner: OTHER, owner_wallet: OTHER });
+    expect(res.status).toBe(200);
+    const owners = new Set(res.body.memories.map((m: any) => m.owner_wallet));
+    expect([...owners]).toEqual([OWNER]); // never OTHER
+  });
+
+  it('401 when the timestamp header is non-numeric (malformed, not a window failure)', async () => {
+    const device = makeDeviceKey();
+    seedPaired(device);
+    seedMems(OWNER, 2);
+    const res = await request(app())
+      .post('/v1/pmp/desktop/memories')
+      .set({ 'x-pmp-device': device.pubkey, 'x-pmp-timestamp': 'not-a-number', 'x-pmp-signature': device.sign('x') })
+      .send({});
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('device_signature_required');
+  });
+});
