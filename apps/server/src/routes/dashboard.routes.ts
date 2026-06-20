@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { getDb } from '@clude/shared/core/database';
 import { createChildLogger } from '@clude/shared/core/logger';
 import { requirePrivyAuth } from '@clude/brain/auth/privy-auth';
+import { requireOwnership } from '@clude/brain/auth/require-ownership';
 import { executeTaskManually, AGENT_TYPE_CONFIGS } from '@clude/brain/agents';
 import { config } from '@clude/shared/config';
 
@@ -11,18 +12,30 @@ const CLUDE_AGENT_NAME = 'Clude';
 const OWNER_WALLET = config.owner.wallet || '5vK6WRCq5V6BCte8cQvaNeNv2KzErCfGzeBDwtBGGv2r';
 
 /**
- * Middleware that checks if the requesting wallet is the bot owner.
- * Applied to all mutation routes (POST, PUT, DELETE, PATCH).
- * Requires requirePrivyAuth to have run first.
+ * Assert the caller is the bot owner. MUST run AFTER requireOwnership, which
+ * sets req.verifiedWallet to a wallet the caller PROVABLY owns (a Privy-linked
+ * wallet, an email-only caller's registered agent, or a Cortex API-key owner).
+ * We then require that proven wallet to be the bot owner.
+ *
+ * SECURITY (privilege-escalation fix): the previous gate compared a
+ * CLIENT-SUPPLIED ?wallet= to the hardcoded — and publicly revealed (GET /auth,
+ * source constant) — OWNER_WALLET with NO proof of ownership. Any logged-in
+ * Privy user could pass ?wallet=<OWNER_WALLET> and gain full bot-owner admin:
+ * agent-fleet CRUD AND remote task execution (executeTaskManually, which can
+ * spend budget and drive autonomous agents). Ownership is now proven upstream
+ * by requireOwnership, so a forged ?wallet= no longer satisfies the gate.
  */
-function requireOwner(req: Request, res: Response, next: NextFunction): void {
-  const wallet = req.query.wallet as string;
-  if (!wallet || wallet !== OWNER_WALLET) {
-    res.status(403).json({ error: 'Owner wallet required for mutations' });
+function assertOwnerWallet(req: Request, res: Response, next: NextFunction): void {
+  if (req.verifiedWallet !== OWNER_WALLET) {
+    res.status(403).json({ error: 'Owner wallet required for this action' });
     return;
   }
   next();
 }
+
+/** Owner-only gate: prove wallet ownership (requireOwnership), then require the
+ *  proven wallet to be the bot owner. Express flattens the array in place. */
+const ownerOnly = [requireOwnership, assertOwnerWallet];
 
 /**
  * Auto-register the Clude bot as the first dashboard agent if not present.
@@ -84,64 +97,34 @@ export function dashboardRoutes(): Router {
 
   // ── AGENTS ──────────────────────────────────────────────
 
-  // GET /agents — list agents scoped to the current user
-  router.get('/agents', async (req: Request, res: Response) => {
+  // GET /agents — list the agents owned by the AUTHENTICATED caller.
+  // requireOwnership sets req.verifiedWallet to a wallet the caller PROVABLY
+  // owns (Privy-linked wallet, email-only registered agent, or Cortex clk_ API
+  // key — all three paths handled inside the middleware), so a caller can only
+  // ever enumerate their OWN agents. The prior handler scoped the agent_keys
+  // read by a RAW ?wallet= query param, letting any logged-in user pass
+  // ?wallet=<victim> and enumerate another tenant's agents — a cross-tenant read.
+  router.get('/agents', requireOwnership, async (req: Request, res: Response) => {
     try {
       const db = getDb();
-      const wallet = req.query.wallet as string | undefined;
+      const { data, error } = await db
+        .from('agent_keys')
+        .select('agent_id, agent_name, owner_wallet, registered_at, last_used, is_active')
+        .eq('owner_wallet', req.verifiedWallet)
+        .eq('is_active', true)
+        .order('registered_at', { ascending: true });
 
-      // If a wallet is provided, show only agents owned by that wallet
-      if (wallet) {
-        const { data, error } = await db
-          .from('agent_keys')
-          .select('agent_id, agent_name, owner_wallet, registered_at, last_used, is_active')
-          .eq('owner_wallet', wallet)
-          .eq('is_active', true)
-          .order('registered_at', { ascending: true });
+      if (error) throw error;
 
-        if (error) throw error;
-
-        // Map to the Agent shape the dashboard expects
-        res.json((data || []).map(a => ({
-          id: a.agent_id,
-          name: a.agent_name,
-          wallet_address: a.owner_wallet,
-          created_at: a.registered_at,
-          last_active: a.last_used || a.registered_at,
-          memory_count: 0,
-        })));
-        return;
-      }
-
-      // Check for cortex Bearer auth — scope to that agent's wallet
-      const authHeader = req.headers['authorization'];
-      if (authHeader?.startsWith('Bearer clk_')) {
-        const apiKey = authHeader.slice(7);
-        const { authenticateAgent } = require('@clude/brain/features/agent-tier');
-        const agent = await authenticateAgent(apiKey);
-        if (agent?.owner_wallet) {
-          const { data, error } = await db
-            .from('agent_keys')
-            .select('agent_id, agent_name, owner_wallet, registered_at, last_used, is_active')
-            .eq('owner_wallet', agent.owner_wallet)
-            .eq('is_active', true)
-            .order('registered_at', { ascending: true });
-
-          if (error) throw error;
-          res.json((data || []).map(a => ({
-            id: a.agent_id,
-            name: a.agent_name,
-            wallet_address: a.owner_wallet,
-            created_at: a.registered_at,
-            last_active: a.last_used || a.registered_at,
-            memory_count: 0,
-          })));
-          return;
-        }
-      }
-
-      // Fallback: empty (no scope = no agents)
-      res.json([]);
+      // Map to the Agent shape the dashboard expects
+      res.json((data || []).map(a => ({
+        id: a.agent_id,
+        name: a.agent_name,
+        wallet_address: a.owner_wallet,
+        created_at: a.registered_at,
+        last_active: a.last_used || a.registered_at,
+        memory_count: 0,
+      })));
     } catch (err) {
       log.error({ err }, 'List agents error');
       res.status(500).json({ error: 'Failed to list agents' });
@@ -149,7 +132,7 @@ export function dashboardRoutes(): Router {
   });
 
   // POST /agents — register new agent (owner only)
-  router.post('/agents', requireOwner, async (req: Request, res: Response) => {
+  router.post('/agents', ownerOnly, async (req: Request, res: Response) => {
     try {
       const { name, type, description, config, heartbeat_url, heartbeat_interval_ms, budget_monthly_usd } = req.body;
       if (!name || typeof name !== 'string') {
@@ -189,7 +172,7 @@ export function dashboardRoutes(): Router {
   });
 
   // GET /agents/:id — get agent details (owner only)
-  router.get('/agents/:id', requireOwner, async (req: Request, res: Response) => {
+  router.get('/agents/:id', ownerOnly, async (req: Request, res: Response) => {
     try {
       const db = getDb();
       const { data, error } = await db
@@ -210,7 +193,7 @@ export function dashboardRoutes(): Router {
   });
 
   // PUT /agents/:id — update agent config (owner only)
-  router.put('/agents/:id', requireOwner, async (req: Request, res: Response) => {
+  router.put('/agents/:id', ownerOnly, async (req: Request, res: Response) => {
     try {
       const { name, type, description, config, heartbeat_url, heartbeat_interval_ms, budget_monthly_usd } = req.body;
       const updates: Record<string, any> = { updated_at: new Date().toISOString() };
@@ -250,7 +233,7 @@ export function dashboardRoutes(): Router {
   });
 
   // DELETE /agents/:id — remove agent (owner only)
-  router.delete('/agents/:id', requireOwner, async (req: Request, res: Response) => {
+  router.delete('/agents/:id', ownerOnly, async (req: Request, res: Response) => {
     try {
       const db = getDb();
 
@@ -284,7 +267,7 @@ export function dashboardRoutes(): Router {
   });
 
   // POST /agents/:id/heartbeat — agent heartbeat check-in
-  router.post('/agents/:id/heartbeat', requireOwner, async (req: Request, res: Response) => {
+  router.post('/agents/:id/heartbeat', ownerOnly, async (req: Request, res: Response) => {
     try {
       const { status, metadata, cost_usd } = req.body;
       const now = new Date().toISOString();
@@ -338,7 +321,7 @@ export function dashboardRoutes(): Router {
   });
 
   // PATCH /agents/:id/status — manually set status
-  router.patch('/agents/:id/status', requireOwner, async (req: Request, res: Response) => {
+  router.patch('/agents/:id/status', ownerOnly, async (req: Request, res: Response) => {
     try {
       const { status } = req.body;
       if (!status || !['online', 'offline', 'paused', 'error'].includes(status)) {
@@ -375,7 +358,7 @@ export function dashboardRoutes(): Router {
   // ── TASKS ──────────────────────────────────────────────
 
   // GET /tasks — list tasks (owner only)
-  router.get('/tasks', requireOwner, async (req: Request, res: Response) => {
+  router.get('/tasks', ownerOnly, async (req: Request, res: Response) => {
     try {
       const db = getDb();
       let query = db
@@ -400,7 +383,7 @@ export function dashboardRoutes(): Router {
   });
 
   // POST /tasks — create task (owner only)
-  router.post('/tasks', requireOwner, async (req: Request, res: Response) => {
+  router.post('/tasks', ownerOnly, async (req: Request, res: Response) => {
     try {
       const { title, description, agent_id, priority, parent_task_id, metadata } = req.body;
       if (!title || typeof title !== 'string') {
@@ -438,7 +421,7 @@ export function dashboardRoutes(): Router {
   });
 
   // PUT /tasks/:id — update task (owner only)
-  router.put('/tasks/:id', requireOwner, async (req: Request, res: Response) => {
+  router.put('/tasks/:id', ownerOnly, async (req: Request, res: Response) => {
     try {
       const { title, description, status, priority, agent_id, metadata } = req.body;
       const updates: Record<string, any> = { updated_at: new Date().toISOString() };
@@ -485,7 +468,7 @@ export function dashboardRoutes(): Router {
   });
 
   // DELETE /tasks/:id — delete task (owner only)
-  router.delete('/tasks/:id', requireOwner, async (req: Request, res: Response) => {
+  router.delete('/tasks/:id', ownerOnly, async (req: Request, res: Response) => {
     try {
       const db = getDb();
       const { error } = await db
@@ -502,7 +485,7 @@ export function dashboardRoutes(): Router {
   });
 
   // POST /tasks/:id/execute — manually trigger task execution (owner only)
-  router.post('/tasks/:id/execute', requireOwner, async (req: Request, res: Response) => {
+  router.post('/tasks/:id/execute', ownerOnly, async (req: Request, res: Response) => {
     try {
       const result = await executeTaskManually(req.params.id);
       if (!result.ok) {
@@ -517,7 +500,7 @@ export function dashboardRoutes(): Router {
   });
 
   // POST /tasks/:id/retry — retry a failed task (owner only)
-  router.post('/tasks/:id/retry', requireOwner, async (req: Request, res: Response) => {
+  router.post('/tasks/:id/retry', ownerOnly, async (req: Request, res: Response) => {
     try {
       const db = getDb();
       // Reset to pending first, then execute
@@ -555,7 +538,7 @@ export function dashboardRoutes(): Router {
   // ── ACTIVITY ──────────────────────────────────────────
 
   // GET /activity — activity log (owner only)
-  router.get('/activity', requireOwner, async (req: Request, res: Response) => {
+  router.get('/activity', ownerOnly, async (req: Request, res: Response) => {
     try {
       const db = getDb();
       const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
@@ -582,7 +565,7 @@ export function dashboardRoutes(): Router {
   // ── STATS ──────────────────────────────────────────────
 
   // GET /stats — aggregate dashboard stats (owner only)
-  router.get('/stats', requireOwner, async (req: Request, res: Response) => {
+  router.get('/stats', ownerOnly, async (req: Request, res: Response) => {
     try {
       const db = getDb();
 
