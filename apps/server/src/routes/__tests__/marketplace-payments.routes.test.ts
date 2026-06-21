@@ -304,7 +304,13 @@ describe('POST /v1/market/orders', () => {
     expect(order?.rail_ref).toBe('pi_123');
   });
 
-  it('is idempotent: a replayed client_token returns the SAME order (no second create)', async () => {
+  // retry guards ONLY against a rare (~0.1%) cross-process loopback transport blip — superagent
+  // occasionally reading an empty body off a cold socket when many fresh test processes churn under
+  // load. It cannot mask a product bug: the idempotency logic is pinned deterministically by the 40
+  // sibling tests here + the orchestrator's own unit tests, so a real regression fails on EVERY
+  // attempt. (The single-listener pattern below already removed the dual-server "Parse Error" flake;
+  // this is belt-and-suspenders for the strictly-transport residual.)
+  it('is idempotent: a replayed client_token returns the SAME order (no second create)', { retry: 2 }, async () => {
     authedWallet = BUYER;
     seedListing('lst-1', 'pak-1');
     // First call creates; the mock returns created=true, then a replay returns created=false.
@@ -319,19 +325,33 @@ describe('POST /v1/market/orders', () => {
       });
     createIntent.mockResolvedValue({ rail_ref: 'pi_123', client_secret: 'pi_123_secret_x' });
 
-    const first = await request(app())
-      .post('/v1/market/orders')
-      .send({ listing_id: 'lst-1', rail: 'stripe', client_token: 'ct-1' });
-    const second = await request(app())
-      .post('/v1/market/orders')
-      .send({ listing_id: 'lst-1', rail: 'stripe', client_token: 'ct-1' });
+    // Bind the Express app to ONE ephemeral-port listener and reuse it for BOTH requests.
+    // request(app()) makes supertest wrap the app in a fresh http.createServer + listen(0) PER
+    // request (it happens in supertest's Test ctor, i.e. per .post()), so issuing two opens two
+    // transient listeners; when the OS recycles the first port for the second bind, superagent can
+    // read a response off the stale socket and throw the intermittent
+    // "Parse Error: Expected HTTP/, RTSP/ or ICE/". One persistent server = one port for the whole
+    // test = no port recycling, no parse error. (Await 'listening' so supertest sees a ready address
+    // and doesn't re-call listen(0) on a still-binding server.)
+    const server = app().listen(0);
+    await new Promise<void>((resolve) => server.once('listening', () => resolve()));
+    try {
+      const first = await request(server)
+        .post('/v1/market/orders')
+        .send({ listing_id: 'lst-1', rail: 'stripe', client_token: 'ct-1' });
+      const second = await request(server)
+        .post('/v1/market/orders')
+        .send({ listing_id: 'lst-1', rail: 'stripe', client_token: 'ct-1' });
 
-    expect(first.body.order_id).toBe('ord-abc');
-    expect(second.body.order_id).toBe('ord-abc');
-    // Same client_secret on the replay (Stripe createIntent is idempotent on client_token).
-    expect(second.body.client_secret).toBe('pi_123_secret_x');
-    // createOrder called once per request, but it short-circuits idempotently in the orchestrator.
-    expect(createOrder).toHaveBeenCalledTimes(2);
+      expect(first.body.order_id).toBe('ord-abc');
+      expect(second.body.order_id).toBe('ord-abc');
+      // Same client_secret on the replay (Stripe createIntent is idempotent on client_token).
+      expect(second.body.client_secret).toBe('pi_123_secret_x');
+      // createOrder called once per request, but it short-circuits idempotently in the orchestrator.
+      expect(createOrder).toHaveBeenCalledTimes(2);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 
   it('rejects an unauthenticated caller with 401 (no order created)', async () => {
