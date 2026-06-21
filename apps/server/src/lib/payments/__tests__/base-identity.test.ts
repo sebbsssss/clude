@@ -4,7 +4,8 @@ import { isAddress, getAddress } from 'viem';
 import nacl from 'tweetnacl';
 import { createCustodialBaseResolver } from '../base-identity.js';
 
-const SEED = 'test-seed-0123456789abcdef'; // ≥ 16 chars
+const SEED = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'; // 64-hex = 32 bytes
+const SEED2 = 'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210';
 const ALICE = 'AliceSolanaWa11et1111111111111111111111111';
 const BOB = 'BobSolanaWa11et22222222222222222222222222222';
 
@@ -31,7 +32,7 @@ describe('base-identity — custodial Base identity derivation', () => {
 
   it('changing the seed re-derives a DIFFERENT address for the same wallet', () => {
     const a = createCustodialBaseResolver(SEED).addressFor(ALICE);
-    const b = createCustodialBaseResolver('a-completely-different-seed-value').addressFor(ALICE);
+    const b = createCustodialBaseResolver(SEED2).addressFor(ALICE);
     expect(a).not.toBe(b);
   });
 
@@ -65,8 +66,10 @@ describe('base-identity — custodial Base identity derivation', () => {
     expect(createCustodialBaseResolver(SEED).custodial).toBe(true);
   });
 
-  it('rejects an empty app wallet and a too-short seed (fail closed)', () => {
-    expect(() => createCustodialBaseResolver('short')).toThrow(/≥ 16|at least|BASE_CUSTODIAL_SEED/);
+  it('rejects a low-entropy seed and an empty app wallet (fail closed)', () => {
+    expect(() => createCustodialBaseResolver('short')).toThrow(/≥ 32 bytes|BASE_CUSTODIAL_SEED/);
+    // a 31-char passphrase is < 32 bytes of decoded entropy → rejected
+    expect(() => createCustodialBaseResolver('abcdefghijklmnopqrstuvwxyz01234')).toThrow(/32 bytes/);
     const r = createCustodialBaseResolver(SEED);
     expect(() => r.keysFor('')).toThrow(/appWallet is required/);
     expect(() => r.addressFor('   ')).toThrow(/appWallet is required/);

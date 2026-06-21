@@ -70,12 +70,18 @@ export function resolveEvmTitleEnv(env: NodeJS.ProcessEnv = process.env): EvmTit
 }
 
 let readClient: EvmTitleClient | null = null;
+let readClientKey: string | null = null;
 
-/** Memoized READ-ONLY client (ownerOf / binding / tokenId). The unlock gate + reconciliation use it. */
+/** READ-ONLY client (ownerOf / binding / tokenId). The unlock gate + reconciliation use it.
+ *  Memoized on the resolved (chainId, contract, rpc) tuple so a runtime config change (a contract
+ *  re-point, a post-SEC-1 chain flip) rebuilds rather than serving a stale chain — and so the SEC-1
+ *  gate (resolveEvmTitleEnv) is re-evaluated on EVERY call, never skipped by a cache hit. */
 export function getReadOnlyEvmTitleClient(): EvmTitleClient {
-  if (readClient) return readClient;
   const env = resolveEvmTitleEnv();
+  const key = `${env.chainId}|${env.contractAddress}|${env.rpcUrl}`;
+  if (readClient && readClientKey === key) return readClient;
   readClient = createEvmTitleClient({ rpcUrl: env.rpcUrl, contractAddress: env.contractAddress, chainId: env.chainId });
+  readClientKey = key;
   log.info({ chainId: env.chainId, contract: env.contractAddress }, 'EvmTitleClient (read-only) resolved');
   return readClient;
 }
@@ -99,4 +105,5 @@ export function getOwnerSignedEvmTitleClient(signerKey: Hex): EvmTitleClient {
 /** Test-only: drop the memoized read client so a different env can be installed. */
 export function __resetEvmTitleClientsForTests(): void {
   readClient = null;
+  readClientKey = null;
 }

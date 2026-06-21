@@ -48,6 +48,28 @@ export async function ensureCustodialTitleIdentity(
   const keys = resolver.keysFor(appWallet); // throws on empty wallet
   const baseAddress = keys.address;
 
+  // GUARD (never stomp a user key): encryption_keys is ONE namespace shared with real owner keys
+  // (publishOwnerEncryptionKey). A blind upsert could silently replace a user's published owner key
+  // — a DEK-escrow takeover — if a derived Base address ever equals an existing owner_wallet (a real
+  // risk once the SEC-1 non-custodial swap makes addressFor return the user's own EVM address). So
+  // read first and refuse unless the row is absent or already OURS (verifier_ct === CUSTODIAL_VERIFIER).
+  const { data: existing, error: selErr } = await db
+    .from('encryption_keys')
+    .select('owner_wallet, x25519_pubkey, verifier_ct')
+    .eq('owner_wallet', baseAddress)
+    .maybeSingle();
+  if (selErr) {
+    log.error({ err: selErr, baseAddress }, 'ensureCustodialTitleIdentity: encryption_keys lookup failed');
+    throw new Error('ensureCustodialTitleIdentity: failed to read existing encryption key');
+  }
+  const row = existing as { x25519_pubkey?: string; verifier_ct?: string } | null;
+  if (row && row.verifier_ct !== CUSTODIAL_VERIFIER) {
+    throw new Error(`ensureCustodialTitleIdentity: refusing to overwrite a non-custodial owner key at ${baseAddress}`);
+  }
+  if (row && row.x25519_pubkey === keys.x25519PublicKeyB64) {
+    return { appWallet, baseAddress, x25519PublicKeyB64: keys.x25519PublicKeyB64 }; // ours, unchanged — no-op
+  }
+
   const { error } = await db.from('encryption_keys').upsert(
     {
       owner_wallet: baseAddress,

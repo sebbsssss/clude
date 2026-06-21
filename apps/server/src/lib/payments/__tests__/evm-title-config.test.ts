@@ -92,4 +92,12 @@ describe('client factories', () => {
     process.env.BASE_CHAIN_ID = '8453';
     expect(() => getReadOnlyEvmTitleClient()).toThrow(/gated behind SEC-1/);
   });
+
+  it('REBUILDS the read client when the contract env changes (no stale chain/contract)', () => {
+    const c1 = getReadOnlyEvmTitleClient();
+    process.env.CLUDE_PACK_TITLE_ADDRESS = '0x1152A5D660bD5f5196879E0Bcd835097d2caA411';
+    const c2 = getReadOnlyEvmTitleClient();
+    expect(c2).not.toBe(c1);
+    expect(c2.contractAddress).toBe(getAddress('0x1152A5D660bD5f5196879E0Bcd835097d2caA411'));
+  });
 });
