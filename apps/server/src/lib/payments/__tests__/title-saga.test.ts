@@ -364,6 +364,38 @@ beforeEach(() => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
+// executeTitleSale — the seller-revoke is PACK-SCOPED (regression: no collateral wipe)
+// ════════════════════════════════════════════════════════════════════════════
+describe('executeTitleSale — revoke is PACK-SCOPED (no collateral title wipe)', () => {
+  it('selling one title does NOT delete the seller title_holder wraps for their OTHER titled packs', async () => {
+    seedSaleFixtures(); // pack A (members 10,11) + a PAID order + the SELLER-owned mirror
+
+    // Pack B — a SECOND titled pack the same seller holds (members 20,21). memory_dek_wraps' PK is
+    // (memory_id, recipient), so an unscoped delete-by-holder during pack A's sale would silently
+    // wipe these and strip the seller's decryption on pack B. They MUST survive.
+    seed('memory_pack_contents', [
+      { pack_id: 'pack-other222', memory_id: 20, leaf_index: 0, content_hash: 'b0' },
+      { pack_id: 'pack-other222', memory_id: 21, leaf_index: 1, content_hash: 'b1' },
+    ]);
+    seed('memory_dek_wraps', [
+      { memory_id: 20, recipient: 'title_holder', wrapped_dek: 'b-seller-0', wrap_pubkey: 'pk', holder_wallet: SELLER },
+      { memory_id: 21, recipient: 'title_holder', wrapped_dek: 'b-seller-1', wrap_pubkey: 'pk', holder_wallet: SELLER },
+    ]);
+
+    const { evm } = makeEvm({ owner: SELLER }); // the transfer step moves SELLER -> BUYER
+    const res = await executeTitleSale(db, evm, ORDER_ID);
+    expect(res.step).toBe('revoked');
+
+    // The seller's surviving title_holder wraps are EXACTLY pack B's (20, 21); pack A's (10, 11) revoked.
+    const survivors = (tables.memory_dek_wraps ?? [])
+      .filter((w) => w.recipient === 'title_holder' && w.holder_wallet === SELLER)
+      .map((w) => w.memory_id as number)
+      .sort((a, b) => a - b);
+    expect(survivors).toEqual([20, 21]);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 // mintTitleForPack
 // ════════════════════════════════════════════════════════════════════════════
 describe('mintTitleForPack — mint the 1-of-1 + mirror, idempotent', () => {

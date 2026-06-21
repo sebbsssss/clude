@@ -522,14 +522,26 @@ async function revokeSeller(
 ): Promise<void> {
   const { packId, seller, buyer, orderId, rail } = args;
 
-  // 1) Delete the seller's title_holder wrap(s) — scoped to the seller, so the buyer's wrap (and
-  //    the provider wrap) survive. Idempotent: a re-run matches zero rows.
-  const { error: dErr } = await db
-    .from('memory_dek_wraps')
-    .delete()
-    .eq('recipient', 'title_holder')
-    .eq('holder_wallet', seller);
-  if (dErr) throw new Error('executeTitleSale: failed to revoke seller title_holder wrap');
+  // 1) Delete the seller's title_holder wrap(s) for THIS pack only. PACK-SCOPED to the pack's member
+  //    memories: memory_dek_wraps' PK is (memory_id, recipient), so one seller can hold title_holder
+  //    wraps across MANY packs — an unscoped delete-by-holder would silently wipe their decryption on
+  //    every OTHER titled pack they own. We bound the delete to this pack's memory_ids. The buyer's
+  //    wrap (added in the 'dek_rewrapped' step) and the provider wrap survive. Idempotent.
+  const { data: memRows, error: mErr } = await db
+    .from('memory_pack_contents')
+    .select('memory_id')
+    .eq('pack_id', packId);
+  if (mErr) throw new Error('executeTitleSale: failed to load pack contents for seller revoke');
+  const memberIds = ((memRows ?? []) as Array<{ memory_id: number }>).map((m) => m.memory_id);
+  if (memberIds.length > 0) {
+    const { error: dErr } = await db
+      .from('memory_dek_wraps')
+      .delete()
+      .in('memory_id', memberIds)
+      .eq('recipient', 'title_holder')
+      .eq('holder_wallet', seller);
+    if (dErr) throw new Error('executeTitleSale: failed to revoke seller title_holder wrap');
+  }
 
   // 2) Flip the seller's title_owner entitlement → 'revoked' (no-op if none / already revoked).
   const { error: rErr } = await db

@@ -97,7 +97,9 @@ CREATE TABLE IF NOT EXISTS title_sale_sagas (
   --   'paid'          — (2) payment captured
   --   'transferred'   — (3) on-chain title moved seller → buyer (IRREVERSIBLE — the RT3 boundary)
   --   'revoked'       — (4) seller DEK wrap revoked (revoke-last, RT7) — sale complete
-  --   'refunded'      — terminal: refund issued (only legal while step < 'transferred', RT3)
+  --   'refunded'      — terminal: refund issued (only legal BEFORE the transfer, i.e. step IN
+  --                     ('created','dek_rewrapped','paid') — RT3. Enforced by set-membership in
+  --                     title-saga.ts (isStepBefore), NOT a lexicographic `step < 'transferred'`.)
   --   'failed'        — terminal: saga abandoned after exhausting retries
   step TEXT NOT NULL DEFAULT 'created'
     CHECK (step IN ('created', 'dek_rewrapped', 'paid', 'transferred', 'revoked', 'refunded', 'failed')),
