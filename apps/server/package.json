@@ -37,7 +37,8 @@
     "stripe": "^22.2.2",
     "tweetnacl": "^1.0.3",
     "unpdf": "^1.4.0",
-    "vercel-minimax-ai-provider": "^0.0.2"
+    "vercel-minimax-ai-provider": "^0.0.2",
+    "viem": "^2.17.11"
   },
   "devDependencies": {
     "@types/compression": "^1.8.1",
