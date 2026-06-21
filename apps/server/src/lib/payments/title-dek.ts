@@ -13,10 +13,11 @@
  *
  *   1. rewrapPackDekToTitleHolder — for EACH member memory, recover the per-memory DEK from the
  *      provider wrap (unwrapDek) and seal it to the NEW holder's key (wrapDek), UPSERTing a
- *      memory_dek_wraps row recipient='title_holder', holder_wallet=<holder>. The PK
- *      (memory_id, recipient) means exactly one title_holder wrap per memory; the UPSERT ROTATES
- *      it. ADDITIVE (RT7): it NEVER deletes the prior holder's wrap — there must never be a window
- *      where neither party can decrypt. (The prior holder is removed LAST, by revokeTitleHolder.)
+ *      memory_dek_wraps row recipient='title_holder', holder_wallet=<holder>. Migration 036's unique
+ *      (memory_id, recipient, holder_wallet) holds one title_holder wrap per (memory, HOLDER), so
+ *      distinct holders COEXIST; the upsert is idempotent for the same holder. ADDITIVE (RT7): it
+ *      NEVER deletes the prior holder's wrap — there must never be a window where neither party can
+ *      decrypt. (The prior holder is removed LAST, by revokeTitleHolder.)
  *
  *   2. assertTitleUnlock — the unlock gate (B2 / RT9). Compute the tokenId, read ownerOf(tokenId)
  *      on Base, and serve the title_holder DEK only if ownerOf === the verified caller address
@@ -141,6 +142,9 @@ export async function rewrapPackDekToTitleHolder(
       throw new Error(`title-dek: failed to recover DEK for member ${memoryId} — cannot re-wrap to title holder`);
     }
     const sealed = wrapDek(dek, holderPubkey);
+    // Upsert on the HOLDER-AWARE identity (migration 036: unique (memory_id, recipient, holder_wallet)).
+    // A re-wrap to the SAME holder is an idempotent overwrite; a DIFFERENT holder is a NEW additive
+    // row — the seller's wrap is never touched here (RT7), it is removed last by revokeTitleHolder.
     const { error: upErr } = await db.from('memory_dek_wraps').upsert(
       {
         memory_id: memoryId,
@@ -149,7 +153,7 @@ export async function rewrapPackDekToTitleHolder(
         wrap_pubkey: sealed.wrapPubkey,
         holder_wallet: holderWallet,
       },
-      { onConflict: 'memory_id,recipient' },
+      { onConflict: 'memory_id,recipient,holder_wallet' },
     );
     if (upErr) {
       log.error({ err: upErr, packId, memoryId }, 'title-dek: title_holder wrap upsert failed');

@@ -63,8 +63,9 @@ vi.mock('@clude/shared/core/encryption-keys', () => ({
 //   .select(cols).in(c,vals).eq(c,v)           — provider wraps read / title_holder wraps read
 //   .upsert(row, {onConflict})                 — title_holder wrap write (awaited → { data, error })
 //   .delete().eq(c,v).in(c,vals).eq(c,v)       — former-holder wrap delete (awaited, .select() → rows)
-// memory_dek_wraps PK is (memory_id, recipient): one title_holder wrap per memory; upsert with
-// onConflict 'memory_id,recipient' OVERWRITES (rotates) the existing title_holder row.
+// memory_dek_wraps uniqueness is (memory_id, recipient, holder_wallet) (migration 036): one
+// title_holder wrap per (memory, HOLDER), so distinct holders COEXIST. An upsert with onConflict
+// 'memory_id,recipient,holder_wallet' overwrites only the SAME holder's row; a new holder is additive.
 type Row = Record<string, any>;
 const tables: Record<string, Row[]> = {};
 const opLog: Array<{ table: string; op: 'upsert' | 'delete'; count: number }> = [];
@@ -265,11 +266,14 @@ describe('rewrapPackDekToTitleHolder — additive re-wrap to the new title holde
 
     await rewrapPackDekToTitleHolder(db, PACK, HOLDER, HOLDER_PUBKEY);
 
-    // The PK is (memory_id, recipient): exactly one title_holder wrap per memory. The UPSERT ROTATES
-    // it to the NEW holder. No DELETE was issued by the re-wrap (RT7 — additive only).
+    // Migration 036's unique (memory_id, recipient, holder_wallet): the NEW holder's wrap is ADDED
+    // ALONGSIDE the prior holder's — both coexist (RT7: never a window where neither can decrypt).
+    // The prior (seller) wrap is removed LAST by revokeTitleHolder — never by the re-wrap, which
+    // issues no DELETE.
     const th = (tables.memory_dek_wraps ?? []).filter((w) => w.recipient === 'title_holder');
-    expect(th).toHaveLength(2);
-    for (const w of th) expect(w.holder_wallet).toBe(HOLDER);
+    expect(th).toHaveLength(4); // 2 FORMER (survived) + 2 HOLDER (added)
+    expect(th.filter((w) => w.holder_wallet === FORMER)).toHaveLength(2);
+    expect(th.filter((w) => w.holder_wallet === HOLDER)).toHaveLength(2);
     expect(opLog.some((o) => o.op === 'delete')).toBe(false);
   });
 
