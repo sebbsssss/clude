@@ -370,6 +370,19 @@ describe('markOrderPaid — idempotent, state-only (M6 contract 1 + 4)', () => {
 });
 
 describe('dispatchPendingDeliveries — state-driven worker (M6 contract 2)', () => {
+  it('SKIPS a paid TITLE order — the copy sweep never clones it (left for the title saga)', async () => {
+    seedOrder({ order_id: 'ord-title', status: 'paid', paid_at: new Date().toISOString(), listing_kind: 'title' });
+    const deliver = vi.fn<DeliverFn>(async () => {});
+
+    const summary = await dispatchPendingDeliveries(deliver);
+
+    expect(deliver).not.toHaveBeenCalled();
+    expect(summary.examined).toBe(0); // filtered out before examination
+    expect(summary.delivered).toBe(0);
+    // Untouched — still 'paid', never claimed to 'delivering'.
+    expect(tables.marketplace_orders!.find((r) => r.order_id === 'ord-title')!.status).toBe('paid');
+  });
+
   it('picks up a paid order, claims it to delivering, runs deliver(), drives it to delivered', async () => {
     const order = seedOrder({ status: 'paid', paid_at: new Date().toISOString() });
     const seen: string[] = [];

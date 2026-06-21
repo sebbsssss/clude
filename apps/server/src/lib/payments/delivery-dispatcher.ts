@@ -246,7 +246,12 @@ export async function dispatchPendingDeliveries(
     throw new Error('failed to load pending deliveries');
   }
 
-  const orders = (data as OrderRow[] | null) ?? [];
+  // COPY dispatcher: NEVER touch a TITLE order. A title sale moves the 1-of-1 NFT seller→buyer via
+  // its own saga (executeTitleSale); cloning it (grantCopy) would mint the buyer a plaintext-
+  // equivalent copy of a 1-of-1 AND mark the order 'delivered', defeating the title model (the
+  // adversarial backtest flagged this CRITICAL). Only 'copy' (and legacy NULL = pre-title copies)
+  // are swept here; a separate title sweeper owns title orders.
+  const orders = ((data as OrderRow[] | null) ?? []).filter((o) => o.listing_kind !== 'title');
   const summary: DispatchSummary = { delivered: 0, failed: 0, examined: 0 };
 
   for (const order of orders) {

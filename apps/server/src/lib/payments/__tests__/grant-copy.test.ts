@@ -300,6 +300,14 @@ describe('grantCopy — clone count + entitlement (Flow A step 8, §2)', () => {
     expect(contents).toEqual(['member 0 content', 'member 1 content', 'member 2 content']);
   });
 
+  it('REFUSES a TITLE order — never clones a 1-of-1 pack (defence in depth)', async () => {
+    seedPlaintextPack(3);
+    await expect(grantCopy(order({ listing_kind: 'title' }))).rejects.toThrow(/TITLE|title/);
+    // Nothing cloned, no entitlement granted.
+    expect((tables.memories ?? []).filter((m) => m.owner_wallet === BUYER)).toHaveLength(0);
+    expect(tables.pack_entitlements ?? []).toHaveLength(0);
+  });
+
   it('inserts an active copy_license entitlement bound to the order', async () => {
     seedPlaintextPack(2);
 

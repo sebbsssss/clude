@@ -79,6 +79,12 @@ const SOURCE_MEMORY_COLUMNS =
  * silently half-delivers.
  */
 export async function grantCopy(order: OrderRow): Promise<void> {
+  // DEFENCE IN DEPTH (the copy dispatcher already filters titles out): NEVER clone a TITLE order.
+  // A title sale moves the 1-of-1 NFT via its own saga; cloning would hand the buyer a plaintext-
+  // equivalent copy of a 1-of-1 and defeat the title model. Fail loud rather than silently clone.
+  if (order.listing_kind === 'title') {
+    throw new Error(`grantCopy: refusing to clone a TITLE order ${order.order_id} — titles transfer via the saga, not a copy`);
+  }
   const buyer = order.buyer_wallet;
   if (!buyer) {
     // A copy must land in a named namespace; a keyless (email-only) buyer cannot receive one
