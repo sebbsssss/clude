@@ -486,6 +486,12 @@ const ENTROPY_MIN_BITS_LONG = 3.8; // bits/char, for runs ≥ ENTROPY_LONG_LEN.
 const ENTROPY_MIN_BITS_SHORT = 4.0; // bits/char, stricter bar for shorter 20–39 runs.
 const ENTROPY_LONG_LEN = 40;
 const ENTROPY_SHORT_LEN = 20;
+// A 20–39 char ALL-HEX run (an odd-length key/token, e.g. a 30-hex secret) can NEVER reach the 4.0
+// short bar — hex tops out at log2(16) = 4.0 bits/char — so such tokens slipped clean (not 32/64 so
+// no exact-length rule fires either). Hex gets its own lower bar: 20+ contiguous hex chars is almost
+// never prose, so this holds odd-length hex secrets at low false-positive risk (still 'hold', not reject).
+const HEX_RUN = /^[0-9a-fA-F]+$/;
+const ENTROPY_MIN_BITS_HEX = 3.2;
 
 function shannonEntropy(s: string): number {
   const counts = new Map<string, number>();
@@ -512,7 +518,9 @@ function looksLikeOpaqueSecret(run: string): boolean {
     if (p.length >= ENTROPY_LONG_LEN) {
       if (shannonEntropy(p) >= ENTROPY_MIN_BITS_LONG) return true;
     } else if (p.length >= ENTROPY_SHORT_LEN) {
-      if (shannonEntropy(p) >= ENTROPY_MIN_BITS_SHORT) return true;
+      // Hex tops out at 4.0 bits, so an all-hex run is judged on a lower bar than mixed base64.
+      const bar = HEX_RUN.test(p) ? ENTROPY_MIN_BITS_HEX : ENTROPY_MIN_BITS_SHORT;
+      if (shannonEntropy(p) >= bar) return true;
     }
   }
   return false;

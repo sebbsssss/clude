@@ -87,3 +87,21 @@ describe('content-filter — short / colon-delimited secrets must NOT ship clean
     expect(res.hasSecrets).toBe(false);
   });
 });
+
+describe('content-filter — odd-length hex (not 32/64) is held via the hex entropy tier', () => {
+  it('a 30-char high-entropy hex token is HELD (hex can never clear the 4.0 short bar)', () => {
+    const token = '9f3a1c7e0b5d28461fa0c93e7b2d04'; // 30 hex chars, obviously fake, not 32/64
+    const res = scanText(`legacy key ${token} in an old note`);
+    expect(flagged(res), 'odd-length hex secret must be flagged').toBe(true);
+    const hit = res.findings.find((f) => f.severity === 'hold');
+    expect(hit, 'odd-length hex should be HELD (review), not hard-rejected').toBeDefined();
+    expect(hit!.sample).not.toContain(token);
+  });
+
+  it('a low-entropy repeated-hex run is NOT flagged (the bar still filters non-secrets)', () => {
+    const repeated = 'deadbeefdeadbeefdeadbeefdead'; // 28 hex chars, ~2 bits/char — clearly not a key
+    const res = scanText(`placeholder ${repeated} here`);
+    expect(res.findings, `repeated-hex placeholder must stay clean: ${JSON.stringify(res.findings)}`).toEqual([]);
+    expect(res.hasSecrets).toBe(false);
+  });
+});
