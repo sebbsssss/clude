@@ -52,10 +52,12 @@
  * injected/mocked in tests — no live network there.
  */
 
+import { createHash } from 'node:crypto';
 import { createChildLogger } from '@clude/shared/core/logger';
 import { wrapDek, unwrapDek } from '@clude/shared/core/memory-envelope';
 import { loadProviderKeypair } from '@clude/shared/core/encryption-keys';
 import type { EvmTitleClient, TitleBinding } from '../evm-title-client.js';
+import type { BaseIdentityResolver } from './base-identity.js';
 import type { Hex, Address } from 'viem';
 
 const log = createChildLogger('title-saga');
@@ -82,6 +84,12 @@ const STEP_INDEX: Readonly<Record<TitleSagaStep, number>> = Object.freeze(
 /** Strict total order over the steps: true iff `a` strictly precedes `b`. */
 export function isStepBefore(a: TitleSagaStep, b: TitleSagaStep): boolean {
   return STEP_INDEX[a] < STEP_INDEX[b];
+}
+
+/** Deterministic saga id for an order (035 saga_id is a NOT-NULL TEXT PK). One saga per order, so
+ *  re-deriving is idempotent and a retried sale collapses to the same row (PK/order_id UNIQUE). */
+function sagaIdFor(orderId: string): string {
+  return 'tsaga-' + createHash('sha256').update(orderId).digest('hex').slice(0, 12);
 }
 
 /** The point of no return — at/after this step the on-chain transfer has happened (RT3). */
@@ -136,22 +144,30 @@ interface PackTitleRow {
   contract_address: string;
 }
 
+// title_sale_sagas (migration 035). seller_wallet/buyer_wallet here are BASE addresses (resolved
+// from the order's app wallets), NOT the Solana app wallets on marketplace_orders. token_id is NOT a
+// column — it is derived (evm.tokenIdFor); saga_id is the NOT-NULL TEXT PK.
 interface SagaRow {
+  saga_id: string;
   order_id: string;
   pack_id: string;
-  token_id: string;
-  from_wallet: string;
-  to_wallet: string;
+  seller_wallet: string;
+  buyer_wallet: string;
   step: TitleSagaStep;
+  transfer_tx: string | null;
   last_error: string | null;
 }
 
+// marketplace_orders. buyer_wallet/seller_wallet are the SOLANA APP wallets (req.verifiedWallet) —
+// order scoping, refund auth, and Stripe payout all key off them, so they are NEVER overwritten with
+// Base addresses. The saga derives Base addresses from these via the resolver.
 interface TitleOrderRow {
   order_id: string;
   pack_id: string;
   buyer_wallet: string | null;
   seller_wallet: string;
   status: string;
+  listing_kind?: string | null;
   payment_rail?: string | null;
   rail?: string;
 }
@@ -200,8 +216,8 @@ export async function mintTitleForPack(
       packId,
       tokenId,
       owner: onChainOwner,
+      creatorWallet: toWallet,
       mintTx: (mirror as PackTitleRow | null)?.mint_tx ?? null,
-      binding: await loadBinding(db, packId, toWallet),
       contractAddress: evm.contractAddress,
     });
     return { tokenId, alreadyMinted: true, mintTx: ((mirror as PackTitleRow | null)?.mint_tx as Hex) ?? null };
@@ -215,8 +231,8 @@ export async function mintTitleForPack(
     packId,
     tokenId,
     owner: toWallet,
+    creatorWallet: toWallet,
     mintTx: txHash,
-    binding,
     contractAddress: evm.contractAddress,
   });
 
@@ -250,7 +266,7 @@ async function loadBinding(db: DbLike, packId: string, creator: string): Promise
 /** Upsert the pack_titles mirror row to a minted state owned by `owner`. */
 async function upsertTitleMirror(
   db: DbLike,
-  args: { packId: string; tokenId: bigint; owner: string; mintTx: Hex | string | null; binding: TitleBinding; contractAddress: Address },
+  args: { packId: string; tokenId: bigint; owner: string; creatorWallet: string; mintTx: Hex | string | null; contractAddress: Address },
 ): Promise<void> {
   const { data: existing } = await db
     .from('pack_titles')
@@ -258,13 +274,12 @@ async function upsertTitleMirror(
     .eq('pack_id', args.packId)
     .maybeSingle();
 
-  const row = {
-    pack_id: args.packId,
-    chain: 'base',
+  // 035 columns ONLY. merkle_root/manifest_hash are NOT on pack_titles (they live on pmp_artifacts as
+  // the on-chain binding); chain defaults to 'base-sepolia'. creator_wallet (NOT NULL) is set on INSERT
+  // and preserved on UPDATE (the original minter, never overwritten by a later owner on a reconcile).
+  const common = {
     token_id: args.tokenId.toString(),
     contract_address: args.contractAddress,
-    merkle_root: args.binding.merkleRoot,
-    manifest_hash: args.binding.manifestHash,
     current_owner: args.owner,
     status: 'minted',
     mint_tx: args.mintTx,
@@ -272,10 +287,15 @@ async function upsertTitleMirror(
   };
 
   if (existing) {
-    const { error } = await db.from('pack_titles').update(row).eq('pack_id', args.packId);
+    const { error } = await db.from('pack_titles').update(common).eq('pack_id', args.packId);
     if (error) throw new Error('mintTitleForPack: failed to update title mirror');
   } else {
-    const { error } = await db.from('pack_titles').insert({ ...row, created_at: new Date().toISOString() });
+    const { error } = await db.from('pack_titles').insert({
+      pack_id: args.packId,
+      creator_wallet: args.creatorWallet,
+      ...common,
+      created_at: new Date().toISOString(),
+    });
     if (error) throw new Error('mintTitleForPack: failed to insert title mirror');
   }
 }
@@ -291,16 +311,25 @@ async function upsertTitleMirror(
 export async function executeTitleSale(
   db: DbLike,
   evm: EvmTitleClient,
+  resolver: BaseIdentityResolver,
   orderId: string,
 ): Promise<TitleSaleResult> {
   const order = await loadOrder(db, orderId);
-  const buyer = order.buyer_wallet;
-  if (!buyer) {
-    throw new Error(`executeTitleSale: order ${orderId} has no buyer_wallet — a title must land in a named Base address`);
+  const buyerApp = order.buyer_wallet;
+  if (!buyerApp) {
+    throw new Error(`executeTitleSale: order ${orderId} has no buyer_wallet`);
   }
-  const seller = order.seller_wallet;
+  const sellerApp = order.seller_wallet;
   const packId = order.pack_id;
   const tokenId = evm.tokenIdFor(packId);
+
+  // Resolve the on-chain BASE identities from the order's SOLANA app wallets (#6/#7). The order
+  // wallets stay Solana (order scoping, refund auth, and Stripe payout all key off them); the chain
+  // transfer, the title_holder DEK wrap, and the saga row operate in Base-address space. The buyer's
+  // custodial encryption key must already be published under buyerBase (ensureCustodialTitleIdentity,
+  // done by the buy-title route before this runs) so the DEK re-wrap can seal to them.
+  const sellerBase = resolver.addressFor(sellerApp);
+  const buyerBase = resolver.addressFor(buyerApp);
 
   // UPFRONT PAYMENT GATE (testnet, M4 step 2 before everything irreversible): the saga must not do
   // ANY work — not even the reversible DEK re-wrap — until the order is actually paid. The reused
@@ -309,14 +338,14 @@ export async function executeTitleSale(
   // dek_rewrapped → paid hop for an in-flight resume.
   await confirmPayment(order);
 
-  // Load-or-create the saga row (idempotent: one per order).
-  let saga = await loadOrCreateSaga(db, { orderId, packId, tokenId, seller, buyer });
+  // Load-or-create the saga row (idempotent: one per order). Stores the BASE addresses.
+  let saga = await loadOrCreateSaga(db, { orderId, packId, sellerBase, buyerBase });
 
   // Drive each stage forward. Each branch is idempotent (checks state before acting) and persists
   // the step on success; a throw is recorded as last_error and leaves the step where it was.
   try {
     if (saga.step === 'created') {
-      await rewrapPackDekToTitleHolder(db, packId, buyer);
+      await rewrapPackDekToTitleHolder(db, packId, buyerBase);
       saga = await advance(db, orderId, 'dek_rewrapped');
     }
 
@@ -329,14 +358,21 @@ export async function executeTitleSale(
       // THE IRREVERSIBLE STEP — LAST meaningful mutation before revoke. Idempotent via the
       // ownerOf==buyer pre-check: a crash after broadcast but before this persist must NOT
       // re-broadcast (RT1). After this, refunds are impossible (RT3).
-      await transferTitleOnce(db, evm, { orderId, tokenId, seller, buyer, packId });
-      saga = await advance(db, orderId, 'transferred');
+      const transferTx = await transferTitleOnce(db, evm, { tokenId, sellerBase, buyerBase, packId });
+      saga = await advance(db, orderId, 'transferred', { transfer_tx: transferTx });
     }
 
     if (saga.step === 'transferred') {
       // The ONLY step that removes capability → last (M4). Additive-first/revoke-last is preserved:
       // the buyer wrap (step 1) is already in place, so removing the seller wrap never leaves a gap.
-      await revokeSeller(db, { packId, seller, buyer, orderId, rail: order.payment_rail ?? order.rail ?? null });
+      await revokeSeller(db, {
+        packId,
+        sellerBase,
+        sellerApp,
+        buyerApp,
+        orderId,
+        rail: order.payment_rail ?? order.rail ?? null,
+      });
       saga = await advance(db, orderId, 'revoked');
     }
   } catch (err) {
@@ -465,47 +501,50 @@ async function confirmPayment(order: TitleOrderRow): Promise<void> {
 async function transferTitleOnce(
   db: DbLike,
   evm: EvmTitleClient,
-  args: { orderId: string; tokenId: bigint; seller: string; buyer: string; packId: string },
-): Promise<void> {
-  const { orderId, tokenId, seller, buyer, packId } = args;
+  args: { tokenId: bigint; sellerBase: string; buyerBase: string; packId: string },
+): Promise<string | null> {
+  const { tokenId, sellerBase, buyerBase, packId } = args;
 
   // PRE-CHECK: never re-broadcast an already-mined transfer.
   const currentOwner = await evm.titleOwner(tokenId);
   let transferTx: Hex | null = null;
-  if (currentOwner != null && currentOwner.toLowerCase() === buyer.toLowerCase()) {
-    log.info({ orderId, tokenId: tokenId.toString() }, 'transferTitleOnce: chain already shows buyer as owner — skipping re-broadcast (idempotent)');
+  if (currentOwner != null && currentOwner.toLowerCase() === buyerBase.toLowerCase()) {
+    log.info({ tokenId: tokenId.toString() }, 'transferTitleOnce: chain already shows buyer as owner — skipping re-broadcast (idempotent)');
   } else {
-    const { txHash } = await evm.transferTitle(seller as Address, buyer as Address, tokenId);
+    const { txHash } = await evm.transferTitle(sellerBase as Address, buyerBase as Address, tokenId);
     transferTx = txHash;
-    log.info({ orderId, tokenId: tokenId.toString(), from: seller, to: buyer, transferTx }, 'transferTitleOnce: irreversible on-chain transfer broadcast');
+    log.info({ tokenId: tokenId.toString(), from: sellerBase, to: buyerBase, transferTx }, 'transferTitleOnce: irreversible on-chain transfer broadcast');
   }
 
-  // Record the audit row (idempotent: skip if one already exists for this order).
+  // Append-only audit row (035 columns: pack_id, token_id, from_wallet, to_wallet, tx, block, at).
+  // Idempotent on (pack_id, to_wallet): a prior row for this buyer+pack means it was already
+  // recorded. tx is NOT NULL; on a resume that skipped the broadcast (no tx in hand), record a
+  // sentinel so the audit + mirror still reconcile rather than throwing on the NOT-NULL column.
   const { data: priorXfer } = await db
     .from('title_transfers')
-    .select('order_id')
-    .eq('order_id', orderId)
+    .select('transfer_id')
+    .eq('pack_id', packId)
+    .eq('to_wallet', buyerBase)
     .maybeSingle();
   if (!priorXfer) {
     const { error: xErr } = await db.from('title_transfers').insert({
-      order_id: orderId,
       pack_id: packId,
       token_id: tokenId.toString(),
-      from_wallet: seller,
-      to_wallet: buyer,
-      transfer_tx: transferTx,
-      mode: 'operator',
-      observed_at: new Date().toISOString(),
+      from_wallet: sellerBase,
+      to_wallet: buyerBase,
+      tx: transferTx ?? '(reconciled)',
     });
     if (xErr) throw new Error('executeTitleSale: failed to record title_transfers audit row');
   }
 
-  // Reconcile the mirror to the buyer.
+  // Reconcile the mirror to the buyer and advance its status to 'transferred'.
   const { error: mErr } = await db
     .from('pack_titles')
-    .update({ current_owner: buyer, last_transfer_tx: transferTx, updated_at: new Date().toISOString() })
+    .update({ current_owner: buyerBase, status: 'transferred', updated_at: new Date().toISOString() })
     .eq('pack_id', packId);
   if (mErr) throw new Error('executeTitleSale: failed to update title mirror to buyer');
+
+  return transferTx;
 }
 
 // ─────────── step 4: revoke the seller (LAST — additive-first/revoke-last) ───────────
@@ -518,15 +557,15 @@ async function transferTitleOnce(
  */
 async function revokeSeller(
   db: DbLike,
-  args: { packId: string; seller: string; buyer: string; orderId: string; rail: string | null },
+  args: { packId: string; sellerBase: string; sellerApp: string; buyerApp: string; orderId: string; rail: string | null },
 ): Promise<void> {
-  const { packId, seller, buyer, orderId, rail } = args;
+  const { packId, sellerBase, sellerApp, buyerApp, orderId, rail } = args;
 
-  // 1) Delete the seller's title_holder wrap(s) for THIS pack only. PACK-SCOPED to the pack's member
-  //    memories: memory_dek_wraps' PK is (memory_id, recipient), so one seller can hold title_holder
-  //    wraps across MANY packs — an unscoped delete-by-holder would silently wipe their decryption on
-  //    every OTHER titled pack they own. We bound the delete to this pack's memory_ids. The buyer's
-  //    wrap (added in the 'dek_rewrapped' step) and the provider wrap survive. Idempotent.
+  // 1) Delete the seller's title_holder DEK wrap(s) — BASE-keyed (holder_wallet = sellerBase), since
+  //    the wrap layer lives in Base-address space. PACK-SCOPED to this pack's members: the wrap unique
+  //    is (memory_id, recipient, holder_wallet), so one seller can hold title_holder wraps across MANY
+  //    packs — an unscoped delete-by-holder would wipe their decryption on every OTHER titled pack.
+  //    The buyer's wrap (added in 'dek_rewrapped') and the provider wrap survive. Idempotent.
   const { data: memRows, error: mErr } = await db
     .from('memory_pack_contents')
     .select('memory_id')
@@ -539,34 +578,35 @@ async function revokeSeller(
       .delete()
       .in('memory_id', memberIds)
       .eq('recipient', 'title_holder')
-      .eq('holder_wallet', seller);
+      .eq('holder_wallet', sellerBase);
     if (dErr) throw new Error('executeTitleSale: failed to revoke seller title_holder wrap');
   }
 
+  // pack_entitlements stay APP-wallet keyed (like the copy path + the user's dashboard queries), NOT
+  // Base. ownerOf remains the decryption authority; this is just the access-record cache.
   // 2) Flip the seller's title_owner entitlement → 'revoked' (no-op if none / already revoked).
   const { error: rErr } = await db
     .from('pack_entitlements')
     .update({ status: 'revoked', revoked_at: new Date().toISOString() })
     .eq('pack_id', packId)
-    .eq('holder_wallet', seller)
+    .eq('holder_wallet', sellerApp)
     .eq('grant_kind', 'title_owner');
   if (rErr) throw new Error('executeTitleSale: failed to revoke seller title_owner entitlement');
 
-  // 3) Grant the buyer a title_owner entitlement (a derived access cache; ownerOf stays authority).
-  //    Idempotent: skip if an active grant already exists; a UNIQUE(pack,holder,grant_kind) race is
-  //    the idempotent no-op.
+  // 3) Grant the buyer a title_owner entitlement. Idempotent: skip if an active grant already exists;
+  //    a UNIQUE(pack,holder,grant_kind) race is the idempotent no-op.
   const { data: existing } = await db
     .from('pack_entitlements')
     .select('id, status')
     .eq('pack_id', packId)
-    .eq('holder_wallet', buyer)
+    .eq('holder_wallet', buyerApp)
     .eq('grant_kind', 'title_owner')
     .maybeSingle();
   const paymentRail = rail === 'stripe' ? 'stripe' : rail === 'solana' ? 'clude_solana' : 'clude_base';
   if (!existing) {
     const { error: gErr } = await db.from('pack_entitlements').insert({
       pack_id: packId,
-      holder_wallet: buyer,
+      holder_wallet: buyerApp,
       grant_kind: 'title_owner',
       order_id: orderId,
       payment_rail: paymentRail,
@@ -581,7 +621,7 @@ async function revokeSeller(
       .from('pack_entitlements')
       .update({ status: 'active', revoked_at: null, order_id: orderId })
       .eq('pack_id', packId)
-      .eq('holder_wallet', buyer)
+      .eq('holder_wallet', buyerApp)
       .eq('grant_kind', 'title_owner');
     if (uErr) throw new Error('executeTitleSale: failed to re-activate buyer title_owner entitlement');
   }
@@ -600,7 +640,11 @@ async function revokeSeller(
  * Defence in depth: if the saga row is missing but a title_transfers audit row exists for the order,
  * the transfer already happened → throw TITLE_FINAL.
  */
-export async function refundTitleSale(db: DbLike, orderId: string): Promise<RefundTitleResult> {
+export async function refundTitleSale(
+  db: DbLike,
+  resolver: BaseIdentityResolver,
+  orderId: string,
+): Promise<RefundTitleResult> {
   const { data: sagaRaw } = await db
     .from('title_sale_sagas')
     .select('order_id, step')
@@ -608,16 +652,20 @@ export async function refundTitleSale(db: DbLike, orderId: string): Promise<Refu
     .maybeSingle();
   const saga = sagaRaw as Pick<SagaRow, 'order_id' | 'step'> | null;
 
-  // No saga row: only safe to call a refund "fine" if the title definitely hasn't moved. If an audit
-  // row proves a transfer, fail closed with TITLE_FINAL.
+  // No saga row: only safe to call a refund "fine" if the title definitely hasn't moved. title_transfers
+  // has no order_id (035), so tie a transfer to THIS order via (pack_id, buyerBase). If one exists, the
+  // title already moved to this buyer → fail closed with TITLE_FINAL.
   if (!saga) {
-    const { data: xfer } = await db
-      .from('title_transfers')
-      .select('order_id')
-      .eq('order_id', orderId)
-      .maybeSingle();
-    if (xfer) {
-      throw new TitleFinalError();
+    const order = await loadOrder(db, orderId);
+    if (order.buyer_wallet) {
+      const buyerBase = resolver.addressFor(order.buyer_wallet);
+      const { data: xfer } = await db
+        .from('title_transfers')
+        .select('transfer_id')
+        .eq('pack_id', order.pack_id)
+        .eq('to_wallet', buyerBase)
+        .maybeSingle();
+      if (xfer) throw new TitleFinalError();
     }
     throw new Error(`refundTitleSale: no title saga for order ${orderId}`);
   }
@@ -650,7 +698,7 @@ export async function refundTitleSale(db: DbLike, orderId: string): Promise<Refu
 async function loadOrder(db: DbLike, orderId: string): Promise<TitleOrderRow> {
   const { data, error } = await db
     .from('marketplace_orders')
-    .select('order_id, pack_id, buyer_wallet, seller_wallet, status, rail')
+    .select('order_id, pack_id, buyer_wallet, seller_wallet, status, rail, listing_kind')
     .eq('order_id', orderId)
     .maybeSingle();
   if (error) throw new Error('executeTitleSale: failed to load order');
@@ -660,33 +708,35 @@ async function loadOrder(db: DbLike, orderId: string): Promise<TitleOrderRow> {
 
 async function loadOrCreateSaga(
   db: DbLike,
-  args: { orderId: string; packId: string; tokenId: bigint; seller: string; buyer: string },
+  args: { orderId: string; packId: string; sellerBase: string; buyerBase: string },
 ): Promise<SagaRow> {
+  const SELECT = 'saga_id, order_id, pack_id, seller_wallet, buyer_wallet, step, transfer_tx, last_error';
   const { data: existing } = await db
     .from('title_sale_sagas')
-    .select('order_id, pack_id, token_id, from_wallet, to_wallet, step, last_error')
+    .select(SELECT)
     .eq('order_id', args.orderId)
     .maybeSingle();
   if (existing) return existing as SagaRow;
 
   const row: SagaRow = {
+    saga_id: sagaIdFor(args.orderId),
     order_id: args.orderId,
     pack_id: args.packId,
-    token_id: args.tokenId.toString(),
-    from_wallet: args.seller,
-    to_wallet: args.buyer,
+    seller_wallet: args.sellerBase,
+    buyer_wallet: args.buyerBase,
     step: 'created',
+    transfer_tx: null,
     last_error: null,
   };
   const { error } = await db.from('title_sale_sagas').insert({ ...row, created_at: new Date().toISOString() });
   if (error && (error as { code?: string }).code !== '23505') {
     throw new Error('executeTitleSale: failed to create saga row');
   }
-  // On a 23505 race, re-read the winner.
+  // On a 23505 race (saga_id PK or order_id UNIQUE), re-read the winner.
   if (error) {
     const { data: won } = await db
       .from('title_sale_sagas')
-      .select('order_id, pack_id, token_id, from_wallet, to_wallet, step, last_error')
+      .select(SELECT)
       .eq('order_id', args.orderId)
       .maybeSingle();
     if (won) return won as SagaRow;
@@ -694,11 +744,16 @@ async function loadOrCreateSaga(
   return row;
 }
 
-/** Persist a forward step and clear last_error; return the updated saga shape. */
-async function advance(db: DbLike, orderId: string, step: TitleSagaStep): Promise<SagaRow> {
+/** Persist a forward step (+ optional columns, e.g. transfer_tx) and clear last_error. */
+async function advance(
+  db: DbLike,
+  orderId: string,
+  step: TitleSagaStep,
+  patch: Partial<Pick<SagaRow, 'transfer_tx'>> = {},
+): Promise<SagaRow> {
   const { error } = await db
     .from('title_sale_sagas')
-    .update({ step, last_error: null, updated_at: new Date().toISOString() })
+    .update({ step, last_error: null, updated_at: new Date().toISOString(), ...patch })
     .eq('order_id', orderId);
   if (error) throw new Error(`executeTitleSale: failed to persist step '${step}'`);
   // Return a lightweight view; only `.step` is read by the caller loop.

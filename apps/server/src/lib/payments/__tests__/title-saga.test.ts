@@ -68,6 +68,51 @@ let nextMemoryId = 5000;
 /** Inject a one-shot DB error on the next write to a given table (consumed once). */
 let failNextWriteOn: { table: string; error: { code?: string; message: string } } | null = null;
 
+// ── SCHEMA-FAITHFUL guards (migration 035/036). The old mock accepted arbitrary columns, which
+//    masked the saga writing columns that do not exist in the deployed schema. These turn any such
+//    write into a loud failure naming the offending column. ──
+const TITLE_TABLE_COLUMNS: Record<string, Set<string>> = {
+  pack_titles: new Set([
+    'pack_id', 'token_id', 'contract_address', 'chain', 'current_owner', 'creator_wallet',
+    'mint_tx', 'mint_block', 'last_synced_block', 'status', 'created_at', 'updated_at',
+  ]),
+  title_sale_sagas: new Set([
+    'saga_id', 'order_id', 'pack_id', 'seller_wallet', 'buyer_wallet', 'step', 'transfer_tx',
+    'last_error', 'created_at', 'updated_at',
+  ]),
+  title_transfers: new Set(['transfer_id', 'pack_id', 'token_id', 'from_wallet', 'to_wallet', 'tx', 'block', 'at']),
+};
+const NOT_NULL_ON_INSERT: Record<string, string[]> = {
+  pack_titles: ['pack_id', 'token_id', 'contract_address', 'creator_wallet'],
+  title_sale_sagas: ['saga_id', 'order_id', 'pack_id', 'seller_wallet', 'buyer_wallet'],
+  title_transfers: ['pack_id', 'token_id', 'to_wallet', 'tx'],
+};
+
+/** Throw (loud RED) if a code write uses a column absent from migration 035, or omits a NOT NULL. */
+function assertSchema(table: string, row: Row, op: 'insert' | 'update') {
+  const cols = TITLE_TABLE_COLUMNS[table];
+  if (!cols) return;
+  for (const k of Object.keys(row)) {
+    if (!cols.has(k)) throw new Error(`schema(${table}): ${op} writes unknown column "${k}" (not in migration 035)`);
+  }
+  if (op === 'insert') {
+    for (const req of NOT_NULL_ON_INSERT[table] ?? []) {
+      if (row[req] == null) throw new Error(`schema(${table}): insert missing NOT NULL column "${req}"`);
+    }
+  }
+}
+
+/** memory_dek_wraps 036 unique (memory_id, recipient, holder_wallet) NULLS NOT DISTINCT. */
+function dekDuplicate(row: Row): boolean {
+  if (row.recipient == null) return false;
+  return (tables.memory_dek_wraps ?? []).some(
+    (e) =>
+      e.memory_id === row.memory_id &&
+      e.recipient === row.recipient &&
+      (e.holder_wallet ?? null) === (row.holder_wallet ?? null),
+  );
+}
+
 function resetDb() {
   for (const k of Object.keys(tables)) delete tables[k];
   opLog.length = 0;
@@ -109,11 +154,16 @@ function makeChain(table: string) {
       const err = maybeFail();
       if (err) return { data: null, error: err };
       const arr = tables[table] ?? (tables[table] = []);
-      const written = pendingInsert.map((r) => {
+      const written: Row[] = [];
+      for (const r of pendingInsert) {
+        assertSchema(table, r, 'insert'); // throws on a column absent from 035
+        if (table === 'memory_dek_wraps' && dekDuplicate(r)) {
+          return { data: null, error: { code: '23505', message: 'duplicate dek wrap (036 unique)' } };
+        }
         const withId = table === 'memories' && r.id == null ? { ...r, id: nextMemoryId++ } : { ...r };
         arr.push(withId);
-        return withId;
-      });
+        written.push(withId);
+      }
       opLog.push({ table, op: 'insert', rows: written.map((r) => ({ ...r })) });
       return { data: written, error: null };
     }
@@ -121,6 +171,7 @@ function makeChain(table: string) {
     if (pendingUpdate) {
       const err = maybeFail();
       if (err) return { data: null, error: err };
+      assertSchema(table, pendingUpdate, 'update'); // throws on a column absent from 035
       const hits = matched();
       for (const row of hits) Object.assign(row, pendingUpdate);
       opLog.push({ table, op: 'update', rows: hits.map((r) => ({ ...r })) });
@@ -249,10 +300,20 @@ import {
   TITLE_SAGA_STEPS,
   isStepBefore,
 } from '../title-saga.js';
+import { createCustodialBaseResolver } from '../base-identity.js';
 
-const AUTHOR = '0xAuthor000000000000000000000000000000aaaa';
-const SELLER = AUTHOR; // creator first sells their own minted title
-const BUYER = '0xBuyer1111111111111111111111111111111bbbb';
+// App wallets (Solana — what marketplace_orders + pack_entitlements carry) are DISTINCT from the Base
+// addresses the resolver derives (ownerOf, the title_holder DEK wraps, the saga row, the mirror). The
+// audit's #6/#7 bug was conflating the two; these tests keep them separate. SELLER/BUYER/AUTHOR are the
+// BASE addresses (chain + wrap space); *_APP are the order/entitlement wallets that derive to them.
+const SEED_HEX = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+const resolver = createCustodialBaseResolver(SEED_HEX);
+const AUTHOR_APP = 'AuthorSo1anaWa11et1111111111111111111111111';
+const SELLER_APP = AUTHOR_APP; // creator first sells their own minted title
+const BUYER_APP = 'BuyerSo1anaWa11et22222222222222222222222222';
+const AUTHOR = resolver.addressFor(AUTHOR_APP); // Base address: mint-to, ownerOf, title_holder wraps
+const SELLER = AUTHOR;
+const BUYER = resolver.addressFor(BUYER_APP);
 const PACK = 'pack-deadbeef';
 const ORDER_ID = 'ord-title01';
 const MERKLE = '0x' + 'aa'.repeat(32);
@@ -318,9 +379,9 @@ function titleOrder(overrides: Row = {}) {
     pack_id: PACK,
     listing_id: 'lst-title',
     listing_kind: 'title',
-    buyer_wallet: BUYER,
+    buyer_wallet: BUYER_APP,
     buyer_account_id: null,
-    seller_wallet: SELLER,
+    seller_wallet: SELLER_APP,
     rail: 'stripe',
     currency: 'usd',
     amount: '50.00',
@@ -345,11 +406,10 @@ function seedSaleFixtures(orderOverrides: Row = {}) {
   seed('pack_titles', [
     {
       pack_id: PACK,
-      chain: 'base',
+      chain: 'base-sepolia',
       token_id: '777',
       contract_address: '0xCONTRACT',
-      merkle_root: MERKLE,
-      manifest_hash: MANIFEST,
+      creator_wallet: SELLER,
       current_owner: SELLER,
       status: 'minted',
       mint_tx: '0xmint1',
@@ -383,7 +443,7 @@ describe('executeTitleSale — revoke is PACK-SCOPED (no collateral title wipe)'
     ]);
 
     const { evm } = makeEvm({ owner: SELLER }); // the transfer step moves SELLER -> BUYER
-    const res = await executeTitleSale(db, evm, ORDER_ID);
+    const res = await executeTitleSale(db, evm, resolver, ORDER_ID);
     expect(res.step).toBe('revoked');
 
     // The seller's surviving title_holder wraps are EXACTLY pack B's (20, 21); pack A's (10, 11) revoked.
@@ -439,7 +499,7 @@ describe('mintTitleForPack — mint the 1-of-1 + mirror, idempotent', () => {
   it('is idempotent when a minted MIRROR row already exists — no chain read needed to no-op', async () => {
     seedArtifact();
     seedTitlePack(2, true);
-    seed('pack_titles', [{ pack_id: PACK, status: 'minted', current_owner: AUTHOR, token_id: '777', mint_tx: '0xmint1', merkle_root: MERKLE, manifest_hash: MANIFEST, contract_address: '0xCONTRACT' }]);
+    seed('pack_titles', [{ pack_id: PACK, status: 'minted', current_owner: AUTHOR, creator_wallet: AUTHOR, token_id: '777', mint_tx: '0xmint1', contract_address: '0xCONTRACT' }]);
     const { evm, calls } = makeEvm({ owner: null });
 
     const res = await mintTitleForPack(db, evm, PACK, AUTHOR);
@@ -465,7 +525,7 @@ describe('executeTitleSale — advances created → dek_rewrapped → paid → t
     seedSaleFixtures();
     const { evm, calls, state } = makeEvm({ owner: SELLER });
 
-    const res = await executeTitleSale(db, evm, ORDER_ID);
+    const res = await executeTitleSale(db, evm, resolver, ORDER_ID);
 
     expect(res.step).toBe('revoked');
     expect(res.done).toBe(true);
@@ -484,7 +544,10 @@ describe('executeTitleSale — advances created → dek_rewrapped → paid → t
     // a title_transfers audit row + the mirror updated to the buyer.
     const xfers = tables.title_transfers ?? [];
     expect(xfers).toHaveLength(1);
-    expect(xfers[0]).toMatchObject({ order_id: ORDER_ID, from_wallet: SELLER, to_wallet: BUYER });
+    // 035 columns: from/to are BASE addresses, tx is recorded; there is no order_id column.
+    expect(xfers[0]).toMatchObject({ from_wallet: SELLER, to_wallet: BUYER });
+    expect(xfers[0].tx).toBeTruthy();
+    expect(xfers[0].order_id).toBeUndefined();
     expect((tables.pack_titles ?? [])[0].current_owner).toBe(BUYER);
 
     // STEP 4 (revoked): seller's title_holder wrap is gone; seller title_owner entitlement revoked;
@@ -493,10 +556,11 @@ describe('executeTitleSale — advances created → dek_rewrapped → paid → t
       (w) => w.recipient === 'title_holder' && w.holder_wallet === SELLER,
     );
     expect(sellerWraps).toHaveLength(0);
+    // pack_entitlements are APP-wallet keyed (not Base) — like the copy path + the dashboard.
     const ents = tables.pack_entitlements ?? [];
-    const buyerGrant = ents.find((e) => e.holder_wallet === BUYER && e.grant_kind === 'title_owner');
+    const buyerGrant = ents.find((e) => e.holder_wallet === BUYER_APP && e.grant_kind === 'title_owner');
     expect(buyerGrant?.status).toBe('active');
-    const sellerGrant = ents.find((e) => e.holder_wallet === SELLER && e.grant_kind === 'title_owner');
+    const sellerGrant = ents.find((e) => e.holder_wallet === SELLER_APP && e.grant_kind === 'title_owner');
     // seller grant only exists if it was seeded; here none was, so the assertion is conditional.
     if (sellerGrant) expect(sellerGrant.status).toBe('revoked');
 
@@ -520,7 +584,7 @@ describe('executeTitleSale — advances created → dek_rewrapped → paid → t
       return { txHash: '0xxfer1' as any };
     });
 
-    await executeTitleSale(db, evm, ORDER_ID);
+    await executeTitleSale(db, evm, resolver, ORDER_ID);
 
     // Every rewrap precedes the single transfer.
     const firstTransfer = sequence.indexOf('transfer');
@@ -539,11 +603,11 @@ describe('executeTitleSale — resumable + idempotent from any step (no double-m
     seedSaleFixtures();
     const { evm, calls } = makeEvm({ owner: SELLER });
 
-    await executeTitleSale(db, evm, ORDER_ID); // first run completes
+    await executeTitleSale(db, evm, resolver, ORDER_ID); // first run completes
     const wrapCountAfter1 = (tables.memory_dek_wraps ?? []).length;
     const entCountAfter1 = (tables.pack_entitlements ?? []).length;
 
-    await executeTitleSale(db, evm, ORDER_ID); // resume on an already-done saga
+    await executeTitleSale(db, evm, resolver, ORDER_ID); // resume on an already-done saga
 
     expect(calls.transfer).toBe(1); // the irreversible step happened EXACTLY once
     expect((tables.memory_dek_wraps ?? []).length).toBe(wrapCountAfter1);
@@ -556,10 +620,10 @@ describe('executeTitleSale — resumable + idempotent from any step (no double-m
     for (const id of [10, 11]) {
       seed('memory_dek_wraps', [{ memory_id: id, recipient: 'title_holder', wrapped_dek: `wrapped-for-${BUYER}`, wrap_pubkey: 'eph-pub', holder_wallet: BUYER }]);
     }
-    seed('title_sale_sagas', [{ order_id: ORDER_ID, pack_id: PACK, token_id: '777', from_wallet: SELLER, to_wallet: BUYER, step: 'paid', last_error: null }]);
+    seed('title_sale_sagas', [{ saga_id: 'tsaga-test', order_id: ORDER_ID, pack_id: PACK, seller_wallet: SELLER, buyer_wallet: BUYER, step: 'paid', transfer_tx: null, last_error: null }]);
     const { evm, calls } = makeEvm({ owner: SELLER });
 
-    const res = await executeTitleSale(db, evm, ORDER_ID);
+    const res = await executeTitleSale(db, evm, resolver, ORDER_ID);
 
     expect(wrapDekMock).not.toHaveBeenCalled(); // rewrap NOT repeated
     expect(calls.transfer).toBe(1);
@@ -573,12 +637,12 @@ describe('executeTitleSale — resumable + idempotent from any step (no double-m
     for (const id of [10, 11]) {
       seed('memory_dek_wraps', [{ memory_id: id, recipient: 'title_holder', wrapped_dek: `wrapped-for-${BUYER}`, wrap_pubkey: 'eph-pub', holder_wallet: BUYER }]);
     }
-    seed('title_sale_sagas', [{ order_id: ORDER_ID, pack_id: PACK, token_id: '777', from_wallet: SELLER, to_wallet: BUYER, step: 'transferred', last_error: null }]);
-    seed('title_transfers', [{ order_id: ORDER_ID, token_id: '777', from_wallet: SELLER, to_wallet: BUYER, transfer_tx: '0xxfer1' }]);
+    seed('title_sale_sagas', [{ saga_id: 'tsaga-test', order_id: ORDER_ID, pack_id: PACK, seller_wallet: SELLER, buyer_wallet: BUYER, step: 'transferred', transfer_tx: '0xxfer1', last_error: null }]);
+    seed('title_transfers', [{ pack_id: PACK, token_id: '777', from_wallet: SELLER, to_wallet: BUYER, tx: '0xxfer1' }]);
     // Chain already reflects the completed transfer.
     const { evm, calls } = makeEvm({ owner: BUYER });
 
-    const res = await executeTitleSale(db, evm, ORDER_ID);
+    const res = await executeTitleSale(db, evm, resolver, ORDER_ID);
 
     expect(calls.transfer).toBe(0); // NEVER re-broadcast an already-mined transfer
     expect(res.step).toBe('revoked');
@@ -591,11 +655,11 @@ describe('executeTitleSale — resumable + idempotent from any step (no double-m
     for (const id of [10, 11]) {
       seed('memory_dek_wraps', [{ memory_id: id, recipient: 'title_holder', wrapped_dek: `wrapped-for-${BUYER}`, wrap_pubkey: 'eph-pub', holder_wallet: BUYER }]);
     }
-    seed('title_sale_sagas', [{ order_id: ORDER_ID, pack_id: PACK, token_id: '777', from_wallet: SELLER, to_wallet: BUYER, step: 'paid', last_error: null }]);
+    seed('title_sale_sagas', [{ saga_id: 'tsaga-test', order_id: ORDER_ID, pack_id: PACK, seller_wallet: SELLER, buyer_wallet: BUYER, step: 'paid', transfer_tx: null, last_error: null }]);
     // The previous run broadcast + the tx mined, but crashed before persisting 'transferred'.
     const { evm, calls } = makeEvm({ owner: BUYER });
 
-    const res = await executeTitleSale(db, evm, ORDER_ID);
+    const res = await executeTitleSale(db, evm, resolver, ORDER_ID);
 
     expect(calls.transfer).toBe(0); // ownerOf==buyer pre-check skips the re-broadcast (M4/RT1)
     expect(res.step).toBe('revoked');
@@ -614,7 +678,7 @@ describe('executeTitleSale — a failure is recorded + the saga stays resumable'
     // vi.fn call count — which counts the rejected attempt too — not the internal owner-mutation).
     evm.transferTitle.mockRejectedValueOnce(new Error('RPC 429: rate limited'));
 
-    await expect(executeTitleSale(db, evm, ORDER_ID)).rejects.toThrow(/429|transfer/i);
+    await expect(executeTitleSale(db, evm, resolver, ORDER_ID)).rejects.toThrow(/429|transfer/i);
 
     // The saga did not advance past paid; the transfer did not land; the seller is NOT revoked.
     const saga = (tables.title_sale_sagas ?? [])[0];
@@ -627,7 +691,7 @@ describe('executeTitleSale — a failure is recorded + the saga stays resumable'
     expect(sellerWraps).toHaveLength(2);
 
     // RESUMABLE: a later sweep (transfer now succeeds) completes the saga.
-    const res2 = await executeTitleSale(db, evm, ORDER_ID);
+    const res2 = await executeTitleSale(db, evm, resolver, ORDER_ID);
     expect(evm.transferTitle).toHaveBeenCalledTimes(2); // first failed throw + second success
     expect(res2.step).toBe('revoked');
     expect(state.owner).toBe(BUYER);
@@ -637,7 +701,7 @@ describe('executeTitleSale — a failure is recorded + the saga stays resumable'
     seedSaleFixtures({ status: 'awaiting_payment' });
     const { evm, calls } = makeEvm({ owner: SELLER });
 
-    await expect(executeTitleSale(db, evm, ORDER_ID)).rejects.toThrow(/paid|payment/i);
+    await expect(executeTitleSale(db, evm, resolver, ORDER_ID)).rejects.toThrow(/paid|payment/i);
     expect(calls.transfer).toBe(0);
     expect(wrapDekMock).not.toHaveBeenCalled();
   });
@@ -646,7 +710,7 @@ describe('executeTitleSale — a failure is recorded + the saga stays resumable'
     seedSaleFixtures();
     const { evm } = makeEvm({ owner: SELLER });
 
-    await executeTitleSale(db, evm, ORDER_ID);
+    await executeTitleSale(db, evm, resolver, ORDER_ID);
 
     // At completion: buyer has wraps, seller does not. Crucially the buyer wrap insert (step 1)
     // ordered strictly before the seller wrap delete (step 4).
@@ -669,10 +733,10 @@ describe('refundTitleSale — RT3: refundable before transfer, TITLE_FINAL after
   it('allows a refund while step < transferred (created / dek_rewrapped / paid)', async () => {
     for (const step of ['created', 'dek_rewrapped', 'paid'] as const) {
       resetDb();
-      seed('title_sale_sagas', [{ order_id: ORDER_ID, pack_id: PACK, token_id: '777', from_wallet: SELLER, to_wallet: BUYER, step, last_error: null }]);
+      seed('title_sale_sagas', [{ saga_id: 'tsaga-test', order_id: ORDER_ID, pack_id: PACK, seller_wallet: SELLER, buyer_wallet: BUYER, step, transfer_tx: null, last_error: null }]);
       seed('marketplace_orders', [titleOrder({ status: 'paid' })]);
 
-      const res = await refundTitleSale(db, ORDER_ID);
+      const res = await refundTitleSale(db, resolver, ORDER_ID);
       expect(res.refundable).toBe(true);
       // The saga is marked refunded/aborted so it can never resume into a transfer.
       const saga = (tables.title_sale_sagas ?? [])[0];
@@ -681,21 +745,23 @@ describe('refundTitleSale — RT3: refundable before transfer, TITLE_FINAL after
   });
 
   it('THROWS TITLE_FINAL once step === transferred (the buyer NFT cannot be clawed back)', async () => {
-    seed('title_sale_sagas', [{ order_id: ORDER_ID, pack_id: PACK, token_id: '777', from_wallet: SELLER, to_wallet: BUYER, step: 'transferred', last_error: null }]);
+    seed('title_sale_sagas', [{ saga_id: 'tsaga-test', order_id: ORDER_ID, pack_id: PACK, seller_wallet: SELLER, buyer_wallet: BUYER, step: 'transferred', transfer_tx: '0xxfer1', last_error: null }]);
     seed('marketplace_orders', [titleOrder({ status: 'delivering' })]);
 
-    await expect(refundTitleSale(db, ORDER_ID)).rejects.toThrow(/TITLE_FINAL/);
+    await expect(refundTitleSale(db, resolver, ORDER_ID)).rejects.toThrow(/TITLE_FINAL/);
   });
 
   it('THROWS TITLE_FINAL once step === revoked (sale fully final)', async () => {
-    seed('title_sale_sagas', [{ order_id: ORDER_ID, pack_id: PACK, token_id: '777', from_wallet: SELLER, to_wallet: BUYER, step: 'revoked', last_error: null }]);
-    await expect(refundTitleSale(db, ORDER_ID)).rejects.toThrow(/TITLE_FINAL/);
+    seed('title_sale_sagas', [{ saga_id: 'tsaga-test', order_id: ORDER_ID, pack_id: PACK, seller_wallet: SELLER, buyer_wallet: BUYER, step: 'revoked', transfer_tx: null, last_error: null }]);
+    await expect(refundTitleSale(db, resolver, ORDER_ID)).rejects.toThrow(/TITLE_FINAL/);
   });
 
   it('throws TITLE_FINAL when the saga row is missing but the chain shows the title already moved (defence in depth)', async () => {
-    // No saga row, but a title_transfers audit row proves the irreversible move happened.
-    seed('title_transfers', [{ order_id: ORDER_ID, token_id: '777', from_wallet: SELLER, to_wallet: BUYER, transfer_tx: '0xxfer1' }]);
-    await expect(refundTitleSale(db, ORDER_ID)).rejects.toThrow(/TITLE_FINAL/);
+    // No saga row, but a title_transfers audit row tied to this order via (pack_id, buyerBase) proves
+    // the irreversible move happened. The order is needed to resolve buyerBase from the app wallet.
+    seed('marketplace_orders', [titleOrder({ status: 'delivering' })]);
+    seed('title_transfers', [{ pack_id: PACK, token_id: '777', from_wallet: SELLER, to_wallet: BUYER, tx: '0xxfer1' }]);
+    await expect(refundTitleSale(db, resolver, ORDER_ID)).rejects.toThrow(/TITLE_FINAL/);
   });
 });
 
