@@ -466,12 +466,18 @@ async function writeRegisterRespond(args: WriteRegisterArgs): Promise<{ handled:
   };
   const manifestHash = computeManifestHash(manifestForHash);
 
+  // Read the staged .pmp once: its size for the row, and its bytes (base64) for an INLINE download
+  // so the client can save the file directly — no server-side blob storage, no dangling /download URL.
   let byteSize: number | null = null;
+  let pmpBase64: string | null = null;
   try {
-    byteSize = readFileSync(outFile).byteLength;
+    const bytes = readFileSync(outFile);
+    byteSize = bytes.byteLength;
+    pmpBase64 = bytes.toString('base64');
   } catch {
     byteSize = null;
   }
+  const pmpFilename = `${pmpFilenameBase}.pmp`;
 
   // 9. Register the artifact. UNIQUE(owner_wallet, manifest_hash) (§00 MINOR 14): a repeat export of
   //    the same content collides — treat the conflict as "already registered".
@@ -511,13 +517,13 @@ async function writeRegisterRespond(args: WriteRegisterArgs): Promise<{ handled:
         .limit(1)
         .maybeSingle();
       if (existing) {
-        // No `download` link: there is no GET /v1/pmp/artifacts/:id/download handler, and the
-        // .pmp bytes are not persisted (storage_url is null), so advertising one would dangle a
-        // 404. The artifact metadata below is enough to identify the registered pack; a download
-        // URL can be added here once byte persistence exists.
+        // Re-export of identical content: the artifact row already exists, but we still generated the
+        // .pmp bytes this call, so return them inline so the client can download the same pack again.
         res.status(200).json({
           artifact: existing,
           deduped: true,
+          pmp_base64: pmpBase64,
+          filename: pmpFilename,
         });
         return { handled: true };
       }
@@ -527,10 +533,12 @@ async function writeRegisterRespond(args: WriteRegisterArgs): Promise<{ handled:
     return { handled: true };
   }
 
-  // No `download` link: see the dedup branch above — there is no /download handler and the .pmp
-  // bytes are not persisted (storage_url is null), so the URL would 404. Return metadata only.
+  // Return the artifact metadata + the .pmp bytes inline (base64) so the client downloads the file
+  // directly. No storage_url / no /download handler: the bytes are served once here, on export.
   res.status(201).json({
     artifact: artifactRow,
+    pmp_base64: pmpBase64,
+    filename: pmpFilename,
   });
   return { handled: true };
 }

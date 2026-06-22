@@ -244,9 +244,25 @@ export function MemoryExportPanel(props: MemoryExportPanelProps) {
   }, [api, selection, name, description, category, encrypt, onExported]);
 
   const handleDownload = useCallback(() => {
-    if (!result) return;
-    if (onDownload) onDownload(result.artifact, result.download);
-    else if (typeof window !== 'undefined') window.open(result.download, '_blank');
+    if (!result || typeof window === 'undefined') return;
+    if (result.pmp_base64) {
+      // Decode the inline .pmp bytes → Blob → save the file directly. No server round-trip, and
+      // never window.open(undefined) (the old dangling-URL path that opened a blank tab).
+      const bin = atob(result.pmp_base64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = result.filename || `${result.artifact.title || 'memory-pack'}.pmp`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      return;
+    }
+    // Fallback if no bytes came back: defer to the host app's handler, never a blank tab.
+    if (onDownload) onDownload(result.artifact, result.download ?? '');
   }, [result, onDownload]);
 
   const orderedBreakdown = useMemo(() => {

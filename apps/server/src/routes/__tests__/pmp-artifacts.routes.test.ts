@@ -28,6 +28,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import request from 'supertest';
+import { writeFileSync } from 'node:fs';
 
 // ── Logger ──
 vi.mock('@clude/shared/core/logger', () => ({
@@ -588,6 +589,9 @@ describe('POST /v1/pmp/export', () => {
   it('builds a .pmp from the owner pack and registers an artifact with the right manifest_hash', async () => {
     authedWallet = OWNER;
     const packId = seedOwnedPack();
+    // Stage real .pmp bytes via the (mocked) writer so the route reads them back for the inline download.
+    const pmpBytes = Buffer.from('PMP-TEST-BYTES');
+    writeMemoryPack.mockImplementationOnce((file: string) => writeFileSync(file, pmpBytes));
 
     const res = await request(app()).post('/v1/pmp/export').send({ pack_id: packId });
 
@@ -617,9 +621,11 @@ describe('POST /v1/pmp/export', () => {
     );
     // The artifact id identifies the registered pack.
     expect(res.body.artifact.artifact_id).toMatch(/^pmpa-/);
-    // NO `download` link: there is no GET /v1/pmp/artifacts/:id/download handler and the .pmp
-    // bytes are not persisted, so advertising one would dangle a 404 (a client would follow it).
+    // NO dangling `download` URL (the old window.open path 404'd). Instead the .pmp bytes are
+    // returned INLINE (base64) with a filename, so the client saves the file directly — no round-trip.
     expect(res.body.download).toBeUndefined();
+    expect(res.body.pmp_base64).toBe(pmpBytes.toString('base64'));
+    expect(res.body.filename).toMatch(/\.pmp$/);
   });
 
   it('manifest_hash is deterministic for the same pack content (re-derivable)', async () => {

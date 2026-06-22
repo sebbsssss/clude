@@ -66,8 +66,13 @@ export interface PmpArtifact {
 
 export interface ExportResult {
   artifact: PmpArtifact;
-  /** URL to download the .tar.zst (owner-scoped). */
-  download: string;
+  /** The .pmp file bytes (base64), returned inline so the client saves the file directly — no
+   *  server-side blob storage and no dangling /download URL. */
+  pmp_base64?: string;
+  /** Suggested download filename, e.g. "my-pack.pmp". */
+  filename?: string;
+  /** @deprecated the server no longer returns a download URL; downloads are served inline via pmp_base64. */
+  download?: string;
   /** true when this exact pack was already registered (idempotent re-export). */
   deduped?: boolean;
 }
