@@ -44,6 +44,9 @@ import { getDb } from '@clude/shared/core/database';
 import { requirePrivyAuth, optionalPrivyAuth } from '@clude/brain/auth/privy-auth';
 import { requireOwnership } from '@clude/brain/auth/require-ownership';
 import { createChildLogger } from '@clude/shared/core/logger';
+import { getMinterEvmTitleClient } from '../lib/payments/evm-title-config.js';
+import { getBaseIdentityResolver } from '../lib/payments/base-identity.js';
+import { mintTitleOnExport } from '../lib/payments/mint-title-on-export.js';
 
 const log = createChildLogger('pmp-artifacts-routes');
 
@@ -145,6 +148,37 @@ function generateArtifactId(): string {
 
 function generateImportId(): string {
   return `pmpi-${randomBytes(4).toString('hex')}`;
+}
+
+/**
+ * FOUNDER MODEL (2026-06-23): a title-licensed pack becomes an ON-CHAIN ASSET at EXPORT — the moment
+ * the `.pmp` is produced, not when it is later listed for sale. Mint the Base title here.
+ *
+ * BEST-EFFORT + IDEMPOTENT. The `.pmp` has already shipped in the export response, so this NEVER fails
+ * the export: a missing Base env (CLUDE_PACK_TITLE_ADDRESS / BASE_MINTER_KEY / BASE_CUSTODIAL_SEED — so
+ * non-Base deployments simply skip), the SEC-1 mainnet gate, or a transient chain error is LOGGED and
+ * swallowed. mintTitleOnExport is itself idempotent (deterministic snapshot, no-op mint once the title
+ * exists), so a later re-export — or a reconciliation retry — completes a miss without double-minting.
+ */
+async function mintTitleAtExportBestEffort(
+  db: ReturnType<typeof getDb>,
+  sourcePackId: string,
+  creatorAppWallet: string,
+): Promise<void> {
+  try {
+    const evm = getMinterEvmTitleClient();
+    const resolver = getBaseIdentityResolver();
+    const r = await mintTitleOnExport(db, evm, resolver, { sourcePackId, creatorAppWallet });
+    log.info(
+      { sourcePackId, snapshotPackId: r.snapshotPackId, tokenId: r.tokenId, alreadyMinted: r.alreadyMinted },
+      'export: Base title minted at export',
+    );
+  } catch (err) {
+    log.warn(
+      { err: (err as Error).message, sourcePackId },
+      'export: Base title mint skipped (Base env missing or chain error) — .pmp already delivered',
+    );
+  }
 }
 
 // ─────────── Canonicalisation (matches content-hash.ts `stableStringify`) ───────────
@@ -825,6 +859,10 @@ export function pmpArtifactsRoutes(): Router {
         });
         if (!result.handled) {
           res.status(500).json({ error: 'export_failed' } satisfies ErrorBody);
+        } else if (licenseType === 'title') {
+          // FOUNDER MODEL: a title pack exists on Base AT EXPORT. The .pmp already shipped in the
+          // response above; mint the Base title best-effort + idempotent (never fails the export).
+          await mintTitleAtExportBestEffort(db, effectivePackId, owner);
         }
       } catch (err) {
         log.error({ err, packId }, 'POST /v1/pmp/export failed');
