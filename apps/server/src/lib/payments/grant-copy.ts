@@ -308,9 +308,32 @@ export async function grantCopy(order: OrderRow): Promise<void> {
   });
   if (entErr) {
     if ((entErr as { code?: string }).code === '23505') {
-      // Another sweep inserted the grant between our pre-check and here — that delivery won;
-      // ours is the idempotent no-op. The clones it (or we) wrote are correct either way.
-      log.info({ orderId: order.order_id, packId }, 'grantCopy: entitlement already inserted by a concurrent sweep — idempotent');
+      // A row already exists on the UNIQUE(pack_id, holder_wallet, grant_kind) key. Two cases land
+      // here and BOTH must end with the buyer holding an ACTIVE grant — never a silent no-op:
+      //   (a) a concurrent sweep of the same delivery inserted an 'active' grant first; or
+      //   (b) §00 M10 clawback left a lingering 'refunded' grant from a PRIOR refunded order and this
+      //       is a genuine RE-BUY (the active-only pre-check at the top stepped right over it, so we
+      //       re-cloned and re-paid). Silently returning here would mark the order delivered while the
+      //       entitlement stayed 'refunded' → hasActiveCopyEntitlement = false → the re-paying buyer is
+      //       permanently locked out.
+      // RE-ACTIVATE the existing row to this order: status→'active', clear revoked_at, re-point
+      // order_id. Idempotent — for case (a) this re-writes an already-active row to itself. A genuine
+      // double-deliver of the SAME active order never reaches here (the active-only pre-check returns
+      // first), so the re-activate only ever runs for a real (re)delivery.
+      const { error: reactErr } = await db
+        .from('pack_entitlements')
+        .update({ status: 'active', revoked_at: null, order_id: order.order_id })
+        .eq('pack_id', packId)
+        .eq('holder_wallet', buyer)
+        .eq('grant_kind', 'copy_license');
+      if (reactErr) {
+        log.error({ err: reactErr, orderId: order.order_id, packId }, 'grantCopy: entitlement re-activation failed');
+        throw new Error('grantCopy: failed to re-activate entitlement');
+      }
+      log.info(
+        { orderId: order.order_id, packId, buyer: buyer.slice(0, 8) },
+        'grantCopy: entitlement already present (concurrent sweep or refunded re-buy) — re-activated to this order',
+      );
       return;
     }
     log.error({ err: entErr, orderId: order.order_id, packId }, 'grantCopy: entitlement insert failed');

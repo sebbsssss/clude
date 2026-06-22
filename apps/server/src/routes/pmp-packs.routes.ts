@@ -22,6 +22,7 @@ import {
 } from '@clude/tokenization';
 import { getDb } from '@clude/shared/core/database';
 import { requirePrivyAuth, optionalPrivyAuth } from '@clude/brain/auth/privy-auth';
+import { requireOwnership } from '@clude/brain/auth/require-ownership';
 import { withOwnerWallet } from '@clude/shared/core/owner-context';
 import { createChildLogger } from '@clude/shared/core/logger';
 import { getPdaMintClient } from '../lib/pda-mint-client.js';
@@ -50,10 +51,10 @@ interface PackErrorBody {
 }
 
 function ownerFromReq(req: Request): string | null {
-  if (req.verifiedWallet) return req.verifiedWallet;
-  const q = req.query.owner;
-  if (typeof q === 'string' && q.length > 0) return q;
-  return null;
+  // Only the wallet requireOwnership proved against the authenticated identity — NEVER a client
+  // ?owner= (the spoof: any logged-in user could pass ?owner=<victim> and pack the victim's
+  // memories). Mirrors the PR #290 hardening already applied in compliance.routes.ts.
+  return req.verifiedWallet ?? null;
 }
 
 function publicBaseUrl(req: Request): string {
@@ -137,7 +138,7 @@ export function pmpPacksRoutes(): Router {
    *   gate_uri?: string
    * }
    */
-  router.post('/v1/packs', requirePrivyAuth, async (req: Request, res: Response) => {
+  router.post('/v1/packs', requirePrivyAuth, requireOwnership, async (req: Request, res: Response) => {
     const owner = ownerFromReq(req);
     if (!owner) {
       res.status(401).json({ error: 'unauthenticated' } satisfies PackErrorBody);

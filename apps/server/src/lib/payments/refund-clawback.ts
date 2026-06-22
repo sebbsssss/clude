@@ -106,8 +106,77 @@ export async function clawbackCopy(order: OrderRow): Promise<void> {
   }
   const deletedCount = Array.isArray(deleted) ? deleted.length : 0;
 
+  // 3) FREE the supply unit this order claimed (the inverse of claimSupplyUnit's over-sell guard).
+  //    Gate it on deletedCount > 0 so it fires EXACTLY ONCE across all (idempotent) clawback re-runs
+  //    for this order: the run that actually deleted this order's clones is the run that releases its
+  //    unit; a re-fired dispute / poller retry deletes zero rows and so never double-decrements (which
+  //    would corrupt the counter / wrongly re-open a sold-out listing). Best-effort: a failure here
+  //    must not block the (already-completed) revoke+delete, so we log and move on rather than throw.
+  if (deletedCount > 0) {
+    await releaseSupplyUnit(order.listing_id, orderId);
+  }
+
   log.info(
     { orderId, packId, buyer: buyer.slice(0, 8), revokedCount, deletedCount },
     'clawbackCopy: copy clawed back (entitlement refunded + clones deleted)',
   );
+}
+
+/** Bounded CAS retries to release a unit (mirrors claimSupplyUnit's contention budget). */
+const SUPPLY_RELEASE_MAX_ATTEMPTS = 5;
+
+/**
+ * Return one claimed unit to a finite-supply listing on refund: decrement `supply_sold` and, if the
+ * listing had been flipped to 'sold_out' by the final claim, restore it to 'listed' so the freed unit
+ * is buyable again. A no-op for unlimited listings (supply_total IS NULL → never claimed) and for an
+ * order with no listing_id (keyless/legacy).
+ *
+ * Atomic via the same optimistic compare-and-swap claimSupplyUnit uses (PostgREST cannot decrement a
+ * column in place without an RPC): read supply_sold = N → UPDATE … SET supply_sold = N-1 [, status =
+ * 'listed' if it was 'sold_out'] WHERE listing_id = ? AND supply_sold = N. A concurrent claim/release
+ * that moved the counter off N loses the CAS and retries against the fresh value, so the decrement can
+ * never race-corrupt the count. Floored at 0 — a never-claimed listing is left untouched.
+ */
+async function releaseSupplyUnit(listingId: string | null, orderId: string): Promise<void> {
+  if (!listingId) return; // keyless / legacy order carries no listing to credit back
+  const db = getDb();
+  for (let attempt = 0; attempt < SUPPLY_RELEASE_MAX_ATTEMPTS; attempt++) {
+    const { data: row, error: readErr } = await db
+      .from('pack_listings')
+      .select('supply_total, supply_sold, status')
+      .eq('listing_id', listingId)
+      .limit(1)
+      .maybeSingle();
+    if (readErr) {
+      log.warn({ err: readErr, orderId, listingId }, 'releaseSupplyUnit: listing read failed (skipping)');
+      return;
+    }
+    const listing = row as { supply_total: number | null; supply_sold: number; status: string } | null;
+    if (!listing) return; // listing gone — nothing to credit back
+    if (listing.supply_total === null) return; // unlimited listing was never claimed against
+    const sold = typeof listing.supply_sold === 'number' ? listing.supply_sold : 0;
+    if (sold <= 0) return; // nothing to release (already at floor)
+
+    const next = sold - 1;
+    const patch: Record<string, unknown> = { supply_sold: next };
+    // Un-flip a sold-out listing: the freed unit makes it buyable again.
+    if (listing.status === 'sold_out') patch.status = 'listed';
+
+    const { data: updated, error: updErr } = await db
+      .from('pack_listings')
+      .update(patch)
+      .eq('listing_id', listingId)
+      .eq('supply_sold', sold) // CAS: only release against the value we just read
+      .select('listing_id');
+    if (updErr) {
+      log.warn({ err: updErr, orderId, listingId }, 'releaseSupplyUnit: supply release update failed (skipping)');
+      return;
+    }
+    if (Array.isArray(updated) && updated.length > 0) {
+      log.info({ orderId, listingId, supplySold: next }, 'releaseSupplyUnit: freed one unit on refund');
+      return;
+    }
+    // Lost the CAS (a concurrent claim/release moved supply_sold) — retry against the fresh value.
+  }
+  log.warn({ orderId, listingId }, 'releaseSupplyUnit: conceded after max CAS attempts (contention)');
 }

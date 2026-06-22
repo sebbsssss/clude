@@ -363,6 +363,24 @@ const SECRET_DETECTORS: Detector[] = [
     severity: 'reject',
     regex: /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g,
   },
+  {
+    // Telegram bot token: <bot_id>:<secret>. The ':' separator splits the value into
+    // two sub-40-char runs, so the entropy fallback's contiguous-run rule never sees
+    // it — without this explicit shape it ships clean. Bot ids are 6–12 digits and the
+    // secret is ~35 chars of [A-Za-z0-9_-]. The `digits:token` shape does not occur in
+    // prose, so this is precise. Match the whole token (group 0) for redaction.
+    category: 'secret_api_key',
+    severity: 'reject',
+    regex: /\b\d{6,12}:[A-Za-z0-9_-]{30,}\b/g,
+  },
+  {
+    // DigitalOcean personal access / OAuth / refresh tokens: dop_v1_ / doo_v1_ / dor_v1_
+    // followed by 64 hex. Below the entropy floor in some forms and matches no other
+    // prefix → previously invisible.
+    category: 'secret_api_key',
+    severity: 'reject',
+    regex: /\bdo[opr]_v1_[a-f0-9]{64}\b/g,
+  },
 
   // ── Generic high-length crypto secrets (LAST, so a prefixed token always wins) ──
   {
@@ -452,8 +470,22 @@ function luhnValid(digits: string): boolean {
 // ── Shannon-entropy fallback ──
 // Catches unknown high-entropy blobs (an opaque token we don't have a prefix for).
 // Severity 'hold': suspicious, but not provably a credential, so it must NOT hard-reject.
-const ENTROPY_TOKEN = /[A-Za-z0-9+/_-]{40,}/g;
-const ENTROPY_MIN_BITS = 3.8; // bits/char; English prose sits well below, random base64 above.
+//
+// Two tiers, fail-closed without over-flagging prose:
+//   - LONG (≥40 chars): the original catch-all at 3.8 bits/char. English prose sits
+//     well below; random base64 sits above. Unchanged so its boundary tests are stable.
+//   - SHORT (20–39 chars): an opaque ~24-char credential is below the 40-char floor and
+//     matches no provider prefix, so it shipped clean. We catch it with a HIGHER bar
+//     (4.0 bits/char): measured English words/identifiers up to ~3.6 bits, real random
+//     tokens ≥4.5 bits — so 4.0 holds opaque secrets without flagging long words.
+// Candidates are also split on ':' so a `digits:base64ish` segment (e.g. a token whose
+// halves are each <40) is scored on its high-entropy half rather than slipping the
+// contiguous-run rule.
+const ENTROPY_TOKEN = /[A-Za-z0-9+/_-]{20,}/g;
+const ENTROPY_MIN_BITS_LONG = 3.8; // bits/char, for runs ≥ ENTROPY_LONG_LEN.
+const ENTROPY_MIN_BITS_SHORT = 4.0; // bits/char, stricter bar for shorter 20–39 runs.
+const ENTROPY_LONG_LEN = 40;
+const ENTROPY_SHORT_LEN = 20;
 
 function shannonEntropy(s: string): number {
   const counts = new Map<string, number>();
@@ -464,6 +496,26 @@ function shannonEntropy(s: string): number {
     h -= p * Math.log2(p);
   }
   return h;
+}
+
+/**
+ * Does a candidate run look like an opaque credential? A run qualifies if EITHER the
+ * whole run, OR one of its ':'-delimited segments (e.g. the secret half of a
+ * `bot_id:secret` pair), clears the tiered entropy bar for its length:
+ *   - ≥40 chars  → ≥3.8 bits/char  (the original long catch-all, unchanged)
+ *   - 20–39 chars → ≥4.0 bits/char (stricter, so opaque tokens hold but prose stays clean)
+ * Segments shorter than 20 chars are ignored (too short to judge by entropy alone).
+ */
+function looksLikeOpaqueSecret(run: string): boolean {
+  const parts = run.includes(':') ? [run, ...run.split(':')] : [run];
+  for (const p of parts) {
+    if (p.length >= ENTROPY_LONG_LEN) {
+      if (shannonEntropy(p) >= ENTROPY_MIN_BITS_LONG) return true;
+    } else if (p.length >= ENTROPY_SHORT_LEN) {
+      if (shannonEntropy(p) >= ENTROPY_MIN_BITS_SHORT) return true;
+    }
+  }
+  return false;
 }
 
 // ─────────── Scan ───────────
@@ -542,14 +594,16 @@ export function scanText(text: string): FilterResult {
   // Seed phrases: scan whitespace-separated lowercase tokens for a ≥12 run all in BIP39.
   detectMnemonic(text, findings, seen);
 
-  // Entropy fallback: any long high-entropy token not already claimed → hold.
+  // Entropy fallback: any high-entropy token not already claimed → hold. Tiered length
+  // floors (see ENTROPY_* constants): ≥40 chars at 3.8 bits, 20–39 chars at a stricter
+  // 4.0 bits so a short opaque credential is held without flagging ordinary long words.
   ENTROPY_TOKEN.lastIndex = 0;
   let em: RegExpExecArray | null;
   while ((em = ENTROPY_TOKEN.exec(text)) !== null) {
     const start = em.index;
     const end = start + em[0].length;
     if (overlaps(start, end)) continue; // already a recognised secret
-    if (shannonEntropy(em[0]) >= ENTROPY_MIN_BITS) {
+    if (looksLikeOpaqueSecret(em[0])) {
       pushFinding(findings, seen, 'secret_password', 'hold', em[0], start);
     }
   }

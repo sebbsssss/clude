@@ -325,6 +325,86 @@ describe('clawbackCopy — idempotent (a dispute webhook can fire twice)', () =>
   });
 });
 
+describe('clawbackCopy — frees the claimed supply unit on refund (over-sell guard inverse)', () => {
+  const LISTING = 'lst-1234'; // the order() factory's listing_id
+
+  /** A finite-supply listing with `sold` units claimed (status reflects whether it hit the cap). */
+  function seedListing(supplyTotal: number | null, sold: number, status = 'listed') {
+    seed('pack_listings', [
+      {
+        listing_id: LISTING,
+        pack_id: PACK,
+        seller_wallet: SELLER,
+        license_type: 'copy',
+        status,
+        supply_kind: supplyTotal === 1 ? 'single' : supplyTotal === null ? 'unlimited' : 'limited',
+        supply_total: supplyTotal,
+        supply_sold: sold,
+      },
+    ]);
+  }
+
+  it('a refunded single-supply order decrements supply_sold AND un-flips sold_out → listed', async () => {
+    // Post-sale state: the one unit was claimed (supply_sold=1) and the listing flipped sold_out.
+    seedDeliveredCopy(2);
+    seedListing(1, 1, 'sold_out');
+
+    await clawbackCopy(order());
+
+    const listing = (tables.pack_listings ?? []).find((l) => l.listing_id === LISTING);
+    // The freed unit is credited back and the listing is buyable again.
+    expect(listing?.supply_sold).toBe(0);
+    expect(listing?.status).toBe('listed');
+  });
+
+  it('a limited listing below its cap is decremented but its status is left untouched', async () => {
+    // 3 of 5 sold; refunding one frees a unit without changing the (still 'listed') status.
+    seedDeliveredCopy(1);
+    seedListing(5, 3, 'listed');
+
+    await clawbackCopy(order());
+
+    const listing = (tables.pack_listings ?? []).find((l) => l.listing_id === LISTING);
+    expect(listing?.supply_sold).toBe(2);
+    expect(listing?.status).toBe('listed');
+  });
+
+  it('is idempotent: a SECOND clawback run does NOT decrement the unit again', async () => {
+    seedDeliveredCopy(2);
+    seedListing(1, 1, 'sold_out');
+
+    await clawbackCopy(order()); // frees the unit: supply_sold 1 → 0, status → listed
+    await clawbackCopy(order()); // re-run: clones already gone (deletedCount=0) → no second decrement
+
+    const listing = (tables.pack_listings ?? []).find((l) => l.listing_id === LISTING);
+    // Still 0 — NOT -1. The release is gated on actually-deleted clones, so it fires exactly once.
+    expect(listing?.supply_sold).toBe(0);
+    expect(listing?.status).toBe('listed');
+  });
+
+  it('an UNLIMITED listing (supply_total=null) is never credited back (no-op, no underflow)', async () => {
+    seedDeliveredCopy(2);
+    seedListing(null, 0, 'listed');
+
+    await clawbackCopy(order());
+
+    const listing = (tables.pack_listings ?? []).find((l) => l.listing_id === LISTING);
+    expect(listing?.supply_sold).toBe(0); // untouched
+    expect(listing?.status).toBe('listed');
+  });
+
+  it('an order with no listing_id (keyless/legacy) skips the release without error', async () => {
+    seedDeliveredCopy(2);
+    seedListing(1, 1, 'sold_out');
+
+    // listing_id null → releaseSupplyUnit returns early; the listing is left exactly as seeded.
+    await expect(clawbackCopy(order({ listing_id: null }))).resolves.toBeUndefined();
+    const listing = (tables.pack_listings ?? []).find((l) => l.listing_id === LISTING);
+    expect(listing?.supply_sold).toBe(1);
+    expect(listing?.status).toBe('sold_out');
+  });
+});
+
 describe('clawbackCopy — guards', () => {
   it('throws if the order has no buyer_wallet (cannot scope a clawback)', async () => {
     await expect(clawbackCopy(order({ buyer_wallet: null }))).rejects.toThrow(/buyer/i);

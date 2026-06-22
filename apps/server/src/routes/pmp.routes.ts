@@ -32,6 +32,7 @@ import {
   optionalPrivyAuth,
   requirePrivyAuth,
 } from '@clude/brain/auth/privy-auth';
+import { requireOwnership } from '@clude/brain/auth/require-ownership';
 import { withOwnerWallet } from '@clude/shared/core/owner-context';
 import { createChildLogger } from '@clude/shared/core/logger';
 import {
@@ -378,8 +379,11 @@ export function pmpRoutes(): Router {
    * Body: { content, type, tags?, summary?, importance?, source? }
    * Auth required.
    */
-  router.post('/v1/memories', requirePrivyAuth, async (req: Request, res: Response) => {
-    const owner = ownerFromReq(req);
+  router.post('/v1/memories', requirePrivyAuth, requireOwnership, async (req: Request, res: Response) => {
+    // CONTRIBUTE writes into the AUTHENTICATED owner's namespace — use the wallet requireOwnership
+    // proved, NEVER a client ?owner= (the spoof: contributing memories as a victim). The public
+    // DISCOVER read keeps its own ?owner= browse filter (withOptionalOwner); this is the write path.
+    const owner = req.verifiedWallet ?? null;
     if (!owner) {
       res.status(401).json({ error: 'unauthenticated' } satisfies PmpError);
       return;

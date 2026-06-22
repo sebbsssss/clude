@@ -111,6 +111,12 @@ interface ListingRow {
   seller_wallet: string;
   license_type: 'copy' | 'title';
   status: string;
+  // Supply accounting — a limited/single listing has a finite supply_total; supply_sold is the
+  // running count of CLAIMED units. NULL supply_total = unlimited (no cap). The order path must
+  // read these to refuse / atomically claim against the cap, else a limited copy over-sells.
+  supply_kind: 'unlimited' | 'limited' | 'single';
+  supply_total: number | null;
+  supply_sold: number;
 }
 
 interface PriceRow {
@@ -335,10 +341,11 @@ export function packMarketplacePaymentsRoutes(): Router {
     try {
       const db = getDb();
 
-      // 1) Load the listing — must exist and be LISTED to be buyable.
+      // 1) Load the listing — must exist and be LISTED to be buyable. supply_* are read so the
+      //    order path can refuse / atomically claim against a finite supply (over-sell guard).
       const { data: listingData, error: lErr } = await db
         .from('pack_listings')
-        .select('listing_id, pack_id, seller_wallet, license_type, status')
+        .select('listing_id, pack_id, seller_wallet, license_type, status, supply_kind, supply_total, supply_sold')
         .eq('listing_id', listingId)
         .limit(1)
         .maybeSingle();
@@ -402,6 +409,23 @@ export function packMarketplacePaymentsRoutes(): Router {
         clientToken,
       });
       const order = orderResult.order;
+
+      // 3b) SUPPLY GUARD (over-sell fix). A limited/single listing has a finite supply_total; a
+      //     copy must never be ordered + delivered past it. We claim a unit ONLY for a genuinely
+      //     NEW order (created=true): a replay already claimed its unit on first creation, so
+      //     re-claiming would double-count. The claim is an ATOMIC compare-and-swap on supply_sold
+      //     (claimSupplyUnit) that also flips the listing to 'sold_out' at the cap — so two racing
+      //     buyers of the last unit cannot both win. If the listing is sold out (or the race is
+      //     lost), the just-created order is marked 'failed' (a harmless terminal row that can
+      //     never be paid — no intent is opened below — nor delivered) and we answer 409.
+      if (orderResult.created && listing.supply_total !== null) {
+        const claimed = await claimSupplyUnit(listing.listing_id, listing.supply_total);
+        if (!claimed) {
+          await failOrphanOrder(order.order_id);
+          res.status(409).json({ error: 'sold_out', hint: 'this listing has no remaining supply' } satisfies ErrorBody);
+          return;
+        }
+      }
 
       // 4) Open (or, idempotently, re-open) the Stripe PaymentIntent. createIntent uses the
       //    order's client_token as Stripe's native idempotency key, so a replay returns the
@@ -616,6 +640,92 @@ async function loadOrder(orderId: string): Promise<OrderRow | null> {
     throw new Error('failed to load order');
   }
   return (data as OrderRow | null) ?? null;
+}
+
+/** How many CAS retries claimSupplyUnit makes before conceding the race (sold out / contention). */
+const SUPPLY_CLAIM_MAX_ATTEMPTS = 5;
+
+/**
+ * Atomically claim ONE unit of a finite-supply listing (the over-sell guard). Returns true iff a
+ * unit was claimed; false iff the listing is sold out (or lost an unwinnable race).
+ *
+ * PostgREST has no column-vs-column predicate, so we do an optimistic compare-and-swap on the
+ * EXACT observed `supply_sold` integer (the same read-then-conditional-`.eq()` idiom the order DAG
+ * uses for status, e.g. refundOrder's `.eq('status', status)`):
+ *
+ *   read supply_sold = N → if N >= supply_total, sold out → false.
+ *   else UPDATE … SET supply_sold = N+1 WHERE listing_id = ? AND supply_sold = N  → .select() the
+ *   row: exactly ONE concurrent claimant matches the row (the CAS), the loser matches ZERO rows
+ *   (supply_sold already moved off N) and retries against the fresh value. So two buyers racing for
+ *   the last unit can NEVER both win — at most `supply_total` units are ever claimed.
+ *
+ * When the claimed unit is the LAST (N+1 === supply_total) the listing is flipped to 'sold_out' in
+ * the same conditional update, so it leaves the buyable set atomically with the final claim. A
+ * bounded retry caps the (rare) contention loop; conceding after the cap is safe — it just refuses
+ * an order that a subsequent attempt could place, never an over-sell.
+ */
+async function claimSupplyUnit(listingId: string, supplyTotal: number): Promise<boolean> {
+  const db = getDb();
+  for (let attempt = 0; attempt < SUPPLY_CLAIM_MAX_ATTEMPTS; attempt++) {
+    // Re-read the live counter each attempt (the route's earlier read may be stale by now).
+    const { data: row, error: readErr } = await db
+      .from('pack_listings')
+      .select('supply_sold')
+      .eq('listing_id', listingId)
+      .limit(1)
+      .maybeSingle();
+    if (readErr) {
+      log.warn({ err: readErr, listingId }, 'claimSupplyUnit: supply read failed');
+      throw new Error('failed to read listing supply');
+    }
+    const sold = (row as { supply_sold: number } | null)?.supply_sold;
+    if (typeof sold !== 'number') {
+      // Listing vanished mid-flight (delisted/deleted) — nothing to claim.
+      return false;
+    }
+    if (sold >= supplyTotal) return false; // sold out
+
+    const next = sold + 1;
+    const atCap = next >= supplyTotal;
+    const patch: Record<string, unknown> = { supply_sold: next };
+    if (atCap) patch.status = 'sold_out'; // last unit → leave the buyable set atomically
+
+    // CAS: only the claimant whose observed `sold` still matches wins the row.
+    const { data: claimed, error: updErr } = await db
+      .from('pack_listings')
+      .update(patch)
+      .eq('listing_id', listingId)
+      .eq('supply_sold', sold)
+      .select('listing_id');
+    if (updErr) {
+      log.warn({ err: updErr, listingId }, 'claimSupplyUnit: supply claim update failed');
+      throw new Error('failed to claim listing supply');
+    }
+    if (Array.isArray(claimed) && claimed.length > 0) return true; // won the unit
+    // Lost the CAS (another buyer moved supply_sold) — retry against the fresh value.
+  }
+  // Exhausted the retry budget under contention. Concede (no over-sell); the buyer can re-try.
+  log.warn({ listingId }, 'claimSupplyUnit: conceded after max CAS attempts (contention)');
+  return false;
+}
+
+/**
+ * Mark a just-created order 'failed' when its supply claim could not be honoured (sold out / race
+ * lost). The order was created (idempotency row) but no PaymentIntent is opened for it, so 'failed'
+ * is a harmless terminal state: it can never be paid nor delivered. created → failed is a sanctioned
+ * DAG edge. Best-effort: a failure to mark it leaves a stranded 'created' row that expires on its
+ * own, which is strictly safer than an over-sell.
+ */
+async function failOrphanOrder(orderId: string): Promise<void> {
+  const db = getDb();
+  const { error } = await db
+    .from('marketplace_orders')
+    .update({ status: 'failed' })
+    .eq('order_id', orderId)
+    .eq('status', 'created'); // only fail an order still in its initial state
+  if (error) {
+    log.warn({ err: error, orderId }, 'failOrphanOrder: could not mark order failed (will expire)');
+  }
 }
 
 /**

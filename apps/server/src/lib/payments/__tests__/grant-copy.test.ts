@@ -68,6 +68,7 @@ vi.mock('@clude/shared/core/encryption-keys', () => ({
 //   .select(cols).in(c,vals)… (awaited)                — member memories / member wraps reads
 //   .insert(row).select(cols).single()                 — clone insert, returns assigned id
 //   .insert(row|rows)  (awaited)                        — entitlement / wrap inserts
+//   .update(patch).eq(c,v).eq(c,v).eq(c,v)  (awaited)   — entitlement re-activation (23505 path)
 // memories.id is auto-assigned (BIGSERIAL) on insert. pack_entitlements enforces
 // UNIQUE(pack_id, holder_wallet, grant_kind) → a duplicate insert returns Postgres 23505.
 type Row = Record<string, any>;
@@ -98,6 +99,8 @@ type Filter = (row: Row) => boolean;
 function makeChain(table: string) {
   const filters: Filter[] = [];
   let pendingInsert: Row[] | null = null;
+  let pendingUpdate: Row | null = null;
+  let pendingDelete = false;
   let settled = false;
 
   const matched = (): Row[] => (tables[table] ?? []).filter((row) => filters.every((f) => f(row)));
@@ -158,6 +161,22 @@ function makeChain(table: string) {
     if (settled) return { data: null, error: null };
     settled = true;
     if (pendingInsert) return settleInsert();
+    if (pendingUpdate) {
+      // Filtered UPDATE: mutate the matched rows in place (the entitlement re-activation path).
+      const hits = matched();
+      for (const row of hits) Object.assign(row, pendingUpdate);
+      return { data: hits.map((r) => ({ ...r })), error: null };
+    }
+    if (pendingDelete) {
+      // Filtered DELETE: drop the matched rows (the clawback clone-delete path). Used only when the
+      // regression test drives a real refund→re-buy round-trip through clawbackCopy.
+      const arr = tables[table] ?? (tables[table] = []);
+      const survivors: Row[] = [];
+      const removed: Row[] = [];
+      for (const row of arr) (filters.every((f) => f(row)) ? removed : survivors).push(row);
+      tables[table] = survivors;
+      return { data: removed.map((r) => ({ ...r })), error: null };
+    }
     return { data: matched().map((r) => ({ ...r })), error: null };
   };
 
@@ -188,6 +207,14 @@ function makeChain(table: string) {
       pendingInsert = Array.isArray(row) ? row : [row];
       return chain;
     },
+    update: (patch: Row) => {
+      pendingUpdate = patch;
+      return chain;
+    },
+    delete: () => {
+      pendingDelete = true;
+      return chain;
+    },
     maybeSingle: async () => {
       const r = exec();
       const arr = Array.isArray(r.data) ? r.data : r.data == null ? [] : [r.data];
@@ -209,6 +236,8 @@ vi.mock('@clude/shared/core/database', () => ({
 }));
 
 import { grantCopy } from '../grant-copy.js';
+import { clawbackCopy } from '../refund-clawback.js';
+import { hasActiveCopyEntitlement } from '../entitlement-gate.js';
 import type { OrderRow } from '../order-orchestrator.js';
 
 const AUTHOR = 'AuThoRwallet11111111111111111111111111111';
@@ -388,6 +417,62 @@ describe('grantCopy — idempotent (worker crash-resume)', () => {
     // later sweep retries. (grantCopy is idempotent, so the retry is safe.)
     failEntitlementInsertWith = { code: '53300', message: 'too many connections' };
     await expect(grantCopy(order())).rejects.toThrow(/insert entitlement/i);
+  });
+});
+
+describe('grantCopy — refund-then-rebuy re-grants access (§00 M10 regression)', () => {
+  it('RE-ACTIVATES the entitlement on re-buy after a refund — a re-paying buyer is not locked out', async () => {
+    // The §00 M10 clawback REVOKES (status → 'refunded'), it does NOT delete the UNIQUE
+    // (pack, holder, copy_license) row. So on a genuine re-buy:
+    //   - grantCopy's active-only pre-check steps over the lingering 'refunded' row → it re-clones,
+    //   - then the final entitlement INSERT collides 23505 on the UNIQUE.
+    // The collision MUST NOT be a silent no-op (that marks the new order delivered while the grant
+    // stays 'refunded' → hasActiveCopyEntitlement = false → buyer paid + got bytes but cannot unlock).
+    // It must RE-ACTIVATE the row to the new order so access is restored.
+    seedPlaintextPack(3);
+    const orderA = order({ order_id: 'ord-first-buy' });
+    const orderB = order({ order_id: 'ord-rebuy' });
+
+    // 1) First buy → active entitlement bound to order A; gate allows.
+    await grantCopy(orderA);
+    expect(await hasActiveCopyEntitlement(PACK, BUYER)).toBe(true);
+
+    // 2) Refund order A → clawback flips the grant to 'refunded' (row LINGERS) and deletes A's clones.
+    await clawbackCopy({ ...orderA, status: 'refunding' });
+    expect(await hasActiveCopyEntitlement(PACK, BUYER)).toBe(false);
+    expect((tables.pack_entitlements ?? [])).toHaveLength(1); // refunded row still on the UNIQUE key
+    expect(tables.pack_entitlements![0].status).toBe('refunded');
+
+    // 3) Re-buy on a NEW order → must restore access (the bug: returned success but left 'refunded').
+    await grantCopy(orderB);
+
+    const ents = tables.pack_entitlements ?? [];
+    expect(ents).toHaveLength(1); // still one row (re-activated in place, not duplicated)
+    expect(ents[0].status).toBe('active'); // BEFORE FIX: stayed 'refunded' → this assertion failed
+    expect(ents[0].order_id).toBe('ord-rebuy'); // re-pointed to the paying order
+    expect(ents[0].revoked_at).toBeNull(); // clawback's revoked_at stamp cleared
+    // The buyer can unlock again — the whole point of M10's regression.
+    expect(await hasActiveCopyEntitlement(PACK, BUYER)).toBe(true);
+    // And the re-buy re-cloned the bytes for the new order.
+    const buyerClones = tables.memories!.filter((m) => m.owner_wallet === BUYER);
+    expect(buyerClones).toHaveLength(3);
+    expect(buyerClones.every((m) => m.metadata?.source_order_id === 'ord-rebuy')).toBe(true);
+  });
+
+  it('a plain double-delivery of one active order stays single + active (re-activate never duplicates)', async () => {
+    // Guard the fix did not over-reach: re-delivering the SAME still-active order is a clean no-op via
+    // the active-only pre-check (it returns before ever reaching the 23505 / re-activate path).
+    seedPlaintextPack(2);
+
+    await grantCopy(order());
+    await grantCopy(order()); // crash-resume of the same delivery
+
+    const ents = tables.pack_entitlements ?? [];
+    expect(ents).toHaveLength(1);
+    expect(ents[0].status).toBe('active');
+    expect(ents[0].order_id).toBe('ord-aabbccdd');
+    // Exactly one set of clones (no double-clone, no second entitlement).
+    expect(tables.memories!.filter((m) => m.owner_wallet === BUYER)).toHaveLength(2);
   });
 });
 

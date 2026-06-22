@@ -615,9 +615,11 @@ describe('POST /v1/pmp/export', () => {
       expect.any(Array),
       expect.objectContaining({ pmp: expect.objectContaining({ merkle_root: row.merkle_root }) }),
     );
-    // A signed/owned download ref is returned (not a public link).
+    // The artifact id identifies the registered pack.
     expect(res.body.artifact.artifact_id).toMatch(/^pmpa-/);
-    expect(res.body.download).toBeTruthy();
+    // NO `download` link: there is no GET /v1/pmp/artifacts/:id/download handler and the .pmp
+    // bytes are not persisted, so advertising one would dangle a 404 (a client would follow it).
+    expect(res.body.download).toBeUndefined();
   });
 
   it('manifest_hash is deterministic for the same pack content (re-derivable)', async () => {
@@ -650,6 +652,58 @@ describe('POST /v1/pmp/export', () => {
     authedWallet = OWNER;
     const res = await request(app()).post('/v1/pmp/export').send({ pack_id: 'pack-missing' });
     expect(res.status).toBe(404);
+  });
+});
+
+// ───────────── REGRESSION: export must not advertise a dangling /download link ─────────────
+// The stress test found that export advertised `download: <baseUrl>/v1/pmp/artifacts/<id>/download`
+// in BOTH the 201 body and the dedup-200 body, but there is NO GET .../download handler and the
+// .pmp bytes are written to a temp dir with storage_url=null — so any client (the @clude/ui
+// MemoryExportPanel calls window.open(result.download)) followed the URL straight into a 404.
+// Guarantee: the response advertises NO download URL, and the URL it used to advertise has no
+// route (would 404). These FAIL against the pre-fix code (download was a truthy URL string).
+describe('POST /v1/pmp/export — no dangling download link', () => {
+  it('the 201 export response advertises no download URL', async () => {
+    authedWallet = OWNER;
+    const packId = seedOwnedPack();
+
+    const res = await request(app()).post('/v1/pmp/export').send({ pack_id: packId });
+
+    expect(res.status).toBe(201);
+    // The artifact is registered, but NO download link is handed back.
+    expect(res.body.artifact).toBeTruthy();
+    expect(res.body.download).toBeUndefined();
+    // Nothing in the body is a /download URL the client could open.
+    expect(JSON.stringify(res.body)).not.toContain('/download');
+  });
+
+  it('the dedup-200 export response advertises no download URL', async () => {
+    authedWallet = OWNER;
+    const packId = seedOwnedPack();
+
+    const first = await request(app()).post('/v1/pmp/export').send({ pack_id: packId });
+    expect(first.status).toBe(201);
+
+    // Collide the second insert on UNIQUE(owner_wallet, manifest_hash) → dedup branch.
+    forceUniqueViolation = 'pmp_artifacts';
+    const second = await request(app()).post('/v1/pmp/export').send({ pack_id: packId });
+
+    expect(second.status).toBe(200);
+    expect(second.body.deduped).toBe(true);
+    expect(second.body.download).toBeUndefined();
+    expect(JSON.stringify(second.body)).not.toContain('/download');
+  });
+
+  it('the formerly-advertised /download path has no handler (would 404)', async () => {
+    authedWallet = OWNER;
+    const packId = seedOwnedPack();
+    const exp = await request(app()).post('/v1/pmp/export').send({ pack_id: packId });
+    const artifactId = exp.body.artifact.artifact_id as string;
+
+    // This is the exact URL shape the pre-fix server advertised. It must NOT resolve — proving
+    // that advertising it (as the bug did) would have dangled a 404 for every client that followed.
+    const dl = await request(app()).get(`/v1/pmp/artifacts/${artifactId}/download`);
+    expect(dl.status).toBe(404);
   });
 });
 
@@ -1473,7 +1527,8 @@ describe('POST /v1/pmp/export — edge cases', () => {
     expect(second.body.deduped).toBe(true);
     // Returns the EXISTING artifact (same id), not a freshly minted one.
     expect(second.body.artifact.artifact_id).toBe(firstId);
-    expect(second.body.download).toContain(firstId);
+    // Dedup response also advertises no `download` link (same dangling-404 reason as the 201 path).
+    expect(second.body.download).toBeUndefined();
     // Only one artifact row ever persisted for this owner+hash.
     expect(tables['pmp_artifacts'].filter((r) => r.owner_wallet === OWNER)).toHaveLength(1);
   });

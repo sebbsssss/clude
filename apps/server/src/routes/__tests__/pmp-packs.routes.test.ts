@@ -61,6 +61,20 @@ vi.mock('@clude/brain/auth/privy-auth', () => ({
   },
 }));
 
+// ── requireOwnership: proves the caller controls the wallet (POST /v1/packs is now guarded by it,
+//    so ownerFromReq can trust req.verifiedWallet instead of a client ?owner=). Mock = passthrough
+//    once a wallet is authed (mirrors the secured-route tests). ──
+vi.mock('@clude/brain/auth/require-ownership', () => ({
+  requireOwnership: (req: Request, res: Response, next: NextFunction) => {
+    if (!authedWallet) {
+      res.status(401).json({ error: 'No wallet' });
+      return;
+    }
+    (req as Request & { verifiedWallet?: string }).verifiedWallet = authedWallet;
+    next();
+  },
+}));
+
 // ── Supabase mock: programmable per-call ──
 type Step = { table: string; data: unknown; error?: unknown };
 let stepQueue: Step[] = [];

@@ -405,6 +405,164 @@ describe('POST /v1/market/orders', () => {
   });
 });
 
+// ───────────────── POST /v1/market/orders — FINITE-SUPPLY over-sell guard (copy listings) ─────────────────
+
+/**
+ * REGRESSION (CRITICAL — copy listing over-sell). pack_listings.supply_sold was seeded to 0 and NEVER
+ * incremented, and the order path never read supply_kind/supply_total/supply_sold — so a single/limited
+ * COPY listing could be ordered + delivered UNBOUNDED (a chargeback-free infinite-copy hole through the
+ * paid path). The fix: the order path atomically CLAIMS a unit against the cap (supply_sold += 1 only
+ * while supply_sold < supply_total), flips the listing to 'sold_out' at the cap, and refuses the next
+ * order with 409 sold_out.
+ *
+ * BEFORE this fix these tests FAIL: claimSupplyUnit/failOrphanOrder did not exist (the route did not
+ * even compile), and even with the calls stubbed out a single-supply listing would have happily created
+ * a 2nd order. AFTER: exactly ONE order is placeable on a single-supply listing; the 2nd is 409.
+ */
+describe('POST /v1/market/orders — finite-supply over-sell guard', () => {
+  /** A LISTED single-supply (supply_total=1) copy listing + its stripe price. */
+  function seedSingleSupplyListing(listingId: string, packId: string) {
+    seed('pack_listings', [
+      {
+        listing_id: listingId,
+        pack_id: packId,
+        seller_wallet: SELLER,
+        title: 'One-of-one pack',
+        license_type: 'copy',
+        status: 'listed',
+        supply_kind: 'single',
+        supply_total: 1,
+        supply_sold: 0,
+      },
+    ]);
+    seed('memory_packs', [{ pack_id: packId, author_wallet: SELLER, name: 'One-of-one pack' }]);
+    seed('pack_listing_prices', [
+      { listing_id: listingId, rail: 'stripe', amount: '999', currency: 'usd', decimals: 2, enabled: true },
+    ]);
+  }
+
+  it('a single-supply listing allows EXACTLY ONE order, then claims the unit + flips to sold_out', async () => {
+    authedWallet = BUYER;
+    seedSingleSupplyListing('lst-s1', 'pak-s1');
+    const created = { order_id: 'ord-s1', pack_id: 'pak-s1', buyer_wallet: BUYER, seller_wallet: SELLER, status: 'created', rail: 'stripe', amount: '9.99', currency: 'usd' };
+    seed('marketplace_orders', [created]);
+    createOrder.mockResolvedValue({ order: { ...created }, created: true });
+    createIntent.mockResolvedValue({ rail_ref: 'pi_s1', client_secret: 'cs_s1' });
+
+    const res = await request(app())
+      .post('/v1/market/orders')
+      .send({ listing_id: 'lst-s1', rail: 'stripe', client_token: 'ct-s1' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.order_id).toBe('ord-s1');
+    // The unit was claimed (supply_sold 0 → 1) and the listing left the buyable set atomically.
+    const listing = tables['pack_listings'].find((l) => l.listing_id === 'lst-s1');
+    expect(listing?.supply_sold).toBe(1);
+    expect(listing?.status).toBe('sold_out');
+    // The order proceeded to awaiting_payment (a PaymentIntent WAS opened for the claimed unit).
+    expect(createIntent).toHaveBeenCalledTimes(1);
+    expect(tables['marketplace_orders'].find((o) => o.order_id === 'ord-s1')?.status).toBe('awaiting_payment');
+  });
+
+  it('rejects the SECOND order on a now-exhausted single-supply listing with 409 sold_out (no intent, order failed)', async () => {
+    authedWallet = BUYER;
+    // The listing already sold its one unit (supply_sold === supply_total) — but is still status=listed
+    // to prove the CLAIM (not merely the status read) is what blocks the over-sell.
+    seed('pack_listings', [
+      {
+        listing_id: 'lst-s2',
+        pack_id: 'pak-s2',
+        seller_wallet: SELLER,
+        title: 'One-of-one pack',
+        license_type: 'copy',
+        status: 'listed',
+        supply_kind: 'single',
+        supply_total: 1,
+        supply_sold: 1, // already at cap
+      },
+    ]);
+    seed('memory_packs', [{ pack_id: 'pak-s2', author_wallet: SELLER, name: 'One-of-one pack' }]);
+    seed('pack_listing_prices', [
+      { listing_id: 'lst-s2', rail: 'stripe', amount: '999', currency: 'usd', decimals: 2, enabled: true },
+    ]);
+    // A genuinely-new order from a different buyer/token (created=true) — the orchestrator inserted it.
+    const created2 = { order_id: 'ord-s2', pack_id: 'pak-s2', buyer_wallet: BUYER, seller_wallet: SELLER, status: 'created', rail: 'stripe', amount: '9.99', currency: 'usd' };
+    seed('marketplace_orders', [created2]);
+    createOrder.mockResolvedValue({ order: { ...created2 }, created: true });
+    createIntent.mockResolvedValue({ rail_ref: 'pi_s2', client_secret: 'cs_s2' });
+
+    const res = await request(app())
+      .post('/v1/market/orders')
+      .send({ listing_id: 'lst-s2', rail: 'stripe', client_token: 'ct-s2' });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('sold_out');
+    // No charge was set up for an un-claimable order.
+    expect(createIntent).not.toHaveBeenCalled();
+    // supply_sold is NOT pushed past the cap (still 1, never 2 — the over-sell is refused).
+    expect(tables['pack_listings'].find((l) => l.listing_id === 'lst-s2')?.supply_sold).toBe(1);
+    // The just-created orphan order is marked 'failed' (a terminal row that can never be paid/delivered).
+    expect(tables['marketplace_orders'].find((o) => o.order_id === 'ord-s2')?.status).toBe('failed');
+  });
+
+  it('an UNLIMITED listing (supply_total=null) is never claimed against — orders flow freely', async () => {
+    authedWallet = BUYER;
+    seedListing('lst-u', 'pak-u'); // helper seeds supply_kind=unlimited, supply_total=null
+    const created = { order_id: 'ord-u', pack_id: 'pak-u', buyer_wallet: BUYER, seller_wallet: SELLER, status: 'created', rail: 'stripe', amount: '9.99', currency: 'usd' };
+    seed('marketplace_orders', [created]);
+    createOrder.mockResolvedValue({ order: { ...created }, created: true });
+    createIntent.mockResolvedValue({ rail_ref: 'pi_u', client_secret: 'cs_u' });
+
+    const res = await request(app())
+      .post('/v1/market/orders')
+      .send({ listing_id: 'lst-u', rail: 'stripe', client_token: 'ct-u' });
+
+    expect(res.status).toBe(201);
+    // supply_sold stays 0 and the listing stays buyable (no cap to claim against).
+    const listing = tables['pack_listings'].find((l) => l.listing_id === 'lst-u');
+    expect(listing?.supply_sold).toBe(0);
+    expect(listing?.status).toBe('listed');
+  });
+
+  it('an idempotent REPLAY (created=false) does NOT claim a second unit (no double-count)', async () => {
+    authedWallet = BUYER;
+    // A still-LISTED limited listing (2 of cap) with one unit already claimed by THIS buyer's first
+    // (now-replayed) order — it has headroom, so the replay is not blocked by the sold-out guard; the
+    // point is purely that the replay must not re-claim against the cap.
+    seed('pack_listings', [
+      {
+        listing_id: 'lst-r',
+        pack_id: 'pak-r',
+        seller_wallet: SELLER,
+        title: 'Limited pack',
+        license_type: 'copy',
+        status: 'listed',
+        supply_kind: 'limited',
+        supply_total: 2,
+        supply_sold: 1,
+      },
+    ]);
+    seed('memory_packs', [{ pack_id: 'pak-r', author_wallet: SELLER, name: 'Limited pack' }]);
+    seed('pack_listing_prices', [
+      { listing_id: 'lst-r', rail: 'stripe', amount: '999', currency: 'usd', decimals: 2, enabled: true },
+    ]);
+    // The orchestrator returns the EXISTING order (created=false) for the replayed client_token.
+    const existing = { order_id: 'ord-r', pack_id: 'pak-r', buyer_wallet: BUYER, seller_wallet: SELLER, status: 'awaiting_payment', rail: 'stripe', amount: '9.99', currency: 'usd', rail_ref: 'pi_r' };
+    seed('marketplace_orders', [existing]);
+    createOrder.mockResolvedValue({ order: { ...existing }, created: false });
+    createIntent.mockResolvedValue({ rail_ref: 'pi_r', client_secret: 'cs_r' });
+
+    const res = await request(app())
+      .post('/v1/market/orders')
+      .send({ listing_id: 'lst-r', rail: 'stripe', client_token: 'ct-r' });
+
+    // The replay succeeds (200, same order) and crucially does NOT bump supply_sold to 2.
+    expect(res.status).toBe(200);
+    expect(res.body.order_id).toBe('ord-r');
+    expect(tables['pack_listings'].find((l) => l.listing_id === 'lst-r')?.supply_sold).toBe(1);
+  });
+});
+
 // ───────────────── POST /v1/market/orders — NUMERIC money precision (no float drift) ─────────────────
 
 /**

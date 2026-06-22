@@ -139,12 +139,6 @@ function ownerFromReq(req: Request): string | null {
   return req.verifiedWallet ?? null;
 }
 
-function publicBaseUrl(req: Request): string {
-  const proto = (req.headers['x-forwarded-proto'] as string | undefined) ?? req.protocol;
-  const host = req.headers['x-forwarded-host'] ?? req.headers.host;
-  return `${proto}://${host}`;
-}
-
 function generateArtifactId(): string {
   return `pmpa-${randomBytes(4).toString('hex')}`;
 }
@@ -388,7 +382,6 @@ function pmpBlock(manifest: MemoryPackManifest): PmpManifestPmpBlock {
 // a response; returns { handled: true } so the caller knows the response was written.
 
 interface WriteRegisterArgs {
-  req: Request;
   res: Response;
   db: ReturnType<typeof getDb>;
   owner: string;
@@ -411,7 +404,6 @@ interface WriteRegisterArgs {
 
 async function writeRegisterRespond(args: WriteRegisterArgs): Promise<{ handled: boolean }> {
   const {
-    req,
     res,
     db,
     owner,
@@ -519,9 +511,12 @@ async function writeRegisterRespond(args: WriteRegisterArgs): Promise<{ handled:
         .limit(1)
         .maybeSingle();
       if (existing) {
+        // No `download` link: there is no GET /v1/pmp/artifacts/:id/download handler, and the
+        // .pmp bytes are not persisted (storage_url is null), so advertising one would dangle a
+        // 404. The artifact metadata below is enough to identify the registered pack; a download
+        // URL can be added here once byte persistence exists.
         res.status(200).json({
           artifact: existing,
-          download: `${publicBaseUrl(req)}/v1/pmp/artifacts/${(existing as { artifact_id: string }).artifact_id}/download`,
           deduped: true,
         });
         return { handled: true };
@@ -532,9 +527,10 @@ async function writeRegisterRespond(args: WriteRegisterArgs): Promise<{ handled:
     return { handled: true };
   }
 
+  // No `download` link: see the dedup branch above — there is no /download handler and the .pmp
+  // bytes are not persisted (storage_url is null), so the URL would 404. Return metadata only.
   res.status(201).json({
     artifact: artifactRow,
-    download: `${publicBaseUrl(req)}/v1/pmp/artifacts/${artifactId}/download`,
   });
   return { handled: true };
 }
@@ -672,7 +668,6 @@ export function pmpArtifactsRoutes(): Router {
 
           // The shared tail below registers with `artifactId`; build it once and reuse.
           const result = await writeRegisterRespond({
-            req,
             res,
             db,
             owner,
@@ -801,7 +796,6 @@ export function pmpArtifactsRoutes(): Router {
         pmpFilenameBase = effectivePackId;
 
         const result = await writeRegisterRespond({
-          req,
           res,
           db,
           owner,
