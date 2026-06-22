@@ -861,8 +861,12 @@ export function pmpArtifactsRoutes(): Router {
           res.status(500).json({ error: 'export_failed' } satisfies ErrorBody);
         } else if (licenseType === 'title') {
           // FOUNDER MODEL: a title pack exists on Base AT EXPORT. The .pmp already shipped in the
-          // response above; mint the Base title best-effort + idempotent (never fails the export).
-          await mintTitleAtExportBestEffort(db, effectivePackId, owner);
+          // response above. DETACH the mint from the request path — it does on-chain RPC round-trips,
+          // so awaiting it would pin this worker on a slow/hung Base RPC. mintTitleAtExportBestEffort
+          // never rejects (its body is wrapped in try/catch), so `void` cannot raise an unhandled
+          // rejection. NOTE: a chain/env miss is logged, not retried here — a reconciliation poller
+          // (follow-up) is what guarantees "exists on Base once exported". Idempotent, so safe to retry.
+          void mintTitleAtExportBestEffort(db, effectivePackId, owner);
         }
       } catch (err) {
         log.error({ err, packId }, 'POST /v1/pmp/export failed');

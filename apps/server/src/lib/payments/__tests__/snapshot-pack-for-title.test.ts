@@ -161,7 +161,9 @@ const resolver = { custodial: true } as any; // unused (ensureCustodialTitleIden
 
 import { snapshotPackForTitle } from '../snapshot-pack-for-title.js';
 
-const AUTHOR = 'AuThoRappWallet22222222222222222222222222';
+// The pack AUTHOR must be the caller (only the author may title a pack — the snapshot self-asserts
+// pack.author_wallet === creatorAppWallet). Tests call snapshotPackForTitle(..., CREATOR_APP).
+const AUTHOR = CREATOR_APP;
 const SOURCE = 'pack-source-cafe';
 // Valid 64-char hex leaves so the REAL buildPackTree can hex-decode them.
 const LEAVES = ['aa'.repeat(32), 'bb'.repeat(32), 'cc'.repeat(32)];
@@ -232,7 +234,12 @@ describe('snapshotPackForTitle — clone isolation + binding reuse (plaintext)',
       expect(c.tags).toContain(`title_snapshot:${res.snapshotPackId}`);
       expect(c.metadata?.title_snapshot_of).toBe(SOURCE);
       expect(c.content_hash).toMatch(/^[a-f0-9]{64}$/); // the committed leaf, preserved
+      // memories.hash_id is NOT NULL (no DB default) — each clone MUST get a fresh unique external id.
+      expect(c.hash_id).toMatch(/^clude-[0-9a-f]{8}$/);
     }
+    // Every clone's hash_id is distinct (idx_memories_hash_id is global-unique).
+    const hashIds = clones.map((c) => c.hash_id);
+    expect(new Set(hashIds).size).toBe(hashIds.length);
     // Frozen: clone content + timestamp carried from the source.
     expect(clones.map((c) => c.content).sort()).toEqual(['member 0 content', 'member 1 content', 'member 2 content']);
     expect(clones.every((c) => c.created_at === '2026-01-01T00:00:00.000Z')).toBe(true);

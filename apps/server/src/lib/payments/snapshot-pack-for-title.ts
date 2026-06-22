@@ -149,6 +149,12 @@ export async function snapshotPackForTitle(
     content_category: 'personal' | 'knowledge' | 'agent' | null;
   } | null;
   if (!pack) throw new Error(`snapshotPackForTitle: source pack ${sourcePackId} not found`);
+  // SELF-PROTECTING INVARIANT (do not rely on the route's 403): only the pack's AUTHOR may title it.
+  // A future caller (a list route, a reconciliation poller) passing another tenant's pack id must not
+  // be able to snapshot + re-key someone else's memories into an attacker-owned title.
+  if (pack.author_wallet !== creatorAppWallet) {
+    throw new Error('snapshotPackForTitle: caller is not the source pack author — refusing to title');
+  }
   if (!pack.merkle_root) {
     throw new Error(`snapshotPackForTitle: source pack ${sourcePackId} is not tokenised (no merkle_root) — cannot title it`);
   }
@@ -253,6 +259,10 @@ export async function snapshotPackForTitle(
       const { data: cloneRow, error: insErr } = await db
         .from('memories')
         .insert({
+          // memories.hash_id is NOT NULL (migration 003) with no DB default — every clone needs a
+          // fresh unique external id (idx_memories_hash_id is global-unique, so never reuse the
+          // source's). Same `clude-<8hex>` shape as generateHashId() in the brain.
+          hash_id: `clude-${randomBytes(4).toString('hex')}`,
           memory_type: mem.memory_type,
           content: mem.content,
           summary: mem.summary,
@@ -359,8 +369,26 @@ export async function snapshotPackForTitle(
     anchor_tx_sig: null,
     created_at: nowIso,
   });
-  if (artErr && (artErr as { code?: string }).code !== '23505') {
-    throw new Error('snapshotPackForTitle: failed to register snapshot artifact');
+  if (artErr) {
+    if ((artErr as { code?: string }).code === '23505') {
+      // pmp_artifacts UNIQUE is (owner_wallet, manifest_hash) — NOT pack_id. A 23505 is benign ONLY
+      // if the existing row is THIS snapshot's (a retry). If it belongs to a DIFFERENT pack — two
+      // distinct source packs with byte-identical content + name by the same creator hash to the same
+      // manifest — the mint would later find no binding for this snapId. Fail LOUD, never silently
+      // strand a snapshot with no artifact.
+      const { data: own } = await db
+        .from('pmp_artifacts')
+        .select('pack_id')
+        .eq('pack_id', snapId)
+        .maybeSingle();
+      if (!own) {
+        throw new Error(
+          'snapshotPackForTitle: artifact manifest collided with another identical-content pack — cannot title duplicate-content packs',
+        );
+      }
+    } else {
+      throw new Error('snapshotPackForTitle: failed to register snapshot artifact');
+    }
   }
 
   log.info(
