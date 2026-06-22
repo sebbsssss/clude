@@ -1,0 +1,69 @@
+/* =====================================================================
+   Dashboard revamp — design tokens + shared classes (Clude Design handoff)
+   ---------------------------------------------------------------------
+   Imported after index.css. ADDS the design's semantic token names
+   (--surface, --fg, --accent, …) alongside the existing ones (--bg,
+   --text, --blue stay for legacy components), switches the UI font to
+   Inter, and registers the hover/animation classes the revamped screens
+   use. Dark-first; light is the clean inverse via html.dark.
+   ===================================================================== */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+
+  /* light (inverse) */
+  --sidebar: #efeeea;
+  --surface: #ffffff;
+  --surface-2: #f4f4f1;
+  --surface-3: #eceae4;
+  --border-2: rgba(0, 0, 0, 0.14);
+  --hairline: rgba(0, 0, 0, 0.05);
+  --fg: #16161a;
+  --fg-2: #55555f;
+  --fg-3: #8a8a92;
+  --accent: #2244ff;
+  --accent-fg: #ffffff;
+  --accent-soft: rgba(34, 68, 255, 0.09);
+  --accent-text: #2244ff;
+  --scrim: rgba(20, 22, 31, 0.35);
+  --introspective: #ec4899;
+}
+
+html.dark {
+  --sidebar: #0c0c12;
+  --surface: #16161e;
+  --surface-2: #1c1c26;
+  --surface-3: #24242f;
+  --border-2: rgba(255, 255, 255, 0.12);
+  --hairline: rgba(255, 255, 255, 0.05);
+  --fg: #ededf2;
+  --fg-2: #9b9ba8;
+  --fg-3: #62626f;
+  --accent: #4466ff;
+  --accent-fg: #ffffff;
+  --accent-soft: rgba(68, 102, 255, 0.16);
+  --accent-text: #8aa0ff;
+  --scrim: rgba(0, 0, 0, 0.55);
+  --introspective: #ec4899;
+}
+
+/* Inter is the UI voice; JetBrains Mono (var(--mono)) is reserved for data. */
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+
+/* Shared interaction + animation classes used by the revamped screens. */
+.navi:hover { background: var(--surface-2) !important; color: var(--fg) !important; }
+.navi svg { stroke: currentColor; fill: none; stroke-width: 1.8; }
+.row:hover { background: var(--surface-2) !important; }
+.gbtn:hover { background: var(--surface-2) !important; color: var(--fg) !important; }
+.pbtn:hover { filter: brightness(1.08); }
+.chip:hover { border-color: var(--border-2) !important; }
+.topic:hover { background: var(--surface-2) !important; }
+.lnk:hover { text-decoration: underline; }
+.palitem:hover { background: var(--accent-soft) !important; }
+
+@keyframes cl-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.cl-pulse { animation: cl-pulse 1.8s ease-in-out infinite; }
