@@ -17,12 +17,14 @@ vi.mock('@clude/shared/core/logger', () => ({
   createChildLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }));
 
-const { dispatchPendingDeliveries, grantCopy } = vi.hoisted(() => ({
+const { dispatchPendingDeliveries, grantCopy, expireStaleSupplyHolds } = vi.hoisted(() => ({
   dispatchPendingDeliveries: vi.fn(),
   grantCopy: vi.fn(),
+  expireStaleSupplyHolds: vi.fn(),
 }));
 vi.mock('../delivery-dispatcher.js', () => ({ dispatchPendingDeliveries }));
 vi.mock('../grant-copy.js', () => ({ grantCopy }));
+vi.mock('../supply-expiry.js', () => ({ expireStaleSupplyHolds }));
 
 import {
   runDeliverySweepOnce,
@@ -33,7 +35,9 @@ import {
 beforeEach(() => {
   dispatchPendingDeliveries.mockReset();
   grantCopy.mockReset();
+  expireStaleSupplyHolds.mockReset();
   dispatchPendingDeliveries.mockResolvedValue({ delivered: 0, failed: 0, examined: 0 });
+  expireStaleSupplyHolds.mockResolvedValue({ expired: 0 });
 });
 
 afterEach(() => {

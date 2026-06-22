@@ -137,7 +137,7 @@ const SUPPLY_RELEASE_MAX_ATTEMPTS = 5;
  * that moved the counter off N loses the CAS and retries against the fresh value, so the decrement can
  * never race-corrupt the count. Floored at 0 — a never-claimed listing is left untouched.
  */
-async function releaseSupplyUnit(listingId: string | null, orderId: string): Promise<void> {
+export async function releaseSupplyUnit(listingId: string | null, orderId: string): Promise<void> {
   if (!listingId) return; // keyless / legacy order carries no listing to credit back
   const db = getDb();
   for (let attempt = 0; attempt < SUPPLY_RELEASE_MAX_ATTEMPTS; attempt++) {

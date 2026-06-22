@@ -24,6 +24,7 @@
 import { createChildLogger } from '@clude/shared/core/logger';
 import { dispatchPendingDeliveries, type DeliverFn } from './delivery-dispatcher.js';
 import { grantCopy } from './grant-copy.js';
+import { expireStaleSupplyHolds } from './supply-expiry.js';
 
 const log = createChildLogger('marketplace-delivery-poller');
 
@@ -45,6 +46,9 @@ export async function runDeliverySweepOnce(deliver: DeliverFn = grantCopy): Prom
     if (summary.examined > 0) {
       log.info(summary, 'marketplace delivery sweep complete');
     }
+    // Same tick: free supply units held by abandoned, unpaid orders past expiry (so a single/limited
+    // listing can't be griefed into permanent 'sold_out'). Idempotent + crash-safe; logs its own work.
+    await expireStaleSupplyHolds();
   } catch (err) {
     // Never let a transient failure kill the poller — the next tick retries.
     log.error({ err }, 'marketplace delivery sweep failed (will retry next tick)');
