@@ -21,6 +21,26 @@
  * client. With exports present it resolves the MINTER client + custodial resolver, and if the Base env
  * is absent (non-Base deploys) it no-ops. Per-item errors are swallowed (logged) so one bad pack never
  * stalls the sweep — the next tick retries. MONEY / IRREVERSIBLE-ASSET CODE; the mint stays idempotent.
+ *
+ * ⚠️ STATUS: NOT WIRED — pending rework. A 4-agent adversarial backtest (2026-06-23) returned NO_GO on
+ * this as first written + wired into the copy-delivery poller. The core single-threaded logic is sound
+ * + unit-tested (skip-minted, skip-sold, re-mint-miss, resilient-per-item, snapshot-leak guard), but
+ * the OPERATIONAL shape was wrong, so it was REMOVED from runDeliverySweepOnce until fixed:
+ *   1. CRITICAL (starvation): the unordered `.limit(SCAN_LIMIT)` + skip-if-minted can permanently
+ *      strand a genuine miss once the title backlog exceeds the cap — the backstop stops backstopping.
+ *      FIX: scan only UN-minted candidates (a marker column / partial index on pmp_artifacts, or an
+ *      anti-join against pack_titles), ordered (created_at), or a walking cursor; batch the minted
+ *      check (one `.in()` over derived snapIds, not N point reads).
+ *   2. HIGH (coupling): must run on its OWN bounded-cadence timer (~5 min), never inside the M6
+ *      copy-delivery critical section — a hung Base RPC here must not block copy delivery.
+ *   3. HIGH (double-mint window): mintTitle() returns at broadcast (no receipt await) while
+ *      titleOwner() reads null pre-mining, so export + a sweep can both broadcast (asset-safe via
+ *      _safeMint, but gas burn + racing mirror writes). FIX: an atomic claim (conditional INSERT of a
+ *      pending_mint pack_titles row, unique on pack_id) before broadcast, or await the receipt.
+ *   4. MEDIUM (clone TOCTOU): concurrent export-vs-sweep mintTitleOnExport for one pack can duplicate
+ *      member clones (no DB uniqueness on the clone). FIX: partial unique index on
+ *      memories(owner_wallet, metadata->>'title_snapshot_pack', metadata->>'title_snapshot_of_member').
+ *   5. Bound per-item chain calls (viem timeout/retryCount) + a SIGTERM drain for the in-flight mint.
  */
 
 import { createChildLogger } from '@clude/shared/core/logger';
