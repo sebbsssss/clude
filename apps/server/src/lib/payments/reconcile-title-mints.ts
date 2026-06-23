@@ -116,11 +116,17 @@ export async function reconcileTitleMintsOnce(deps: ReconcileDeps = {}): Promise
       const snapId = snapshotPackId(exp.pack_id, creatorBase);
       const { data: titleRow } = await db
         .from('pack_titles')
-        .select('status')
+        .select('pack_id')
         .eq('pack_id', snapId)
         .maybeSingle();
-      if ((titleRow as { status?: string } | null)?.status === 'minted') {
-        skipped += 1; // already on Base — cheap no-op (no chain call)
+      // SKIP if a title record EXISTS at all — a pack_titles row is written iff the mint already
+      // completed (status 'minted', or later 'transferring'/'transferred' once SOLD). Re-running the
+      // mint for a minted OR sold title is harmful: mintTitleForPack's mirror upsert would revert a
+      // sold title's status back to 'minted' AND grantCreatorTitleOwner would re-grant the seller
+      // access they no longer hold. Only mint a GENUINE miss (no record). A crash-after-broadcast (no
+      // row but token live on-chain) still self-heals via mintTitleForPack's own ownerOf pre-check.
+      if (titleRow) {
+        skipped += 1; // already minted (or sold) — cheap no-op, no chain call
         continue;
       }
       await mint(db, evm, resolver, { sourcePackId: exp.pack_id, creatorAppWallet: author });

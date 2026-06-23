@@ -71,10 +71,10 @@ beforeEach(() => {
   mint = vi.fn(async () => ({ snapshotPackId: 'x', tokenId: '1', mintTx: '0xt', alreadyMinted: false, creatorBase: 'b' }));
 });
 
-/** Mark a source title pack's snapshot title as already minted (so the sweep skips it). */
-function seedMinted(sourcePackId: string, author: string) {
+/** Seed a source title pack's snapshot title record in a given lifecycle state (so the sweep skips it). */
+function seedTitle(sourcePackId: string, author: string, status: string) {
   const snapId = snapshotPackId(sourcePackId, resolver.addressFor(author));
-  seed('pack_titles', [{ pack_id: snapId, status: 'minted' }]);
+  seed('pack_titles', [{ pack_id: snapId, status }]);
 }
 
 describe('reconcileTitleMintsOnce', () => {
@@ -85,7 +85,7 @@ describe('reconcileTitleMintsOnce', () => {
       { pack_id: 'tsnap-deadbeef', owner_wallet: '0xBase-authorA', license_type: 'title' }, // snapshot → excluded
       { pack_id: 'pack-C', owner_wallet: 'authorC', license_type: 'copy' }, // copy → excluded
     ]);
-    seedMinted('pack-B', 'authorB');
+    seedTitle('pack-B', 'authorB', 'minted');
 
     const summary = await reconcileTitleMintsOnce({ db, evm, resolver, mint });
 
@@ -94,6 +94,19 @@ describe('reconcileTitleMintsOnce', () => {
     // The mint ran exactly once, for the un-minted pack, with (source, author).
     expect(mint).toHaveBeenCalledTimes(1);
     expect(mint).toHaveBeenCalledWith(db, evm, resolver, { sourcePackId: 'pack-A', creatorAppWallet: 'authorA' });
+  });
+
+  it('NEVER re-touches a SOLD title — a transferred title is skipped, not re-minted or reverted', async () => {
+    // After a sale, pack_titles.status is 'transferred' (the buyer owns it). Re-running the mint
+    // would revert the mirror to 'minted' AND re-grant the seller — so the sweep must skip ANY pack
+    // that already has a title record, not just 'minted' ones.
+    seed('pmp_artifacts', [{ pack_id: 'pack-S', owner_wallet: 'authorS', license_type: 'title' }]);
+    seedTitle('pack-S', 'authorS', 'transferred');
+
+    const summary = await reconcileTitleMintsOnce({ db, evm, resolver, mint });
+
+    expect(summary).toEqual({ examined: 1, minted: 0, skipped: 1, failed: 0 });
+    expect(mint).not.toHaveBeenCalled();
   });
 
   it('is a cheap no-op when there are no title exports (no mint, no Base client needed)', async () => {
