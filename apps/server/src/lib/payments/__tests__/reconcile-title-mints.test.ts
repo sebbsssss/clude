@@ -47,8 +47,10 @@ function makeChain(table: string) {
     select: () => chain,
     eq: (c: string, v: any) => { filters.push((r) => r[c] === v); return chain; },
     not: (c: string, op: string, v: any) => {
-      if (op === 'like') { const re = likeToRe(v); filters.push((r) => !re.test(String(r[c] ?? ''))); }
-      else { filters.push((r) => r[c] !== v); }
+      // Model the DB-side `.not(col,'like',…)` as a NO-OP on purpose: the sweep must NOT depend on the
+      // PostgREST wildcard — its authoritative protection is the JS startsWith('tsnap-') guard. Leaving
+      // the snapshot rows in the mock's result proves that guard actually excludes them.
+      if (op !== 'like') filters.push((r) => r[c] !== v);
       return chain;
     },
     like: (c: string, v: any) => { const re = likeToRe(v); filters.push((r) => re.test(String(r[c] ?? ''))); return chain; },

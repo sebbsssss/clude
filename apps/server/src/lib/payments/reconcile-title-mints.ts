@@ -72,13 +72,18 @@ export async function reconcileTitleMintsOnce(deps: ReconcileDeps = {}): Promise
       .from('pmp_artifacts')
       .select('pack_id, owner_wallet')
       .eq('license_type', 'title')
-      .not('pack_id', 'like', 'tsnap-%')
+      .not('pack_id', 'like', 'tsnap-%') // DB-side optimisation (PostgREST like); see the JS guard below
       .limit(SCAN_LIMIT);
     if (error) {
       log.error({ err: error }, 'reconcile: failed to scan title exports');
       return EMPTY;
     }
-    exports = (data ?? []) as Array<{ pack_id: string; owner_wallet: string | null }>;
+    // AUTHORITATIVE exclusion of snapshot artifacts (pack_id 'tsnap-…'): do NOT trust the PostgREST
+    // `like` wildcard semantics (* vs %) — a leaked snapshot row would be mis-read as a source pack
+    // and trigger a spurious snapshot-of-a-snapshot mint. The startsWith filter is the real guard.
+    exports = ((data ?? []) as Array<{ pack_id: string; owner_wallet: string | null }>).filter(
+      (r) => !String(r.pack_id ?? '').startsWith('tsnap-'),
+    );
   } catch (err) {
     log.error({ err }, 'reconcile: title export scan threw');
     return EMPTY;
