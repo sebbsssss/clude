@@ -1,17 +1,18 @@
 /**
  * reconcileTitleMintsOnce — the durable backstop that guarantees "a title pack exists on Base once
- * exported". MONEY/ASSET CODE. This suite pins the sweep contract:
+ * exported", redesigned after the backtest NO_GO. MONEY/ASSET CODE. This suite pins the new contract:
  *
- *   1. SCAN: only SOURCE title exports are examined — license_type='title' AND pack_id NOT LIKE
- *      'tsnap-%' (snapshot artifacts are excluded), and copy exports are excluded.
- *   2. SKIP-MINTED: an exported title pack whose snapshot title is already 'minted' is a cheap no-op
- *      (no mint call) — so steady state costs only DB reads.
- *   3. RE-MINT: an exported title pack with no minted title triggers mintTitleOnExport(source, author).
- *   4. RESILIENT: a per-item failure is counted + swallowed; the rest of the sweep still runs.
- *   5. IDLE-CHEAP: zero title exports → EMPTY, no Base client touched, no mint.
+ *   1. GRACE: a pack exported < GRACE_MS ago is NOT examined (so the sweep never races the export's own
+ *      detached mint — the double-mint + clone-race fix).
+ *   2. SKIP-MINTED / SKIP-SOLD: a settled export whose snapshot title already has a pack_titles row
+ *      (minted OR transferred) is skipped via a single batch `.in()` — no chain call.
+ *   3. RE-MINT: a settled export with no title record triggers mintTitleOnExport(source, author).
+ *   4. tsnap GUARD: snapshot artifacts (pack_id 'tsnap-…') are excluded in JS, not trusted to the DB.
+ *   5. CURSOR WALK + WRAP: the cursor advances past each page and wraps at the end (no starvation).
+ *   6. CAP + RESILIENCE: at most MINT_PER_SWEEP mints/sweep; a per-item failure is counted + swallowed.
+ *   7. POLLER: start/stop is idempotent and decoupled from the delivery poller.
  *
- * db/evm/resolver/mint are injected; the REAL snapshotPackId derives the expected title id (so the
- * skip-minted seed matches what the sweep computes). No live chain.
+ * db/evm/resolver/mint/now are injected; the REAL snapshotPackId derives the expected title id.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -19,126 +20,140 @@ vi.mock('@clude/shared/core/logger', () => ({
   createChildLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }));
 
-import { reconcileTitleMintsOnce } from '../reconcile-title-mints.js';
+import {
+  reconcileTitleMintsOnce,
+  startTitleReconciliationPoller,
+  stopTitleReconciliationPoller,
+  __resetCursorForTests,
+} from '../reconcile-title-mints.js';
 import { snapshotPackId } from '../snapshot-pack-for-title.js';
 
-// ── A tiny query mock supporting exactly the calls the sweep makes ──
-//   pmp_artifacts: .select().eq('license_type',v).not('pack_id','like','tsnap-%').limit(n)  (awaited)
-//   pack_titles:   .select('status').eq('pack_id', snapId).maybeSingle()
+const NOW = Date.parse('2026-06-23T12:00:00.000Z'); // fixed clock; GRACE_MS = 5min → cutoff 11:55:00Z
+const iso = (ms: number) => new Date(ms).toISOString();
+const minsAgo = (m: number) => iso(NOW - m * 60_000);
+
+// ── Query mock: .select().eq().lt().gt().order().limit() (scan) + .select().in() (batch check) ──
 type Row = Record<string, any>;
 const tables: Record<string, Row[]> = {};
-function resetDb() {
-  for (const k of Object.keys(tables)) delete tables[k];
-}
-function seed(table: string, rows: Row[]) {
-  tables[table] = (tables[table] ?? []).concat(rows.map((r) => ({ ...r })));
-}
-function likeToRe(pattern: string): RegExp {
-  // SQL LIKE → regex: % → .*, _ → ., escape the rest.
-  const esc = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/%/g, '.*').replace(/_/g, '.');
-  return new RegExp(`^${esc}$`);
-}
+function resetDb() { for (const k of Object.keys(tables)) delete tables[k]; }
+function seed(table: string, rows: Row[]) { tables[table] = (tables[table] ?? []).concat(rows.map((r) => ({ ...r }))); }
 function makeChain(table: string) {
   const filters: Array<(r: Row) => boolean> = [];
+  let orderCol: string | null = null;
   let limit = Infinity;
-  const matched = () => (tables[table] ?? []).filter((r) => filters.every((f) => f(r))).slice(0, limit);
+  const matched = () => {
+    let rows = (tables[table] ?? []).filter((r) => filters.every((f) => f(r)));
+    if (orderCol) rows = [...rows].sort((a, b) => String(a[orderCol!]).localeCompare(String(b[orderCol!])));
+    return rows.slice(0, limit);
+  };
   const chain: Record<string, any> = {};
   Object.assign(chain, {
     select: () => chain,
     eq: (c: string, v: any) => { filters.push((r) => r[c] === v); return chain; },
-    not: (c: string, op: string, v: any) => {
-      // Model the DB-side `.not(col,'like',…)` as a NO-OP on purpose: the sweep must NOT depend on the
-      // PostgREST wildcard — its authoritative protection is the JS startsWith('tsnap-') guard. Leaving
-      // the snapshot rows in the mock's result proves that guard actually excludes them.
-      if (op !== 'like') filters.push((r) => r[c] !== v);
-      return chain;
-    },
-    like: (c: string, v: any) => { const re = likeToRe(v); filters.push((r) => re.test(String(r[c] ?? ''))); return chain; },
+    lt: (c: string, v: any) => { filters.push((r) => String(r[c]) < String(v)); return chain; },
+    gt: (c: string, v: any) => { filters.push((r) => String(r[c]) > String(v)); return chain; },
+    in: (c: string, vals: any[]) => { filters.push((r) => vals.includes(r[c])); return chain; },
+    order: (c: string) => { orderCol = c; return chain; },
     limit: (n: number) => { limit = n; return chain; },
-    maybeSingle: async () => ({ data: matched()[0] ?? null, error: null }),
     then: (resolve: (v: any) => any) => Promise.resolve({ data: matched(), error: null }).then(resolve),
   });
   return chain;
 }
 const db = { from: (t: string) => makeChain(t) } as any;
-
-// addressFor: deterministic Base addr per app wallet. snapId = snapshotPackId(source, creatorBase).
 const resolver = { custodial: true, addressFor: (app: string) => `0xBase-${app}`, keysFor: () => { throw new Error('unused'); } } as any;
-const evm = {} as any; // passed through to the injected mint; never called directly here
-// `any` so vi.fn() satisfies the precise mint?: typeof mintTitleOnExport seam without cast noise.
+const evm = {} as any;
 let mint: any;
+
+function seedExport(packId: string, author: string, ageMin: number) {
+  seed('pmp_artifacts', [{ pack_id: packId, owner_wallet: author, license_type: 'title', created_at: minsAgo(ageMin) }]);
+}
+function seedTitle(sourcePackId: string, author: string, status: string) {
+  seed('pack_titles', [{ pack_id: snapshotPackId(sourcePackId, resolver.addressFor(author)), status }]);
+}
 
 beforeEach(() => {
   resetDb();
+  __resetCursorForTests();
   mint = vi.fn(async () => ({ snapshotPackId: 'x', tokenId: '1', mintTx: '0xt', alreadyMinted: false, creatorBase: 'b' }));
 });
 
-/** Seed a source title pack's snapshot title record in a given lifecycle state (so the sweep skips it). */
-function seedTitle(sourcePackId: string, author: string, status: string) {
-  const snapId = snapshotPackId(sourcePackId, resolver.addressFor(author));
-  seed('pack_titles', [{ pack_id: snapId, status }]);
-}
-
-describe('reconcileTitleMintsOnce', () => {
-  it('re-mints an exported title pack with no minted title, skips an already-minted one', async () => {
-    seed('pmp_artifacts', [
-      { pack_id: 'pack-A', owner_wallet: 'authorA', license_type: 'title' }, // NOT minted → re-mint
-      { pack_id: 'pack-B', owner_wallet: 'authorB', license_type: 'title' }, // minted → skip
-      { pack_id: 'tsnap-deadbeef', owner_wallet: '0xBase-authorA', license_type: 'title' }, // snapshot → excluded
-      { pack_id: 'pack-C', owner_wallet: 'authorC', license_type: 'copy' }, // copy → excluded
-    ]);
+describe('reconcileTitleMintsOnce — grace, skip, re-mint', () => {
+  it('re-mints a SETTLED miss, skips a settled minted one, and IGNORES a too-recent export (grace)', async () => {
+    seedExport('pack-A', 'authorA', 60); // settled (60m ago), no title → re-mint
+    seedExport('pack-B', 'authorB', 60); // settled, minted → skip
     seedTitle('pack-B', 'authorB', 'minted');
+    seedExport('pack-R', 'authorR', 1); // exported 1m ago < 5m grace → NOT examined (no race)
 
-    const summary = await reconcileTitleMintsOnce({ db, evm, resolver, mint });
+    const summary = await reconcileTitleMintsOnce({ db, evm, resolver, mint, now: NOW });
 
-    // Only the two SOURCE title exports are examined (snapshot + copy excluded by the scan filters).
-    expect(summary).toEqual({ examined: 2, minted: 1, skipped: 1, failed: 0 });
-    // The mint ran exactly once, for the un-minted pack, with (source, author).
+    expect(summary).toEqual({ examined: 2, minted: 1, skipped: 1, failed: 0 }); // pack-R excluded by grace
     expect(mint).toHaveBeenCalledTimes(1);
     expect(mint).toHaveBeenCalledWith(db, evm, resolver, { sourcePackId: 'pack-A', creatorAppWallet: 'authorA' });
   });
 
-  it('NEVER re-touches a SOLD title — a transferred title is skipped, not re-minted or reverted', async () => {
-    // After a sale, pack_titles.status is 'transferred' (the buyer owns it). Re-running the mint
-    // would revert the mirror to 'minted' AND re-grant the seller — so the sweep must skip ANY pack
-    // that already has a title record, not just 'minted' ones.
-    seed('pmp_artifacts', [{ pack_id: 'pack-S', owner_wallet: 'authorS', license_type: 'title' }]);
+  it('skips a SOLD (transferred) title — a row exists, so it is never re-minted', async () => {
+    seedExport('pack-S', 'authorS', 60);
     seedTitle('pack-S', 'authorS', 'transferred');
-
-    const summary = await reconcileTitleMintsOnce({ db, evm, resolver, mint });
-
+    const summary = await reconcileTitleMintsOnce({ db, evm, resolver, mint, now: NOW });
     expect(summary).toEqual({ examined: 1, minted: 0, skipped: 1, failed: 0 });
     expect(mint).not.toHaveBeenCalled();
   });
 
-  it('is a cheap no-op when there are no title exports (no mint, no Base client needed)', async () => {
-    seed('pmp_artifacts', [{ pack_id: 'pack-C', owner_wallet: 'authorC', license_type: 'copy' }]);
-    // Inject NO evm/resolver — proving the idle path never touches a Base client.
-    const summary = await reconcileTitleMintsOnce({ db, mint });
-    expect(summary).toEqual({ examined: 0, minted: 0, skipped: 0, failed: 0 });
-    expect(mint).not.toHaveBeenCalled();
+  it('excludes snapshot artifacts (pack_id tsnap-…) via the authoritative JS guard', async () => {
+    seedExport('pack-A', 'authorA', 60);
+    seedExport('tsnap-deadbeef', '0xBase-authorA', 60); // a snapshot artifact — must be ignored
+    const summary = await reconcileTitleMintsOnce({ db, evm, resolver, mint, now: NOW });
+    expect(summary.examined).toBe(1); // only pack-A
+    expect(mint).toHaveBeenCalledTimes(1);
+    expect(mint).toHaveBeenCalledWith(db, evm, resolver, { sourcePackId: 'pack-A', creatorAppWallet: 'authorA' });
   });
 
-  it('counts + swallows a per-item failure and still processes the rest of the sweep', async () => {
-    seed('pmp_artifacts', [
-      { pack_id: 'pack-A', owner_wallet: 'authorA', license_type: 'title' }, // mint throws
-      { pack_id: 'pack-D', owner_wallet: 'authorD', license_type: 'title' }, // mint succeeds
-    ]);
-    mint.mockImplementation(async (_db: any, _evm: any, _res: any, args: any) => {
+  it('caps mints per sweep and counts the rest as skipped (the cursor picks them up next sweep)', async () => {
+    for (let i = 0; i < 12; i++) seedExport(`pack-${i}`, `author-${i}`, 60); // 12 settled misses
+    const summary = await reconcileTitleMintsOnce({ db, evm, resolver, mint, now: NOW });
+    expect(summary.examined).toBe(12);
+    expect(summary.minted).toBe(10); // MINT_PER_SWEEP
+    expect(summary.skipped).toBe(2);
+    expect(mint).toHaveBeenCalledTimes(10);
+  });
+
+  it('counts + swallows a per-item failure and still processes the rest', async () => {
+    seedExport('pack-A', 'authorA', 60);
+    seedExport('pack-D', 'authorD', 60);
+    mint.mockImplementation(async (_d: any, _e: any, _r: any, args: any) => {
       if (args.sourcePackId === 'pack-A') throw new Error('chain down');
       return { snapshotPackId: 'x', tokenId: '1', mintTx: '0xt', alreadyMinted: false, creatorBase: 'b' };
     });
-
-    const summary = await reconcileTitleMintsOnce({ db, evm, resolver, mint });
-
+    const summary = await reconcileTitleMintsOnce({ db, evm, resolver, mint, now: NOW });
     expect(summary).toEqual({ examined: 2, minted: 1, failed: 1, skipped: 0 });
-    expect(mint).toHaveBeenCalledTimes(2); // the throw on A did NOT abort the sweep; D still ran
+    expect(mint).toHaveBeenCalledTimes(2);
   });
+});
 
-  it('skips a source export with no owner_wallet (defensive) without minting', async () => {
-    seed('pmp_artifacts', [{ pack_id: 'pack-A', owner_wallet: null, license_type: 'title' }]);
-    const summary = await reconcileTitleMintsOnce({ db, evm, resolver, mint });
-    expect(summary).toEqual({ examined: 1, minted: 0, skipped: 1, failed: 0 });
-    expect(mint).not.toHaveBeenCalled();
+describe('reconcileTitleMintsOnce — walking cursor (no starvation)', () => {
+  it('advances past the examined page and WRAPS at the end of the walk', async () => {
+    seedExport('pack-A', 'authorA', 60);
+    seedTitle('pack-A', 'authorA', 'minted'); // already minted so no mint() call muddies the walk
+
+    // Sweep 1: examines pack-A (cursor advances past it).
+    const s1 = await reconcileTitleMintsOnce({ db, evm, resolver, mint, now: NOW });
+    expect(s1.examined).toBe(1);
+    // Sweep 2: cursor is now past pack-A → nothing settled remains → examined 0 and the cursor WRAPS.
+    const s2 = await reconcileTitleMintsOnce({ db, evm, resolver, mint, now: NOW });
+    expect(s2.examined).toBe(0);
+    // Sweep 3: after the wrap, the walk restarts and re-examines pack-A (proving no permanent skip).
+    const s3 = await reconcileTitleMintsOnce({ db, evm, resolver, mint, now: NOW });
+    expect(s3.examined).toBe(1);
+  });
+});
+
+describe('title reconciliation poller — own timer', () => {
+  it('start is idempotent and stop is safe', () => {
+    const a = startTitleReconciliationPoller(60_000);
+    const b = startTitleReconciliationPoller(60_000); // second call is a no-op (one instance)
+    expect(typeof a.stop).toBe('function');
+    expect(typeof b.stop).toBe('function');
+    stopTitleReconciliationPoller();
+    stopTitleReconciliationPoller(); // safe when already stopped
   });
 });

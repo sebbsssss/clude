@@ -24,4 +24,15 @@ export async function bootstrap(): Promise<void> {
     startMarketplaceDeliveryPoller();
     log.info('Marketplace delivery poller started');
   }
+
+  // Title-mint reconciliation backstop (Base) — guarantees "a title pack exists on Base once exported"
+  // by re-minting any export whose best-effort detached mint was missed. Runs on its OWN timer,
+  // DELIBERATELY decoupled from the copy-delivery poller (a 4-agent backtest showed a hung Base RPC in
+  // a shared sweep would block M6 copy delivery). Only when the Base title contract is configured —
+  // otherwise it would just no-op every interval. Idempotent + cheap when idle.
+  if (process.env.CLUDE_PACK_TITLE_ADDRESS) {
+    const { startTitleReconciliationPoller } = require('./lib/payments/reconcile-title-mints');
+    startTitleReconciliationPoller();
+    log.info('Title-mint reconciliation poller started');
+  }
 }

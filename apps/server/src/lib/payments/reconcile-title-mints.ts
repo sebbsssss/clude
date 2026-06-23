@@ -1,46 +1,33 @@
 /**
- * reconcile-title-mints — the durable backstop that GUARANTEES "a title pack exists on Base once
- * exported."
+ * reconcile-title-mints — the durable backstop that makes "a title pack exists on Base once exported"
+ * a GUARANTEE, not a hope. Runs on its OWN bounded-cadence timer (never inside the copy-delivery sweep).
  *
- * The export route mints the Base title BEST-EFFORT + DETACHED (so a slow/hung chain never holds the
- * request). That means a transient miss is possible: the export succeeded, the `.pmp` shipped, but the
- * mint threw (RPC down, env not yet set, process restart mid-mint). THIS sweep closes that gap. Every
- * tick it scans the exported title packs and idempotently re-runs the mint for any that have no minted
- * Base title yet — exactly the §00 M6 "read-off-persisted-state, retry-until-done" discipline the copy
- * delivery poller uses.
+ * The export-time mint is best-effort + detached, so a transient miss (RPC down, Base env not yet set,
+ * restart mid-mint) can leave an exported title pack without its Base title. Each sweep walks the
+ * exported SOURCE title packs and idempotently re-runs the mint for any whose snapshot title is not yet
+ * recorded. This is the §00 M6 "read-off-persisted-state, retry-until-done" discipline, redesigned after
+ * a 4-agent backtest NO_GO'd the first version. The four fixes the backtest demanded, and how they land:
  *
- * SIGNAL (no new table / no marker to maintain): a SOURCE pack export writes a `pmp_artifacts` row
- * (owner_wallet = the author's app wallet, license_type = the pack's sale_mode). A snapshot's own
- * artifact has pack_id `tsnap-…`, so source exports are `license_type='title' AND pack_id NOT LIKE
- * 'tsnap-%'`. For each, the expected title id is the deterministic `snapshotPackId(source, creatorBase)`;
- * if `pack_titles` shows it 'minted', skip — otherwise re-run mintTitleOnExport (which is itself fully
- * idempotent: snapshot reused, mint a no-op once on-chain). Stateless + self-correcting: it can never
- * drift, and re-running a minted pack is a cheap DB read with no chain call.
+ *   ① STARVATION (was CRITICAL: unordered LIMIT 100 + skip-minted stranded misses past the cap) →
+ *      a WALKING CURSOR over created_at: each sweep advances past the page it examined and wraps at the
+ *      end, so every export is visited over successive sweeps regardless of how many are already minted.
+ *      The minted check is ONE batch `.in()` per page, not N point reads.
+ *   ② COUPLING (was HIGH: awaited inside the M6 copy-delivery critical section) → its OWN timer + its
+ *      OWN re-entrancy guard. A hung Base RPC here can never block copy delivery.
+ *   ③ DOUBLE-MINT WINDOW + ④ CLONE RACE (was HIGH/MEDIUM: export's detached mint and a sweep racing the
+ *      same pack) → a GRACE PERIOD: the sweep only considers packs exported MORE than GRACE_MS ago. The
+ *      export's own detached mint settles in seconds, so by the time the sweep looks, that pack's mint
+ *      is mined (a pack_titles row exists → skipped) or genuinely failed (no row → safe to re-mint with
+ *      no concurrent actor). Combined with the single-sweeper guard, reconcile is never concurrent with
+ *      an export mint or another sweep — so no duplicate clones and no concurrent broadcast. (A tx still
+ *      stuck past GRACE_MS is the only residual: a 2nd broadcast that the contract's _safeMint reverts —
+ *      asset-safe, gas-only, rare.)
+ *   ⑤ Per-item chain calls are wrapped in a hard timeout so one slow mint can't consume the whole sweep.
  *
- * CHEAP WHEN IDLE: the scan runs FIRST; with zero title exports it returns before constructing any Base
- * client. With exports present it resolves the MINTER client + custodial resolver, and if the Base env
- * is absent (non-Base deploys) it no-ops. Per-item errors are swallowed (logged) so one bad pack never
- * stalls the sweep — the next tick retries. MONEY / IRREVERSIBLE-ASSET CODE; the mint stays idempotent.
- *
- * ⚠️ STATUS: NOT WIRED — pending rework. A 4-agent adversarial backtest (2026-06-23) returned NO_GO on
- * this as first written + wired into the copy-delivery poller. The core single-threaded logic is sound
- * + unit-tested (skip-minted, skip-sold, re-mint-miss, resilient-per-item, snapshot-leak guard), but
- * the OPERATIONAL shape was wrong, so it was REMOVED from runDeliverySweepOnce until fixed:
- *   1. CRITICAL (starvation): the unordered `.limit(SCAN_LIMIT)` + skip-if-minted can permanently
- *      strand a genuine miss once the title backlog exceeds the cap — the backstop stops backstopping.
- *      FIX: scan only UN-minted candidates (a marker column / partial index on pmp_artifacts, or an
- *      anti-join against pack_titles), ordered (created_at), or a walking cursor; batch the minted
- *      check (one `.in()` over derived snapIds, not N point reads).
- *   2. HIGH (coupling): must run on its OWN bounded-cadence timer (~5 min), never inside the M6
- *      copy-delivery critical section — a hung Base RPC here must not block copy delivery.
- *   3. HIGH (double-mint window): mintTitle() returns at broadcast (no receipt await) while
- *      titleOwner() reads null pre-mining, so export + a sweep can both broadcast (asset-safe via
- *      _safeMint, but gas burn + racing mirror writes). FIX: an atomic claim (conditional INSERT of a
- *      pending_mint pack_titles row, unique on pack_id) before broadcast, or await the receipt.
- *   4. MEDIUM (clone TOCTOU): concurrent export-vs-sweep mintTitleOnExport for one pack can duplicate
- *      member clones (no DB uniqueness on the clone). FIX: partial unique index on
- *      memories(owner_wallet, metadata->>'title_snapshot_pack', metadata->>'title_snapshot_of_member').
- *   5. Bound per-item chain calls (viem timeout/retryCount) + a SIGTERM drain for the in-flight mint.
+ * Idempotent + crash-safe throughout (mintTitleOnExport reuses the snapshot + no-ops a live mint). Cheap
+ * when idle (a settled-export page scan; no Base client unless there's work). MONEY / IRREVERSIBLE-ASSET
+ * CODE. NOT YET fixed: a SIGTERM drain for an in-flight mint (recoverable — the next process's sweep
+ * re-attempts via the cursor; the copy poller shares this gap).
  */
 
 import { createChildLogger } from '@clude/shared/core/logger';
@@ -54,8 +41,18 @@ import { snapshotPackId } from './snapshot-pack-for-title.js';
 
 const log = createChildLogger('reconcile-title-mints');
 
-/** Max exported title packs examined per sweep (bounds the backstop; more are picked up next tick). */
-const SCAN_LIMIT = 100;
+/** Default sweep cadence — a backstop, not a latency path. */
+const DEFAULT_INTERVAL_MS = 300_000; // 5 min
+/** Only reconcile exports OLDER than this, so the export's own detached mint has long settled (③/④). */
+const GRACE_MS = 300_000; // 5 min
+/** Rows examined per sweep (the cursor walks the whole set over successive sweeps). */
+const SCAN_PAGE = 100;
+/** Max on-chain mints attempted per sweep (bounds the irreversible work + the sweep's wall-clock). */
+const MINT_PER_SWEEP = 10;
+/** Hard per-item timeout so one slow chain call can't consume the sweep (⑤). */
+const PER_ITEM_TIMEOUT_MS = 20_000;
+/** Cursor sentinel: a timestamp strictly before any real created_at (the walk starts/wraps here). */
+const EPOCH = '1970-01-01T00:00:00.000Z';
 
 export interface ReconcileSummary {
   examined: number;
@@ -63,54 +60,78 @@ export interface ReconcileSummary {
   skipped: number;
   failed: number;
 }
-
 const EMPTY: ReconcileSummary = { examined: 0, minted: 0, skipped: 0, failed: 0 };
 
-/** Injectable seams (defaults are the real singletons; tests pass mocks — no live chain). */
+/** Injectable seams (defaults are the real singletons; tests pass mocks — no live chain, fixed clock). */
 export interface ReconcileDeps {
   db?: ReturnType<typeof getDb>;
   evm?: EvmTitleClient;
   resolver?: BaseIdentityResolver;
-  /** The mint orchestrator (mintTitleOnExport). Injectable so tests assert dispatch without a chain. */
   mint?: typeof mintTitleOnExport;
+  /** Wall clock (ms) — injectable so tests control the GRACE window. Defaults to Date.now(). */
+  now?: number;
+}
+
+// ── Walking-cursor state (module-scoped; one sweeper). Reset on process restart — a re-walk is safe. ──
+let scanCursor = EPOCH;
+
+/** Reject if `p` doesn't settle within `ms` (the underlying promise keeps running; the loop moves on). */
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`${label}: timed out after ${ms}ms`)), ms);
+    if (typeof t.unref === 'function') t.unref();
+    p.then(
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); },
+    );
+  });
 }
 
 /**
- * Run exactly one title-mint reconciliation sweep. Idempotent + crash-safe. Returns a summary
- * (examined / minted / skipped / failed). Never throws — a transient failure is logged and retried
- * next tick.
+ * Run exactly one reconciliation sweep. Idempotent + crash-safe. Never throws — a transient failure is
+ * logged and retried next tick. Returns a summary (examined / minted / skipped / failed).
  */
 export async function reconcileTitleMintsOnce(deps: ReconcileDeps = {}): Promise<ReconcileSummary> {
   const db = deps.db ?? getDb();
   const mint = deps.mint ?? mintTitleOnExport;
+  const nowMs = deps.now ?? Date.now();
+  const graceCutoff = new Date(nowMs - GRACE_MS).toISOString();
 
-  // 1) CHEAP SCAN FIRST — exported SOURCE title packs (snapshot artifacts are pack_id LIKE 'tsnap-%').
-  //    With none, return before constructing any Base client (the common, non-title case).
-  let exports: Array<{ pack_id: string; owner_wallet: string | null }>;
+  // 1) Walk one page of SETTLED source title exports (created before graceCutoff, after the cursor).
+  let page: Array<{ pack_id: string; owner_wallet: string | null; created_at: string }>;
   try {
     const { data, error } = await db
       .from('pmp_artifacts')
-      .select('pack_id, owner_wallet')
+      .select('pack_id, owner_wallet, created_at')
       .eq('license_type', 'title')
-      .not('pack_id', 'like', 'tsnap-%') // DB-side optimisation (PostgREST like); see the JS guard below
-      .limit(SCAN_LIMIT);
+      .lt('created_at', graceCutoff)
+      .gt('created_at', scanCursor)
+      .order('created_at', { ascending: true })
+      .limit(SCAN_PAGE);
     if (error) {
       log.error({ err: error }, 'reconcile: failed to scan title exports');
-      return EMPTY;
+      return EMPTY; // leave the cursor — retry this page next sweep
     }
-    // AUTHORITATIVE exclusion of snapshot artifacts (pack_id 'tsnap-…'): do NOT trust the PostgREST
-    // `like` wildcard semantics (* vs %) — a leaked snapshot row would be mis-read as a source pack
-    // and trigger a spurious snapshot-of-a-snapshot mint. The startsWith filter is the real guard.
-    exports = ((data ?? []) as Array<{ pack_id: string; owner_wallet: string | null }>).filter(
-      (r) => !String(r.pack_id ?? '').startsWith('tsnap-'),
-    );
+    page = (data ?? []) as typeof page;
   } catch (err) {
     log.error({ err }, 'reconcile: title export scan threw');
     return EMPTY;
   }
-  if (exports.length === 0) return EMPTY;
 
-  // 2) There IS work → resolve the MINTER client + custodial resolver. Absent Base env → no-op.
+  // End of the walk (no settled rows past the cursor) → wrap to the start for the next sweep.
+  if (page.length === 0) {
+    scanCursor = EPOCH;
+    return EMPTY;
+  }
+  // Advance the cursor past this page (even rows we filter out below, so the walk always progresses).
+  scanCursor = page[page.length - 1]!.created_at;
+
+  // AUTHORITATIVE exclusion of snapshot artifacts (pack_id 'tsnap-…') — never trust the DB wildcard; a
+  // leaked snapshot row would be mis-read as a source pack and trigger a snapshot-of-a-snapshot mint.
+  const exports = page.filter((r) => !String(r.pack_id ?? '').startsWith('tsnap-'));
+  if (exports.length === 0) return EMPTY; // page was all snapshot rows; cursor already advanced
+
+  // 2) Resolve the MINTER client + custodial resolver (absent Base env → no-op; cursor stays advanced).
   let evm = deps.evm;
   let resolver = deps.resolver;
   if (!evm || !resolver) {
@@ -118,56 +139,109 @@ export async function reconcileTitleMintsOnce(deps: ReconcileDeps = {}): Promise
       evm = evm ?? getMinterEvmTitleClient();
       resolver = resolver ?? getBaseIdentityResolver();
     } catch (err) {
-      log.warn(
-        { err: (err as Error).message },
-        'reconcile: Base title env not configured — skipping title-mint reconciliation',
-      );
+      log.warn({ err: (err as Error).message }, 'reconcile: Base title env not configured — skipping');
       return { ...EMPTY, examined: exports.length };
     }
   }
+  if (!evm || !resolver) return { ...EMPTY, examined: exports.length }; // unreachable; narrows for TS
 
-  // 3) Re-mint any exported title pack whose snapshot title is not yet 'minted'. Idempotent per item.
-  let minted = 0;
-  let skipped = 0;
-  let failed = 0;
-  for (const exp of exports) {
-    const author = exp.owner_wallet;
-    if (!author) {
-      skipped += 1; // a source export always carries its author owner_wallet; defensive
-      continue;
+  // 3) BATCH minted-check: derive each export's expected snapshot title id (pure, no I/O), then ONE
+  //    `.in()` over pack_titles. A title row exists iff the mint already completed (minted or later
+  //    sold) — those are skipped; the misses are the rows with no title record.
+  const withSnap: Array<{ pack_id: string; author: string; snapId: string }> = [];
+  for (const e of exports) {
+    if (!e.owner_wallet) continue; // a source export always carries its author; defensive
+    withSnap.push({
+      pack_id: e.pack_id,
+      author: e.owner_wallet,
+      snapId: snapshotPackId(e.pack_id, resolver.addressFor(e.owner_wallet)),
+    });
+  }
+
+  let mintedSet = new Set<string>();
+  if (withSnap.length > 0) {
+    const { data: titleRows, error: tErr } = await db
+      .from('pack_titles')
+      .select('pack_id')
+      .in('pack_id', withSnap.map((e) => e.snapId));
+    if (tErr) {
+      log.error({ err: tErr }, 'reconcile: failed to batch-check pack_titles');
+      return { ...EMPTY, examined: exports.length };
     }
+    mintedSet = new Set(((titleRows ?? []) as Array<{ pack_id: string }>).map((t) => t.pack_id));
+  }
+
+  const misses = withSnap.filter((e) => !mintedSet.has(e.snapId));
+
+  // 4) Re-mint the misses (bounded per sweep), each under a hard timeout. Idempotent per item.
+  let minted = 0;
+  let failed = 0;
+  const toMint = misses.slice(0, MINT_PER_SWEEP);
+  for (const m of toMint) {
     try {
-      const creatorBase = resolver.addressFor(author);
-      const snapId = snapshotPackId(exp.pack_id, creatorBase);
-      const { data: titleRow } = await db
-        .from('pack_titles')
-        .select('pack_id')
-        .eq('pack_id', snapId)
-        .maybeSingle();
-      // SKIP if a title record EXISTS at all — a pack_titles row is written iff the mint already
-      // completed (status 'minted', or later 'transferring'/'transferred' once SOLD). Re-running the
-      // mint for a minted OR sold title is harmful: mintTitleForPack's mirror upsert would revert a
-      // sold title's status back to 'minted' AND grantCreatorTitleOwner would re-grant the seller
-      // access they no longer hold. Only mint a GENUINE miss (no record). A crash-after-broadcast (no
-      // row but token live on-chain) still self-heals via mintTitleForPack's own ownerOf pre-check.
-      if (titleRow) {
-        skipped += 1; // already minted (or sold) — cheap no-op, no chain call
-        continue;
-      }
-      await mint(db, evm, resolver, { sourcePackId: exp.pack_id, creatorAppWallet: author });
+      await withTimeout(
+        mint(db, evm, resolver, { sourcePackId: m.pack_id, creatorAppWallet: m.author }),
+        PER_ITEM_TIMEOUT_MS,
+        `reconcile mint ${m.pack_id}`,
+      );
       minted += 1;
     } catch (err) {
       failed += 1;
-      log.warn(
-        { err: (err as Error).message, packId: exp.pack_id },
-        'reconcile: title mint retry failed (will retry next sweep)',
-      );
+      log.warn({ err: (err as Error).message, packId: m.pack_id }, 'reconcile: title mint retry failed (will retry)');
     }
   }
 
-  const summary: ReconcileSummary = { examined: exports.length, minted, skipped, failed };
-  if (minted > 0 || failed > 0) {
-    log.info(summary, 'title-mint reconciliation sweep complete');
-  }
+  // examined = skipped + minted + failed. skipped = everything examined we did NOT attempt to mint
+  // (already-minted, no-owner, and any misses beyond the per-sweep cap — picked up by the cursor walk).
+  const summary: ReconcileSummary = {
+    examined: exports.length,
+    minted,
+    failed,
+    skipped: exports.length - toMint.length,
+  };
+  if (minted > 0 || failed > 0) log.info(summary, 'title-mint reconciliation sweep complete');
   return summary;
+}
+
+// ── Own recurring poller (decoupled from the copy-delivery sweep — ② coupling fix) ──
+
+let timer: NodeJS.Timeout | null = null;
+let reconciling = false;
+
+/** Run one sweep, guarded against overlap, swallowing errors (never let a transient failure kill it). */
+async function tick(): Promise<void> {
+  if (reconciling) return; // single sweeper — also part of the ③/④ no-concurrency guarantee
+  reconciling = true;
+  try {
+    await reconcileTitleMintsOnce();
+  } catch (err) {
+    log.error({ err }, 'title-mint reconciliation tick failed (will retry next interval)');
+  } finally {
+    reconciling = false;
+  }
+}
+
+/**
+ * Start the recurring title-mint reconciliation poller on its OWN timer. Idempotent (one instance).
+ * Returns a stop() handle. unref()'d so it never keeps the process alive on its own.
+ */
+export function startTitleReconciliationPoller(intervalMs: number = DEFAULT_INTERVAL_MS): { stop: () => void } {
+  if (timer) return { stop: stopTitleReconciliationPoller };
+  log.info({ intervalMs }, 'starting title-mint reconciliation poller (own timer, decoupled from delivery)');
+  timer = setInterval(() => void tick(), intervalMs);
+  if (typeof timer.unref === 'function') timer.unref();
+  return { stop: stopTitleReconciliationPoller };
+}
+
+/** Stop the poller (clears the interval). Safe to call when not running. */
+export function stopTitleReconciliationPoller(): void {
+  if (timer) {
+    clearInterval(timer);
+    timer = null;
+  }
+}
+
+/** Test-only: reset the walking cursor (module state) between cases. */
+export function __resetCursorForTests(): void {
+  scanCursor = EPOCH;
 }
