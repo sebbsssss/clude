@@ -108,13 +108,27 @@ describe('reconcileTitleMintsOnce — grace, skip, re-mint', () => {
     expect(mint).toHaveBeenCalledWith(db, evm, resolver, { sourcePackId: 'pack-A', creatorAppWallet: 'authorA' });
   });
 
-  it('caps mints per sweep and counts the rest as skipped (the cursor picks them up next sweep)', async () => {
-    for (let i = 0; i < 12; i++) seedExport(`pack-${i}`, `author-${i}`, 60); // 12 settled misses
+  it('mints ALL of a page\'s misses (no per-sweep cap below page size) — closes cap-stranding', async () => {
+    for (let i = 0; i < 12; i++) seedExport(`pack-${i}`, `author-${i}`, 60); // 12 settled misses < SCAN_PAGE
     const summary = await reconcileTitleMintsOnce({ db, evm, resolver, mint, now: NOW });
-    expect(summary.examined).toBe(12);
-    expect(summary.minted).toBe(10); // MINT_PER_SWEEP
-    expect(summary.skipped).toBe(2);
-    expect(mint).toHaveBeenCalledTimes(10);
+    expect(summary).toEqual({ examined: 12, minted: 12, skipped: 0, failed: 0 });
+    expect(mint).toHaveBeenCalledTimes(12);
+  });
+
+  it('bounds a sweep to SCAN_PAGE rows (the walking cursor reaches the rest on later sweeps)', async () => {
+    for (let i = 0; i < 25; i++) seedExport(`pack-${i}`, `author-${i}`, 60); // 25 > SCAN_PAGE (20)
+    const summary = await reconcileTitleMintsOnce({ db, evm, resolver, mint, now: NOW });
+    expect(summary.examined).toBe(20); // page-bounded; the rest follow on subsequent sweeps
+    expect(summary.minted).toBe(20);
+  });
+
+  it('skips an export whose owner_wallet is a Base (0x) address, not an app wallet', async () => {
+    seedExport('pack-A', 'authorA', 60);
+    seedExport('pack-X', '0xBaseAddrNotAnAppWallet', 60); // mis-keyed owner → must be skipped, not mis-minted
+    const summary = await reconcileTitleMintsOnce({ db, evm, resolver, mint, now: NOW });
+    expect(summary).toEqual({ examined: 2, minted: 1, skipped: 1, failed: 0 });
+    expect(mint).toHaveBeenCalledTimes(1);
+    expect(mint).toHaveBeenCalledWith(db, evm, resolver, { sourcePackId: 'pack-A', creatorAppWallet: 'authorA' });
   });
 
   it('counts + swallows a per-item failure and still processes the rest', async () => {
