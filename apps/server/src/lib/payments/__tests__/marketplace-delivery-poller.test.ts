@@ -17,14 +17,16 @@ vi.mock('@clude/shared/core/logger', () => ({
   createChildLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }));
 
-const { dispatchPendingDeliveries, grantCopy, expireStaleSupplyHolds } = vi.hoisted(() => ({
+const { dispatchPendingDeliveries, grantCopy, expireStaleSupplyHolds, reconcileTitleMintsOnce } = vi.hoisted(() => ({
   dispatchPendingDeliveries: vi.fn(),
   grantCopy: vi.fn(),
   expireStaleSupplyHolds: vi.fn(),
+  reconcileTitleMintsOnce: vi.fn(),
 }));
 vi.mock('../delivery-dispatcher.js', () => ({ dispatchPendingDeliveries }));
 vi.mock('../grant-copy.js', () => ({ grantCopy }));
 vi.mock('../supply-expiry.js', () => ({ expireStaleSupplyHolds }));
+vi.mock('../reconcile-title-mints.js', () => ({ reconcileTitleMintsOnce }));
 
 import {
   runDeliverySweepOnce,
@@ -36,8 +38,10 @@ beforeEach(() => {
   dispatchPendingDeliveries.mockReset();
   grantCopy.mockReset();
   expireStaleSupplyHolds.mockReset();
+  reconcileTitleMintsOnce.mockReset();
   dispatchPendingDeliveries.mockResolvedValue({ delivered: 0, failed: 0, examined: 0 });
   expireStaleSupplyHolds.mockResolvedValue({ expired: 0 });
+  reconcileTitleMintsOnce.mockResolvedValue({ examined: 0, minted: 0, skipped: 0, failed: 0 });
 });
 
 afterEach(() => {

@@ -51,8 +51,9 @@ export interface SnapshotResult {
   reused: boolean;
 }
 
-/** Deterministic snapshot pack id for (source pack, creator) so a retry collapses to one snapshot. */
-function snapshotPackId(sourcePackId: string, creatorBase: string): string {
+/** Deterministic snapshot pack id for (source pack, creator) so a retry collapses to one snapshot.
+ *  Exported so the reconciliation poller can derive the expected title id for an exported pack. */
+export function snapshotPackId(sourcePackId: string, creatorBase: string): string {
   const h = createHash('sha256').update(`${sourcePackId} ${creatorBase}`).digest('hex').slice(0, 12);
   return `tsnap-${h}`;
 }

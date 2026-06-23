@@ -25,6 +25,7 @@ import { createChildLogger } from '@clude/shared/core/logger';
 import { dispatchPendingDeliveries, type DeliverFn } from './delivery-dispatcher.js';
 import { grantCopy } from './grant-copy.js';
 import { expireStaleSupplyHolds } from './supply-expiry.js';
+import { reconcileTitleMintsOnce } from './reconcile-title-mints.js';
 
 const log = createChildLogger('marketplace-delivery-poller');
 
@@ -49,6 +50,10 @@ export async function runDeliverySweepOnce(deliver: DeliverFn = grantCopy): Prom
     // Same tick: free supply units held by abandoned, unpaid orders past expiry (so a single/limited
     // listing can't be griefed into permanent 'sold_out'). Idempotent + crash-safe; logs its own work.
     await expireStaleSupplyHolds();
+    // Same tick: the durable backstop for "a title pack exists on Base once exported" — re-mint any
+    // exported title pack whose best-effort export mint was missed (RPC down / env / restart). Cheap
+    // when idle (one scan, no chain), idempotent, never throws; logs only when it does work.
+    await reconcileTitleMintsOnce();
   } catch (err) {
     // Never let a transient failure kill the poller — the next tick retries.
     log.error({ err }, 'marketplace delivery sweep failed (will retry next tick)');
