@@ -51,6 +51,8 @@ export interface ExportRequest {
   description?: string;
   category: ContentCategory;
   encrypt: boolean;
+  /** Pack scope only: mint a 1-of-1 Base ownership title for the (owned, tokenised) pack on export. */
+  mint_as_title?: boolean;
 }
 
 /** A `.pmp` artifact as returned by POST /v1/pmp/export. */

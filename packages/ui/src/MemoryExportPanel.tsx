@@ -158,6 +158,7 @@ export function MemoryExportPanel(props: MemoryExportPanelProps) {
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<ContentCategory>('personal');
   const [encrypt, setEncrypt] = useState(true);
+  const [mintAsTitle, setMintAsTitle] = useState(false);
 
   const [preview, setPreview] = useState<SelectionPreview | null>(null);
   const [previewing, setPreviewing] = useState(false);
@@ -232,6 +233,8 @@ export function MemoryExportPanel(props: MemoryExportPanelProps) {
         description: description.trim() || undefined,
         category,
         encrypt,
+        // Title intent only applies to a saved, tokenised pack (the title binds its committed root).
+        mint_as_title: scope === 'pack' ? mintAsTitle : undefined,
       };
       const r = await api.export(req);
       setResult(r);
@@ -241,7 +244,7 @@ export function MemoryExportPanel(props: MemoryExportPanelProps) {
     } finally {
       setExporting(false);
     }
-  }, [api, selection, name, description, category, encrypt, onExported]);
+  }, [api, selection, name, description, category, encrypt, scope, mintAsTitle, onExported]);
 
   const handleDownload = useCallback(() => {
     if (!result || typeof window === 'undefined') return;
@@ -489,6 +492,30 @@ export function MemoryExportPanel(props: MemoryExportPanelProps) {
             {encrypt ? 'On' : 'Off'}
           </span>
         </button>
+        {scope === 'pack' && (
+          <button
+            type="button"
+            onClick={() => setMintAsTitle((v) => !v)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: p.bg,
+              border: `1px solid ${mintAsTitle ? p.accent : p.border}`,
+              borderRadius: 8,
+              padding: '10px 12px',
+              font: 'inherit',
+              fontSize: 13,
+              color: p.text,
+              cursor: 'pointer',
+            }}
+          >
+            <span>Mint a 1-of-1 Base ownership title for this pack</span>
+            <span style={{ fontSize: 12, fontWeight: 500, color: mintAsTitle ? p.accent : p.textFaint }}>
+              {mintAsTitle ? 'On' : 'Off'}
+            </span>
+          </button>
+        )}
       </div>
 
       {error && (

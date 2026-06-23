@@ -366,6 +366,7 @@ class CludeAPI {
         description: req.description,
         category: req.category,
         encrypt: req.encrypt,
+        mint_as_title: req.mint_as_title,
       }),
     });
   }
