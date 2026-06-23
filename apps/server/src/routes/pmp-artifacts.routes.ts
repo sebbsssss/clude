@@ -99,6 +99,10 @@ const exportBodySchema = z
     description: z.string().nullish(),
     category: contentCategorySchema.optional(),
     encrypt: z.boolean().optional(),
+    // Base TITLE intent: when true on the pack path, mark the (owned) pack as a 1-of-1 title so the
+    // export-time mint fires — minting a Base ownership title to the caller's custodial Base address.
+    // Ignored on the selection path (a title needs a saved, tokenised pack).
+    mint_as_title: z.boolean().optional(),
   })
   .strict();
 
@@ -772,6 +776,29 @@ export function pmpArtifactsRoutes(): Router {
         if (pack.author_wallet !== owner) {
           res.status(403).json({ error: 'forbidden', hint: 'you do not own this pack' } satisfies ErrorBody);
           return;
+        }
+
+        // 1b. TITLE INTENT (Base): the caller asked to mint a 1-of-1 Base ownership title for THEIR pack.
+        //     Mark it 'title' so the export-time mint (below) fires — to the caller's custodial Base
+        //     address. Minting a title of your own content is NOT the SEC-gated event; SELLING it later
+        //     is (and that path is mainnet-gated). Requires a tokenised pack (the title binds its root).
+        if (body.mint_as_title && pack.sale_mode !== 'title') {
+          if (!pack.merkle_root) {
+            res
+              .status(409)
+              .json({ error: 'pack_not_tokenised', hint: 'tokenise the pack before minting a Base title' } satisfies ErrorBody);
+            return;
+          }
+          const { error: smErr } = await db
+            .from('memory_packs')
+            .update({ sale_mode: 'title' })
+            .eq('pack_id', effectivePackId)
+            .eq('author_wallet', owner);
+          if (smErr) {
+            log.warn({ err: smErr, packId: effectivePackId }, 'export: failed to mark pack as title');
+          } else {
+            pack.sale_mode = 'title';
+          }
         }
 
         // 2. Resolve member memories in tree order (pack-scoped).

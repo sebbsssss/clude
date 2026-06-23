@@ -586,6 +586,33 @@ beforeEach(() => {
 // ───────────────────────── POST /v1/pmp/export ─────────────────────────
 
 describe('POST /v1/pmp/export', () => {
+  it('mint_as_title flags an owned tokenised pack as a title (the trigger that fires the Base mint)', async () => {
+    authedWallet = OWNER;
+    const packId = seedOwnedPack(); // tokenised, sale_mode 'copy'
+    writeMemoryPack.mockImplementationOnce((file: string) => writeFileSync(file, Buffer.from('PMP')));
+
+    const res = await request(app()).post('/v1/pmp/export').send({ pack_id: packId, mint_as_title: true });
+
+    // Export still succeeds; the on-chain mint is best-effort + Base-env-gated (a no-op in tests).
+    expect(res.status).toBe(201);
+    // The pack is now 'title' — the exact flag the export-time mint (mintTitleAtExportBestEffort) gates on.
+    const pack = (tables['memory_packs'] ?? []).find((p) => p.pack_id === packId);
+    expect(pack?.sale_mode).toBe('title');
+    // The mark flowed through: the registered artifact carries the title license.
+    const reg = insertedRows.find((r) => r.table === 'pmp_artifacts');
+    expect(reg!.rows[0].license_type).toBe('title');
+  });
+
+  it('mint_as_title on an UN-tokenised pack is rejected (a title must bind a committed root)', async () => {
+    authedWallet = OWNER;
+    seed('memory_packs', [
+      { pack_id: 'pack-draft', author_wallet: OWNER, name: 'Draft', version: '1.0.0', memory_count: 1, merkle_root: null, content_category: 'knowledge', sale_mode: 'copy' },
+    ]);
+    const res = await request(app()).post('/v1/pmp/export').send({ pack_id: 'pack-draft', mint_as_title: true });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('pack_not_tokenised');
+  });
+
   it('builds a .pmp from the owner pack and registers an artifact with the right manifest_hash', async () => {
     authedWallet = OWNER;
     const packId = seedOwnedPack();
