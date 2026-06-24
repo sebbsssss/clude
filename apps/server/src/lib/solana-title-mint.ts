@@ -9,10 +9,21 @@
  * that single token, which is what fixes the old `holdsPackToken` balance>=1 double-spend by
  * construction (pack-gate.ts:111): a 1-of-1 has exactly one holder, so there is nothing to double-spend.
  *
+ * IDEMPOTENT / DOUBLE-MINT-PROOF (the asset-critical property):
+ *   - The mint address is DETERMINISTIC — derived from (packId, SOLANA_TITLE_MINT_SEED), the Solana
+ *     analog of Base's deterministic tokenId (keccak256(packId)). So it is re-derivable after any crash.
+ *   - The mint is ONE ATOMIC transaction (create + init + ATA + mintTo + revoke-authority). All-or-
+ *     nothing: there is no partial on-chain state to resume from.
+ *   - Therefore "does the deterministic mint account already exist?" answers "was this title already
+ *     minted?" with NO database state. A crash after the broadcast, or a duplicate call, re-derives the
+ *     same address, sees it exists, and returns an idempotent no-op — it NEVER mints a second 1-of-1.
+ *
  * HARD SECURITY BOUNDARIES:
  *   - The mint authority is a DEDICATED keypair (SOLANA_TITLE_MINTER_KEY), NEVER the memo-only bot
  *     wallet (solana-client.ts is explicitly memo+registry only — "reject transfer functionality in
  *     review"). loadTitleMinter refuses if the configured key equals the bot wallet.
+ *   - SOLANA_TITLE_MINT_SEED is server-secret so the deterministic mint keypair is NOT publicly
+ *     derivable (a public packId alone cannot grief-create the mint account). Set once, never rotate.
  *   - Minting on MAINNET is gated behind ALLOW_SOLANA_MAINNET_TITLES (SEC: a transferable title is
  *     Howey-sensitive on any chain). resolveSolanaTitleEnv throws on an un-gated mainnet. Devnet is free.
  *
@@ -21,19 +32,31 @@
  * later increment attaches Metaplex Token Metadata (name/symbol/uri) so the title shows as a proper NFT
  * in wallets/marketplaces; the ownership + transfer logic here is unchanged by that.
  *
- * connection + minter are injected by the factory so the env resolver, the minter loader, and the
- * ownership lookup are unit-tested with mocks. The live mint is verified on DEVNET (Phase 0b), the same
- * build-then-devnet-spike pattern the Base client used on Sepolia.
+ * connection + minter + mintSeed are injected by the factory so the env resolver, the minter loader,
+ * the keypair derivation, and the ownership lookup are unit-tested with mocks. The live atomic mint is
+ * verified on DEVNET (Phase 0b), the same build-then-devnet-spike pattern the Base client used on Sepolia.
  */
 
-import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import {
-  createMint,
-  getOrCreateAssociatedTokenAccount,
-  mintTo,
-  setAuthority,
+  Connection,
+  Keypair,
+  PublicKey,
+  SystemProgram,
+  Transaction,
+  sendAndConfirmTransaction,
+} from '@solana/web3.js';
+import {
   AuthorityType,
+  MINT_SIZE,
+  TOKEN_PROGRAM_ID,
+  createAssociatedTokenAccountInstruction,
+  createInitializeMint2Instruction,
+  createMintToInstruction,
+  createSetAuthorityInstruction,
+  getAssociatedTokenAddressSync,
+  getMinimumBalanceForRentExemptMint,
 } from '@solana/spl-token';
+import { createHash } from 'node:crypto';
 import bs58 from 'bs58';
 import { createChildLogger } from '@clude/shared/core/logger';
 
@@ -98,6 +121,36 @@ export function loadTitleMinter(env: NodeJS.ProcessEnv = process.env): Keypair {
   return kp;
 }
 
+// ─────────── deterministic mint keypair (the double-mint guard) ───────────
+
+/**
+ * Load the server-secret seed that makes title mint addresses DETERMINISTIC. Required: a missing seed
+ * would make every mint address random, defeating the idempotency guard (a crash-after-broadcast retry
+ * could mint a SECOND 1-of-1). Set ONCE and never rotate — changing it re-derives every pack to a new
+ * address, orphaning existing titles. Reads process.env (injectable for tests).
+ */
+export function loadTitleMintSeed(env: NodeJS.ProcessEnv = process.env): string {
+  const seed = (env.SOLANA_TITLE_MINT_SEED ?? '').trim();
+  if (!seed) {
+    throw new Error(
+      'SOLANA_TITLE_MINT_SEED is not set (the server secret that makes title mint addresses deterministic / double-mint-proof)',
+    );
+  }
+  return seed;
+}
+
+/**
+ * Derive the DETERMINISTIC mint keypair for a pack. The address is a pure function of (packId, seed),
+ * so it is re-derivable after any crash — the Solana analog of Base's deterministic tokenId
+ * (keccak256(packId)). Idempotency rests on this: "does this address already exist on-chain?" answers
+ * "was this title already minted?" with no DB state. The seed is server-secret so the keypair is NOT
+ * publicly derivable (a public packId alone cannot grief-create the mint account).
+ */
+export function deriveTitleMintKeypair(packId: string, seed: string): Keypair {
+  const h = createHash('sha256').update(`clude-pmp-title:v1:${packId}:${seed}`).digest();
+  return Keypair.fromSeed(h.subarray(0, 32)); // an Ed25519 seed is 32 bytes
+}
+
 // ─────────── client ───────────
 
 export interface TitleBinding {
@@ -110,13 +163,15 @@ export interface TitleBinding {
 export interface MintTitleResult {
   /** The SPL mint address — the title's on-chain id (tracked in the DB title record). */
   mintAddress: string;
-  /** The mint tx signature. */
-  txSig: string;
+  /** The mint tx signature, or null when the title already existed (idempotent no-op). */
+  txSig: string | null;
+  /** True when the deterministic mint already existed and this call minted nothing. */
+  alreadyMinted: boolean;
 }
 
 export interface SolanaTitleMintClient {
   readonly network: 'mainnet-beta' | 'devnet';
-  /** Mint a 1-of-1 title to `toWallet` (the user's OWN address) and revoke mint authority. */
+  /** Mint a 1-of-1 title to `toWallet` (the user's OWN address) and revoke mint authority. Idempotent. */
   mintTitle(toWallet: string, binding: TitleBinding): Promise<MintTitleResult>;
   /** The current owner (base58) of the 1-of-1 `mintAddress`, or null if unheld/burned. */
   titleOwner(mintAddress: string): Promise<string | null>;
@@ -126,10 +181,12 @@ export interface SolanaTitleClientDeps {
   connection: Connection;
   minter: Keypair;
   network: 'mainnet-beta' | 'devnet';
+  /** Server-secret seed for deterministic mint addresses (loadTitleMintSeed). */
+  mintSeed: string;
 }
 
 export function createSolanaTitleMintClient(deps: SolanaTitleClientDeps): SolanaTitleMintClient {
-  const { connection, minter, network } = deps;
+  const { connection, minter, network, mintSeed } = deps;
 
   return {
     network,
@@ -137,23 +194,59 @@ export function createSolanaTitleMintClient(deps: SolanaTitleClientDeps): Solana
     async mintTitle(toWallet: string, binding: TitleBinding): Promise<MintTitleResult> {
       const owner = new PublicKey(toWallet); // throws on a malformed address — fail loud
 
-      // 1) Create the mint: decimals 0, mint authority = the dedicated minter, no freeze authority.
-      const mint = await createMint(connection, minter, minter.publicKey, null, 0);
+      // DETERMINISTIC address (re-derivable after any crash) — the Solana analog of Base's tokenId.
+      const mintKp = deriveTitleMintKeypair(binding.packId, mintSeed);
+      const mint = mintKp.publicKey;
 
-      // 2) The recipient's associated token account (created if absent; rent paid by the minter).
-      const ata = await getOrCreateAssociatedTokenAccount(connection, minter, mint, owner);
+      // IDEMPOTENCY (the double-mint guard): if the deterministic mint account already exists, the
+      // atomic mint below already landed (a crash-after-broadcast resume, or a duplicate call). Never
+      // re-mint. Because the mint is ONE atomic tx, an existing account ⟺ a fully-completed 1-of-1.
+      const existing = await connection.getAccountInfo(mint);
+      if (existing) {
+        if (!existing.owner.equals(TOKEN_PROGRAM_ID)) {
+          throw new Error(
+            `solana title mint ${mint.toBase58()} exists but is not owned by the token program — refusing to proceed`,
+          );
+        }
+        log.info(
+          { mint: mint.toBase58(), packId: binding.packId, network },
+          'solana title already minted (deterministic address exists on-chain) — idempotent no-op',
+        );
+        return { mintAddress: mint.toBase58(), txSig: null, alreadyMinted: true };
+      }
 
-      // 3) Mint exactly ONE unit to the user.
-      const txSig = await mintTo(connection, minter, mint, ata.address, minter, 1);
+      // ATOMIC mint — ONE transaction, all-or-nothing, so there is no partial state to resume from:
+      //   1) create the mint account (rent-exempt), owned by the token program
+      //   2) initialize it: decimals 0, mint authority = the dedicated minter, no freeze authority
+      //   3) create the recipient's ATA (rent paid by the minter)
+      //   4) mint exactly ONE unit to the user
+      //   5) REVOKE mint authority → supply is permanently 1 (a true 1-of-1; nothing more can be minted)
+      const rentExempt = await getMinimumBalanceForRentExemptMint(connection);
+      const ata = getAssociatedTokenAddressSync(mint, owner);
+      const tx = new Transaction().add(
+        SystemProgram.createAccount({
+          fromPubkey: minter.publicKey,
+          newAccountPubkey: mint,
+          space: MINT_SIZE,
+          lamports: rentExempt,
+          programId: TOKEN_PROGRAM_ID,
+        }),
+        createInitializeMint2Instruction(mint, 0, minter.publicKey, null),
+        createAssociatedTokenAccountInstruction(minter.publicKey, ata, owner, mint),
+        createMintToInstruction(mint, ata, minter.publicKey, 1),
+        createSetAuthorityInstruction(mint, minter.publicKey, AuthorityType.MintTokens, null),
+      );
 
-      // 4) Revoke mint authority → supply is permanently 1. A true 1-of-1; nothing more can be minted.
-      await setAuthority(connection, minter, mint, minter, AuthorityType.MintTokens, null);
+      // Signers: the minter (payer + mint authority + ATA-rent payer) and the mint keypair (it must
+      // sign createAccount for its own address). One confirmed round-trip — far fewer RPC calls than
+      // the prior multi-helper path (which matters under the public devnet RPC's per-method throttle).
+      const txSig = await sendAndConfirmTransaction(connection, tx, [minter, mintKp]);
 
       log.info(
         { mint: mint.toBase58(), to: toWallet.slice(0, 8), packId: binding.packId, network },
-        'solana title minted (1-of-1, authority revoked) to the user wallet',
+        'solana title minted (atomic 1-of-1, authority revoked) to the user wallet',
       );
-      return { mintAddress: mint.toBase58(), txSig };
+      return { mintAddress: mint.toBase58(), txSig, alreadyMinted: false };
     },
 
     async titleOwner(mintAddress: string): Promise<string | null> {
@@ -185,10 +278,11 @@ export async function assertTitleOwner(
   return owner !== null && owner === walletAddress;
 }
 
-/** Build the production client from env (dedicated minter + gated network). Throws if mis-configured. */
+/** Build the production client from env (dedicated minter + deterministic seed + gated network). */
 export function getSolanaTitleMintClient(): SolanaTitleMintClient {
   const env = resolveSolanaTitleEnv();
   const minter = loadTitleMinter();
+  const mintSeed = loadTitleMintSeed();
   const connection = new Connection(env.rpcUrl, 'confirmed');
-  return createSolanaTitleMintClient({ connection, minter, network: env.network });
+  return createSolanaTitleMintClient({ connection, minter, network: env.network, mintSeed });
 }

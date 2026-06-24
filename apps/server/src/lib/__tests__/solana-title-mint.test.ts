@@ -10,14 +10,22 @@
  *      balance>=1 double-spend by construction.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { Keypair } from '@solana/web3.js';
+import { Keypair, SystemProgram } from '@solana/web3.js';
+import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import bs58 from 'bs58';
 
 vi.mock('@clude/shared/core/logger', () => ({
   createChildLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }));
 
-import { resolveSolanaTitleEnv, loadTitleMinter, createSolanaTitleMintClient, assertTitleOwner } from '../solana-title-mint.js';
+import {
+  resolveSolanaTitleEnv,
+  loadTitleMinter,
+  loadTitleMintSeed,
+  deriveTitleMintKeypair,
+  createSolanaTitleMintClient,
+  assertTitleOwner,
+} from '../solana-title-mint.js';
 
 describe('resolveSolanaTitleEnv — SEC mainnet gate', () => {
   it('devnet is always allowed', () => {
@@ -87,7 +95,7 @@ describe('titleOwner — the 1-of-1 holder (fixes the balance>=1 double-spend)',
       getTokenLargestAccounts: vi.fn(async () => ({ value: [{ address: tokenAccount, amount: '1', uiAmount: 1 }] })),
       getParsedAccountInfo: vi.fn(async () => ({ value: { data: { parsed: { info: { owner: ownerWallet } } } } })),
     } as unknown as import('@solana/web3.js').Connection;
-    const client = createSolanaTitleMintClient({ connection, minter, network: 'devnet' });
+    const client = createSolanaTitleMintClient({ connection, minter, network: 'devnet', mintSeed: 'test-seed' });
     expect(await client.titleOwner(mintAddr)).toBe(ownerWallet);
   });
 
@@ -96,8 +104,65 @@ describe('titleOwner — the 1-of-1 holder (fixes the balance>=1 double-spend)',
       getTokenLargestAccounts: vi.fn(async () => ({ value: [] })),
       getParsedAccountInfo: vi.fn(),
     } as unknown as import('@solana/web3.js').Connection;
-    const client = createSolanaTitleMintClient({ connection, minter, network: 'devnet' });
+    const client = createSolanaTitleMintClient({ connection, minter, network: 'devnet', mintSeed: 'test-seed' });
     expect(await client.titleOwner(mintAddr)).toBeNull();
+  });
+});
+
+describe('loadTitleMintSeed — required server secret for deterministic addresses', () => {
+  it('loads the seed', () => {
+    expect(loadTitleMintSeed({ SOLANA_TITLE_MINT_SEED: 's3cr3t' } as NodeJS.ProcessEnv)).toBe('s3cr3t');
+  });
+  it('throws when unset (a missing seed defeats the double-mint guard)', () => {
+    expect(() => loadTitleMintSeed({} as NodeJS.ProcessEnv)).toThrow(/SOLANA_TITLE_MINT_SEED|deterministic/i);
+  });
+});
+
+describe('deriveTitleMintKeypair — deterministic, double-mint-proof addresses', () => {
+  const seed = 'server-secret-seed';
+  it('is deterministic: same (packId, seed) → same address (re-derivable after a crash)', () => {
+    expect(deriveTitleMintKeypair('clude-pack-abc', seed).publicKey.toBase58()).toBe(
+      deriveTitleMintKeypair('clude-pack-abc', seed).publicKey.toBase58(),
+    );
+  });
+  it('different packId → different address', () => {
+    expect(deriveTitleMintKeypair('clude-pack-abc', seed).publicKey.toBase58()).not.toBe(
+      deriveTitleMintKeypair('clude-pack-xyz', seed).publicKey.toBase58(),
+    );
+  });
+  it('different seed → different address (the secret seed is what keeps it non-public)', () => {
+    expect(deriveTitleMintKeypair('clude-pack-abc', seed).publicKey.toBase58()).not.toBe(
+      deriveTitleMintKeypair('clude-pack-abc', 'other-seed').publicKey.toBase58(),
+    );
+  });
+});
+
+describe('mintTitle — idempotency guard (the double-mint fix)', () => {
+  const minter = Keypair.generate();
+  const toWallet = Keypair.generate().publicKey.toBase58();
+  const binding = { packId: 'clude-pack-idem', merkleRoot: '0xabc', manifestHash: '0xdef', memoryCount: 3 };
+
+  it('no-op when the deterministic mint already exists: returns alreadyMinted, broadcasts nothing', async () => {
+    // getAccountInfo resolving a TOKEN_PROGRAM-owned account ⟺ the atomic mint already landed. The
+    // mint path never reaches getMinimumBalanceForRentExemptMint / sendAndConfirmTransaction (absent on
+    // this mock) — so a clean return proves the idempotency branch short-circuited before any broadcast.
+    const getAccountInfo = vi.fn(async () => ({ owner: TOKEN_PROGRAM_ID }));
+    const connection = { getAccountInfo } as unknown as import('@solana/web3.js').Connection;
+    const client = createSolanaTitleMintClient({ connection, minter, network: 'devnet', mintSeed: 'seed' });
+
+    const res = await client.mintTitle(toWallet, binding);
+    expect(res.alreadyMinted).toBe(true);
+    expect(res.txSig).toBeNull();
+    expect(res.mintAddress).toBe(deriveTitleMintKeypair(binding.packId, 'seed').publicKey.toBase58());
+    expect(getAccountInfo).toHaveBeenCalledOnce();
+  });
+
+  it('refuses when something else occupies the address (not a token mint — anomaly / grief)', async () => {
+    const getAccountInfo = vi.fn(async () => ({ owner: SystemProgram.programId }));
+    const connection = { getAccountInfo } as unknown as import('@solana/web3.js').Connection;
+    const client = createSolanaTitleMintClient({ connection, minter, network: 'devnet', mintSeed: 'seed' });
+
+    await expect(client.mintTitle(toWallet, binding)).rejects.toThrow(/not owned by the token program/i);
   });
 });
 
