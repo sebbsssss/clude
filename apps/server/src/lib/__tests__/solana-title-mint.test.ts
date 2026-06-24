@@ -17,7 +17,7 @@ vi.mock('@clude/shared/core/logger', () => ({
   createChildLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }));
 
-import { resolveSolanaTitleEnv, loadTitleMinter, createSolanaTitleMintClient } from '../solana-title-mint.js';
+import { resolveSolanaTitleEnv, loadTitleMinter, createSolanaTitleMintClient, assertTitleOwner } from '../solana-title-mint.js';
 
 describe('resolveSolanaTitleEnv — SEC mainnet gate', () => {
   it('devnet is always allowed', () => {
@@ -98,5 +98,23 @@ describe('titleOwner — the 1-of-1 holder (fixes the balance>=1 double-spend)',
     } as unknown as import('@solana/web3.js').Connection;
     const client = createSolanaTitleMintClient({ connection, minter, network: 'devnet' });
     expect(await client.titleOwner(mintAddr)).toBeNull();
+  });
+});
+
+describe('assertTitleOwner — authoritative gate (replaces holdsPackToken balance>=1)', () => {
+  const mint = Keypair.generate().publicKey.toBase58();
+  const wallet = Keypair.generate().publicKey.toBase58();
+  const other = Keypair.generate().publicKey.toBase58();
+  const clientWith = (owner: string | null) =>
+    ({ network: 'devnet', titleOwner: vi.fn(async () => owner), mintTitle: vi.fn() }) as unknown as ReturnType<typeof createSolanaTitleMintClient>;
+
+  it('TRUE when the wallet holds the 1-of-1', async () => {
+    expect(await assertTitleOwner(clientWith(wallet), mint, wallet)).toBe(true);
+  });
+  it('FALSE when someone else holds it (no double-spend)', async () => {
+    expect(await assertTitleOwner(clientWith(other), mint, wallet)).toBe(false);
+  });
+  it('FALSE when unheld / burned (titleOwner null)', async () => {
+    expect(await assertTitleOwner(clientWith(null), mint, wallet)).toBe(false);
   });
 });

@@ -170,6 +170,21 @@ export function createSolanaTitleMintClient(deps: SolanaTitleClientDeps): Solana
   };
 }
 
+/**
+ * Ownership gate: true iff `walletAddress` currently holds the 1-of-1 title `mintAddress`. This is the
+ * AUTHORITATIVE ownership check (the on-chain holder of the single unit) — the Solana-native replacement
+ * for the buggy `holdsPackToken` balance>=1 gate (pack-gate.ts:111). A 1-of-1 has exactly one holder, so
+ * there is nothing to double-spend. Returns false if the title is unheld/burned or held by someone else.
+ */
+export async function assertTitleOwner(
+  client: SolanaTitleMintClient,
+  mintAddress: string,
+  walletAddress: string,
+): Promise<boolean> {
+  const owner = await client.titleOwner(mintAddress);
+  return owner !== null && owner === walletAddress;
+}
+
 /** Build the production client from env (dedicated minter + gated network). Throws if mis-configured. */
 export function getSolanaTitleMintClient(): SolanaTitleMintClient {
   const env = resolveSolanaTitleEnv();
