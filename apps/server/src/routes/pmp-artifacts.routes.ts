@@ -47,6 +47,8 @@ import { createChildLogger } from '@clude/shared/core/logger';
 import { getMinterEvmTitleClient } from '../lib/payments/evm-title-config.js';
 import { getBaseIdentityResolver } from '../lib/payments/base-identity.js';
 import { mintTitleOnExport } from '../lib/payments/mint-title-on-export.js';
+import { mintSolanaTitleOnExport } from '../lib/payments/mint-solana-title-on-export.js';
+import { getSolanaTitleMintClient } from '../lib/solana-title-mint.js';
 
 const log = createChildLogger('pmp-artifacts-routes');
 
@@ -181,6 +183,35 @@ async function mintTitleAtExportBestEffort(
     log.warn(
       { err: (err as Error).message, sourcePackId },
       'export: Base title mint skipped (Base env missing or chain error) — .pmp already delivered',
+    );
+  }
+}
+
+/**
+ * SOLANA-NATIVE DEFAULT (pivot 2026-06-24): exporting a title-intended pack mints a 1-of-1 SOLANA title to
+ * the user's OWN wallet (non-custodial). Base is now an opt-in PORT (Phase 4), not the export default.
+ *
+ * BEST-EFFORT + IDEMPOTENT, same contract as the Base helper: the `.pmp` already shipped, so this NEVER
+ * fails the export. A missing Solana title env (SOLANA_TITLE_MINTER_KEY / SOLANA_TITLE_MINT_SEED — a
+ * non-Solana deploy simply skips), the SEC mainnet gate, or a transient chain error is logged + swallowed.
+ * mintSolanaTitleOnExport is idempotent (deterministic snapshot + no-op mint once the title exists).
+ */
+async function mintSolanaTitleAtExportBestEffort(
+  db: ReturnType<typeof getDb>,
+  sourcePackId: string,
+  creatorWallet: string,
+): Promise<void> {
+  try {
+    const sol = getSolanaTitleMintClient();
+    const r = await mintSolanaTitleOnExport(db, sol, { sourcePackId, creatorWallet });
+    log.info(
+      { sourcePackId, snapshotPackId: r.snapshotPackId, mintAddress: r.mintAddress, alreadyMinted: r.alreadyMinted, chain: r.chain },
+      'export: Solana title minted at export (non-custodial)',
+    );
+  } catch (err) {
+    log.warn(
+      { err: (err as Error).message, sourcePackId },
+      'export: Solana title mint skipped (Solana env missing or chain error) — .pmp already delivered',
     );
   }
 }
@@ -887,13 +918,14 @@ export function pmpArtifactsRoutes(): Router {
         if (!result.handled) {
           res.status(500).json({ error: 'export_failed' } satisfies ErrorBody);
         } else if (licenseType === 'title') {
-          // FOUNDER MODEL: a title pack exists on Base AT EXPORT. The .pmp already shipped in the
-          // response above. DETACH the mint from the request path — it does on-chain RPC round-trips,
-          // so awaiting it would pin this worker on a slow/hung Base RPC. mintTitleAtExportBestEffort
-          // never rejects (its body is wrapped in try/catch), so `void` cannot raise an unhandled
-          // rejection. NOTE: a chain/env miss is logged, not retried here — a reconciliation poller
-          // (follow-up) is what guarantees "exists on Base once exported". Idempotent, so safe to retry.
-          void mintTitleAtExportBestEffort(db, effectivePackId, owner);
+          // SOLANA-NATIVE DEFAULT (pivot): a title pack becomes a 1-of-1 SOLANA title in the user's OWN
+          // wallet AT EXPORT. The .pmp already shipped above. DETACH the mint from the request path — it
+          // does on-chain RPC round-trips, so awaiting it would pin this worker on a slow/hung RPC.
+          // mintSolanaTitleAtExportBestEffort never rejects (try/catch body), so `void` cannot raise an
+          // unhandled rejection. A chain/env miss is logged, not retried here — a Solana reconciliation
+          // arm (follow-up) guarantees "exists once exported". Idempotent, so safe to retry. Base is now
+          // an opt-in PORT (Phase 4), not the export default.
+          void mintSolanaTitleAtExportBestEffort(db, effectivePackId, owner);
         }
       } catch (err) {
         log.error({ err, packId }, 'POST /v1/pmp/export failed');
