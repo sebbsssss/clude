@@ -177,6 +177,8 @@ export interface MintTitleResult {
 
 export interface SolanaTitleMintClient {
   readonly network: 'mainnet-beta' | 'devnet';
+  /** The underlying RPC connection — reused by the sale saga for the non-custodial transfer. */
+  readonly connection: Connection;
   /** Mint a 1-of-1 title to `toWallet` (the user's OWN address) and revoke mint authority. Idempotent. */
   mintTitle(toWallet: string, binding: TitleBinding): Promise<MintTitleResult>;
   /** The current owner (base58) of the 1-of-1 `mintAddress`, or null if unheld/burned. */
@@ -198,6 +200,7 @@ export function createSolanaTitleMintClient(deps: SolanaTitleClientDeps): Solana
 
   return {
     network,
+    connection,
 
     async mintTitle(toWallet: string, binding: TitleBinding): Promise<MintTitleResult> {
       const owner = new PublicKey(toWallet); // throws on a malformed address — fail loud
