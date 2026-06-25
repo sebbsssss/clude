@@ -205,7 +205,19 @@ export function packMarketplaceStripeWebhookRoutes(): Router {
             res.status(200).json({ ok: true, noop: 'no_order' });
             return;
           }
-          await refundOrder(parsed.order_id);
+          try {
+            await refundOrder(parsed.order_id);
+          } catch (refundErr) {
+            // A title whose NFT already transferred can't be clawed back. ACK (200) so Stripe stops
+            // retrying, and alert LOUDLY — a human must reconcile the seller's loss (the money moved on
+            // Stripe's side; the on-chain title is gone). Other errors fall through to the 500 retry.
+            if ((refundErr as { code?: string }).code === 'TITLE_FINAL') {
+              log.error({ orderId: parsed.order_id, event: parsed.rail_event_id }, 'stripe webhook: TITLE_FINAL on refund — post-transfer chargeback needs MANUAL reconciliation');
+              res.status(200).json({ ok: true, title_final: true });
+              return;
+            }
+            throw refundErr;
+          }
           res.status(200).json({ ok: true, refunded: true });
           return;
         }
@@ -258,6 +270,15 @@ async function refundOrder(orderId: string): Promise<{ found: boolean; transitio
   const order = (data as OrderRow | null) ?? null;
   if (!order) return { found: false, transitioned: false, alreadyRefunding: false };
 
+  // TITLE FINALITY (Phase 3): runs for EVERY title-order refund attempt — INCLUDING an already-'refunding'
+  // one (Stripe retries the dispute/refund webhook), so a refund can never be re-confirmed after the
+  // 1-of-1 has transferred on-chain. refundSolanaTitleSale THROWS TITLE_FINAL past the transfer, aborts an
+  // in-flight pre-transfer saga, and is a no-op for a non-title order. title_sale_sagas is shared by the
+  // Base + Solana title flows, so this guards both chains.
+  if ((order as { listing_kind?: string | null }).listing_kind === 'title') {
+    await refundSolanaTitleSale(db, orderId);
+  }
+
   const status = order.status;
   const alreadyRefunding = status === 'refunding' || status === 'refunded';
 
@@ -265,14 +286,6 @@ async function refundOrder(orderId: string): Promise<{ found: boolean; transitio
   // delivered/settled/paid → refunding. created/awaiting_payment/failed/expired cannot refund.
   let transitioned = false;
   if (!alreadyRefunding) {
-    // TITLE FINALITY (Phase 3): a 1-of-1 title sale cannot be refunded once the NFT has transferred
-    // on-chain — the buyer holds it non-custodially and it cannot be clawed back, so refunding would lose
-    // the seller BOTH the title and the money. refundSolanaTitleSale throws TITLE_FINAL past the transfer,
-    // aborts any in-flight pre-transfer saga, and is a no-op for a non-title order. title_sale_sagas is
-    // shared by the Base + Solana title flows, so this guards both.
-    if ((order as { listing_kind?: string | null }).listing_kind === 'title') {
-      await refundSolanaTitleSale(db, orderId);
-    }
     if (!canTransition(status, 'refunding')) {
       // Caller-facing precondition failure (e.g. refunding an unpaid order). No clawback.
       const e = new Error('not_refundable') as Error & { code?: string };

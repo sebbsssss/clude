@@ -60,7 +60,9 @@ function makeDb(cfg: { single?: Record<string, any[]>; list?: Record<string, any
 const solClient = (titleOwner: () => Promise<string | null>) =>
   ({ network: 'devnet' as const, connection: {} as any, titleOwner: vi.fn(titleOwner), mintTitle: vi.fn() }) as any;
 
-const order = (status: string) => ({ order_id: ORDER, pack_id: PACK, buyer_wallet: BUYER, seller_wallet: SELLER, status, rail: 'solana', payment_rail: 'clude_solana' });
+// Mirrors the REAL marketplace_orders columns (has `rail`, NOT `payment_rail` — that was the phantom
+// column the backtest caught; the old fixture hand-injected it, hiding the bad SELECT).
+const order = (status: string) => ({ order_id: ORDER, pack_id: PACK, buyer_wallet: BUYER, seller_wallet: SELLER, status, rail: 'solana' });
 const solTitleRow = { chain: 'solana-devnet', mint_address: MINT };
 
 describe('executeSolanaTitleSale — payment gate + forward path', () => {

@@ -56,8 +56,8 @@ interface OrderRow {
   buyer_wallet: string | null;
   seller_wallet: string;
   status: string;
+  // marketplace_orders has `rail` (032), NOT `payment_rail` — payment_rail lives on pack_entitlements.
   rail?: string | null;
-  payment_rail?: string | null;
 }
 interface SagaRow {
   saga_id: string;
@@ -167,7 +167,7 @@ export async function submitSolanaTitleTransfer(
     }
 
     if (saga.step === 'transferred') {
-      await revokeSeller(db, { packId: order.pack_id, seller, buyer, orderId, rail: order.payment_rail ?? order.rail ?? null });
+      await revokeSeller(db, { packId: order.pack_id, seller, buyer, orderId, rail: order.rail ?? null });
       saga = await advance(db, orderId, 'revoked');
     }
   } catch (err) {
@@ -427,7 +427,7 @@ async function recordTransfer(
 async function loadOrder(db: DbLike, orderId: string): Promise<OrderRow> {
   const { data, error } = await db
     .from('marketplace_orders')
-    .select('order_id, pack_id, buyer_wallet, seller_wallet, status, rail, payment_rail')
+    .select('order_id, pack_id, buyer_wallet, seller_wallet, status, rail')
     .eq('order_id', orderId)
     .maybeSingle();
   if (error) throw new Error('solana title sale: failed to load order');
