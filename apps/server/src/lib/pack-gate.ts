@@ -47,6 +47,7 @@ export type UnlockFailureReason =
   | 'invalid_wallet'
   | 'invalid_signature'
   | 'not_token_holder'
+  | 'not_title_owner'
   | 'not_entitled'
   | 'rpc_unavailable';
 

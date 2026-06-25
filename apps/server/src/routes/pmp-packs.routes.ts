@@ -33,6 +33,8 @@ import {
   type UnlockFailureReason,
 } from '../lib/pack-gate.js';
 import { hasActiveCopyEntitlement } from '../lib/payments/entitlement-gate.js';
+import { assertSolanaTitleUnlock } from '../lib/payments/solana-title-gate.js';
+import { getSolanaTitleMintClient } from '../lib/solana-title-mint.js';
 import {
   buildPackPreview,
   verifyPackCommitment,
@@ -597,7 +599,10 @@ export function pmpPacksRoutes(): Router {
         pack_token_address: string | null;
         sale_mode: string | null;
       };
-      if (!packRow.merkle_root || !packRow.pack_token_address) {
+      // A commitment (merkle_root) is required to unlock. pack_token_address is NOT required here — a
+      // Solana-titled SNAPSHOT pack has none (its ownership is the 1-of-1 SPL title, checked below); only
+      // the LEGACY token gate needs it, and that branch guards for its absence.
+      if (!packRow.merkle_root) {
         res.status(409).json({
           error: 'not_tokenised',
           hint: 'pack must be tokenised before it can be unlocked',
@@ -605,43 +610,64 @@ export function pmpPacksRoutes(): Router {
         return;
       }
 
-      // 2. Authorise the unlock. TWO DISTINCT GATES (§00 B2 — do NOT unify through the chain):
-      //    - sale_mode='copy'  → verify the wallet signature (off-chain, no chain), then read
-      //      pack_entitlements for an ACTIVE copy_license grant. A fiat buyer holds no on-chain
-      //      token (Risk R3); the entitlement is the sole authority. NEVER touches the chain.
-      //    - otherwise (title / legacy null) → the existing token-ownership path, unchanged.
+      // 2. Authorise the unlock. The Solana TITLE gate is AUTHORITATIVE and runs FIRST: a 1-of-1 title
+      //    outranks BOTH the legacy token gate and any copy-entitlement on the same pack. Verify the
+      //    wallet signature first (the title gate trusts an already-proven wallet, §00 B2), then:
+      //      - titled & ok  → ALLOW
+      //      - titled & !ok → DENY, and NEVER fall back (a denied title must not drop to a weaker gate,
+      //                       which would reopen the holdsPackToken balance>=1 double-spend hole)
+      //      - !titled      → fall through to the existing copy / legacy-token gates, UNCHANGED.
       let verifyResult: { ok: true; walletAddress: string } | { ok: false; reason: UnlockFailureReason; detail?: string };
-      if (packRow.sale_mode === 'copy') {
-        // Off-chain signature/replay/format check — proves the caller controls `wallet`.
-        const sig = verifyUnlockSignature({
-          packId: id,
-          packTokenAddress: packRow.pack_token_address,
-          walletAddress: wallet,
-          message,
-          signature,
-        });
-        if (!sig.ok) {
-          verifyResult = sig;
-        } else {
-          // Pure entitlement read — the copy gate. No Solana RPC on this path.
+
+      // Off-chain proof of wallet control — shared by every gate. Proves the caller controls `wallet`.
+      // packTokenAddress is unused by the signature check; '' when a Solana-titled pack has no legacy token.
+      const sig = verifyUnlockSignature({
+        packId: id,
+        packTokenAddress: packRow.pack_token_address ?? '',
+        walletAddress: wallet,
+        message,
+        signature,
+      });
+      if (!sig.ok) {
+        verifyResult = sig;
+      } else {
+        // Constructing the Solana title client THROWS when SOLANA_TITLE_* env is unset. On a non-Solana
+        // deploy that simply means "no Solana titles" → skip the check (titled:false), NEVER deny unlock.
+        let solClient: ReturnType<typeof getSolanaTitleMintClient> | null = null;
+        try {
+          solClient = getSolanaTitleMintClient();
+        } catch {
+          solClient = null;
+        }
+        // assertSolanaTitleUnlock reads the live on-chain holder + fails closed; a DB lookup error inside
+        // it THROWS → caught by the outer try/catch → 500 (fail closed), never a silent downgrade.
+        const sol = solClient
+          ? await assertSolanaTitleUnlock(db, solClient, id, sig.walletAddress)
+          : { titled: false as const };
+
+        if (sol.titled) {
+          // Title is authoritative: ALLOW on ok, DENY otherwise. NEVER fall through to a weaker gate.
+          verifyResult = sol.ok
+            ? { ok: true, walletAddress: sig.walletAddress }
+            : { ok: false, reason: sol.reason === 'rpc_unavailable' ? 'rpc_unavailable' : 'not_title_owner' };
+        } else if (packRow.sale_mode === 'copy') {
+          // Pure entitlement read — the copy gate (Risk R3: a fiat buyer holds no on-chain token). No chain.
           const entitled = await hasActiveCopyEntitlement(id, sig.walletAddress);
           verifyResult = entitled
             ? { ok: true, walletAddress: sig.walletAddress }
             : { ok: false, reason: 'not_entitled' };
+        } else if (!packRow.pack_token_address) {
+          // A tokenised pack with no Solana title, not copy-licensed, and no legacy pack token: no gate
+          // can authorise it. Deny (never pass a null token address into the legacy verifier).
+          verifyResult = { ok: false, reason: 'not_token_holder' };
+        } else {
+          // Legacy token-gated path: the wallet must hold the Pack token on-chain (re-verifies the sig).
+          const verifier = getDefaultPackOwnershipVerifier();
+          verifyResult = await verifyUnlockRequest(
+            { packId: id, packTokenAddress: packRow.pack_token_address, walletAddress: wallet, message, signature },
+            verifier,
+          );
         }
-      } else {
-        // Title / legacy path: verify caller controls the wallet AND it holds the Pack token.
-        const verifier = getDefaultPackOwnershipVerifier();
-        verifyResult = await verifyUnlockRequest(
-          {
-            packId: id,
-            packTokenAddress: packRow.pack_token_address,
-            walletAddress: wallet,
-            message,
-            signature,
-          },
-          verifier,
-        );
       }
       if (!verifyResult.ok) {
         const status = unlockFailureStatus(verifyResult.reason);
@@ -769,6 +795,7 @@ function unlockFailureStatus(reason: UnlockFailureReason): number {
     case 'invalid_signature':
       return 401;
     case 'not_token_holder':
+    case 'not_title_owner':
     case 'not_entitled':
       return 403;
     case 'rpc_unavailable':
