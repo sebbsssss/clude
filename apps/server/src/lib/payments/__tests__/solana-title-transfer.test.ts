@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { Keypair, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
-import { getAssociatedTokenAddressSync, createTransferCheckedInstruction } from '@solana/spl-token';
+import { getAssociatedTokenAddressSync, createTransferCheckedInstruction, createApproveInstruction } from '@solana/spl-token';
 
 vi.mock('@clude/shared/core/logger', () => ({
   createChildLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
@@ -48,6 +48,18 @@ describe('buildTitleTransferTransaction + verifyTitleTransferTx', () => {
     const tx = new Transaction();
     tx.add(createTransferCheckedInstruction(fromAta, m, toAta, s, 1, 0));
     tx.add(SystemProgram.transfer({ fromPubkey: s, toPubkey: b, lamports: 1_000_000_000 })); // the attack
+    tx.feePayer = s;
+    tx.recentBlockhash = BLOCKHASH;
+    const b64 = tx.serialize({ requireAllSignatures: false }).toString('base64');
+    expect(verifyTitleTransferTx(b64, { mintAddress: mint, fromWallet: seller, toWallet: buyer })).toBe(false);
+  });
+
+  it('rejects a tx with an extra TOKEN-program instruction riding along (e.g. Approve)', () => {
+    const m = new PublicKey(mint), s = new PublicKey(seller), b = new PublicKey(buyer);
+    const fromAta = getAssociatedTokenAddressSync(m, s), toAta = getAssociatedTokenAddressSync(m, b);
+    const tx = new Transaction();
+    tx.add(createTransferCheckedInstruction(fromAta, m, toAta, s, 1, 0));
+    tx.add(createApproveInstruction(fromAta, b, s, 1)); // a same-program rider — must be rejected, not just counted
     tx.feePayer = s;
     tx.recentBlockhash = BLOCKHASH;
     const b64 = tx.serialize({ requireAllSignatures: false }).toString('base64');

@@ -345,18 +345,21 @@ async function recordTransfer(
     .eq('pack_id', args.packId)
     .eq('to_wallet', args.buyer)
     .maybeSingle();
-  if (prior) return;
-  const { error } = await db.from('title_transfers').insert({
-    pack_id: args.packId,
-    token_id: args.mintAddress,
-    from_wallet: args.seller,
-    to_wallet: args.buyer,
-    tx: args.transferTx ?? '(reconciled)',
-  });
-  if (error && (error as { code?: string }).code !== '23505') {
-    throw new Error('submitSolanaTitleTransfer: failed to record title_transfers audit row');
+  // Gate only the INSERT on the prior audit row — but ALWAYS reconcile the mirror below. A resume that
+  // recorded the audit row then crashed before the mirror update must still fix the stale cached owner.
+  if (!prior) {
+    const { error } = await db.from('title_transfers').insert({
+      pack_id: args.packId,
+      token_id: args.mintAddress,
+      from_wallet: args.seller,
+      to_wallet: args.buyer,
+      tx: args.transferTx ?? '(reconciled)',
+    });
+    if (error && (error as { code?: string }).code !== '23505') {
+      throw new Error('submitSolanaTitleTransfer: failed to record title_transfers audit row');
+    }
   }
-  // Reconcile the mirror's cached owner to the buyer.
+  // Reconcile the mirror's cached owner to the buyer (idempotent — runs every time).
   await db.from('pack_titles').update({ current_owner: args.buyer, status: 'transferred', updated_at: new Date().toISOString() }).eq('pack_id', args.packId);
 }
 

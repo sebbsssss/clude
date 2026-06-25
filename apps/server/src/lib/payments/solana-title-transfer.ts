@@ -92,38 +92,44 @@ export function verifyTitleTransferTx(
   const fromAta = getAssociatedTokenAddressSync(mint, from);
   const toAta = getAssociatedTokenAddressSync(mint, to);
 
-  // Every instruction must belong to the SPL token program (the ATA-create + the transfer) — no hidden
-  // instruction (e.g. draining SOL, an extra transfer) may ride along.
+  // The tx must be EXACTLY a buyer-ATA create (idempotent, associated-token program) plus the ONE
+  // transferChecked — and NOTHING else. Any other instruction (a legacy Transfer of a different token,
+  // an Approve, a CloseAccount, a SOL move, a second transfer) is rejected outright: a seller must not be
+  // able to smuggle extra operations through the sale path. Counting transferCheckeds is not enough —
+  // we whitelist each instruction explicitly.
+  let sawTransfer = false;
   for (const ix of tx.instructions) {
-    if (!ix.programId.equals(TOKEN_PROGRAM_ID) && !ix.programId.equals(ASSOCIATED_TOKEN_PROGRAM_ID)) {
-      log.warn({ programId: ix.programId.toBase58() }, 'verifyTitleTransferTx: unexpected instruction program');
-      return false;
+    if (ix.programId.equals(ASSOCIATED_TOKEN_PROGRAM_ID)) continue; // the buyer-ATA create — allowed
+    if (ix.programId.equals(TOKEN_PROGRAM_ID) && ix.data[0] === TRANSFER_CHECKED_DISCRIMINATOR) {
+      if (sawTransfer) {
+        log.warn('verifyTitleTransferTx: more than one transferChecked');
+        return false;
+      }
+      sawTransfer = true;
+      // transferChecked keys: [source, mint, destination, owner(signer), …]. amount u64 LE @1, decimals @9.
+      const k = ix.keys;
+      const accountsOk =
+        k[0]?.pubkey.equals(fromAta) &&
+        k[1]?.pubkey.equals(mint) &&
+        k[2]?.pubkey.equals(toAta) &&
+        k[3]?.pubkey.equals(from) &&
+        k[3]?.isSigner === true;
+      if (!accountsOk || ix.data.readBigUInt64LE(1) !== 1n || ix.data[9] !== 0) {
+        log.warn('verifyTitleTransferTx: transfer is not a signed 1-of-1 seller→buyer');
+        return false;
+      }
+      continue;
     }
-  }
-
-  // Exactly one transferChecked: source=sellerATA, dest=buyerATA, owner=seller, amount 1.
-  const transfers = tx.instructions.filter((ix) => ix.programId.equals(TOKEN_PROGRAM_ID) && ix.data[0] === TRANSFER_CHECKED_DISCRIMINATOR);
-  if (transfers.length !== 1) {
-    log.warn({ count: transfers.length }, 'verifyTitleTransferTx: expected exactly one transferChecked');
+    log.warn({ programId: ix.programId.toBase58() }, 'verifyTitleTransferTx: unexpected instruction');
     return false;
   }
-  const t = transfers[0];
-  // transferChecked keys: [source, mint, destination, owner, ...signers]
-  const keys = t.keys;
-  const ok =
-    keys[0]?.pubkey.equals(fromAta) &&
-    keys[1]?.pubkey.equals(mint) &&
-    keys[2]?.pubkey.equals(toAta) &&
-    keys[3]?.pubkey.equals(from);
-  if (!ok) {
-    log.warn('verifyTitleTransferTx: transfer accounts do not match seller→buyer for this mint');
+  if (!sawTransfer) {
+    log.warn('verifyTitleTransferTx: no transferChecked present');
     return false;
   }
-  // amount: u64 LE at data[1..9], decimals at data[9]; must be 1 unit of a 0-decimal mint.
-  const amount = t.data.readBigUInt64LE(1);
-  const decimals = t.data[9];
-  if (amount !== 1n || decimals !== 0) {
-    log.warn({ amount: amount.toString(), decimals }, 'verifyTitleTransferTx: amount/decimals not a 1-of-1');
+  // The seller must be the fee payer — the non-custodial contract is the SELLER pays + signs, not us.
+  if (!tx.feePayer?.equals(from)) {
+    log.warn('verifyTitleTransferTx: fee payer is not the seller');
     return false;
   }
   return true;
@@ -136,7 +142,12 @@ export function verifyTitleTransferTx(
 export async function submitSignedTitleTransfer(connection: Connection, signedTxBase64: string): Promise<string> {
   const raw = Buffer.from(signedTxBase64, 'base64');
   const sig = await connection.sendRawTransaction(raw, { skipPreflight: false, preflightCommitment: 'confirmed' });
-  await connection.confirmTransaction(sig, 'confirmed');
+  const conf = await connection.confirmTransaction(sig, 'confirmed');
+  // A tx can be CONFIRMED (landed in a block) yet have FAILED execution — never treat that as a transfer.
+  if (conf?.value?.err) {
+    log.warn({ sig, err: conf.value.err }, 'submitSignedTitleTransfer: transfer landed but execution failed');
+    throw new Error('submitSignedTitleTransfer: the transfer landed in a block but failed on-chain');
+  }
   log.info({ sig }, 'submitSignedTitleTransfer: title transfer confirmed on-chain');
   return sig;
 }
