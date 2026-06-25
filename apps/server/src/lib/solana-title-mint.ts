@@ -56,6 +56,10 @@ import {
   getAssociatedTokenAddressSync,
   getMinimumBalanceForRentExemptMint,
 } from '@solana/spl-token';
+import {
+  createCreateMetadataAccountV3Instruction,
+  PROGRAM_ID as TOKEN_METADATA_PROGRAM_ID,
+} from '@metaplex-foundation/mpl-token-metadata';
 import { createHash } from 'node:crypto';
 import bs58 from 'bs58';
 import { createChildLogger } from '@clude/shared/core/logger';
@@ -158,6 +162,8 @@ export interface TitleBinding {
   merkleRoot: string;
   manifestHash: string;
   memoryCount: number;
+  /** The pack's display name → the NFT's on-chain metadata name (truncated to 32 chars). */
+  name?: string;
 }
 
 export interface MintTitleResult {
@@ -183,10 +189,12 @@ export interface SolanaTitleClientDeps {
   network: 'mainnet-beta' | 'devnet';
   /** Server-secret seed for deterministic mint addresses (loadTitleMintSeed). */
   mintSeed: string;
+  /** Base URI for the title's off-chain metadata JSON; the NFT uri is `${base}/${packId}.json`. */
+  metadataBaseUri?: string;
 }
 
 export function createSolanaTitleMintClient(deps: SolanaTitleClientDeps): SolanaTitleMintClient {
-  const { connection, minter, network, mintSeed } = deps;
+  const { connection, minter, network, mintSeed, metadataBaseUri } = deps;
 
   return {
     network,
@@ -223,6 +231,28 @@ export function createSolanaTitleMintClient(deps: SolanaTitleClientDeps): Solana
       //   5) REVOKE mint authority → supply is permanently 1 (a true 1-of-1; nothing more can be minted)
       const rentExempt = await getMinimumBalanceForRentExemptMint(connection);
       const ata = getAssociatedTokenAddressSync(mint, owner);
+
+      // Token Metadata so the title shows as a NAMED NFT in wallets/explorers (name + symbol + uri). It
+      // MUST be created while the mint authority is still the minter — i.e. BEFORE the revoke below — so
+      // it rides inside the same atomic tx. isMutable:false: the binding is permanent once minted.
+      const [metadataPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('metadata'), TOKEN_METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+        TOKEN_METADATA_PROGRAM_ID,
+      );
+      const name = (binding.name ?? 'Clude Pack Title').slice(0, 32);
+      const base = (metadataBaseUri ?? 'https://clude.io/api/pack-title').replace(/\/+$/, '');
+      const uri = `${base}/${binding.packId}.json`.slice(0, 200);
+      const metadataIx = createCreateMetadataAccountV3Instruction(
+        { metadata: metadataPda, mint, mintAuthority: minter.publicKey, payer: minter.publicKey, updateAuthority: minter.publicKey },
+        {
+          createMetadataAccountArgsV3: {
+            data: { name, symbol: 'CLUDE', uri, sellerFeeBasisPoints: 0, creators: null, collection: null, uses: null },
+            isMutable: false,
+            collectionDetails: null,
+          },
+        },
+      );
+
       const tx = new Transaction().add(
         SystemProgram.createAccount({
           fromPubkey: minter.publicKey,
@@ -234,6 +264,7 @@ export function createSolanaTitleMintClient(deps: SolanaTitleClientDeps): Solana
         createInitializeMint2Instruction(mint, 0, minter.publicKey, null),
         createAssociatedTokenAccountInstruction(minter.publicKey, ata, owner, mint),
         createMintToInstruction(mint, ata, minter.publicKey, 1),
+        metadataIx, // named-NFT metadata — created BEFORE the authority revoke
         createSetAuthorityInstruction(mint, minter.publicKey, AuthorityType.MintTokens, null),
       );
 
@@ -293,7 +324,13 @@ export function getSolanaTitleMintClient(): SolanaTitleMintClient {
   const minter = loadTitleMinter();
   const mintSeed = loadTitleMintSeed();
   const connection = new Connection(env.rpcUrl, 'confirmed');
-  _titleClient = createSolanaTitleMintClient({ connection, minter, network: env.network, mintSeed });
+  _titleClient = createSolanaTitleMintClient({
+    connection,
+    minter,
+    network: env.network,
+    mintSeed,
+    metadataBaseUri: process.env.SOLANA_TITLE_METADATA_BASE_URI,
+  });
   return _titleClient;
 }
 
