@@ -22,6 +22,7 @@ import { pmpRoutes } from './pmp.routes.js';
 import { encryptionRoutes } from './encryption.routes.js';
 import { pmpPacksRoutes } from './pmp-packs.routes.js';
 import { pmpArtifactsRoutes } from './pmp-artifacts.routes.js';
+import { packTitleRoutes } from './pack-title.routes.js';
 import { pmpDevicesRoutes } from './pmp-devices.routes.js';
 import { pmpAdminRoutes } from './pmp-admin.routes.js';
 import { complianceRoutes } from './compliance.routes.js';
@@ -81,6 +82,10 @@ export function mountApiRoutes(app: express.Application): void {
   // PMP artifacts — the SERVER side of the desktop .pmp integration (Part C).
   // POST /v1/pmp/export, GET /v1/pmp/artifacts(/:id), POST /v1/pmp/verify (public), /import.
   app.use(pmpArtifactsRoutes());
+
+  // Pack title NFT metadata + image — PUBLIC, unauthenticated (wallets/explorers fetch it).
+  // GET /api/pack-title/:packId.{json,png,svg}. Gated on a minted pack_titles row (privacy).
+  app.use(packTitleRoutes());
 
   // PMP desktop device pairing — the secure server contract the desktop (Tauri) app links to
   // (Part C, Task 3). Anti-phishing pairing handshake + device-signed memory pull.
