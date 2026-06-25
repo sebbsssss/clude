@@ -33,7 +33,7 @@ import {
   type UnlockFailureReason,
 } from '../lib/pack-gate.js';
 import { hasActiveCopyEntitlement } from '../lib/payments/entitlement-gate.js';
-import { assertSolanaTitleUnlock } from '../lib/payments/solana-title-gate.js';
+import { assertSolanaTitleUnlock, type SolanaUnlockResult } from '../lib/payments/solana-title-gate.js';
 import { getSolanaTitleMintClient } from '../lib/solana-title-mint.js';
 import {
   buildPackPreview,
@@ -639,11 +639,19 @@ export function pmpPacksRoutes(): Router {
         } catch {
           solClient = null;
         }
-        // assertSolanaTitleUnlock reads the live on-chain holder + fails closed; a DB lookup error inside
-        // it THROWS → caught by the outer try/catch → 500 (fail closed), never a silent downgrade.
-        const sol = solClient
-          ? await assertSolanaTitleUnlock(db, solClient, id, sig.walletAddress)
-          : { titled: false as const };
+        // assertSolanaTitleUnlock reads the live on-chain holder + fails closed. A pack_titles DB error
+        // THROWS → caught here and mapped to a retriable 503 deny, never a silent downgrade to a weaker gate.
+        let sol: SolanaUnlockResult;
+        if (solClient) {
+          try {
+            sol = await assertSolanaTitleUnlock(db, solClient, id, sig.walletAddress);
+          } catch (err) {
+            log.warn({ err, id }, 'unlock: solana title lookup failed — failing closed (rpc_unavailable)');
+            sol = { titled: true, ok: false, reason: 'rpc_unavailable' };
+          }
+        } else {
+          sol = { titled: false };
+        }
 
         if (sol.titled) {
           // Title is authoritative: ALLOW on ok, DENY otherwise. NEVER fall through to a weaker gate.

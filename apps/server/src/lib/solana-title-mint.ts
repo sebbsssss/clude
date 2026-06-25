@@ -278,11 +278,26 @@ export async function assertTitleOwner(
   return owner !== null && owner === walletAddress;
 }
 
-/** Build the production client from env (dedicated minter + deterministic seed + gated network). */
+let _titleClient: SolanaTitleMintClient | null = null;
+
+/**
+ * Build the production client from env (dedicated minter + deterministic seed + gated network), CACHED
+ * as a module singleton. The unlock hot path calls this per request; constructing fresh each time would
+ * re-decode the minter key + re-allocate a Connection. Only a SUCCESSFUL build is cached — it keeps
+ * THROWING (uncached) until SOLANA_TITLE_* env is present, so a deploy that sets the env after boot
+ * still succeeds on the next call. Mirrors getDefaultPackOwnershipVerifier (pack-gate.ts).
+ */
 export function getSolanaTitleMintClient(): SolanaTitleMintClient {
+  if (_titleClient) return _titleClient;
   const env = resolveSolanaTitleEnv();
   const minter = loadTitleMinter();
   const mintSeed = loadTitleMintSeed();
   const connection = new Connection(env.rpcUrl, 'confirmed');
-  return createSolanaTitleMintClient({ connection, minter, network: env.network, mintSeed });
+  _titleClient = createSolanaTitleMintClient({ connection, minter, network: env.network, mintSeed });
+  return _titleClient;
+}
+
+/** Test hook — clear the cached title client. */
+export function _resetSolanaTitleMintClient(): void {
+  _titleClient = null;
 }
