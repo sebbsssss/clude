@@ -6,6 +6,7 @@ import { toSolanaWalletConnectors } from "@privy-io/react-auth/solana";
 import App from "./App";
 import { LotrExplore } from "./pages/lotr-explore";
 import "./index.css";
+import "./revamp.css";
 
 const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID;
 
