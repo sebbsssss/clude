@@ -178,6 +178,67 @@ export async function submitSolanaTitleTransfer(
   return { step: saga.step, awaitingTransfer: false };
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// refundSolanaTitleSale — the refund boundary (refund allowed ONLY before the transfer)
+// ════════════════════════════════════════════════════════════════════════════
+
+/** Thrown when a refund is attempted after the title has irreversibly moved on-chain (code TITLE_FINAL). */
+export class SolanaTitleFinalError extends Error {
+  readonly code = 'TITLE_FINAL';
+  constructor(message = 'TITLE_FINAL: the Solana title has transferred on-chain; the sale is final and cannot be refunded') {
+    super(message);
+    this.name = 'SolanaTitleFinalError';
+  }
+}
+
+/** Steps at/after which the 1-of-1 has moved to the buyer — refunding then is a SELLER DOUBLE-LOSS. */
+const SOLANA_FINAL_STEPS = new Set<string>(['transferred', 'revoked']);
+
+export interface SolanaRefundResult {
+  /** Always true when this RETURNS — it THROWS SolanaTitleFinalError instead when the title is final. */
+  refundable: true;
+}
+
+/**
+ * Decide whether order `orderId`'s Solana title sale may be refunded. A refund is legal ONLY while the
+ * title has NOT yet moved on-chain (step before 'transferred'); after that the NFT is in the buyer's OWN
+ * wallet and cannot be clawed back, so returning the money would lose the seller BOTH. Throws
+ * SolanaTitleFinalError (code TITLE_FINAL) at/after the transfer. On success marks the saga 'refunded' so a
+ * later resume/sweeper can never drive it forward into a transfer. Idempotent on an already-refunded saga.
+ *
+ * The shared refundOrder() route MUST call this for a Solana title order BEFORE it writes the refund.
+ */
+export async function refundSolanaTitleSale(db: DbLike, orderId: string): Promise<SolanaRefundResult> {
+  const saga = await loadSaga(db, orderId);
+  if (!saga) {
+    // No saga row: only safe to allow a refund if the title definitely has not moved. title_transfers has
+    // no order_id, so tie a transfer to THIS order via (pack_id, buyer). If one exists → already moved.
+    const order = await loadOrder(db, orderId);
+    if (order.buyer_wallet) {
+      const { data: xfer } = await db
+        .from('title_transfers')
+        .select('transfer_id')
+        .eq('pack_id', order.pack_id)
+        .eq('to_wallet', order.buyer_wallet)
+        .maybeSingle();
+      if (xfer) throw new SolanaTitleFinalError();
+    }
+    // No saga + no transfer → the title never moved (a paid-but-not-yet-sold title order, or a
+    // non-title order). Nothing to abort; the order refund is safe.
+    return { refundable: true };
+  }
+  if ((saga.step as string) === 'refunded') return { refundable: true }; // idempotent
+  if (SOLANA_FINAL_STEPS.has(saga.step)) throw new SolanaTitleFinalError(); // the boundary
+
+  const { error } = await db
+    .from('title_sale_sagas')
+    .update({ step: 'refunded', last_error: null, updated_at: new Date().toISOString() })
+    .eq('order_id', orderId);
+  if (error) throw new Error('refundSolanaTitleSale: failed to mark saga refunded');
+  log.info({ orderId, fromStep: saga.step }, 'refundSolanaTitleSale: refunded (pre-transfer) — sale aborted');
+  return { refundable: true };
+}
+
 // ─────────── step 1: additive DEK re-wrap to the buyer (title_holder) ───────────
 
 async function rewrapPackDekToBuyer(db: DbLike, packId: string, buyer: string): Promise<void> {

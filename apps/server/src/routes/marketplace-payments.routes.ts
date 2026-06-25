@@ -47,6 +47,7 @@ import { requireOwnership } from '@clude/brain/auth/require-ownership';
 import { createChildLogger } from '@clude/shared/core/logger';
 import { StripeRail } from '../lib/payments/stripe-rail.js';
 import { createOrder, canTransition, type OrderRow } from '../lib/payments/order-orchestrator.js';
+import { refundSolanaTitleSale } from '../lib/payments/solana-title-sale.js';
 import { markOrderPaid, dispatchPendingDeliveries } from '../lib/payments/delivery-dispatcher.js';
 import { grantCopy } from '../lib/payments/grant-copy.js';
 import { clawbackCopy } from '../lib/payments/refund-clawback.js';
@@ -264,6 +265,14 @@ async function refundOrder(orderId: string): Promise<{ found: boolean; transitio
   // delivered/settled/paid → refunding. created/awaiting_payment/failed/expired cannot refund.
   let transitioned = false;
   if (!alreadyRefunding) {
+    // TITLE FINALITY (Phase 3): a 1-of-1 title sale cannot be refunded once the NFT has transferred
+    // on-chain — the buyer holds it non-custodially and it cannot be clawed back, so refunding would lose
+    // the seller BOTH the title and the money. refundSolanaTitleSale throws TITLE_FINAL past the transfer,
+    // aborts any in-flight pre-transfer saga, and is a no-op for a non-title order. title_sale_sagas is
+    // shared by the Base + Solana title flows, so this guards both.
+    if ((order as { listing_kind?: string | null }).listing_kind === 'title') {
+      await refundSolanaTitleSale(db, orderId);
+    }
     if (!canTransition(status, 'refunding')) {
       // Caller-facing precondition failure (e.g. refunding an unpaid order). No clawback.
       const e = new Error('not_refundable') as Error & { code?: string };
@@ -545,6 +554,10 @@ export function packMarketplacePaymentsRoutes(): Router {
       const code = (err as { code?: string }).code;
       if (code === 'NOT_REFUNDABLE') {
         res.status(409).json({ error: 'not_refundable', hint: 'order is not in a refundable state' } satisfies ErrorBody);
+        return;
+      }
+      if (code === 'TITLE_FINAL') {
+        res.status(409).json({ error: 'title_final', hint: 'the title transferred on-chain; the sale is final and cannot be refunded' } satisfies ErrorBody);
         return;
       }
       log.error({ err, id }, 'POST /v1/market/orders/:id/refund failed');

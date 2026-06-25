@@ -13,7 +13,7 @@ vi.mock('@clude/shared/core/logger', () => ({
   createChildLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }));
 
-import { executeSolanaTitleSale, getSolanaTitleTransferForSeller, submitSolanaTitleTransfer } from '../solana-title-sale.js';
+import { executeSolanaTitleSale, getSolanaTitleTransferForSeller, submitSolanaTitleTransfer, refundSolanaTitleSale, SolanaTitleFinalError } from '../solana-title-sale.js';
 
 const ORDER = 'ord-1';
 const PACK = 'clude-pack-sale';
@@ -131,5 +131,49 @@ describe('submitSolanaTitleTransfer — security: only the exact transfer is sub
     // seller revoked + buyer granted
     expect(writes.some((w) => w.table === 'memory_dek_wraps' && w.op === 'delete')).toBe(true);
     expect(writes.some((w) => w.table === 'pack_entitlements' && w.op === 'insert' && w.row.holder_wallet === BUYER)).toBe(true);
+  });
+});
+
+describe('refundSolanaTitleSale — the refund boundary (no refund after the irreversible transfer)', () => {
+  it('ALLOWS a refund before the transfer (paid) and marks the saga refunded', async () => {
+    const { db, writes } = makeDb({ single: { title_sale_sagas: [{ data: { step: 'paid', order_id: ORDER } }] } });
+    const res = await refundSolanaTitleSale(db as any, ORDER);
+    expect(res).toEqual({ refundable: true });
+    expect(writes.some((w) => w.table === 'title_sale_sagas' && w.op === 'update' && w.row.step === 'refunded')).toBe(true);
+  });
+
+  it('with NO saga and NO transfer → refundable (a paid-but-not-yet-sold title order, nothing to abort)', async () => {
+    const { db, writes } = makeDb({
+      single: { title_sale_sagas: [{ data: null }], marketplace_orders: [{ data: order('paid') }], title_transfers: [{ data: null }] },
+    });
+    expect(await refundSolanaTitleSale(db as any, ORDER)).toEqual({ refundable: true });
+    expect(writes).toHaveLength(0);
+  });
+
+  it('REFUSES a refund once transferred → TITLE_FINAL (this is the seller-double-loss guard)', async () => {
+    const { db } = makeDb({ single: { title_sale_sagas: [{ data: { step: 'transferred', order_id: ORDER } }] } });
+    await expect(refundSolanaTitleSale(db as any, ORDER)).rejects.toMatchObject({ code: 'TITLE_FINAL' });
+  });
+
+  it('REFUSES after revoke too → SolanaTitleFinalError', async () => {
+    const { db } = makeDb({ single: { title_sale_sagas: [{ data: { step: 'revoked', order_id: ORDER } }] } });
+    await expect(refundSolanaTitleSale(db as any, ORDER)).rejects.toBeInstanceOf(SolanaTitleFinalError);
+  });
+
+  it('is idempotent on an already-refunded saga (no re-write)', async () => {
+    const { db, writes } = makeDb({ single: { title_sale_sagas: [{ data: { step: 'refunded', order_id: ORDER } }] } });
+    expect(await refundSolanaTitleSale(db as any, ORDER)).toEqual({ refundable: true });
+    expect(writes).toHaveLength(0);
+  });
+
+  it('with NO saga row but a title_transfers row for the order → TITLE_FINAL (defence in depth)', async () => {
+    const { db } = makeDb({
+      single: {
+        title_sale_sagas: [{ data: null }],
+        marketplace_orders: [{ data: order('settled') }],
+        title_transfers: [{ data: { transfer_id: 1 } }],
+      },
+    });
+    await expect(refundSolanaTitleSale(db as any, ORDER)).rejects.toMatchObject({ code: 'TITLE_FINAL' });
   });
 });
