@@ -19,15 +19,27 @@
  */
 
 import { Connection, PublicKey, Transaction } from '@solana/web3.js';
-import {
-  TOKEN_PROGRAM_ID,
-  getAssociatedTokenAddressSync,
-  createAssociatedTokenAccountIdempotentInstruction,
-  createTransferCheckedInstruction,
-} from '@solana/spl-token';
 import { createChildLogger } from '@clude/shared/core/logger';
 
 const log = createChildLogger('solana-title-transfer');
+
+// @solana/spl-token is ESM-only (type:module); this file builds as CommonJS (tsconfig.build → node16) and
+// CANNOT statically import it. The two well-known program IDs are protocol constants (hardcoded), and the
+// associated-token address is derived locally with web3.js — so the SYNC drain guard (verifyTitleTransferTx)
+// stays sync. The instruction BUILDERS are dynamic-import()ed inside the async buildTitleTransferTransaction.
+const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+
+/**
+ * Local re-implementation of spl-token's getAssociatedTokenAddressSync(mint, owner) for the default token
+ * program + off-curve=false: the ATA is PDA([owner, TOKEN_PROGRAM_ID, mint], ASSOCIATED_TOKEN_PROGRAM_ID).
+ * Identical bytes to the library; kept local so the sync drain guard needs no async import.
+ */
+function getAssociatedTokenAddressSync(mint: PublicKey, owner: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync(
+    [owner.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+    ASSOCIATED_TOKEN_PROGRAM_ID,
+  )[0];
+}
 
 export interface UnsignedTitleTransfer {
   /** Base64 of the unsigned transaction the seller's wallet signs. */
@@ -54,6 +66,10 @@ export async function buildTitleTransferTransaction(
   const to = new PublicKey(toWallet);
   const fromAta = getAssociatedTokenAddressSync(mint, from);
   const toAta = getAssociatedTokenAddressSync(mint, to);
+
+  // ESM-only spl-token instruction builders, loaded dynamically from this CJS build.
+  const { createAssociatedTokenAccountIdempotentInstruction, createTransferCheckedInstruction } =
+    await import('@solana/spl-token');
 
   const tx = new Transaction();
   // Create the buyer's ATA if it does not exist yet (idempotent — no-op if present). Seller pays rent.

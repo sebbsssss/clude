@@ -45,24 +45,21 @@ import {
   Transaction,
   sendAndConfirmTransaction,
 } from '@solana/web3.js';
-import {
-  AuthorityType,
-  MINT_SIZE,
-  TOKEN_PROGRAM_ID,
-  createAssociatedTokenAccountInstruction,
-  createInitializeMint2Instruction,
-  createMintToInstruction,
-  createSetAuthorityInstruction,
-  getAssociatedTokenAddressSync,
-  getMinimumBalanceForRentExemptMint,
-} from '@solana/spl-token';
+// @solana/spl-token is ESM-only (type:module). This file builds as CommonJS (tsconfig.build → node16),
+// so it CANNOT statically import it (TS1479 at build, ERR_REQUIRE_ESM at runtime). The symbols load via a
+// dynamic import() inside mintTitle — the only function that uses them, and it is already async.
 import {
   createCreateMetadataAccountV3Instruction,
   PROGRAM_ID as TOKEN_METADATA_PROGRAM_ID,
 } from '@metaplex-foundation/mpl-token-metadata';
 import { createHash } from 'node:crypto';
-import bs58 from 'bs58';
+import { createRequire } from 'node:module';
 import { createChildLogger } from '@clude/shared/core/logger';
+
+// bs58 ships as ESM (type:module); a static `import bs58 from 'bs58'` trips TS1479 in this CommonJS build.
+// createRequire loads the CJS build at runtime (apps/server pins bs58 to the CJS-compatible v4), so the
+// synchronous key-decode in loadTitleMinter stays synchronous — no async ripple through the cached client.
+const bs58 = createRequire(__filename)('bs58') as { decode(s: string): Uint8Array };
 
 const log = createChildLogger('solana-title-mint');
 
@@ -203,6 +200,18 @@ export function createSolanaTitleMintClient(deps: SolanaTitleClientDeps): Solana
     connection,
 
     async mintTitle(toWallet: string, binding: TitleBinding): Promise<MintTitleResult> {
+      // ESM-only @solana/spl-token, loaded dynamically from this CJS build (see import note above).
+      const {
+        AuthorityType,
+        MINT_SIZE,
+        TOKEN_PROGRAM_ID,
+        createAssociatedTokenAccountInstruction,
+        createInitializeMint2Instruction,
+        createMintToInstruction,
+        createSetAuthorityInstruction,
+        getAssociatedTokenAddressSync,
+        getMinimumBalanceForRentExemptMint,
+      } = await import('@solana/spl-token');
       const owner = new PublicKey(toWallet); // throws on a malformed address — fail loud
 
       // DETERMINISTIC address (re-derivable after any crash) — the Solana analog of Base's tokenId.
