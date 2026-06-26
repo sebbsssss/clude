@@ -474,8 +474,14 @@ export function ExportScreen() {
               >
                 ↓ {exporting ? 'Packaging…' : 'Download .pmp'}
               </button>
-              <button className="gbtn" disabled style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-3)', background: 'transparent', border: '1px solid var(--border-2)', borderRadius: 9, padding: '10px 16px', cursor: 'default' }}>Send to desktop</button>
-              <button className="gbtn" disabled style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-3)', background: 'transparent', border: '1px solid var(--border-2)', borderRadius: 9, padding: '10px 16px', cursor: 'default' }}>List on marketplace</button>
+              <button className="gbtn" disabled style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: 'var(--fg-3)', background: 'transparent', border: '1px solid var(--border-2)', borderRadius: 9, padding: '10px 16px', cursor: 'default' }}>
+                Send to desktop
+                <span style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--accent-text)', background: 'var(--accent-soft)', padding: '2px 6px', borderRadius: 5 }}>Coming Soon</span>
+              </button>
+              <button className="gbtn" disabled style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: 'var(--fg-3)', background: 'transparent', border: '1px solid var(--border-2)', borderRadius: 9, padding: '10px 16px', cursor: 'default' }}>
+                List on marketplace
+                <span style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--accent-text)', background: 'var(--accent-soft)', padding: '2px 6px', borderRadius: 5 }}>Coming Soon</span>
+              </button>
             </div>
             {exportNote && (
               <div style={{ marginTop: 12, fontSize: 12, color: exportNote.startsWith('Export failed') ? '#ef4444' : '#10b981' }}>{exportNote}</div>
