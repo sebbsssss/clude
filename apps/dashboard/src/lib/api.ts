@@ -1,4 +1,11 @@
 import type { Memory, MemoryStats, KnowledgeGraph, MemoryPack, Agent } from '../types/memory';
+import type {
+  ExportRequest,
+  ExportResult,
+  ExportSelection,
+  PmpArtifact,
+  SelectionPreview,
+} from '@clude/ui';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '';
 
@@ -334,6 +341,66 @@ class CludeAPI {
       return [];
     }
     return this.fetch('/api/memory-packs');
+  }
+
+  // ── Portable Memory Pack (.pmp) ──
+  // Drives the @clude/ui MemoryExportPanel. These hit the owner-scoped
+  // /v1/pmp/* endpoints and reuse the same Bearer-token auth (and 401
+  // auth-expiry handling) as every other authed call above.
+
+  /** Cheap count-only preview for the current selection. */
+  async pmpPreview(selection: ExportSelection): Promise<SelectionPreview> {
+    return this.fetch('/v1/pmp/export/preview', {
+      method: 'POST',
+      body: JSON.stringify({ selection }),
+    });
+  }
+
+  /** Build (or idempotently re-register) a .pmp artifact for a selection. */
+  async pmpExport(req: ExportRequest): Promise<ExportResult> {
+    return this.fetch('/v1/pmp/export', {
+      method: 'POST',
+      body: JSON.stringify({
+        selection: req.selection,
+        name: req.name,
+        description: req.description,
+        category: req.category,
+        encrypt: req.encrypt,
+        mint_as_title: req.mint_as_title,
+      }),
+    });
+  }
+
+  /**
+   * Create + tokenise a saved pack from explicit memory hash ids. Tokenising commits a pack
+   * token on-chain, so this is a real on-chain action (the prerequisite for a title mint).
+   * Returns the new pack id (`.id`).
+   */
+  async createPack(name: string, memoryHashIds: string[]): Promise<{ id: string; memory_count?: number; attestation?: { merkle_root?: string } }> {
+    return this.fetch('/v1/packs', {
+      method: 'POST',
+      body: JSON.stringify({ name, memory_hash_ids: memoryHashIds }),
+    });
+  }
+
+  /**
+   * Export an already-saved pack as a `.pmp` AND best-effort mint its 1-of-1 ownership title NFT.
+   * The server marks the pack `sale_mode='title'` and (when the Solana title env is configured)
+   * mints a non-custodial 1-of-1 to the caller's own wallet, then returns the `.pmp` bytes inline.
+   * The mint is best-effort: a missing title env or a chain hiccup never fails the export.
+   */
+  async exportPackWithTitle(packId: string, name: string, encrypt: boolean): Promise<{ artifact?: { merkle_root?: string; record_count?: number }; pmp_base64?: string; filename?: string }> {
+    return this.fetch('/v1/pmp/export', {
+      method: 'POST',
+      body: JSON.stringify({ pack_id: packId, name, encrypt, mint_as_title: true }),
+    });
+  }
+
+  /** List the caller's previously-exported .pmp artifacts. */
+  async pmpListArtifacts(): Promise<PmpArtifact[]> {
+    const result = await this.fetch<any>('/v1/pmp/artifacts');
+    if (Array.isArray(result)) return result;
+    return result?.artifacts ?? [];
   }
 
   // ── Explore (Memory Graph + Search) ──

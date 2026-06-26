@@ -168,6 +168,20 @@ export const config = {
   helius: {
     webhookSecret: optional("HELIUS_WEBHOOK_SECRET", ""),
   },
+  stripe: {
+    /**
+     * Stripe secret API key (sk_live_… / sk_test_…). Empty disables the
+     * marketplace Stripe rail — the orchestrator/webhook fail closed without it.
+     * SDK/MCP consumers never need this, so it stays optional() (not required()).
+     */
+    secretKey: optional("STRIPE_SECRET_KEY", ""),
+    /**
+     * Stripe webhook signing secret (whsec_…) used by stripe.webhooks.constructEvent
+     * to verify the raw body BEFORE any DB write (Risk R6). Empty ⇒ every webhook is
+     * rejected, so a misconfigured deploy can never process an unverified event.
+     */
+    webhookSecret: optional("STRIPE_WEBHOOK_SECRET", ""),
+  },
   usdc: {
     /** Treasury wallet that receives USDC top-up payments */
     treasuryAddress: optional(

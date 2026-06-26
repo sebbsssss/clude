@@ -49,6 +49,56 @@ describe('MemoryPack v0.2 — reference vectors', () => {
 });
 
 // ────────────────────────────────────────────────────────────────────
+// PMP artifact identity block (manifest.pmp) — self-verifiable round-trip
+//
+// The `.pmp` artifact layer embeds the pack-level merkle_root in manifest.pmp
+// so an artifact is SELF-VERIFIABLE: a reader recomputes the root and compares
+// it to pmp.merkle_root with no server trust. The writer must PERSIST any
+// caller-supplied block and the reader must return it — if the writer drops it
+// (as it once did), the hosted verifier reads a null root and returns
+// verified:false for every real artifact. These prove the round-trip directly.
+// ────────────────────────────────────────────────────────────────────
+
+describe('MemoryPack v0.2 — pmp identity block round-trip', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'mp-pmp-'));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const baseOpts = {
+    producer: { name: 'test', version: '1' },
+    record_schema: 'clude-memory-v1',
+    clock: FIXTURE_CLOCK,
+  };
+
+  it('persists the pmp block to the manifest and reads it back (directory)', () => {
+    const pmp = { pmp_version: '0.8', merkle_root: 'sha256:deadbeef', license_type: 'copy' };
+    const out = join(dir, 'pack');
+    writeMemoryPack(out, FIXTURE_RECORDS, { ...baseOpts, pmp });
+    const read = readMemoryPack(out);
+    expect(read.manifest.pmp).toEqual(pmp);
+  });
+
+  it('persists the pmp block through the tarball path too', () => {
+    const pmp = { merkle_root: 'sha256:cafef00d', title: 'My Pack' };
+    const out = join(dir, 'pack.tar.zst');
+    writeMemoryPack(out, FIXTURE_RECORDS, { ...baseOpts, format: 'tarball', pmp });
+    const read = readMemoryPack(out);
+    expect(read.manifest.pmp).toEqual(pmp);
+  });
+
+  it('omits pmp from the manifest when no block is supplied', () => {
+    const out = join(dir, 'plain');
+    writeMemoryPack(out, FIXTURE_RECORDS, baseOpts);
+    const read = readMemoryPack(out);
+    expect(read.manifest.pmp).toBeUndefined();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
 // Encryption primitives
 // ────────────────────────────────────────────────────────────────────
 

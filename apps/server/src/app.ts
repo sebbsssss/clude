@@ -6,6 +6,7 @@ import { staticRoutes } from './routes/static.routes';
 import { optionalPrivyAuth } from '@clude/brain/auth/privy-auth';
 import { createChildLogger } from '@clude/shared/core/logger';
 import { initOpenRouter, isOpenRouterEnabled } from '@clude/shared/core/openrouter-client';
+import { packMarketplaceStripeWebhookRoutes } from './routes/marketplace-payments.routes';
 
 const log = createChildLogger('server');
 
@@ -22,6 +23,11 @@ export function createServer(): express.Application {
   if (!isOpenRouterEnabled() && config.openrouter.apiKey) {
     initOpenRouter({ apiKey: config.openrouter.apiKey });
   }
+
+  // Stripe marketplace webhook — MUST be mounted BEFORE express.json(): Stripe signature
+  // verification needs the EXACT raw bytes Stripe signed, which the json parser would consume.
+  // This router applies its own express.raw() to that one path; all other routes still get JSON.
+  app.use(packMarketplaceStripeWebhookRoutes());
 
   app.use(express.json());
   app.use(createCompression());

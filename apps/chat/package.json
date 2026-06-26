@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.147",
+    "@clude/ui": "workspace:*",
     "@paper-design/shaders-react": "latest",
     "@privy-io/react-auth": "^3.18.0",
     "@radix-ui/react-select": "latest",

@@ -4,8 +4,9 @@
  * The primary panel packages memories into a portable, self-verifiable `.pmp`
  * artifact: a "What to include" scope control, a live per-type preview + stacked
  * distribution bar, a safety scan, owner-held-encryption toggle, and an artifact
- * card whose Download button calls the real cortex pack export, blobs the JSON to
- * disk, and surfaces records / size / Merkle root from the result. The secondary
+ * card whose Download button publishes a tokenised pack, exports the real `.pmp`,
+ * best-effort mints its 1-of-1 ownership title NFT, and surfaces records / size /
+ * Merkle root from the result. The secondary
  * row briefs another model (smart-export → paste-ready block) and imports from a
  * file (gracefully self-hosted-only in cortex mode).
  *
@@ -15,7 +16,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
-import type { MemoryStats, MemoryPack } from '../types/memory';
+import type { MemoryStats, Memory } from '../types/memory';
 import { MEMORY_TYPES } from '../lib/memory-ui';
 
 type Scope = 'all' | 'type' | 'tag' | 'date' | 'pack';
@@ -54,26 +55,6 @@ function fmtBytes(n: number): string {
 function abbrevHex(hex: string): string {
   if (hex.length <= 20) return hex;
   return `${hex.slice(0, 8)}…${hex.slice(-8)}`;
-}
-
-/** SHA-256 of a string → hex, used as a Merkle-root stand-in when the server omits one. */
-async function sha256Hex(text: string): Promise<string | null> {
-  try {
-    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-    return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
-  } catch {
-    return null;
-  }
-}
-
-/** Pull a Merkle/content root out of a pack response under any of the likely keys. */
-function readMerkle(pack: MemoryPack): string | null {
-  const p = pack as unknown as Record<string, unknown>;
-  const meta = (p.metadata ?? {}) as Record<string, unknown>;
-  const cand =
-    p.merkle_root ?? p.merkleRoot ?? p.merkle ?? p.content_hash ?? p.contentHash ??
-    meta.merkle_root ?? meta.merkle ?? meta.content_hash;
-  return typeof cand === 'string' && cand.length > 0 ? cand : null;
 }
 
 export function ExportScreen() {
@@ -125,48 +106,97 @@ export function ExportScreen() {
     });
   }
 
-  // Translate the active scope into export args. Only All and By-type map to real
-  // server scope today; tag/date/pack set local state and fall back to a tag filter.
-  function exportArgs(name: string): Parameters<typeof api.exportMemoryPack>[0] {
-    const base = { name, description: `Exported from Clude dashboard — scope: ${scope}` };
-    if (scope === 'type' && selectedTypes.size > 0) {
-      return { ...base, types: Array.from(selectedTypes) };
+  // Filter fetched memories to the active scope. The server has no selection-export that ALSO
+  // mints a title, so we enumerate client-side, create a tokenised pack, then export-with-title.
+  function inScope(m: Memory): boolean {
+    if (scope === 'type') return selectedTypes.size === 0 || selectedTypes.has(m.memory_type);
+    if (scope === 'tag') {
+      const wanted = tagInput.split(',').map((t) => t.trim()).filter(Boolean);
+      return wanted.length === 0 || (m.tags ?? []).some((t) => wanted.includes(t));
     }
-    if (scope === 'tag' && tagInput.trim()) {
-      return { ...base, tags: tagInput.split(',').map((t) => t.trim()).filter(Boolean) };
+    if (scope === 'date') {
+      const t = new Date(m.created_at).getTime();
+      if (dateFrom && t < new Date(dateFrom).getTime()) return false;
+      if (dateTo && t > new Date(dateTo).getTime() + 86_400_000) return false;
+      return true;
     }
-    return base;
+    return true; // all (and 'pack' has no saved packs in this workspace yet)
   }
 
+  /** Trigger a real browser download of bytes as `<name>.pmp`. */
+  function downloadPmp(bytes: BlobPart, name: string) {
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  /**
+   * Export the current selection. The primary path publishes a tokenised pack and best-effort mints
+   * its 1-of-1 title NFT (the demo path). If that path is unavailable here — cortex/API-key mode
+   * (/v1/packs is Privy-only) or Solana tokenisation not configured — it falls back to a plain .pmp
+   * export so the button always works.
+   */
   async function handleDownload() {
     setExporting(true);
     setExportNote('');
-    try {
-      const name = `clude-memory-${new Date().toISOString().slice(0, 10)}`;
-      const pack = await api.exportMemoryPack(exportArgs(name));
+    setArtifact(null);
+    const name = `clude-memory-${new Date().toISOString().slice(0, 10)}`;
 
+    // ── Primary: tokenised pack → export + title mint ──
+    try {
+      setExportNote('Gathering memories…');
+      const { memories } = await api.getMemories({ limit: 5000 }); // capped — /v1/packs caps at 10k
+      const hashIds = memories.filter(inScope).map((m) => m.hash_id).filter(Boolean).slice(0, 5000);
+      if (hashIds.length === 0) {
+        setExportNote('Export failed: no memories match this selection.');
+        setExporting(false);
+        return;
+      }
+
+      setExportNote(`Publishing a pack of ${hashIds.length.toLocaleString()} memories…`);
+      const pack = await api.createPack(name, hashIds); // tokenises (on-chain pack token)
+
+      setExportNote('Exporting + minting title NFT…');
+      const result = await api.exportPackWithTitle(pack.id, name, encrypt);
+
+      const b64 = result.pmp_base64 ?? '';
+      const records = result.artifact?.record_count ?? hashIds.length;
+      const merkle = result.artifact?.merkle_root ?? pack.attestation?.merkle_root ?? '';
+      let sizeLabel = '—';
+      if (b64) {
+        const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+        sizeLabel = fmtBytes(bytes.length);
+        downloadPmp(bytes, result.filename ?? `${name}.pmp`);
+      }
+      setArtifact({ fileName: result.filename ?? `${name}.pmp`, records, sizeLabel, merkle });
+      setExportNote(`Exported ${records.toLocaleString()} records. A 1-of-1 title NFT is minting on-chain (best-effort): check your wallet or the explorer.`);
+      setExporting(false);
+      return;
+    } catch (titleErr) {
+      // Title path unavailable here — fall through to a plain export rather than failing the button.
+      console.warn('Title export unavailable, falling back to a plain .pmp export.', titleErr);
+    }
+
+    // ── Fallback: plain ephemeral .pmp (no mint) ──
+    try {
+      const args: { name: string; description: string; types?: string[]; tags?: string[] } = {
+        name,
+        description: `Exported from Clude dashboard, scope: ${scope}`,
+      };
+      if (scope === 'type' && selectedTypes.size > 0) args.types = Array.from(selectedTypes);
+      if (scope === 'tag' && tagInput.trim()) args.tags = tagInput.split(',').map((t) => t.trim()).filter(Boolean);
+
+      const pack = await api.exportMemoryPack(args);
       const json = JSON.stringify(pack, null, 2);
       const records = pack.memory_count ?? pack.memories?.length ?? previewTotal;
-      const merkle = readMerkle(pack) ?? (await sha256Hex(json)) ?? '';
-
-      // Real browser download of the .pmp artifact (JSON payload).
-      const blob = new Blob([json], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${name}.pmp`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-
-      setArtifact({
-        fileName: `${name}.pmp`,
-        records,
-        sizeLabel: fmtBytes(new Blob([json]).size),
-        merkle,
-      });
-      setExportNote(`Exported ${records.toLocaleString()} records.`);
+      downloadPmp(json, `${name}.pmp`);
+      setArtifact({ fileName: `${name}.pmp`, records, sizeLabel: fmtBytes(new Blob([json]).size), merkle: '' });
+      setExportNote(`Exported ${records.toLocaleString()} records (plain .pmp, no title mint in this workspace).`);
     } catch (err) {
       setExportNote(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
     }

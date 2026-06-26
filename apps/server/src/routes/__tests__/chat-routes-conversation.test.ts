@@ -6,7 +6,7 @@
  *   POST   /api/chat/conversations           — create conversation
  *   GET    /api/chat/conversations           — list conversations
  *   GET    /api/chat/conversations/:id       — load conversation with messages
- *   POST   /api/chat/conversations/:id/messages — send message (partial: validation + memory recall)
+ *   POST   /api/chat/messages                — send message; conversationId in body (partial: validation + memory recall)
  */
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import express from 'express';
@@ -358,13 +358,17 @@ describe('Chat conversation routes', () => {
     });
   });
 
-  // ---- POST /conversations/:id/messages — validation + memory recall ----
+  // ---- POST /messages — validation + memory recall ----
+  // NOTE: The server route is mounted at POST /api/chat/messages and reads the
+  // conversation id from req.body.conversationId (NOT a :id URL param). The active
+  // frontend (apps/chat/src/hooks/use-chat.ts) calls this exact contract. An older
+  // /conversations/:id/messages path no longer has a handler.
 
-  describe('POST /api/chat/conversations/:id/messages', () => {
+  describe('POST /api/chat/messages', () => {
     it('missing content → 400', async () => {
       authAs();
-      const res = await request('POST', '/api/chat/conversations/conv-1/messages', {
-        body: {},
+      const res = await request('POST', '/api/chat/messages', {
+        body: { conversationId: 'conv-1' },
         headers: AUTH_HEADER,
       });
       expect(res.status).toBe(400);
@@ -376,8 +380,8 @@ describe('Chat conversation routes', () => {
       // Conversation lookup returns null (not found)
       mockDbQueue.push({ data: null, error: null });
 
-      const res = await request('POST', '/api/chat/conversations/unknown-conv/messages', {
-        body: { content: 'Hello there' },
+      const res = await request('POST', '/api/chat/messages', {
+        body: { conversationId: 'unknown-conv', content: 'Hello there' },
         headers: AUTH_HEADER,
       });
       expect(res.status).toBe(404);
@@ -391,8 +395,8 @@ describe('Chat conversation routes', () => {
       // Rate limit exceeded
       mockCheckRateLimit.mockResolvedValueOnce(false);
 
-      const res = await request('POST', '/api/chat/conversations/conv-1/messages', {
-        body: { content: 'Hello' },
+      const res = await request('POST', '/api/chat/messages', {
+        body: { conversationId: 'conv-1', content: 'Hello' },
         headers: AUTH_HEADER,
       });
       expect(res.status).toBe(429);
@@ -408,8 +412,8 @@ describe('Chat conversation routes', () => {
       // DB call 2: balance check — nearly zero
       mockDbQueue.push({ data: { balance_usdc: '0.00001' }, error: null });
 
-      const res = await request('POST', '/api/chat/conversations/conv-1/messages', {
-        body: { content: 'Hello' },
+      const res = await request('POST', '/api/chat/messages', {
+        body: { conversationId: 'conv-1', content: 'Hello' },
         headers: AUTH_HEADER,
       });
       expect(res.status).toBe(402);
@@ -438,10 +442,10 @@ describe('Chat conversation routes', () => {
       // Note: after memory recall, the route calls OpenRouter AI (SSE).
       // We interrupt the SSE connection immediately — we only care that recall happened.
       const controller = new AbortController();
-      const fetchPromise = fetch(`${baseUrl}/api/chat/conversations/conv-1/messages`, {
+      const fetchPromise = fetch(`${baseUrl}/api/chat/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...AUTH_HEADER },
-        body: JSON.stringify({ content: 'What do you know about me?' }),
+        body: JSON.stringify({ conversationId: 'conv-1', content: 'What do you know about me?' }),
         signal: controller.signal,
       });
 
