@@ -3,6 +3,7 @@ import { useAuth } from "./hooks/useAuth";
 import { AuthContext } from "./hooks/AuthContext";
 import { V2App } from "./v2/V2App";
 import { OAuthConsent } from "./v2/OAuthConsent";
+import { ExportMemories } from "./pages/ExportMemories";
 
 export function App() {
   const auth = useAuth();
@@ -28,6 +29,7 @@ export function App() {
           <Route path="/" element={<V2App />} />
           <Route path="/authorize" element={<OAuthConsent />} />
           <Route path="/v2" element={<Navigate to="/" replace />} />
+          <Route path="/export" element={<ExportMemories />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>

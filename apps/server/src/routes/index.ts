@@ -21,7 +21,13 @@ import { wikiPacksRoutes } from './wiki-packs.routes.js';
 import { pmpRoutes } from './pmp.routes.js';
 import { encryptionRoutes } from './encryption.routes.js';
 import { pmpPacksRoutes } from './pmp-packs.routes.js';
+import { pmpArtifactsRoutes } from './pmp-artifacts.routes.js';
+import { packTitleRoutes } from './pack-title.routes.js';
+import { pmpDevicesRoutes } from './pmp-devices.routes.js';
 import { pmpAdminRoutes } from './pmp-admin.routes.js';
+import { complianceRoutes } from './compliance.routes.js';
+import { packMarketplaceRoutes } from './pack-marketplace.routes.js';
+import { packMarketplacePaymentsRoutes } from './marketplace-payments.routes.js';
 import { demoRoutes } from './demo.routes.js';
 import { showcaseRoutes } from './showcase.routes.js';
 import { walletAuthRoutes } from './wallet-auth.routes.js';
@@ -73,9 +79,34 @@ export function mountApiRoutes(app: express.Application): void {
   // POST /v1/packs, GET /v1/packs/:id, /preview, /verify — marketplace surface.
   app.use(pmpPacksRoutes());
 
+  // PMP artifacts — the SERVER side of the desktop .pmp integration (Part C).
+  // POST /v1/pmp/export, GET /v1/pmp/artifacts(/:id), POST /v1/pmp/verify (public), /import.
+  app.use(pmpArtifactsRoutes());
+
+  // Pack title NFT metadata + image — PUBLIC, unauthenticated (wallets/explorers fetch it).
+  // GET /api/pack-title/:packId.{json,png,svg}. Gated on a minted pack_titles row (privacy).
+  app.use(packTitleRoutes());
+
+  // PMP desktop device pairing — the secure server contract the desktop (Tauri) app links to
+  // (Part C, Task 3). Anti-phishing pairing handshake + device-signed memory pull.
+  // POST /v1/pmp/devices/pair/{init,claim,complete}, GET /v1/pmp/devices, POST /:id/revoke,
+  // POST /v1/pmp/desktop/memories (device-signed, owner-scoped, ±120s).
+  app.use(pmpDevicesRoutes());
+
   // PMP admin — backfill control (X-Admin-Token gated, disabled unless
   // PMP_ADMIN_TOKEN is set). POST/GET /v1/admin/backfill, /backfill/stop.
   app.use(pmpAdminRoutes());
+
+  // Memory Pack Marketplace (Slice 1 Part A) — compliance gate + copy-license listings.
+  // /v1/legal/*, /v1/packs/:id/{attest,scan,compliance}, /v1/listings/*
+  app.use(complianceRoutes());
+  app.use(packMarketplaceRoutes());
+
+  // Memory Pack Marketplace (Slice 1 Part B) — payments + orders + refund + payout account.
+  // /v1/market/orders, /v1/market/orders/:id, /v1/market/orders/:id/refund, /v1/market/payout-account.
+  // (The Stripe webhook /webhook/stripe/marketplace is mounted in app.ts BEFORE express.json so
+  //  the raw signed body survives — it cannot live here behind the JSON parser.)
+  app.use(packMarketplacePaymentsRoutes());
 
   // Memory packs: export, import, smart-export
   app.use('/api/memory-packs', memoryPacksRoutes());

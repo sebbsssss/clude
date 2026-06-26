@@ -42,6 +42,19 @@ vi.mock('@clude/brain/auth/privy-auth', () => ({
   },
 }));
 
+// ── requireOwnership: CONTRIBUTE (POST /v1/memories) is now guarded by it so the write uses the
+//    proven wallet, never a client ?owner=. Mock = passthrough once a wallet is authed. ──
+vi.mock('@clude/brain/auth/require-ownership', () => ({
+  requireOwnership: (req: Request, res: Response, next: NextFunction) => {
+    if (!authedWallet) {
+      res.status(401).json({ error: 'No wallet' });
+      return;
+    }
+    (req as Request & { verifiedWallet?: string }).verifiedWallet = authedWallet;
+    next();
+  },
+}));
+
 // ── Brain memory ──
 const storeMemoryMock = vi.fn();
 const recallMemoriesMock = vi.fn();

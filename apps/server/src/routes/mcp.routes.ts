@@ -249,7 +249,7 @@ async function logMcpDebug(req: Request, auth: McpAuth | null): Promise<void> {
       token_sub: sub,
       token_exp: exp,
       oauth_ok: isOauth,
-      result: auth ? (isOauth ? 'oauth' : 'legacy') : 'unauthorized',
+      result: `${req.method} ${auth ? (isOauth ? 'oauth' : 'legacy') : 'unauthorized'}`,
     });
   } catch { /* debug logging must never break the request */ }
 }
@@ -272,8 +272,12 @@ export function mcpRoutes(): Router {
   // staging vs prod without hardcoding the domain.
   const resourceMetadataPath = '/.well-known/oauth-protected-resource';
 
-  // POST /api/mcp — primary JSON-RPC endpoint
-  router.post('/', async (req: Request, res: Response) => {
+  // All HTTP methods on the MCP endpoint go through auth + the Streamable HTTP transport.
+  // Unauthenticated requests of ANY method return 401 + WWW-Authenticate, so the Claude
+  // connector can discover OAuth no matter which method it probes with (a bare 405 on the
+  // GET stream was being read as "not a valid MCP server", before the token was ever used).
+  // Authenticated GET is handed to the transport for the server->client SSE stream.
+  const handle = async (req: Request, res: Response): Promise<void> => {
     const resourceMetadataUrl = `${req.protocol}://${req.get('host')}${resourceMetadataPath}`;
     const auth = await authFromBearer(req.headers['authorization'] as string | undefined);
     await logMcpDebug(req, auth);
@@ -290,7 +294,7 @@ export function mcpRoutes(): Router {
         server.close().catch(() => {});
       });
       await server.connect(transport);
-      await transport.handleRequest(req, res, req.body);
+      await transport.handleRequest(req, res, req.method === 'POST' ? req.body : undefined);
     } catch (err: any) {
       log.error({ err }, 'MCP request failed');
       if (!res.headersSent) {
@@ -301,21 +305,11 @@ export function mcpRoutes(): Router {
         });
       }
     }
-  });
+  };
 
-  // GET /api/mcp — server-initiated stream (not used in stateless mode)
-  router.get('/', (_req: Request, res: Response) => {
-    res.status(405).json({
-      jsonrpc: '2.0',
-      error: { code: -32000, message: 'Method not allowed in stateless mode' },
-      id: null,
-    });
-  });
-
-  // DELETE /api/mcp — session termination (no-op in stateless mode)
-  router.delete('/', (_req: Request, res: Response) => {
-    res.status(204).end();
-  });
+  router.post('/', handle);
+  router.get('/', handle);
+  router.delete('/', handle);
 
   return router;
 }

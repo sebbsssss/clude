@@ -22,14 +22,24 @@ import {
 } from '@clude/tokenization';
 import { getDb } from '@clude/shared/core/database';
 import { requirePrivyAuth, optionalPrivyAuth } from '@clude/brain/auth/privy-auth';
+import { requireOwnership } from '@clude/brain/auth/require-ownership';
 import { withOwnerWallet } from '@clude/shared/core/owner-context';
 import { createChildLogger } from '@clude/shared/core/logger';
 import { getPdaMintClient } from '../lib/pda-mint-client.js';
 import {
   getDefaultPackOwnershipVerifier,
   verifyUnlockRequest,
+  verifyUnlockSignature,
   type UnlockFailureReason,
 } from '../lib/pack-gate.js';
+import { hasActiveCopyEntitlement } from '../lib/payments/entitlement-gate.js';
+import { assertSolanaTitleUnlock, type SolanaUnlockResult } from '../lib/payments/solana-title-gate.js';
+import { getSolanaTitleMintClient } from '../lib/solana-title-mint.js';
+import {
+  buildPackPreview,
+  verifyPackCommitment,
+  type PreviewMemoryBody,
+} from '../lib/pack-preview.js';
 import { randomBytes } from 'node:crypto';
 
 const log = createChildLogger('pmp-packs-routes');
@@ -43,10 +53,10 @@ interface PackErrorBody {
 }
 
 function ownerFromReq(req: Request): string | null {
-  if (req.verifiedWallet) return req.verifiedWallet;
-  const q = req.query.owner;
-  if (typeof q === 'string' && q.length > 0) return q;
-  return null;
+  // Only the wallet requireOwnership proved against the authenticated identity — NEVER a client
+  // ?owner= (the spoof: any logged-in user could pass ?owner=<victim> and pack the victim's
+  // memories). Mirrors the PR #290 hardening already applied in compliance.routes.ts.
+  return req.verifiedWallet ?? null;
 }
 
 function publicBaseUrl(req: Request): string {
@@ -130,7 +140,7 @@ export function pmpPacksRoutes(): Router {
    *   gate_uri?: string
    * }
    */
-  router.post('/v1/packs', requirePrivyAuth, async (req: Request, res: Response) => {
+  router.post('/v1/packs', requirePrivyAuth, requireOwnership, async (req: Request, res: Response) => {
     const owner = ownerFromReq(req);
     if (!owner) {
       res.status(401).json({ error: 'unauthenticated' } satisfies PackErrorBody);
@@ -398,82 +408,50 @@ export function pmpPacksRoutes(): Router {
         return;
       }
 
-      // Rebuild the tree. Important: order by leaf_index so the root matches what was committed.
-      const leafHashes = contents.map((c) => c.content_hash);
-      const tree = buildPackTree(leafHashes);
-
-      // Safety check: the rebuilt root must match the on-chain commitment.
-      if (tree.root !== packRow.merkle_root) {
-        log.error(
-          { id, builtRoot: tree.root, committedRoot: packRow.merkle_root },
-          'preview: rebuilt root mismatches committed root',
-        );
-        res.status(500).json({ error: 'preview_failed', reason: 'root_mismatch' } satisfies PackErrorBody);
-        return;
-      }
-
-      // Reveal the first `count` leaves with their inclusion proofs.
-      const revealedSlice = contents.slice(0, Math.min(count, contents.length));
-      const revealMemoryIds = revealedSlice.map((r) => r.memory_id);
+      // Hydrate the bodies for just the slice we'll reveal (the helper re-slices identically).
+      const revealMemoryIds = contents.slice(0, Math.min(count, contents.length)).map((r) => r.memory_id);
       const { data: memoriesRaw } = await db
         .from('memories')
         .select('id, hash_id, memory_type, content, owner_wallet, created_at, tags, source, related_user, related_wallet')
         .in('id', revealMemoryIds);
 
-      const memoryById = new Map<number, {
-        id: number;
-        hash_id: string;
-        memory_type: string;
-        content: string;
-        owner_wallet: string | null;
-        created_at: string;
-        tags: string[] | null;
-        source: string | null;
-        related_user: string | null;
-        related_wallet: string | null;
-      }>();
-      for (const m of (memoriesRaw ?? []) as Array<typeof memoryById extends Map<unknown, infer V> ? V : never>) {
+      const memoryById = new Map<number, PreviewMemoryBody>();
+      for (const m of (memoriesRaw ?? []) as Array<PreviewMemoryBody>) {
         memoryById.set(m.id, m);
       }
 
-      const revealed = revealedSlice.map((row) => {
-        const proof = inclusionProof(tree, row.leaf_index);
-        const memory = memoryById.get(row.memory_id) ?? null;
-        return {
-          memory: memory
-            ? {
-                id: memory.hash_id,
-                type: memory.memory_type,
-                content: memory.content,
-                owner: memory.owner_wallet,
-                created_at: memory.created_at,
-                tags: memory.tags ?? [],
-              }
-            : null,
-          content_hash: row.content_hash,
-          leaf_index: row.leaf_index,
-          proof: {
-            leaf: proof.leaf,
-            leaf_index: proof.leafIndex,
-            siblings: proof.siblings,
-            algorithm: proof.algorithm,
-          },
-        };
-      });
-
-      res.json({
-        pack: {
-          id: packRow.pack_id,
+      // Rebuild the tree + reveal via the shared sealed-safe helper. It re-asserts
+      // the rebuilt root matches the on-chain commitment and fails closed on drift.
+      const preview = buildPackPreview(
+        {
+          pack_id: packRow.pack_id,
           name: packRow.name,
           version: packRow.version,
-          author: packRow.author_wallet,
+          author_wallet: packRow.author_wallet,
           memory_count: packRow.memory_count,
           merkle_root: packRow.merkle_root,
           pack_token_address: packRow.pack_token_address,
         },
-        revealed_count: revealed.length,
-        unrevealed_count: contents.length - revealed.length,
-        revealed,
+        contents,
+        memoryById,
+        { count },
+      );
+      if (!preview.ok) {
+        if (preview.reason === 'root_mismatch') {
+          log.error(
+            { id, builtRoot: preview.builtRoot, committedRoot: packRow.merkle_root },
+            'preview: rebuilt root mismatches committed root',
+          );
+        }
+        res.status(500).json({ error: 'preview_failed', reason: preview.reason } satisfies PackErrorBody);
+        return;
+      }
+
+      res.json({
+        pack: preview.pack,
+        revealed_count: preview.revealed_count,
+        unrevealed_count: preview.unrevealed_count,
+        revealed: preview.revealed,
         verifier_url: `${publicBaseUrl(req)}/v1/packs/${id}/verify`,
       });
     } catch (err) {
@@ -526,7 +504,11 @@ export function pmpPacksRoutes(): Router {
         .eq('pack_id', id)
         .order('leaf_index', { ascending: true });
       const contents = (contentsRaw ?? []) as Array<{ content_hash: string; leaf_index: number }>;
-      if (contents.length === 0) {
+      const commitment = verifyPackCommitment(
+        { merkle_root: row.merkle_root, memory_count: row.memory_count },
+        contents,
+      );
+      if (commitment.reason === 'no_contents') {
         res.json({
           id,
           verified: false,
@@ -536,15 +518,13 @@ export function pmpPacksRoutes(): Router {
         });
         return;
       }
-      const tree = buildPackTree(contents.map((c) => c.content_hash));
-      const verified = tree.root === row.merkle_root && contents.length === row.memory_count;
       res.json({
         id,
-        verified,
-        reason: verified ? 'verified' : 'drift_detected',
+        verified: commitment.verified,
+        reason: commitment.reason,
         memory_count: row.memory_count,
-        recomputed_root: tree.root,
-        committed_root: row.merkle_root,
+        recomputed_root: commitment.recomputedRoot,
+        committed_root: commitment.committedRoot,
         commitment: {
           chain: 'solana',
           asset_id: row.pack_token_address,
@@ -593,10 +573,10 @@ export function pmpPacksRoutes(): Router {
     try {
       const db = getDb();
 
-      // 1. Load Pack with its token address.
+      // 1. Load Pack with its token address + sale_mode (copy vs title gating).
       const { data: pack, error: packErr } = await db
         .from('memory_packs')
-        .select('pack_id, name, version, author_wallet, memory_count, merkle_root, pack_token_address')
+        .select('pack_id, name, version, author_wallet, memory_count, merkle_root, pack_token_address, sale_mode')
         .eq('pack_id', id)
         .limit(1)
         .maybeSingle();
@@ -617,8 +597,12 @@ export function pmpPacksRoutes(): Router {
         memory_count: number;
         merkle_root: string | null;
         pack_token_address: string | null;
+        sale_mode: string | null;
       };
-      if (!packRow.merkle_root || !packRow.pack_token_address) {
+      // A commitment (merkle_root) is required to unlock. pack_token_address is NOT required here — a
+      // Solana-titled SNAPSHOT pack has none (its ownership is the 1-of-1 SPL title, checked below); only
+      // the LEGACY token gate needs it, and that branch guards for its absence.
+      if (!packRow.merkle_root) {
         res.status(409).json({
           error: 'not_tokenised',
           hint: 'pack must be tokenised before it can be unlocked',
@@ -626,18 +610,73 @@ export function pmpPacksRoutes(): Router {
         return;
       }
 
-      // 2. Verify caller controls the wallet AND that wallet holds the Pack token.
-      const verifier = getDefaultPackOwnershipVerifier();
-      const verifyResult = await verifyUnlockRequest(
-        {
-          packId: id,
-          packTokenAddress: packRow.pack_token_address,
-          walletAddress: wallet,
-          message,
-          signature,
-        },
-        verifier,
-      );
+      // 2. Authorise the unlock. The Solana TITLE gate is AUTHORITATIVE and runs FIRST: a 1-of-1 title
+      //    outranks BOTH the legacy token gate and any copy-entitlement on the same pack. Verify the
+      //    wallet signature first (the title gate trusts an already-proven wallet, §00 B2), then:
+      //      - titled & ok  → ALLOW
+      //      - titled & !ok → DENY, and NEVER fall back (a denied title must not drop to a weaker gate,
+      //                       which would reopen the holdsPackToken balance>=1 double-spend hole)
+      //      - !titled      → fall through to the existing copy / legacy-token gates, UNCHANGED.
+      let verifyResult: { ok: true; walletAddress: string } | { ok: false; reason: UnlockFailureReason; detail?: string };
+
+      // Off-chain proof of wallet control — shared by every gate. Proves the caller controls `wallet`.
+      // packTokenAddress is unused by the signature check; '' when a Solana-titled pack has no legacy token.
+      const sig = verifyUnlockSignature({
+        packId: id,
+        packTokenAddress: packRow.pack_token_address ?? '',
+        walletAddress: wallet,
+        message,
+        signature,
+      });
+      if (!sig.ok) {
+        verifyResult = sig;
+      } else {
+        // Constructing the Solana title client THROWS when SOLANA_TITLE_* env is unset. On a non-Solana
+        // deploy that simply means "no Solana titles" → skip the check (titled:false), NEVER deny unlock.
+        let solClient: ReturnType<typeof getSolanaTitleMintClient> | null = null;
+        try {
+          solClient = getSolanaTitleMintClient();
+        } catch {
+          solClient = null;
+        }
+        // assertSolanaTitleUnlock reads the live on-chain holder + fails closed. A pack_titles DB error
+        // THROWS → caught here and mapped to a retriable 503 deny, never a silent downgrade to a weaker gate.
+        let sol: SolanaUnlockResult;
+        if (solClient) {
+          try {
+            sol = await assertSolanaTitleUnlock(db, solClient, id, sig.walletAddress);
+          } catch (err) {
+            log.warn({ err, id }, 'unlock: solana title lookup failed — failing closed (rpc_unavailable)');
+            sol = { titled: true, ok: false, reason: 'rpc_unavailable' };
+          }
+        } else {
+          sol = { titled: false };
+        }
+
+        if (sol.titled) {
+          // Title is authoritative: ALLOW on ok, DENY otherwise. NEVER fall through to a weaker gate.
+          verifyResult = sol.ok
+            ? { ok: true, walletAddress: sig.walletAddress }
+            : { ok: false, reason: sol.reason === 'rpc_unavailable' ? 'rpc_unavailable' : 'not_title_owner' };
+        } else if (packRow.sale_mode === 'copy') {
+          // Pure entitlement read — the copy gate (Risk R3: a fiat buyer holds no on-chain token). No chain.
+          const entitled = await hasActiveCopyEntitlement(id, sig.walletAddress);
+          verifyResult = entitled
+            ? { ok: true, walletAddress: sig.walletAddress }
+            : { ok: false, reason: 'not_entitled' };
+        } else if (!packRow.pack_token_address) {
+          // A tokenised pack with no Solana title, not copy-licensed, and no legacy pack token: no gate
+          // can authorise it. Deny (never pass a null token address into the legacy verifier).
+          verifyResult = { ok: false, reason: 'not_token_holder' };
+        } else {
+          // Legacy token-gated path: the wallet must hold the Pack token on-chain (re-verifies the sig).
+          const verifier = getDefaultPackOwnershipVerifier();
+          verifyResult = await verifyUnlockRequest(
+            { packId: id, packTokenAddress: packRow.pack_token_address, walletAddress: wallet, message, signature },
+            verifier,
+          );
+        }
+      }
       if (!verifyResult.ok) {
         const status = unlockFailureStatus(verifyResult.reason);
         res.status(status).json({
@@ -764,6 +803,8 @@ function unlockFailureStatus(reason: UnlockFailureReason): number {
     case 'invalid_signature':
       return 401;
     case 'not_token_holder':
+    case 'not_title_owner':
+    case 'not_entitled':
       return 403;
     case 'rpc_unavailable':
       return 503;

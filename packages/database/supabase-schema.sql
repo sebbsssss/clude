@@ -129,13 +129,19 @@ CREATE TABLE IF NOT EXISTS encryption_keys (
 
 -- Per-memory wrapped DEKs. Wrap = sealed box; wrap_pubkey is the ephemeral sender pubkey.
 CREATE TABLE IF NOT EXISTS memory_dek_wraps (
-  memory_id   BIGINT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
-  recipient   TEXT   NOT NULL,                 -- 'owner' | 'provider'
-  wrapped_dek TEXT   NOT NULL,                 -- base64(nonce || box(DEK))
-  wrap_pubkey TEXT   NOT NULL,                 -- base64 ephemeral sender X25519 pubkey
-  created_at  TIMESTAMPTZ DEFAULT NOW(),
-  PRIMARY KEY (memory_id, recipient)
+  memory_id     BIGINT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+  recipient     TEXT   NOT NULL,                 -- 'owner' | 'provider' | 'title_holder'
+  wrapped_dek   TEXT   NOT NULL,                 -- base64(nonce || box(DEK))
+  wrap_pubkey   TEXT   NOT NULL,                 -- base64 ephemeral sender X25519 pubkey
+  holder_wallet TEXT,                            -- (034) names the title_holder; NULL for owner/provider
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT memory_dek_wraps_recipient_chk CHECK (recipient IN ('owner', 'provider', 'title_holder')),
+  CONSTRAINT memory_dek_wraps_holder_chk CHECK ((recipient = 'title_holder') = (holder_wallet IS NOT NULL))
 );
+-- (036) holder-aware uniqueness: one owner + one provider per memory (NULLS NOT DISTINCT), and one
+-- title_holder per (memory, holder) so a title sale's seller + buyer wraps coexist (RT7 additive).
+CREATE UNIQUE INDEX IF NOT EXISTS uq_dek_wraps_identity
+  ON memory_dek_wraps (memory_id, recipient, holder_wallet) NULLS NOT DISTINCT;
 CREATE INDEX IF NOT EXISTS idx_dek_wraps_memory ON memory_dek_wraps(memory_id);
 
 -- Dream logs: consolidation, reflection, emergence sessions

@@ -6,6 +6,7 @@ export default defineConfig({
     alias: {
       '@clude/shared': path.resolve(__dirname, '../../packages/shared/src'),
       '@clude/brain': path.resolve(__dirname, '../../packages/brain/src'),
+      '@clude/memorypack': path.resolve(__dirname, '../../packages/memorypack/src'),
     },
   },
   test: {

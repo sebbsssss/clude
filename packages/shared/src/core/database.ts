@@ -503,13 +503,19 @@ export async function initDatabase(): Promise<void> {
           updated_at    TIMESTAMPTZ DEFAULT NOW()
         );
         CREATE TABLE IF NOT EXISTS memory_dek_wraps (
-          memory_id   BIGINT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
-          recipient   TEXT   NOT NULL,
-          wrapped_dek TEXT   NOT NULL,
-          wrap_pubkey TEXT   NOT NULL,
-          created_at  TIMESTAMPTZ DEFAULT NOW(),
-          PRIMARY KEY (memory_id, recipient)
+          memory_id     BIGINT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+          recipient     TEXT   NOT NULL,
+          wrapped_dek   TEXT   NOT NULL,
+          wrap_pubkey   TEXT   NOT NULL,
+          holder_wallet TEXT,                          -- (034) names the title_holder; NULL for owner/provider
+          created_at    TIMESTAMPTZ DEFAULT NOW(),
+          CONSTRAINT memory_dek_wraps_recipient_chk CHECK (recipient IN ('owner', 'provider', 'title_holder')),
+          CONSTRAINT memory_dek_wraps_holder_chk CHECK ((recipient = 'title_holder') = (holder_wallet IS NOT NULL))
         );
+        -- (036) holder-aware uniqueness: one owner + one provider per memory (NULLS NOT DISTINCT),
+        -- and one title_holder per (memory, holder) so a sale's seller + buyer wraps coexist (RT7).
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_dek_wraps_identity
+          ON memory_dek_wraps (memory_id, recipient, holder_wallet) NULLS NOT DISTINCT;
         CREATE INDEX IF NOT EXISTS idx_dek_wraps_memory ON memory_dek_wraps(memory_id);
 
         -- Populate content_tokens from a transient plaintext arg (PostgREST can't express to_tsvector inline).
