@@ -69,8 +69,11 @@ export async function loadTitleCardData(db: DbLike, packId: string): Promise<Pac
     .maybeSingle();
   if (aErr) throw aErr;
 
+  // The title binds a SNAPSHOT pack named "<name> — title snapshot"; strip that internal suffix so
+  // the public NFT shows the clean pack name.
+  const rawName = (pack?.name as string | undefined) ?? 'Clude Memory Pack';
   return {
-    name: (pack?.name as string | undefined) ?? 'Clude Memory Pack',
+    name: rawName.replace(/\s*[—-]\s*title snapshot\s*$/i, '').trim() || 'Clude Memory Pack',
     memoryCount: Number(art?.record_count ?? 0),
     dateISO: (pack?.created_at as string | undefined) ?? null,
     packId,

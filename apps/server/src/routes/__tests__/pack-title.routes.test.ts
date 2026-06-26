@@ -73,6 +73,13 @@ describe('GET /api/pack-title/:packId.json', () => {
     );
   });
 
+  it('strips the internal "— title snapshot" suffix so the NFT shows the clean name', async () => {
+    seedTitled();
+    results.memory_packs = { data: { name: 'Trip Notes — title snapshot', created_at: '2026-06-20T00:00:00Z' }, error: null };
+    const res = await request(app()).get(`/api/pack-title/${PACK}.json`);
+    expect(res.body.name).toBe('Clude Pack Title: Trip Notes');
+  });
+
   it('honours SOLANA_TITLE_METADATA_BASE_URI for the image host', async () => {
     seedTitled();
     process.env.SOLANA_TITLE_METADATA_BASE_URI = 'https://preview.example.com/api/pack-title/';
