@@ -19,6 +19,7 @@ COPY packages/memorypack/package.json ./packages/memorypack/
 COPY packages/tokenization/package.json ./packages/tokenization/
 COPY packages/pmp-sdk/package.json ./packages/pmp-sdk/
 COPY packages/brain/package.json ./packages/brain/
+COPY packages/ui/package.json ./packages/ui/
 COPY apps/server/package.json ./apps/server/
 COPY apps/workers/package.json ./apps/workers/
 COPY apps/chat/package.json ./apps/chat/
@@ -32,6 +33,7 @@ COPY packages/memorypack/ ./packages/memorypack/
 COPY packages/tokenization/ ./packages/tokenization/
 COPY packages/pmp-sdk/ ./packages/pmp-sdk/
 COPY packages/brain/ ./packages/brain/
+COPY packages/ui/ ./packages/ui/
 COPY apps/server/ ./apps/server/
 COPY apps/workers/ ./apps/workers/
 COPY apps/chat/ ./apps/chat/
