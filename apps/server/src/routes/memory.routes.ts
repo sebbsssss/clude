@@ -187,8 +187,10 @@ export function memoryRoutes(): Router {
     }
   });
 
-  // Verify a memory's on-chain commitment
-  router.get('/memory/:id/verify', async (req: Request, res: Response) => {
+  // Verify a memory's on-chain commitment. OWNER-ONLY: returns plaintext content/summary, so it
+  // must be gated — an unauthenticated caller previously read any memory via a client-supplied
+  // ?wallet= (opsec H3). Owner is the proven verifiedWallet, never a query param.
+  router.get('/memory/:id/verify', requirePrivyAuth, requireOwnership, async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -206,8 +208,8 @@ export function memoryRoutes(): Router {
         return;
       }
 
-      const requestWallet = req.query.wallet as string;
-      if (!requestWallet || mem.owner_wallet !== requestWallet) {
+      const owner = getRequestOwner(req);
+      if (!owner || mem.owner_wallet !== owner) {
         res.status(403).json({ error: 'Not authorized to verify this memory' });
         return;
       }
@@ -248,18 +250,21 @@ export function memoryRoutes(): Router {
     }
   });
 
-  // Verify a memory by its Solana transaction signature
-  router.get('/memories/verify', async (req: Request, res: Response) => {
+  // Verify a memory by its Solana transaction signature. OWNER-ONLY: returns plaintext
+  // content/summary/tags, so it is gated — an unauthenticated caller previously read ANY tenant's
+  // memory by pairing a public tx signature with a client-supplied ?wallet= (opsec H3). Owner is the
+  // proven verifiedWallet; the rate-limit key is bound to it (a client param could be rotated).
+  router.get('/memories/verify', requirePrivyAuth, requireOwnership, async (req: Request, res: Response) => {
     try {
       const tx = req.query.tx as string;
-      const wallet = req.query.wallet as string;
+      const owner = getRequestOwner(req);
 
-      if (!tx || !wallet) {
-        res.status(400).json({ error: 'Both tx and wallet query params are required' });
+      if (!tx || !owner) {
+        res.status(400).json({ error: 'tx query param is required' });
         return;
       }
 
-      const allowed = await checkRateLimit(`verify:${wallet}`, 20, 1);
+      const allowed = await checkRateLimit(`verify:${owner}`, 20, 1);
       if (!allowed) {
         res.status(429).json({ error: 'Rate limited. 20 verifications per minute max.' });
         return;
@@ -276,7 +281,7 @@ export function memoryRoutes(): Router {
         return;
       }
 
-      if (mem.owner_wallet !== wallet) {
+      if (mem.owner_wallet !== owner) {
         res.status(403).json({ error: 'Not authorized — wallet does not own this memory' });
         return;
       }
