@@ -20,7 +20,7 @@ import { OWNER_SIGN_MESSAGE } from '@clude/shared/core/owner-key-constants';
 import { api, HolderKeyUnregisteredError } from '../lib/api';
 import { buildOwnerKeyRegistration } from '../lib/owner-key-register';
 import { decryptPmp } from '../lib/decrypt-pmp';
-import { parsePmpBase64, PmpZstdUnsupportedError } from '../lib/parse-pmp';
+import { parsePmpBase64 } from '../lib/parse-pmp';
 import type { MemoryStats, Memory } from '../types/memory';
 import { MEMORY_TYPES } from '../lib/memory-ui';
 
@@ -300,10 +300,10 @@ export function ExportScreen() {
    * plaintext JSONL download. Nothing is POSTed; the signature is zeroed immediately after the
    * decrypt, and the plaintext is held in state only until the user navigates away.
    *
-   * KNOWN LIMITATION: the server emits a zstd-compressed `.tar.zst`, and there is no in-browser zstd
-   * decompressor in this bundle. parsePmpBase64 throws PmpZstdUnsupportedError for those bytes; we
-   * surface an honest message + point at the hosted /v1/pmp/verify or the desktop tool rather than
-   * faking a result. A plain (uncompressed) USTAR `.pmp` decrypts fully here.
+   * The server emits a zstd-compressed `.tar.zst`; `parsePmpBase64` inflates it in-browser via
+   * `fzstd` (no server round-trip), so the whole flow — inflate → USTAR parse → tweetnacl decrypt —
+   * runs locally. A plain (uncompressed) USTAR `.pmp` is handled too. Any parse failure surfaces an
+   * honest message and never fabricates a result.
    */
   async function handleDecryptLocally() {
     if (!artifact || artifact.encryptionScope !== 'owner' || !artifact.pmpBase64) return;
@@ -312,16 +312,13 @@ export function ExportScreen() {
     setDecryptPreview(null);
     setPlaintext(null);
 
-    // Parse the .pmp BEFORE signing, so the zstd limitation never makes the user sign for nothing.
+    // Parse the .pmp (inflating the .tar.zst in-browser) BEFORE signing, so an unreadable file never
+    // makes the user sign for nothing.
     let parsed;
     try {
       parsed = parsePmpBase64(artifact.pmpBase64);
     } catch (err) {
-      if (err instanceof PmpZstdUnsupportedError) {
-        setDecryptNote('This .pmp is compressed (.tar.zst); browser decryption isn’t available yet. Use the desktop tool or the hosted verifier. Your key never left this page.');
-      } else {
-        setDecryptNote(`Could not read the .pmp: ${err instanceof Error ? err.message : String(err)}`);
-      }
+      setDecryptNote(`Could not read the .pmp: ${err instanceof Error ? err.message : String(err)}`);
       setDecrypting(false);
       return;
     }

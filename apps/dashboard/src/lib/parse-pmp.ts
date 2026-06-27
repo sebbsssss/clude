@@ -6,21 +6,23 @@
  * JSON) and `<dir>/records.jsonl` (one JSON record per line). The server's `format: 'tarball'`
  * additionally zstd-COMPRESSES that tar (`.tar.zst`) by shelling out to the system `tar --zstd`.
  *
- * ── KNOWN LIMITATION (honest, not faked) ─────────────────────────────────────────────────────
- * There is no zstd decompressor in the browser bundle (no WASM zstd dep; jszip handles zip/deflate,
- * not zstd). So this parser handles a PLAIN USTAR tar in full, but when the bytes are zstd-framed it
- * throws `PmpZstdUnsupportedError` rather than returning anything — the caller surfaces a clear
- * message and offers the hosted verify / desktop path. It NEVER fabricates plaintext.
+ * ── zstd, in-browser ─────────────────────────────────────────────────────────────────────────
+ * `fzstd` (a tiny, zero-dependency, pure-JS zstd DEcompressor) inflates the server's `.tar.zst` in
+ * the browser. When the bytes are a zstd frame (magic `0x28 0xB5 0x2F 0xFD`) we `decompress` them
+ * to the underlying USTAR `.tar`, then run the SAME tar walk used for an uncompressed `.pmp`. An
+ * already-uncompressed USTAR `.pmp` skips the inflate. We do NOT import any Node-only module
+ * (`tar-stream`, `node:zlib`); `fzstd` is pure JS and browser-safe.
  *
  * Pure parsing only — no crypto here (decryptPmp does that), no network, no logging of contents.
  */
+import { decompress } from 'fzstd';
 import type { PmpManifestForDecrypt, EncryptedRecord } from './decrypt-pmp';
 
-/** Thrown when the `.pmp` bytes are zstd-compressed, which the browser cannot decompress yet. */
-export class PmpZstdUnsupportedError extends Error {
-  constructor() {
-    super('This .pmp is zstd-compressed; in-browser decompression is not supported yet.');
-    this.name = 'PmpZstdUnsupportedError';
+/** Thrown when bytes are a zstd frame but inflation fails (corrupt/unsupported zstd stream). */
+export class PmpZstdDecodeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PmpZstdDecodeError';
   }
 }
 
@@ -83,9 +85,24 @@ interface TarEntry {
 }
 
 /**
- * Walk a plain USTAR archive and return its file entries. Header name (offset 0, 100 bytes) +
+ * True for tar members that are not real pack files but archiver sidecars: pax extended-header
+ * blocks (`<dir>/PaxHeader/...`) and macOS BSD-tar AppleDouble resource forks (`._<name>`). Both
+ * can carry a basename that collides with `manifest.json` / `records.jsonl`, so they MUST be
+ * excluded before basename matching. (GNU tar on the server emits neither; BSD tar — e.g. macOS in
+ * tests — emits both.)
+ */
+function isSidecarName(name: string): boolean {
+  const segments = name.split('/');
+  const base = segments[segments.length - 1] ?? '';
+  if (base.startsWith('._')) return true; // AppleDouble resource fork
+  return segments.some((seg) => seg === 'PaxHeader'); // pax extended header dir
+}
+
+/**
+ * Walk a plain USTAR archive and return its real file entries. Header name (offset 0, 100 bytes) +
  * size (offset 124, 12 bytes octal); each entry's data is `ceil(size/512)*512` bytes after its
- * 512-byte header. Two all-zero blocks (or end of buffer) terminate.
+ * 512-byte header. Two all-zero blocks (or end of buffer) terminate. Skips directories/links (by
+ * typeflag) and archiver sidecars (pax headers, AppleDouble) so they can't shadow the pack files.
  */
 function parseTar(bytes: Uint8Array): TarEntry[] {
   const entries: TarEntry[] = [];
@@ -94,14 +111,15 @@ function parseTar(bytes: Uint8Array): TarEntry[] {
     const name = readString(bytes, offset, 100);
     if (name === '') break; // zero block → end of archive
     const size = readOctalSize(bytes, offset + 124, 12);
-    const typeFlag = bytes[offset + 156]; // '0'/NUL = regular file
+    const typeFlag = bytes[offset + 156]; // '0'/NUL = regular file; 'x'/'g' = pax header; '5' = dir
     const dataStart = offset + TAR_BLOCK;
     const dataEnd = dataStart + size;
     if (dataEnd > bytes.length) {
       throw new PmpUnreadableError('truncated .pmp tar entry');
     }
-    // Regular files only (type '0' 0x30 or NUL 0x00); skip dirs/links but still advance.
-    if (typeFlag === 0x30 || typeFlag === 0x00 || typeFlag === undefined) {
+    // Regular files only (type '0' 0x30 or NUL 0x00); skip dirs/links/pax headers, and drop
+    // archiver sidecars by name — but always advance past the data.
+    if ((typeFlag === 0x30 || typeFlag === 0x00 || typeFlag === undefined) && !isSidecarName(name)) {
       entries.push({ name, data: bytes.subarray(dataStart, dataEnd) });
     }
     const padded = Math.ceil(size / TAR_BLOCK) * TAR_BLOCK;
@@ -124,19 +142,36 @@ export interface ParsedPmp {
 }
 
 /**
- * Parse `.pmp` bytes (base64) into `{ manifest, records }` for a client-side decrypt. Throws
- * `PmpZstdUnsupportedError` for zstd-framed bytes (the server's default), or `PmpUnreadableError`
- * for anything that is neither a zstd frame nor a USTAR tar carrying manifest.json + records.jsonl.
+ * Parse `.pmp` bytes (base64) into `{ manifest, records }` for a client-side decrypt.
+ *
+ * Accepts BOTH the server's default `.tar.zst` (zstd-framed; inflated here via `fzstd`) and an
+ * already-uncompressed USTAR `.pmp`. Throws `PmpZstdDecodeError` if a zstd frame fails to inflate,
+ * or `PmpUnreadableError` for anything that — after any inflate — is not a USTAR tar carrying
+ * manifest.json + records.jsonl. NEVER fabricates plaintext.
  */
 export function parsePmpBase64(pmpBase64: string): ParsedPmp {
-  const bytes = base64ToBytes(pmpBase64);
+  const raw = base64ToBytes(pmpBase64);
 
-  if (hasZstdMagic(bytes)) throw new PmpZstdUnsupportedError();
-  if (!looksLikeUstar(bytes)) {
-    throw new PmpUnreadableError('not a readable .pmp (neither a zstd frame nor a USTAR tar)');
+  // zstd-framed (.tar.zst, the server default) → inflate to the underlying USTAR tar; otherwise the
+  // bytes are already a plain tar.
+  let tarBytes: Uint8Array;
+  if (hasZstdMagic(raw)) {
+    try {
+      tarBytes = decompress(raw);
+    } catch (err) {
+      throw new PmpZstdDecodeError(
+        `failed to zstd-decompress .pmp: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  } else {
+    tarBytes = raw;
   }
 
-  const entries = parseTar(bytes);
+  if (!looksLikeUstar(tarBytes)) {
+    throw new PmpUnreadableError('not a readable .pmp (no USTAR tar after any zstd inflate)');
+  }
+
+  const entries = parseTar(tarBytes);
   const manifestEntry = findByBasename(entries, 'manifest.json');
   const recordsEntry = findByBasename(entries, 'records.jsonl');
   if (!manifestEntry) throw new PmpUnreadableError('.pmp is missing manifest.json');
