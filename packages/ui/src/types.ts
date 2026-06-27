@@ -51,8 +51,14 @@ export interface ExportRequest {
   description?: string;
   category: ContentCategory;
   encrypt: boolean;
-  /** Pack scope only: mint a 1-of-1 Base ownership title for the (owned, tokenised) pack on export. */
+  /** Pack scope only: mint a 1-of-1 ownership title for the (owned, tokenised) pack on export. */
   mint_as_title?: boolean;
+  /**
+   * Which chain a minted title lands on. Omitted/'solana' = the non-custodial Solana default
+   * (in the user's own wallet); 'base' = the opt-in Base PORT (custodial Base address). Only
+   * consulted when `mint_as_title` is set.
+   */
+  chain?: 'solana' | 'base';
 }
 
 /** A `.pmp` artifact as returned by POST /v1/pmp/export. */
