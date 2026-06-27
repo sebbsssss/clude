@@ -12,7 +12,12 @@
 import nacl from 'tweetnacl';
 import { hkdf, hkdfSync } from 'crypto';
 import { promisify } from 'util';
-import { HKDF_SALT, HKDF_INFO, VERIFIER_HKDF_INFO } from './owner-key-constants.js';
+import {
+  HKDF_SALT,
+  HKDF_INFO,
+  VERIFIER_HKDF_INFO,
+  VERIFIER_CONSTANT,
+} from './owner-key-constants.js';
 
 const hkdfAsync = promisify(hkdf);
 
@@ -94,9 +99,9 @@ export function unwrapDek(
   }
 }
 
-// HKDF_SALT / HKDF_INFO / VERIFIER_HKDF_INFO are imported from ./owner-key-constants
-// (single source of truth, shared byte-for-byte with the browser decrypt).
-const VERIFIER_CONSTANT = 'clude-key-verifier-v1';
+// HKDF_SALT / HKDF_INFO / VERIFIER_HKDF_INFO / VERIFIER_CONSTANT are imported from
+// ./owner-key-constants (single source of truth, shared byte-for-byte with the browser decrypt
+// + the browser owner-key registration that mints a verifier this same constant gates).
 
 /**
  * Derive an X25519 box keypair from a wallet signature (sign-to-derive, spec §4.1).

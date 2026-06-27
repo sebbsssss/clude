@@ -20,3 +20,11 @@ export const HKDF_INFO = 'memory-encryption-x25519-v2';
 
 /** HKDF info for the DEDICATED secretbox verifier key (separate from the box secret). */
 export const VERIFIER_HKDF_INFO = 'memory-key-verifier-v1';
+
+/**
+ * Known plaintext sealed under the verifier key to form `verifier_ct`. The browser mints a
+ * verifier the server accepts by secretbox-ing THIS exact string under the dedicated verifier
+ * key, and the server's `checkVerifier` accepts iff the ciphertext decrypts back to it. Single
+ * source of truth — `memory-envelope.ts` imports it so the value is byte-identical on both sides.
+ */
+export const VERIFIER_CONSTANT = 'clude-key-verifier-v1';
