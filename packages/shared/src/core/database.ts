@@ -95,6 +95,7 @@ export async function initDatabase(): Promise<void> {
           input_memory_ids BIGINT[] DEFAULT '{}',
           output TEXT NOT NULL,
           new_memories_created BIGINT[] DEFAULT '{}',
+          owner_wallet TEXT,
           created_at TIMESTAMPTZ DEFAULT NOW()
         );
 
@@ -253,6 +254,10 @@ export async function initDatabase(): Promise<void> {
         ALTER TABLE dream_logs DROP CONSTRAINT IF EXISTS dream_logs_session_type_check;
         ALTER TABLE dream_logs ADD CONSTRAINT dream_logs_session_type_check
           CHECK (session_type IN ('consolidation', 'reflection', 'emergence', 'compaction', 'decay', 'contradiction_resolution'));
+
+        -- Migration 021: per-owner attribution for dream_logs (fixes totalDreamSessions leak)
+        ALTER TABLE dream_logs ADD COLUMN IF NOT EXISTS owner_wallet TEXT;
+        CREATE INDEX IF NOT EXISTS idx_dream_logs_owner ON dream_logs(owner_wallet);
 
         -- Migration: add 'resolves' + temporal link types
         ALTER TABLE memory_links DROP CONSTRAINT IF EXISTS memory_links_link_type_check;
@@ -702,6 +707,50 @@ export async function initDatabase(): Promise<void> {
         );
         CREATE INDEX IF NOT EXISTS idx_wiki_pack_installations_owner
           ON wiki_pack_installations(owner_wallet);
+
+        -- Migration 019: corrected access-boost RPC (no importance mutation on read).
+        -- Re-asserted on every boot so the read->rank->read feedback loop can't return.
+        -- importance_boosts is kept for call-site signature compatibility and ignored.
+        -- Drop the stale single-arg overload (migration 003) so the two-arg version is
+        -- unambiguous and the lockdown below can't be bypassed via an unrevoked overload.
+        DROP FUNCTION IF EXISTS batch_boost_memory_access(bigint[]);
+        CREATE OR REPLACE FUNCTION batch_boost_memory_access(
+          memory_ids BIGINT[],
+          importance_boosts DOUBLE PRECISION[] DEFAULT NULL
+        ) RETURNS void LANGUAGE plpgsql AS $fn$
+        BEGIN
+          UPDATE memories
+          SET access_count = access_count + 1,
+              last_accessed = NOW(),
+              decay_factor = LEAST(1.0, decay_factor + 0.1)
+          WHERE id = ANY(memory_ids);
+        END;
+        $fn$;
+
+        -- Migration 020: lock down dangerous SECURITY DEFINER RPCs to service_role only.
+        -- exec_sql/boost RPCs must never be callable by anon/authenticated (the publishable
+        -- key ships in client apps). Wrapped so a not-yet-created function never aborts boot.
+        DO $do$ BEGIN
+          REVOKE EXECUTE ON FUNCTION exec_sql(text) FROM PUBLIC, anon, authenticated;
+          GRANT EXECUTE ON FUNCTION exec_sql(text) TO service_role;
+        EXCEPTION WHEN undefined_function THEN NULL; END $do$;
+
+        DO $do$ BEGIN
+          REVOKE EXECUTE ON FUNCTION batch_boost_memory_access(bigint[], double precision[]) FROM PUBLIC, anon, authenticated;
+          GRANT EXECUTE ON FUNCTION batch_boost_memory_access(bigint[], double precision[]) TO service_role;
+        EXCEPTION WHEN undefined_function THEN NULL; END $do$;
+
+        DO $do$ BEGIN
+          REVOKE EXECUTE ON FUNCTION boost_memory_importance(bigint, double precision, double precision) FROM PUBLIC, anon, authenticated;
+          GRANT EXECUTE ON FUNCTION boost_memory_importance(bigint, double precision, double precision) TO service_role;
+        EXCEPTION WHEN undefined_function THEN NULL; END $do$;
+
+        -- Migration 022 (guard portion): reject empty content on NEW writes in every env.
+        -- NOT VALID enforces on new INSERT/UPDATE without scanning existing rows; the
+        -- one-time cleanup of legacy blank rows + VALIDATE lives in the manual 022 file.
+        DO $do$ BEGIN
+          ALTER TABLE memories ADD CONSTRAINT memories_content_nonempty CHECK (length(btrim(content)) > 0) NOT VALID;
+        EXCEPTION WHEN duplicate_object THEN NULL; END $do$;
       `
     });
 

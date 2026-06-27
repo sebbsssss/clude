@@ -159,6 +159,7 @@ export function MemoryExportPanel(props: MemoryExportPanelProps) {
   const [category, setCategory] = useState<ContentCategory>('personal');
   const [encrypt, setEncrypt] = useState(true);
   const [mintAsTitle, setMintAsTitle] = useState(false);
+  const [titleChain, setTitleChain] = useState<'solana' | 'base'>('solana');
 
   const [preview, setPreview] = useState<SelectionPreview | null>(null);
   const [previewing, setPreviewing] = useState(false);
@@ -235,6 +236,8 @@ export function MemoryExportPanel(props: MemoryExportPanelProps) {
         encrypt,
         // Title intent only applies to a saved, tokenised pack (the title binds its committed root).
         mint_as_title: scope === 'pack' ? mintAsTitle : undefined,
+        // Chain only matters when a title actually mints; default Solana (the non-custodial default).
+        chain: scope === 'pack' && mintAsTitle ? titleChain : undefined,
       };
       const r = await api.export(req);
       setResult(r);
@@ -244,7 +247,7 @@ export function MemoryExportPanel(props: MemoryExportPanelProps) {
     } finally {
       setExporting(false);
     }
-  }, [api, selection, name, description, category, encrypt, scope, mintAsTitle, onExported]);
+  }, [api, selection, name, description, category, encrypt, scope, mintAsTitle, titleChain, onExported]);
 
   const handleDownload = useCallback(() => {
     if (!result || typeof window === 'undefined') return;
@@ -510,11 +513,54 @@ export function MemoryExportPanel(props: MemoryExportPanelProps) {
               cursor: 'pointer',
             }}
           >
-            <span>Mint a 1-of-1 Base ownership title for this pack</span>
+            <span>Mint a 1-of-1 ownership title for this pack</span>
             <span style={{ fontSize: 12, fontWeight: 500, color: mintAsTitle ? p.accent : p.textFaint }}>
               {mintAsTitle ? 'On' : 'Off'}
             </span>
           </button>
+        )}
+        {scope === 'pack' && mintAsTitle && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              background: p.bg,
+              border: `1px solid ${p.border}`,
+              borderRadius: 8,
+              padding: '10px 12px',
+              fontSize: 13,
+              color: p.text,
+            }}
+          >
+            <span>Mint the title on</span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {(['solana', 'base'] as const).map((c) => {
+                const active = titleChain === c;
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setTitleChain(c)}
+                    style={{
+                      fontSize: 12,
+                      fontWeight: active ? 600 : 500,
+                      cursor: 'pointer',
+                      borderRadius: 6,
+                      padding: '5px 12px',
+                      textTransform: 'capitalize',
+                      background: p.bg,
+                      color: active ? p.accent : p.textFaint,
+                      border: `1px solid ${active ? p.accent : p.border}`,
+                    }}
+                  >
+                    {c}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         )}
       </div>
 

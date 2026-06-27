@@ -367,6 +367,7 @@ class CludeAPI {
         category: req.category,
         encrypt: req.encrypt,
         mint_as_title: req.mint_as_title,
+        chain: req.chain,
       }),
     });
   }
@@ -385,14 +386,20 @@ class CludeAPI {
 
   /**
    * Export an already-saved pack as a `.pmp` AND best-effort mint its 1-of-1 ownership title NFT.
-   * The server marks the pack `sale_mode='title'` and (when the Solana title env is configured)
-   * mints a non-custodial 1-of-1 to the caller's own wallet, then returns the `.pmp` bytes inline.
-   * The mint is best-effort: a missing title env or a chain hiccup never fails the export.
+   * The server marks the pack `sale_mode='title'` and mints on the chosen chain: `solana` (default)
+   * mints a non-custodial 1-of-1 to the caller's own wallet; `base` mints on the Base PORT. Either
+   * way the `.pmp` bytes come back inline. The mint is best-effort: a missing title env or a chain
+   * hiccup never fails the export.
    */
-  async exportPackWithTitle(packId: string, name: string, encrypt: boolean): Promise<{ artifact?: { merkle_root?: string; record_count?: number }; pmp_base64?: string; filename?: string }> {
+  async exportPackWithTitle(
+    packId: string,
+    name: string,
+    encrypt: boolean,
+    chain: 'solana' | 'base' = 'solana',
+  ): Promise<{ artifact?: { merkle_root?: string; record_count?: number }; pmp_base64?: string; filename?: string }> {
     return this.fetch('/v1/pmp/export', {
       method: 'POST',
-      body: JSON.stringify({ pack_id: packId, name, encrypt, mint_as_title: true }),
+      body: JSON.stringify({ pack_id: packId, name, encrypt, mint_as_title: true, chain }),
     });
   }
 
