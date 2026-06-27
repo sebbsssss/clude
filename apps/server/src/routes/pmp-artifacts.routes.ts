@@ -101,10 +101,14 @@ const exportBodySchema = z
     description: z.string().nullish(),
     category: contentCategorySchema.optional(),
     encrypt: z.boolean().optional(),
-    // Base TITLE intent: when true on the pack path, mark the (owned) pack as a 1-of-1 title so the
-    // export-time mint fires — minting a Base ownership title to the caller's custodial Base address.
-    // Ignored on the selection path (a title needs a saved, tokenised pack).
+    // TITLE intent: when true on the pack path, mark the (owned) pack as a 1-of-1 title so the
+    // export-time mint fires — minting an ownership title to the caller. Ignored on the selection
+    // path (a title needs a saved, tokenised pack).
     mint_as_title: z.boolean().optional(),
+    // Which chain the export-time title mints on. Omitted/`solana` = the non-custodial Solana
+    // default (post-pivot); `base` = the opt-in Base PORT (custodial Base address). Only consulted
+    // when a title actually mints (mint_as_title on a tokenised pack); ignored otherwise.
+    chain: z.enum(['solana', 'base']).optional(),
   })
   .strict();
 
@@ -214,6 +218,16 @@ async function mintSolanaTitleAtExportBestEffort(
       'export: Solana title mint skipped (Solana env missing or chain error) — .pmp already delivered',
     );
   }
+}
+
+/**
+ * Which chain a title mints on at export. The fail-safe default is SOLANA (the post-pivot
+ * non-custodial default): an omitted or unrecognised value never silently routes to Base. Base
+ * mints only when the caller explicitly opts in with `chain: 'base'`. Exported because this is the
+ * money-routing decision — it gets an explicit, unit-tested home rather than an inline ternary.
+ */
+export function resolveTitleMintChain(chain: 'solana' | 'base' | undefined): 'solana' | 'base' {
+  return chain === 'base' ? 'base' : 'solana';
 }
 
 // ─────────── Canonicalisation (matches content-hash.ts `stableStringify`) ───────────
@@ -918,14 +932,20 @@ export function pmpArtifactsRoutes(): Router {
         if (!result.handled) {
           res.status(500).json({ error: 'export_failed' } satisfies ErrorBody);
         } else if (licenseType === 'title') {
-          // SOLANA-NATIVE DEFAULT (pivot): a title pack becomes a 1-of-1 SOLANA title in the user's OWN
-          // wallet AT EXPORT. The .pmp already shipped above. DETACH the mint from the request path — it
-          // does on-chain RPC round-trips, so awaiting it would pin this worker on a slow/hung RPC.
-          // mintSolanaTitleAtExportBestEffort never rejects (try/catch body), so `void` cannot raise an
-          // unhandled rejection. A chain/env miss is logged, not retried here — a Solana reconciliation
-          // arm (follow-up) guarantees "exists once exported". Idempotent, so safe to retry. Base is now
-          // an opt-in PORT (Phase 4), not the export default.
-          void mintSolanaTitleAtExportBestEffort(db, effectivePackId, owner);
+          // A title pack becomes a 1-of-1 ownership title AT EXPORT. The .pmp already shipped above.
+          // DETACH the mint from the request path — it does on-chain RPC round-trips, so awaiting it
+          // would pin this worker on a slow/hung RPC. Both wrappers never reject (try/catch body), so
+          // `void` cannot raise an unhandled rejection. A chain/env miss is logged, not retried here —
+          // reconciliation guarantees "exists once exported". Idempotent, so safe to retry.
+          //
+          // CHAIN: the caller picks. Fail-safe default is SOLANA (non-custodial, the post-pivot
+          // default, in the user's OWN wallet); `chain: 'base'` opts into the Base PORT (mints an
+          // ownership title to the caller's custodial Base address).
+          if (resolveTitleMintChain(body.chain) === 'base') {
+            void mintTitleAtExportBestEffort(db, effectivePackId, owner);
+          } else {
+            void mintSolanaTitleAtExportBestEffort(db, effectivePackId, owner);
+          }
         }
       } catch (err) {
         log.error({ err, packId }, 'POST /v1/pmp/export failed');

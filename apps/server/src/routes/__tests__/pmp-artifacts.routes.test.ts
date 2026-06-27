@@ -334,7 +334,7 @@ vi.mock('@clude/shared/core/database', () => ({
   getDb: () => ({ from: (table: string) => makeChain(table) }),
 }));
 
-import { pmpArtifactsRoutes } from '../pmp-artifacts.routes.js';
+import { pmpArtifactsRoutes, resolveTitleMintChain } from '../pmp-artifacts.routes.js';
 
 function app() {
   const a = express();
@@ -583,6 +583,20 @@ beforeEach(() => {
   writeMemoryPack.mockImplementation(() => undefined);
 });
 
+// ───────────────────────── resolveTitleMintChain ─────────────────────────
+
+describe('resolveTitleMintChain (export-time mint routing)', () => {
+  it('defaults an omitted chain to solana (fail-safe — never silently routes to Base)', () => {
+    expect(resolveTitleMintChain(undefined)).toBe('solana');
+  });
+  it('keeps an explicit solana', () => {
+    expect(resolveTitleMintChain('solana')).toBe('solana');
+  });
+  it('routes to base only on an explicit base opt-in', () => {
+    expect(resolveTitleMintChain('base')).toBe('base');
+  });
+});
+
 // ───────────────────────── POST /v1/pmp/export ─────────────────────────
 
 describe('POST /v1/pmp/export', () => {
@@ -611,6 +625,31 @@ describe('POST /v1/pmp/export', () => {
     const res = await request(app()).post('/v1/pmp/export').send({ pack_id: 'pack-draft', mint_as_title: true });
     expect(res.status).toBe(409);
     expect(res.body.error).toBe('pack_not_tokenised');
+  });
+
+  it('accepts chain:"base" on a tokenised title pack (the Base PORT opt-in) and still exports', async () => {
+    authedWallet = OWNER;
+    const packId = seedOwnedPack();
+    writeMemoryPack.mockImplementationOnce((file: string) => writeFileSync(file, Buffer.from('PMP')));
+
+    const res = await request(app())
+      .post('/v1/pmp/export')
+      .send({ pack_id: packId, mint_as_title: true, chain: 'base' });
+
+    // Export succeeds; the Base mint is best-effort + env-gated (a no-op in tests), exactly like Solana.
+    expect(res.status).toBe(201);
+    const pack = (tables['memory_packs'] ?? []).find((p) => p.pack_id === packId);
+    expect(pack?.sale_mode).toBe('title');
+  });
+
+  it('rejects an unknown chain value (strict enum — only solana|base)', async () => {
+    authedWallet = OWNER;
+    const packId = seedOwnedPack();
+    const res = await request(app())
+      .post('/v1/pmp/export')
+      .send({ pack_id: packId, mint_as_title: true, chain: 'ethereum' });
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('invalid_body');
   });
 
   it('builds a .pmp from the owner pack and registers an artifact with the right manifest_hash', async () => {

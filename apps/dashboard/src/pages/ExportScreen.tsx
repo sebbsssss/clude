@@ -65,6 +65,7 @@ export function ExportScreen() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [encrypt, setEncrypt] = useState(true);
+  const [titleChain, setTitleChain] = useState<'solana' | 'base'>('solana');
 
   const [exporting, setExporting] = useState(false);
   const [artifact, setArtifact] = useState<Artifact | null>(null);
@@ -162,7 +163,7 @@ export function ExportScreen() {
       const pack = await api.createPack(name, hashIds); // tokenises (on-chain pack token)
 
       setExportNote('Exporting + minting title NFT…');
-      const result = await api.exportPackWithTitle(pack.id, name, encrypt);
+      const result = await api.exportPackWithTitle(pack.id, name, encrypt, titleChain);
 
       const b64 = result.pmp_base64 ?? '';
       const records = result.artifact?.record_count ?? hashIds.length;
@@ -174,7 +175,7 @@ export function ExportScreen() {
         downloadPmp(bytes, result.filename ?? `${name}.pmp`);
       }
       setArtifact({ fileName: result.filename ?? `${name}.pmp`, records, sizeLabel, merkle });
-      setExportNote(`Exported ${records.toLocaleString()} records. A 1-of-1 title NFT is minting on-chain (best-effort): check your wallet or the explorer.`);
+      setExportNote(`Exported ${records.toLocaleString()} records. A 1-of-1 title NFT is minting on ${titleChain === 'base' ? 'Base' : 'Solana'} (best-effort): check your wallet or the explorer.`);
       setExporting(false);
       return;
     } catch (titleErr) {
@@ -433,6 +434,35 @@ export function ExportScreen() {
                     background: '#fff', transition: 'left 0.16s ease',
                   }} />
                 </button>
+              </div>
+              {/* Title mint chain — which network the 1-of-1 ownership title lands on. */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>Title mint chain</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--fg-3)', marginTop: 2 }}>
+                    {titleChain === 'base' ? 'Base — custodial title address' : 'Solana — non-custodial, your own wallet'}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flex: 'none' }}>
+                  {(['solana', 'base'] as const).map((c) => {
+                    const active = titleChain === c;
+                    return (
+                      <button
+                        key={c}
+                        onClick={() => setTitleChain(c)}
+                        style={{
+                          fontSize: 12, fontWeight: active ? 600 : 500, cursor: 'pointer', borderRadius: 7,
+                          padding: '6px 13px', textTransform: 'capitalize',
+                          color: active ? 'var(--accent-text)' : 'var(--fg-2)',
+                          background: active ? 'var(--accent-soft)' : 'var(--surface-2)',
+                          border: active ? '1px solid var(--accent)' : '1px solid var(--border)',
+                        }}
+                      >
+                        {c}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
