@@ -27,6 +27,7 @@
  */
 
 import { Router, type Request, type Response, type NextFunction } from 'express';
+import rateLimit from 'express-rate-limit';
 import { createHash, randomBytes } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -425,6 +426,20 @@ function leafInputFromRecord(rec: MemoryPackRecord, ownerWallet: string | null):
 // ─────────── .pmp payload extraction (verify / import) ───────────
 // Accept the tarball as base64 in the JSON body. Stage it to a temp file so the REUSED
 // readMemoryPack (which reads from a path) can parse it; always clean up the temp dir.
+
+/**
+ * Rate limiter for the UNAUTHENTICATED, decompression-heavy POST /v1/pmp/verify route (opsec H1).
+ * The route stages + zstd-extracts attacker-controlled bytes, so without a cap a single IP could
+ * loop decompression-bombs to exhaust the shared worker. 30/min/IP is ample for legitimate one-off
+ * verifies; the memorypack reader's uncompressed-size guard is the second layer of defence.
+ */
+const pmpVerifyLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'rate_limited', hint: 'Too many verify requests; retry shortly.' },
+});
 
 function extractPmpBase64(req: Request): string | null {
   const body = req.body ?? {};
@@ -1105,7 +1120,7 @@ export function pmpArtifactsRoutes(): Router {
    *      verified = recomputedRoot === declaredRoot. A tampered record body recomputes a
    *      different root → verified:false. Returns { verified, root, recomputed_root }.
    */
-  router.post('/v1/pmp/verify', async (req: Request, res: Response) => {
+  router.post('/v1/pmp/verify', pmpVerifyLimiter, async (req: Request, res: Response) => {
     const b64 = extractPmpBase64(req);
     if (!b64) {
       res
@@ -1140,11 +1155,13 @@ export function pmpArtifactsRoutes(): Router {
         warnings: result.warnings,
       });
     } catch (err) {
-      // A malformed / non-.pmp upload is the caller's error, not a server fault.
+      // A malformed / non-.pmp upload is the caller's error, not a server fault. Keep the detailed
+      // err.message in the server log ONLY — a public caller must not read temp paths / tar stderr
+      // back from the response (opsec L2).
       log.warn({ err: (err as Error).message }, 'POST /v1/pmp/verify: unreadable artifact');
       res
         .status(422)
-        .json({ error: 'unreadable_pmp', hint: (err as Error).message } satisfies ErrorBody);
+        .json({ error: 'unreadable_pmp', hint: 'not a readable .pmp archive' } satisfies ErrorBody);
     }
   });
 
