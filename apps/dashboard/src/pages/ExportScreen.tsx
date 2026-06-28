@@ -18,9 +18,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useWallets, useSignMessage } from '@privy-io/react-auth/solana';
 import { OWNER_SIGN_MESSAGE } from '@clude/shared/core/owner-key-constants';
 import { api, HolderKeyUnregisteredError } from '../lib/api';
-import { buildOwnerKeyRegistration } from '../lib/owner-key-register';
-import { decryptPmp } from '../lib/decrypt-pmp';
-import { parsePmpBase64 } from '../lib/parse-pmp';
+import { buildOwnerKeyRegistration, decryptPmp, parsePmpBase64 } from '@clude/ui';
 import type { MemoryStats, Memory } from '../types/memory';
 import { MEMORY_TYPES } from '../lib/memory-ui';
 

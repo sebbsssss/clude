@@ -365,20 +365,45 @@ class CludeAPI {
     });
   }
 
-  /** Build (or idempotently re-register) a .pmp artifact for a selection. */
+  /**
+   * Build (or idempotently re-register) a .pmp artifact for a selection. Encryption-by-default
+   * fails CLOSED: a selection export with no registered owner key 422s with `holder_key_unregistered`.
+   * We fetch inline (not via fetch()/request()) so that 422 body can be read and surfaced as
+   * HolderKeyUnregisteredError — the recoverable signal the shared panel catches to register-on-demand
+   * and retry. Bearer auth + 401 auth-expiry mirror the shared helpers.
+   */
   async pmpExport(req: ExportRequest): Promise<ExportResult> {
-    return this.fetch('/v1/pmp/export', {
-      method: 'POST',
-      body: JSON.stringify({
-        selection: req.selection,
-        name: req.name,
-        description: req.description,
-        category: req.category,
-        encrypt: req.encrypt,
-        mint_as_title: req.mint_as_title,
-        chain: req.chain,
-      }),
-    });
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+    let res: Response;
+    try {
+      res = await fetch(`${this.agentEndpoint}/v1/pmp/export`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          selection: req.selection,
+          name: req.name,
+          description: req.description,
+          category: req.category,
+          encrypt: req.encrypt,
+          mint_as_title: req.mint_as_title,
+          chain: req.chain,
+        }),
+      });
+    } catch {
+      throw new Error('API error: 0 Network error');
+    }
+    if (res.ok) return res.json();
+    if (res.status === 401) {
+      this.authExpiredCallback?.();
+      throw new AuthExpiredError();
+    }
+    if (res.status === 422) {
+      let body: { error?: string } | null = null;
+      try { body = await res.json(); } catch { body = null; }
+      if (body?.error === 'holder_key_unregistered') throw new HolderKeyUnregisteredError();
+    }
+    throw new Error(`API error: ${res.status} ${res.statusText}`);
   }
 
   /**

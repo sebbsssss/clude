@@ -23,7 +23,7 @@ import {
   checkVerifier,
 } from '@clude/shared/core/memory-envelope';
 
-import { buildOwnerKeyRegistration } from '../owner-key-register';
+import { buildOwnerKeyRegistration } from '@clude/ui';
 
 /** A FIXED, deterministic 64-byte ed25519-shaped signature. */
 function fixedSignature(seed = 13): Uint8Array {

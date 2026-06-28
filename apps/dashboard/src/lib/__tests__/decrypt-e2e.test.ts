@@ -42,9 +42,9 @@ import {
 // runs under Node/vitest with a mocked db, so we exercise the real production encrypt code path.
 import { encryptRecordsForHolder } from '../../../../server/src/lib/pmp/encrypt-records-for-holder';
 
-// The BROWSER read + decrypt under test (production modules — fzstd inflate lives in parse-pmp).
-import { parsePmpBase64 } from '../parse-pmp';
-import { decryptPmp } from '../decrypt-pmp';
+// The BROWSER read + decrypt under test (production modules — now shared from @clude/ui; fzstd
+// inflate lives in parse-pmp).
+import { parsePmpBase64, decryptPmp } from '@clude/ui';
 
 // ── Signatures ──────────────────────────────────────────────────────────────────────────────
 

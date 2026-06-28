@@ -24,7 +24,7 @@ import {
   makeVerifierCiphertext,
 } from '@clude/shared/core/memory-envelope';
 
-import { deriveOwnerKeypairBrowser, decryptPmp } from '../decrypt-pmp';
+import { deriveOwnerKeypairBrowser, decryptPmp } from '@clude/ui';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────────────────
 

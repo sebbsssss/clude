@@ -86,6 +86,42 @@ export interface ExportResult {
 }
 
 /**
+ * Server error code returned (422) by POST /v1/pmp/export when encryption-by-default fails closed
+ * because the caller has no registered owner encryption key. Adapters surface this so the panel can
+ * register-on-demand and retry. Single source of truth for the recognizable string.
+ */
+export const HOLDER_KEY_UNREGISTERED = 'holder_key_unregistered';
+
+/**
+ * The error adapters throw when an encrypted export 422s with `holder_key_unregistered`. Both its
+ * `.code` and `.message` carry the constant, so the panel can recognize it regardless of how the
+ * host app surfaces errors (instanceof, `.code`, or a message match).
+ */
+export class HolderKeyUnregisteredError extends Error {
+  readonly code = HOLDER_KEY_UNREGISTERED;
+  constructor(message = HOLDER_KEY_UNREGISTERED) {
+    super(message);
+    this.name = 'HolderKeyUnregisteredError';
+  }
+}
+
+/**
+ * True when an unknown thrown value indicates the holder-key-unregistered case — recognized via the
+ * `HolderKeyUnregisteredError` instance, a `.code === HOLDER_KEY_UNREGISTERED`, or the constant
+ * appearing in the error message (so adapters that only set a message still match).
+ */
+export function isHolderKeyUnregistered(err: unknown): boolean {
+  if (err instanceof HolderKeyUnregisteredError) return true;
+  if (typeof err === 'object' && err !== null) {
+    const code = (err as { code?: unknown }).code;
+    if (code === HOLDER_KEY_UNREGISTERED) return true;
+    const message = (err as { message?: unknown }).message;
+    if (typeof message === 'string' && message.includes(HOLDER_KEY_UNREGISTERED)) return true;
+  }
+  return false;
+}
+
+/**
  * The API surface the panel needs. Implemented per-app against the live
  * /v1/pmp/* endpoints. `preview` should be cheap (count only).
  */
@@ -93,6 +129,14 @@ export interface MemoryExportApi {
   preview(selection: ExportSelection): Promise<SelectionPreview>;
   export(req: ExportRequest): Promise<ExportResult>;
   listArtifacts?(): Promise<PmpArtifact[]>;
+  /**
+   * Register the caller's owner-held encryption key (the full sign → build payload → POST flow,
+   * implemented by the host app against its own auth + wallet). When `export` rejects with the
+   * holder-key-unregistered signal AND this is provided, the panel calls it once and retries the
+   * export. Omitted in environments that can't register (e.g. no wallet) — the panel then surfaces
+   * an actionable message instead of silently downgrading to plaintext.
+   */
+  registerOwnerKey?(): Promise<void>;
 }
 
 export interface MemoryExportPanelProps {
