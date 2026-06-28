@@ -14,6 +14,14 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    // @clude/shared is a CJS workspace package whose symlinked real path sits OUTSIDE node_modules,
+    // so vite's default commonjsOptions.include (/node_modules/) skips it and Rollup can't see its
+    // named exports — which the chat now imports transitively via @clude/ui (OWNER_SIGN_MESSAGE +
+    // the register/decrypt crypto). Without this, the chat `vite build` fails in the Docker builder
+    // and takes the whole Railway deploy down. Mirrors apps/dashboard/vite.config.ts.
+    commonjsOptions: {
+      include: [/node_modules/, /packages\/shared/],
+    },
     rollupOptions: {
       output: {
         manualChunks: {
