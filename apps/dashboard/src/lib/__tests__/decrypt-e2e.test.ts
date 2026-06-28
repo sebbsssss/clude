@@ -29,6 +29,8 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { decompress } from 'fzstd';
+
 import { writeMemoryPack, type MemoryPackRecord } from '@clude/memorypack';
 import {
   deriveOwnerEncryptionKeypair,
@@ -178,6 +180,12 @@ interface PlainMemory {
   related_wallet: string | null;
 }
 
+// A third party's user id + wallet that the F1 leak shipped in cleartext inside metadata. The
+// merkle leaf binds them, so they must round-trip — but they must NOT appear as plaintext in the
+// shipped tar bytes (only inside metadata.related_ct under the pack DEK).
+const RELATED_USER = 'maya-counterparty-7c1f';
+const RELATED_WALLET = 'CounterPartyWaLLet4444444444444444444third9';
+
 const PLAINTEXT_MEMORIES: PlainMemory[] = [
   {
     id: 'clude-e2e00001',
@@ -188,8 +196,9 @@ const PLAINTEXT_MEMORIES: PlainMemory[] = [
     importance: 0.9,
     source: 'chat',
     owner_wallet: HOLDER,
-    related_user: 'maya',
-    related_wallet: null,
+    // NON-NULL related_* — exercises the F1 encrypt-and-restore path end-to-end.
+    related_user: RELATED_USER,
+    related_wallet: RELATED_WALLET,
   },
   {
     id: 'clude-e2e00002',
@@ -267,7 +276,11 @@ function mockDbForHolder(pubkeyB64: string, verifierCt: string): Parameters<type
  * the holder, compute the pack merkle root, then write the tarball with the owner-sealed header and
  * a `pmp.merkle_root`. Returns the file's base64 (what the dashboard hands to parsePmpBase64).
  */
-async function writeRealTarZstBase64(): Promise<{ base64: string; recordCount: number }> {
+async function writeRealTarZstBase64(): Promise<{
+  base64: string;
+  recordCount: number;
+  tarBytes: Uint8Array;
+}> {
   const holderKp = await deriveOwnerEncryptionKeypair(holderSignature());
   const pubkeyB64 = b64(holderKp.publicKey);
   const verifierCt = makeVerifierCiphertext(holderKp.secretKey);
@@ -303,7 +316,10 @@ async function writeRealTarZstBase64(): Promise<{ base64: string; recordCount: n
     const bytes = new Uint8Array(readFileSync(file));
     // Sanity: it really is a zstd frame (so the fzstd path — not the plain-tar path — is exercised).
     expect([bytes[0], bytes[1], bytes[2], bytes[3]]).toEqual([0x28, 0xb5, 0x2f, 0xfd]);
-    return { base64: b64(bytes), recordCount: encRecords.length };
+    // Inflate to the underlying USTAR tar so callers can byte-grep the ACTUAL shipped bytes for
+    // any plaintext PII leak (F1). zstd is reversible, so a leak in the tar = a leak on the wire.
+    const tarBytes = decompress(bytes);
+    return { base64: b64(bytes), recordCount: encRecords.length, tarBytes };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -313,7 +329,13 @@ async function writeRealTarZstBase64(): Promise<{ base64: string; recordCount: n
 
 describe('decrypt e2e — server .tar.zst → fzstd inflate → USTAR → tweetnacl decrypt', () => {
   it('recovers the ORIGINAL plaintext from a real .tar.zst and verified === true', async () => {
-    const { base64, recordCount } = await writeRealTarZstBase64();
+    const { base64, recordCount, tarBytes } = await writeRealTarZstBase64();
+
+    // ── F1 byte-grep: the third-party related_user / related_wallet must NOT appear as plaintext
+    //    anywhere in the ACTUAL shipped (decompressed) tar bytes. They live only in related_ct. ──
+    const tarText = new TextDecoder('latin1').decode(tarBytes);
+    expect(tarText).not.toContain(RELATED_USER);
+    expect(tarText).not.toContain(RELATED_WALLET);
 
     // BROWSER read: fzstd inflates the zstd frame → USTAR tar → manifest + ciphertext records.
     const { manifest, records } = parsePmpBase64(base64);
@@ -322,6 +344,11 @@ describe('decrypt e2e — server .tar.zst → fzstd inflate → USTAR → tweetn
     expect(manifest.pmp?.merkle_root).toBeTruthy();
     // Records are still ciphertext at this stage (no plaintext leaked by the parse step).
     expect(records[0]!.content).not.toBe(PLAINTEXT_MEMORIES[0]!.content);
+    // The wire record carries related_ct, NOT plaintext related_*.
+    const wireMeta = records[0]!.metadata as Record<string, unknown>;
+    expect(typeof wireMeta.related_ct).toBe('string');
+    expect(wireMeta.related_user).toBeUndefined();
+    expect(wireMeta.related_wallet).toBeUndefined();
 
     // BROWSER decrypt with the holder's signature.
     const out = await decryptPmp(manifest, records, holderSignature());
@@ -335,7 +362,19 @@ describe('decrypt e2e — server .tar.zst → fzstd inflate → USTAR → tweetn
     expect(out.records[0]!.encrypted).toBeFalsy(); // ciphertext marker cleared
     expect(out.records[0]!.id).toBe(PLAINTEXT_MEMORIES[0]!.id); // structural fields preserved
 
+    // F1: related_user / related_wallet are RESTORED onto metadata, matching the originals, and
+    // related_ct is removed (the decrypted record matches the original plaintext shape).
+    const outMeta = out.records[0]!.metadata as Record<string, unknown>;
+    expect(outMeta.related_user).toBe(RELATED_USER);
+    expect(outMeta.related_wallet).toBe(RELATED_WALLET);
+    expect(outMeta.related_ct).toBeUndefined();
+    // The null-related record restores cleanly too (no related_ct, related_* absent or null).
+    const outMeta1 = out.records[1]!.metadata as Record<string, unknown>;
+    expect(outMeta1.related_ct).toBeUndefined();
+
     // Integrity: recomputed leaves match metadata.leaf_hash AND rebuild to manifest.pmp.merkle_root.
+    // This is the load-bearing parity check — the leaf binds related_*, so verified===true proves
+    // the restored values are byte-identical to what the server hashed.
     expect(out.verified).toBe(true);
   });
 });

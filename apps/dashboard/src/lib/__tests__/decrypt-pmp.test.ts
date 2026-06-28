@@ -210,6 +210,16 @@ async function buildEncryptedPack(holderSig: Uint8Array) {
     });
     leaves.push(leaf);
     const hasTags = m.tags.length > 0;
+    // F1: mirror the server's encrypt-and-restore — related_* are NOT shipped as plaintext; when
+    // either is present they are sealed under the pack DEK into a single related_ct, and the
+    // plaintext related_* are omitted from the wire metadata. leaf_hash + owner_wallet stay plain.
+    const metadata: Record<string, unknown> = { leaf_hash: leaf, owner_wallet: m.owner_wallet };
+    if (m.related_user != null || m.related_wallet != null) {
+      metadata.related_ct = encryptField(
+        JSON.stringify({ related_user: m.related_user ?? null, related_wallet: m.related_wallet ?? null }),
+        dek,
+      );
+    }
     records.push({
       id: m.id,
       created_at: m.created_at,
@@ -219,12 +229,7 @@ async function buildEncryptedPack(holderSig: Uint8Array) {
       importance: m.importance,
       source: m.source,
       encrypted: true,
-      metadata: {
-        leaf_hash: leaf,
-        owner_wallet: m.owner_wallet,
-        related_user: m.related_user,
-        related_wallet: m.related_wallet,
-      },
+      metadata,
     });
   }
 
@@ -308,6 +313,14 @@ describe('decryptPmp — round-trip', () => {
     // ciphertext marker cleared; structural fields preserved
     expect(out.records[0]!.encrypted).toBeFalsy();
     expect(out.records[0]!.id).toBe(PLAINTEXT_MEMORIES[0]!.id);
+    // F1: related_user restored from related_ct onto metadata; related_ct removed. (record 0 had a
+    // related_user, record 1 had none.)
+    const outMeta0 = out.records[0]!.metadata as Record<string, unknown>;
+    expect(outMeta0.related_user).toBe(PLAINTEXT_MEMORIES[0]!.related_user);
+    expect(outMeta0.related_wallet).toBe(PLAINTEXT_MEMORIES[0]!.related_wallet);
+    expect(outMeta0.related_ct).toBeUndefined();
+    const outMeta1 = out.records[1]!.metadata as Record<string, unknown>;
+    expect(outMeta1.related_ct).toBeUndefined();
   });
 });
 
@@ -354,6 +367,17 @@ describe('decryptPmp — tamper detection (fail closed)', () => {
     await expect(decryptPmp(manifest, records, sig)).rejects.toThrow();
   });
 
+  it('tampered metadata.related_ct → secretbox.open fails → throws (fail closed, F1)', async () => {
+    const sig = fixedSignature();
+    const { manifest, records } = await buildEncryptedPack(sig);
+    // record 0 carries a related_ct (it had a related_user). Flip a Poly1305-protected byte.
+    const meta = records[0]!.metadata as Record<string, unknown>;
+    const raw = Uint8Array.from(atob(meta.related_ct as string), (c) => c.charCodeAt(0));
+    raw[raw.length - 1] = raw[raw.length - 1]! ^ 0xff;
+    meta.related_ct = b64(raw);
+    await expect(decryptPmp(manifest, records, sig)).rejects.toThrow();
+  });
+
   it('tampered metadata.leaf_hash → integrity check fails → verified === false (or throws)', async () => {
     const sig = fixedSignature();
     const { manifest, records } = await buildEncryptedPack(sig);
@@ -368,5 +392,58 @@ describe('decryptPmp — tamper detection (fail closed)', () => {
       verified = false; // a throw is also an acceptable fail-closed outcome
     }
     expect(verified).toBe(false);
+  });
+});
+
+// ── 6. ADVERSARIAL AUDIT PROBES (header tamper vectors 2d + commitment substitution) ─────────
+// Added by the backward-compat/tamper-resistance security audit to close the coverage gap on the
+// header fields decryptPmp consumes that the original suite did not exercise independently:
+// verifier_ct, wrap_pubkey, recipient_pubkey, and manifest.pmp.merkle_root (the on-chain root a
+// buyer trusts). The attacker model: someone mutates a SOLD .pmp to make the victim decrypt
+// attacker-chosen content, or to make a content-substituted pack still report verified===true.
+describe('decryptPmp — adversarial header tamper (audit probes)', () => {
+  it('tampered verifier_ct → verifier GATE fails → throws (no DEK unwrap, no record touched)', async () => {
+    const sig = fixedSignature();
+    const { manifest, records } = await buildEncryptedPack(sig);
+    const raw = Uint8Array.from(atob(manifest.encryption.owner.verifier_ct), (c) => c.charCodeAt(0));
+    raw[raw.length - 1] = raw[raw.length - 1]! ^ 0xff; // flip a Poly1305-protected byte
+    manifest.encryption.owner.verifier_ct = b64(raw);
+    // The right signature still derives the right verifier KEY, but the ciphertext no longer
+    // authenticates → openSecretbox returns null → the gate throws before any record is read.
+    await expect(decryptPmp(manifest, records, sig)).rejects.toThrow(/wallet|verifier/i);
+  });
+
+  it('tampered wrap_pubkey (ephemeral sender key) → box.open fails → throws, no plaintext', async () => {
+    const sig = fixedSignature();
+    const { manifest, records } = await buildEncryptedPack(sig);
+    const raw = Uint8Array.from(atob(manifest.encryption.owner.wrap_pubkey), (c) => c.charCodeAt(0));
+    raw[0] = raw[0]! ^ 0xff; // wrong ephemeral pubkey → wrong shared secret → DEK unwrap fails
+    manifest.encryption.owner.wrap_pubkey = b64(raw);
+    await expect(decryptPmp(manifest, records, sig)).rejects.toThrow();
+  });
+
+  it('tampered recipient_pubkey is a CRYPTOGRAPHIC NO-OP: decrypt still recovers the ORIGINAL plaintext (the field is informational; the unwrap binds to the derived secret key, never to this self-declared pubkey)', async () => {
+    const sig = fixedSignature();
+    const { manifest, records } = await buildEncryptedPack(sig);
+    // Swap in a different (valid-shape) base64 pubkey. decryptPmp never reads this field, so it
+    // cannot redirect the decrypt to attacker content — the worst an attacker achieves is a lie in
+    // a field nobody trusts. Proven by: plaintext is unchanged AND verified stays true.
+    const otherKp = await deriveOwnerKeypairBrowser(otherSignature());
+    manifest.encryption.owner.recipient_pubkey = b64(otherKp.publicKey);
+    const out = await decryptPmp(manifest, records, sig);
+    expect(out.records[0]!.content).toBe(PLAINTEXT_MEMORIES[0]!.content);
+    expect(out.verified).toBe(true);
+  });
+
+  it('tampered manifest.pmp.merkle_root → leaves no longer rebuild to declared root → verified === false (content-substitution / mismatched-sale guard)', async () => {
+    const sig = fixedSignature();
+    const { manifest, records } = await buildEncryptedPack(sig);
+    // A seller who swaps the committed root (e.g. to point a real-content pack at a root that was
+    // sold/anchored for DIFFERENT content) must NOT get verified===true. The browser rebuilds the
+    // root from the decrypted plaintext leaves and compares — a substituted root fails.
+    manifest.pmp.merkle_root =
+      'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff';
+    const out = await decryptPmp(manifest, records, sig);
+    expect(out.verified).toBe(false);
   });
 });

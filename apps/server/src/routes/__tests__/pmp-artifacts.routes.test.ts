@@ -1184,6 +1184,70 @@ describe('POST /v1/pmp/export — encryption (encrypt-by-default, fail-closed)',
     expect(writeOpts.pmp.merkle_root).toBe(row.merkle_root);
   });
 
+  it('F1: encrypt-by-default seals third-party related_user/related_wallet into related_ct (no plaintext PII reaches the writer)', async () => {
+    authedWallet = OWNER;
+    const packId = 'pack-rel1';
+    const RELATED_USER = 'third-party-user-77ab';
+    const RELATED_WALLET = 'GhostWaLLet9999999999999999999999third99';
+    // A pack whose single member memory carries NON-NULL related_* — the social-graph PII the F1
+    // leak shipped in cleartext. The route runs REAL encryptRecordsForHolder, so a leak here is a
+    // leak in production bytes.
+    seed('memory_packs', [
+      {
+        pack_id: packId,
+        author_wallet: OWNER,
+        name: 'Related pack',
+        description: 'has a relation',
+        version: '1.0.0',
+        memory_count: 1,
+        merkle_root: 'root(lh:rel)',
+        pack_token_address: 'memo:txsig2',
+        content_category: 'knowledge',
+        sale_mode: 'copy',
+      },
+    ]);
+    seed('memory_pack_contents', [
+      { pack_id: packId, memory_id: 91, leaf_index: 0, content_hash: 'lh:rel' },
+    ]);
+    seed('memories', [
+      {
+        id: 91,
+        hash_id: 'clude-rel00091',
+        memory_type: 'semantic',
+        content: 'gamma references a counterparty',
+        summary: 'gamma summary',
+        owner_wallet: OWNER,
+        created_at: '2026-02-01T00:00:00.000Z',
+        tags: ['solana'],
+        source: 'chat',
+        related_user: RELATED_USER,
+        related_wallet: RELATED_WALLET,
+        content_hash: 'lh:rel',
+        tokenization_status: 'minted',
+      },
+    ]);
+    seedHolderKey(OWNER);
+    writeMemoryPack.mockImplementationOnce((file: string) => writeFileSync(file, Buffer.from('PMP')));
+
+    const res = await request(app()).post('/v1/pmp/export').send({ pack_id: packId });
+    expect(res.status).toBe(201);
+
+    const [, writtenRecords, writeOpts] = writeMemoryPack.mock.calls[0] as [string, any[], any];
+    expect(writtenRecords).toHaveLength(1);
+    const meta = writtenRecords[0].metadata as Record<string, unknown>;
+    // No plaintext related_* in the emitted record metadata.
+    expect(meta.related_user).toBeUndefined();
+    expect(meta.related_wallet).toBeUndefined();
+    // related_ct is present (base64 ciphertext); leaf_hash + owner_wallet stay plaintext.
+    expect(typeof meta.related_ct).toBe('string');
+    expect(typeof meta.leaf_hash).toBe('string');
+    expect(meta.owner_wallet).toBe(OWNER);
+    // Belt-and-braces: serialise everything the writer was handed and confirm the PII is GONE.
+    const blob = JSON.stringify({ writtenRecords, ownerEncryption: writeOpts.ownerEncryption });
+    expect(blob).not.toContain(RELATED_USER);
+    expect(blob).not.toContain(RELATED_WALLET);
+  });
+
   it('encrypt:false opts out: records stay plaintext, NO owner header, scope=none', async () => {
     authedWallet = OWNER;
     const packId = seedOwnedPack();

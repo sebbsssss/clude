@@ -62,6 +62,11 @@ function makeDb() {
   } as unknown as Parameters<typeof encryptRecordsForHolder>[0];
 }
 
+// A third party's user id + wallet that the F1 leak shipped in cleartext. These must NEVER appear
+// as plaintext in the exported record; they live only inside metadata.related_ct (DEK-encrypted).
+const RELATED_USER = 'third-party-user-9f3a';
+const RELATED_WALLET = 'GhostWaLLet333333333333333333333333third99';
+
 function plaintextRecords(): MemoryPackRecord[] {
   return [
     {
@@ -72,7 +77,13 @@ function plaintextRecords(): MemoryPackRecord[] {
       tags: ['preference', 'ui'],
       importance: 0.7,
       source: 'pack',
-      metadata: { leaf_hash: 'sha256:leafALPHA', owner_wallet: HOLDER, related_user: null, related_wallet: null },
+      // NON-NULL related_* — the social-graph PII the F1 leak shipped in cleartext.
+      metadata: {
+        leaf_hash: 'sha256:leafALPHA',
+        owner_wallet: HOLDER,
+        related_user: RELATED_USER,
+        related_wallet: RELATED_WALLET,
+      },
     },
     {
       id: 'clude-bbbb2222',
@@ -82,6 +93,7 @@ function plaintextRecords(): MemoryPackRecord[] {
       tags: [], // empty tags → stays []
       importance: 0.5,
       source: 'pack',
+      // BOTH related_* null → no related_ct should be emitted (nothing extra ships).
       metadata: { leaf_hash: 'sha256:leafBETA', owner_wallet: HOLDER, related_user: null, related_wallet: null },
     },
   ];
@@ -172,15 +184,98 @@ describe('encryptRecordsForHolder', () => {
     expect(blob).not.toContain('SECRET-BETA');
     expect(blob).not.toContain('preference'); // plaintext tag value must be gone
     expect(blob).not.toContain('"ui"');
+    // F1: the third-party related_user / related_wallet must NOT survive as plaintext anywhere.
+    expect(blob).not.toContain(RELATED_USER);
+    expect(blob).not.toContain(RELATED_WALLET);
   });
 
   it('does not mutate the input records in place', async () => {
     const input = plaintextRecords();
     const snapshotContent = input[0].content;
     const snapshotTags = [...input[0].tags];
+    const snapshotMeta = { ...(input[0].metadata as Record<string, unknown>) };
     await encryptRecordsForHolder(makeDb(), input, HOLDER);
     expect(input[0].content).toBe(snapshotContent);
     expect(input[0].tags).toEqual(snapshotTags);
     expect(input[0].encrypted).toBeUndefined();
+    // metadata is NOT mutated: the original still carries the plaintext related_* (we mapped to a
+    // new object) and gained no related_ct.
+    expect(input[0].metadata).toEqual(snapshotMeta);
+    expect((input[0].metadata as Record<string, unknown>).related_user).toBe(RELATED_USER);
+    expect((input[0].metadata as Record<string, unknown>).related_ct).toBeUndefined();
+  });
+
+  // ── F1: related_user / related_wallet must ship as ciphertext, never plaintext ───────────────
+  // The merkle leaf BINDS these fields, so they cannot be dropped; the fix is encrypt-and-restore.
+  describe('F1 — related_user / related_wallet are encrypted into metadata.related_ct', () => {
+    it('replaces plaintext related_* with a single base64 related_ct; keeps leaf_hash + owner_wallet', async () => {
+      const input = plaintextRecords();
+      const { records } = await encryptRecordsForHolder(makeDb(), input, HOLDER);
+
+      const meta = records[0].metadata as Record<string, unknown>;
+      // NO plaintext related_* survives on the wire.
+      expect(meta.related_user).toBeUndefined();
+      expect(meta.related_wallet).toBeUndefined();
+      // related_ct is present and is base64 ciphertext (decodes past the 24-byte nonce).
+      expect(typeof meta.related_ct).toBe('string');
+      const rawCt = Buffer.from(meta.related_ct as string, 'base64');
+      expect(rawCt.length).toBeGreaterThan(24);
+      // leaf_hash (plaintext hash needed for verify) + owner_wallet (the recipient's OWN wallet)
+      // are preserved in cleartext.
+      expect(meta.leaf_hash).toBe('sha256:leafALPHA');
+      expect(meta.owner_wallet).toBe(HOLDER);
+    });
+
+    it('round-trips: JSON.parse(decryptField(related_ct, dek)) recovers the original related_*', async () => {
+      const input = plaintextRecords();
+      const { records, header } = await encryptRecordsForHolder(makeDb(), input, HOLDER);
+      const dek = unwrapDek(header.dek_wrap, header.wrap_pubkey, holderKeypair.secretKey);
+      expect(dek).not.toBeNull();
+
+      const meta = records[0].metadata as Record<string, unknown>;
+      const recovered = JSON.parse(decryptField(meta.related_ct as string, dek as Uint8Array) as string);
+      expect(recovered).toEqual({ related_user: RELATED_USER, related_wallet: RELATED_WALLET });
+    });
+
+    it('emits NO related_ct when both related_user and related_wallet are null/absent', async () => {
+      const input = plaintextRecords();
+      const { records } = await encryptRecordsForHolder(makeDb(), input, HOLDER);
+      // records[1] had both related_* null.
+      const meta = records[1].metadata as Record<string, unknown>;
+      expect(meta.related_ct).toBeUndefined();
+      // still no plaintext related_* (and leaf_hash + owner_wallet preserved).
+      expect(meta.related_user).toBeUndefined();
+      expect(meta.related_wallet).toBeUndefined();
+      expect(meta.leaf_hash).toBe('sha256:leafBETA');
+      expect(meta.owner_wallet).toBe(HOLDER);
+    });
+
+    it('emits related_ct when only ONE of related_user / related_wallet is present', async () => {
+      const input: MemoryPackRecord[] = [
+        {
+          id: 'clude-cccc3333',
+          created_at: '2026-01-03T00:00:00.000Z',
+          kind: 'semantic',
+          content: 'only a wallet relation',
+          tags: [],
+          importance: 0.5,
+          source: 'pack',
+          metadata: {
+            leaf_hash: 'sha256:leafGAMMA',
+            owner_wallet: HOLDER,
+            related_user: null,
+            related_wallet: RELATED_WALLET,
+          },
+        },
+      ];
+      const { records, header } = await encryptRecordsForHolder(makeDb(), input, HOLDER);
+      const meta = records[0].metadata as Record<string, unknown>;
+      expect(typeof meta.related_ct).toBe('string');
+      expect(meta.related_wallet).toBeUndefined();
+
+      const dek = unwrapDek(header.dek_wrap, header.wrap_pubkey, holderKeypair.secretKey);
+      const recovered = JSON.parse(decryptField(meta.related_ct as string, dek as Uint8Array) as string);
+      expect(recovered).toEqual({ related_user: null, related_wallet: RELATED_WALLET });
+    });
   });
 });

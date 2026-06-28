@@ -157,9 +157,12 @@ function normaliseNullable(s: string | null): string | null {
 
 /**
  * Compute the canonical content hash for a DECRYPTED record, identical to the server's
- * memoryContentHash over the leaf input. The leaf is bound to the AUTHOR's wallet (carried in
- * metadata.owner_wallet); related_user/related_wallet come from metadata too. This is the value
- * we compare to the record's declared metadata.leaf_hash.
+ * memoryContentHash over the leaf input (same field set + values as mapMemoryToRecord's `leafInput`:
+ * content, memory_type, owner_wallet, created_at, tags, source, related_user, related_wallet). The
+ * leaf is bound to the AUTHOR's wallet (carried in metadata.owner_wallet); related_user/related_wallet
+ * are read from metadata too — these are the values restoreRelated decrypted out of `related_ct` and
+ * wrote back onto metadata BEFORE this runs, so they match what the server hashed byte-for-byte. This
+ * is the value we compare to the record's declared metadata.leaf_hash.
  */
 async function leafHashForRecord(rec: DecryptedRecord): Promise<string> {
   const meta = (rec.metadata ?? {}) as Record<string, unknown>;
@@ -243,6 +246,12 @@ export interface EncryptedRecord {
   importance: number;
   source: string;
   encrypted?: boolean;
+  /**
+   * Carries `leaf_hash` + `owner_wallet` in cleartext. When the source memory had a related party,
+   * `metadata.related_ct` holds base64(nonce ‖ secretbox(JSON{related_user, related_wallet})) — the
+   * third-party PII the merkle leaf binds — instead of the plaintext fields (opsec F1). Decrypt
+   * restores `related_user`/`related_wallet` from it and drops `related_ct`.
+   */
   metadata?: Record<string, unknown>;
   [k: string]: unknown;
 }
@@ -359,7 +368,47 @@ function decryptRecord(rec: EncryptedRecord, idx: number, dek: Uint8Array): Decr
     tags = Array.isArray(parsed) ? (parsed as string[]) : [];
   }
 
-  return { ...rec, content, tags, encrypted: false };
+  // related_*: the server seals `related_user`/`related_wallet` (third-party PII bound by the merkle
+  // leaf) under the pack DEK into `metadata.related_ct` (opsec F1). Decrypt + RESTORE them onto a
+  // FRESH metadata object so the returned record matches the ORIGINAL plaintext shape — and so
+  // leafHashForRecord (which reads related_* from metadata) recomputes the SAME leaf the server
+  // committed. Fail closed: a null open throws like any other field.
+  const metadata = restoreRelated(rec.metadata, dek, idx);
+
+  return { ...rec, content, tags, metadata, encrypted: false };
+}
+
+/**
+ * Reconstruct a record's plaintext metadata: if `related_ct` is present, decrypt it and restore
+ * `related_user`/`related_wallet`, then drop `related_ct`. Returns a NEW object (the input is left
+ * untouched). Throws (fail closed) if `related_ct` is present but fails to open or parse.
+ */
+function restoreRelated(
+  metadata: Record<string, unknown> | undefined,
+  dek: Uint8Array,
+  idx: number,
+): Record<string, unknown> {
+  const meta: Record<string, unknown> = { ...(metadata ?? {}) };
+  const relatedCt = meta.related_ct;
+  if (relatedCt === undefined || relatedCt === null) return meta;
+  if (typeof relatedCt !== 'string') {
+    throw new Error(`decryptPmp: malformed related_ct at index ${idx} (fail closed)`);
+  }
+  const bytes = openSecretbox(relatedCt, dek);
+  if (!bytes) {
+    throw new Error(`decryptPmp: failed to decrypt record related_ct at index ${idx} (fail closed)`);
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    throw new Error(`decryptPmp: malformed related_ct payload at index ${idx} (fail closed)`);
+  }
+  const obj = (parsed ?? {}) as Record<string, unknown>;
+  meta.related_user = obj.related_user ?? null;
+  meta.related_wallet = obj.related_wallet ?? null;
+  delete meta.related_ct;
+  return meta;
 }
 
 /**

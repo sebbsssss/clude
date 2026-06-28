@@ -12,8 +12,15 @@
  *
  * The merkle leaf (`record.metadata.leaf_hash`) is computed over PLAINTEXT upstream (mapMemoryToRecord)
  * and MUST stay byte-identical here, or the on-chain commitment no longer matches the artifact. So we
- * copy records into new objects and re-encrypt only `content`/`tags`, carrying `metadata` (and every
- * other structural field) through untouched. `summary` is not present on export records.
+ * copy records into new objects and re-encrypt only `content`/`tags`. `summary` is not present on
+ * export records.
+ *
+ * `metadata` is REBUILT (not carried through verbatim): the upstream metadata holds `related_user` and
+ * `related_wallet` — a THIRD PARTY's user id + Solana wallet — which must NOT ship in cleartext in an
+ * "owner-sealed, zero-knowledge" pack (opsec F1). The merkle leaf binds them, so they cannot be
+ * dropped; instead we seal them under the pack DEK into a single `related_ct`, and the browser
+ * decrypts + RESTORES them before re-hashing the leaf. `leaf_hash` (plaintext, needed for verify) and
+ * `owner_wallet` (the recipient's OWN wallet) stay in cleartext.
  *
  * DATA-CRYPTO / CROSS-TENANT CODE. Owner-scoped (the holder's key row is read by owner_wallet). Never
  * logs the DEK, plaintext, ciphertext, or any pubkey. Tasks 3 (file write) and 5 (browser decrypt)
@@ -106,14 +113,39 @@ export async function encryptRecordsForHolder(
     const hasTags = Array.isArray(rec.tags) && rec.tags.length > 0;
     const tags = hasTags ? [encryptField(JSON.stringify(rec.tags), dek)] : [];
 
-    // Spread carries every structural field (id, kind, created_at, importance, source, metadata, …)
-    // through untouched — crucially metadata.leaf_hash (the PLAINTEXT merkle leaf) is preserved. We
-    // then override only the sensitive fields and stamp the ciphertext marker. No separate `nonce`
-    // field is set (the nonce lives inside the content ciphertext).
+    // metadata: REBUILD it (do not spread the source metadata) so `related_user`/`related_wallet` —
+    // a THIRD PARTY's social-graph PII — never ship as plaintext (opsec F1). The merkle leaf BINDS
+    // these fields, so they cannot be dropped: instead we seal them under the pack DEK into a single
+    // `related_ct`, and the browser decrypts + RESTORES them before re-hashing the leaf. We keep
+    // `leaf_hash` (the plaintext hash the browser compares against) and `owner_wallet` (the
+    // recipient's OWN wallet — already plaintext in the header, not a third-party leak) in cleartext.
+    const srcMeta = (rec.metadata ?? {}) as Record<string, unknown>;
+    const relatedUser = srcMeta.related_user;
+    const relatedWallet = srcMeta.related_wallet;
+    const metadata: Record<string, unknown> = {
+      leaf_hash: srcMeta.leaf_hash,
+      owner_wallet: srcMeta.owner_wallet,
+    };
+    // Only emit related_ct when there is something to protect; a record with no relations ships
+    // nothing extra. `null` and `undefined` both count as absent.
+    if (
+      (relatedUser !== null && relatedUser !== undefined) ||
+      (relatedWallet !== null && relatedWallet !== undefined)
+    ) {
+      metadata.related_ct = encryptField(
+        JSON.stringify({ related_user: relatedUser ?? null, related_wallet: relatedWallet ?? null }),
+        dek,
+      );
+    }
+
+    // Spread carries every OTHER structural field (id, kind, created_at, importance, source, …)
+    // through untouched. We then override the sensitive fields + the rebuilt metadata and stamp the
+    // ciphertext marker. No separate `nonce` field is set (the nonce lives inside each ciphertext).
     return {
       ...rec,
       content,
       tags,
+      metadata,
       encrypted: true,
     };
   });
