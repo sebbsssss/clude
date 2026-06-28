@@ -89,6 +89,7 @@ export function memoryRoutes(): Router {
       res.json({
         memories: memories.map(m => ({
           id: m.id,
+          hash_id: m.hash_id,
           memory_type: m.memory_type,
           summary: m.summary,
           content: m.content,
