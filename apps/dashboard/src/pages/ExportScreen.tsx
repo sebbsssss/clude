@@ -208,7 +208,7 @@ export function ExportScreen() {
     // ── Primary: tokenised pack → export + title mint ──
     try {
       setExportNote('Gathering memories…');
-      const { memories } = await api.getMemories({ limit: 5000 }); // capped — /v1/packs caps at 10k
+      const { memories } = await api.getMemories({ limit: 5000, hours: 720 }); // 30-day window (server caps hours 720, limit 50)
       const hashIds = memories.filter(inScope).map((m) => m.hash_id).filter(Boolean).slice(0, 5000);
       if (hashIds.length === 0) {
         setExportNote('Export failed: no memories match this selection.');
