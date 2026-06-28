@@ -100,12 +100,20 @@ vi.mock('@clude/brain/memory', () => ({
 //  - revoke-all uses select().eq('owner_wallet', w).eq('encrypted', true).not(…) and is
 //    awaited. The mock HONOURS the owner_wallet filter so we can prove revoke-all is
 //    scoped to the verified wallet (a forged wallet could never enumerate the victim).
+//  - owner-key registration reads encryption_keys via select().eq('owner_wallet', w).maybeSingle()
+//    and writes via upsert(...). The mock keys both off the table name so encryption_keys
+//    state is independent of the `memories` lookups. encKeysByOwner holds the EXISTING row
+//    (overwrite-guard fixture); upsertCalls records every write so tests can assert no-stomp.
 let memLookup: unknown;
 // rows keyed by owner_wallet → what revoke-all returns for that wallet.
 let revokeAllRowsByOwner: Record<string, unknown[]>;
+// encryption_keys: existing row per owner_wallet (null/absent = unregistered).
+let encKeysByOwner: Record<string, unknown>;
+// Every encryption_keys upsert payload, in order (for no-overwrite assertions).
+let upsertCalls: Array<{ table: string; payload: unknown; options: unknown }>;
 vi.mock('@clude/shared/core/database', () => ({
   getDb: () => ({
-    from: () => {
+    from: (table: string) => {
       const filters: Record<string, unknown> = {};
       const chain: Record<string, unknown> = {};
       Object.assign(chain, {
@@ -119,7 +127,22 @@ vi.mock('@clude/shared/core/database', () => ({
             data: revokeAllRowsByOwner[filters['owner_wallet'] as string] ?? [],
             error: null,
           }),
-        maybeSingle: async () => ({ data: memLookup, error: null }),
+        maybeSingle: async () => {
+          if (table === 'encryption_keys') {
+            const owner = filters['owner_wallet'] as string;
+            return { data: encKeysByOwner[owner] ?? null, error: null };
+          }
+          return { data: memLookup, error: null };
+        },
+        upsert: async (payload: unknown, options: unknown) => {
+          upsertCalls.push({ table, payload, options });
+          // Reflect the write into the in-memory store so a later read sees it.
+          const row = payload as { owner_wallet?: string };
+          if (table === 'encryption_keys' && row?.owner_wallet) {
+            encKeysByOwner[row.owner_wallet] = payload;
+          }
+          return { data: payload, error: null };
+        },
       });
       return chain;
     },
@@ -144,6 +167,8 @@ beforeEach(() => {
     WALLET_A: [{ id: 1 }, { id: 2 }],
     VICTIM_WALLET: [{ id: 91 }, { id: 92 }, { id: 93 }], // never reachable by WALLET_A
   };
+  encKeysByOwner = {}; // unregistered by default
+  upsertCalls = [];
   revokeMemoryMock.mockReset();
   revokeMemoryMock.mockResolvedValue({ revoked: true });
   redelegateMemoryMock.mockReset();
@@ -298,5 +323,112 @@ describe('POST /v1/keys/revoke-all', () => {
     H.state.loggedIn = false;
     const res = await request(app()).post('/v1/keys/revoke-all');
     expect(res.status).toBe(401);
+  });
+});
+
+describe('POST /v1/encryption/owner-key (M1: binding + overwrite guard)', () => {
+  const body = { x25519_pubkey: 'PUBKEY_A', verifier_ct: 'VERIFIER_A' };
+
+  it('401 when unauthenticated — never writes a key', async () => {
+    H.state.loggedIn = false;
+    const res = await request(app()).post('/v1/encryption/owner-key').send(body);
+    expect(res.status).toBe(401);
+    expect(upsertCalls).toHaveLength(0);
+  });
+
+  it('depends on requireOwnership: no verifiedWallet → 401, no write', async () => {
+    H.state.ownershipSetsWallet = false;
+    const res = await request(app()).post('/v1/encryption/owner-key').send(body);
+    expect(res.status).toBe(401);
+    expect(upsertCalls).toHaveLength(0);
+  });
+
+  it('authed: upserts encryption_keys KEYED ON THE VERIFIED WALLET (first registration)', async () => {
+    const res = await request(app()).post('/v1/encryption/owner-key').send(body);
+    expect([200, 204]).toContain(res.status);
+    expect(upsertCalls).toHaveLength(1);
+    expect(upsertCalls[0].table).toBe('encryption_keys');
+    const payload = upsertCalls[0].payload as Record<string, unknown>;
+    expect(payload.owner_wallet).toBe('WALLET_A'); // the proven wallet, period
+    expect(payload.x25519_pubkey).toBe('PUBKEY_A');
+    expect(payload.verifier_ct).toBe('VERIFIER_A');
+  });
+
+  it('CRITICAL (M1 binding): a body-supplied owner/wallet is IGNORED — binding is the verified wallet', async () => {
+    // The attacker posts owner/wallet=VICTIM alongside their own self-consistent keypair.
+    // requireOwnership leaves verifiedWallet === WALLET_A (the claim matches nothing it owns),
+    // and the route must bind to WALLET_A, never the payload. NB: a body.wallet that DIFFERS
+    // from the proven wallet is rejected at requireOwnership (403) — proven separately below —
+    // so here we forge `owner` (a field requireOwnership does not police) to prove the route
+    // itself never reads an owner from the body.
+    const res = await request(app())
+      .post('/v1/encryption/owner-key')
+      .send({ ...body, owner: 'VICTIM_WALLET' });
+    expect([200, 204]).toContain(res.status);
+    expect(upsertCalls).toHaveLength(1);
+    const payload = upsertCalls[0].payload as Record<string, unknown>;
+    expect(payload.owner_wallet).toBe('WALLET_A'); // NOT VICTIM_WALLET
+    // The victim's row was never touched.
+    expect(encKeysByOwner['VICTIM_WALLET']).toBeUndefined();
+  });
+
+  it('CRITICAL (M1 binding): a forged body.wallet=<victim> is blocked at requireOwnership (403), no write', async () => {
+    const res = await request(app())
+      .post('/v1/encryption/owner-key')
+      .send({ ...body, wallet: 'VICTIM_WALLET' });
+    expect(res.status).toBe(403);
+    expect(upsertCalls).toHaveLength(0);
+  });
+
+  it('idempotent: re-POST of the SAME {pubkey, verifier_ct} succeeds, no error', async () => {
+    encKeysByOwner['WALLET_A'] = { owner_wallet: 'WALLET_A', x25519_pubkey: 'PUBKEY_A', verifier_ct: 'VERIFIER_A' };
+    const res = await request(app()).post('/v1/encryption/owner-key').send(body);
+    expect([200, 204]).toContain(res.status);
+    expect(res.body.error).toBeUndefined();
+  });
+
+  it('CRITICAL (M1 overwrite guard): re-POST with a DIFFERENT verifier_ct → 409 owner_key_exists, row NOT overwritten', async () => {
+    encKeysByOwner['WALLET_A'] = { owner_wallet: 'WALLET_A', x25519_pubkey: 'PUBKEY_A', verifier_ct: 'VERIFIER_A' };
+    const res = await request(app())
+      .post('/v1/encryption/owner-key')
+      .send({ x25519_pubkey: 'PUBKEY_A', verifier_ct: 'VERIFIER_DIFFERENT' });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('owner_key_exists');
+    // The existing row is untouched — no DEK-escrow lockout.
+    expect(upsertCalls).toHaveLength(0);
+    expect((encKeysByOwner['WALLET_A'] as Record<string, unknown>).verifier_ct).toBe('VERIFIER_A');
+  });
+
+  it('M1 overwrite guard: re-POST with a DIFFERENT x25519_pubkey → 409 owner_key_exists', async () => {
+    encKeysByOwner['WALLET_A'] = { owner_wallet: 'WALLET_A', x25519_pubkey: 'PUBKEY_A', verifier_ct: 'VERIFIER_A' };
+    const res = await request(app())
+      .post('/v1/encryption/owner-key')
+      .send({ x25519_pubkey: 'PUBKEY_DIFFERENT', verifier_ct: 'VERIFIER_A' });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('owner_key_exists');
+    expect(upsertCalls).toHaveLength(0);
+  });
+
+  it('422/400 when x25519_pubkey is missing', async () => {
+    const res = await request(app()).post('/v1/encryption/owner-key').send({ verifier_ct: 'VERIFIER_A' });
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.status).toBeLessThan(500);
+    expect(upsertCalls).toHaveLength(0);
+  });
+
+  it('422/400 when verifier_ct is missing', async () => {
+    const res = await request(app()).post('/v1/encryption/owner-key').send({ x25519_pubkey: 'PUBKEY_A' });
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.status).toBeLessThan(500);
+    expect(upsertCalls).toHaveLength(0);
+  });
+
+  it('422/400 when fields are empty strings', async () => {
+    const res = await request(app())
+      .post('/v1/encryption/owner-key')
+      .send({ x25519_pubkey: '', verifier_ct: '' });
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.status).toBeLessThan(500);
+    expect(upsertCalls).toHaveLength(0);
   });
 });

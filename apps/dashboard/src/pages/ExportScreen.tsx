@@ -15,7 +15,10 @@
  * a server-side scan), the UI degrades to a graceful message rather than crashing.
  */
 import { useEffect, useRef, useState } from 'react';
-import { api } from '../lib/api';
+import { useWallets, useSignMessage } from '@privy-io/react-auth/solana';
+import { OWNER_SIGN_MESSAGE } from '@clude/shared/core/owner-key-constants';
+import { api, HolderKeyUnregisteredError } from '../lib/api';
+import { buildOwnerKeyRegistration, decryptPmp, parsePmpBase64 } from '@clude/ui';
 import type { MemoryStats, Memory } from '../types/memory';
 import { MEMORY_TYPES } from '../lib/memory-ui';
 
@@ -42,6 +45,10 @@ interface Artifact {
   records: number;
   sizeLabel: string;
   merkle: string; // full hex; abbreviated for display
+  /** 'owner' when the .pmp is owner-sealed — gates the "Decrypt locally" action. */
+  encryptionScope: 'owner' | 'none';
+  /** The exported .pmp bytes (base64), held in memory so a local decrypt needs no server round-trip. */
+  pmpBase64: string;
 }
 
 /** Format a byte count as a compact size label, e.g. 4.8 MB / 612 KB. */
@@ -58,6 +65,10 @@ function abbrevHex(hex: string): string {
 }
 
 export function ExportScreen() {
+  // Privy Solana signing — used to sign OWNER_SIGN_MESSAGE for owner-key registration + local decrypt.
+  const { wallets } = useWallets();
+  const { signMessage } = useSignMessage();
+
   const [stats, setStats] = useState<MemoryStats | null>(null);
   const [scope, setScope] = useState<Scope>('all');
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
@@ -71,6 +82,13 @@ export function ExportScreen() {
   const [artifact, setArtifact] = useState<Artifact | null>(null);
   const [merkleCopied, setMerkleCopied] = useState(false);
   const [exportNote, setExportNote] = useState('');
+
+  // "Decrypt locally" — owner-encrypted artifacts only. Plaintext preview + a plaintext download,
+  // all client-side; the signature + derived key are cleared after use (never logged/persisted).
+  const [decrypting, setDecrypting] = useState(false);
+  const [decryptNote, setDecryptNote] = useState('');
+  const [decryptPreview, setDecryptPreview] = useState<string | null>(null);
+  const [plaintext, setPlaintext] = useState<string | null>(null);
 
   const [provider, setProvider] = useState<Provider>('chatgpt');
   const [brief, setBrief] = useState('');
@@ -137,6 +155,45 @@ export function ExportScreen() {
   }
 
   /**
+   * Sign the fixed OWNER_SIGN_MESSAGE with the connected Solana wallet → the 64-byte signature both
+   * owner-key registration and local decrypt derive the encryption keypair from. Throws a friendly
+   * error if no wallet is connected (e.g. email-only or cortex API-key sessions). The caller is
+   * responsible for zeroing the returned bytes once done.
+   */
+  async function signOwnerMessage(): Promise<Uint8Array> {
+    const wallet = wallets[0];
+    if (!wallet) {
+      throw new Error('Connect a Solana wallet to sign for encryption (email-only sessions can’t derive a key).');
+    }
+    const { signature } = await signMessage({
+      message: new TextEncoder().encode(OWNER_SIGN_MESSAGE),
+      wallet,
+    });
+    return signature;
+  }
+
+  /**
+   * Register the owner's encryption key (sign → mint {pubkey, verifier_ct} → POST). Returns true on
+   * success (or idempotent no-op). The signature + derived material are zeroed immediately after the
+   * payload is built — nothing secret is logged or persisted. A 409 (a DIFFERENT key already
+   * registered) surfaces a clear message and returns false.
+   */
+  async function registerEncryptionKey(): Promise<boolean> {
+    const sig = await signOwnerMessage();
+    try {
+      const reg = await buildOwnerKeyRegistration(sig);
+      const result = await api.registerOwnerKey(reg.x25519_pubkey, reg.verifier_ct);
+      if (!result.ok) {
+        setExportNote('A different encryption key is already registered for this wallet. Decrypt earlier packs with that key.');
+        return false;
+      }
+      return true;
+    } finally {
+      sig.fill(0); // zero the signature regardless of outcome
+    }
+  }
+
+  /**
    * Export the current selection. The primary path publishes a tokenised pack and best-effort mints
    * its 1-of-1 title NFT (the demo path). If that path is unavailable here — cortex/API-key mode
    * (/v1/packs is Privy-only) or Solana tokenisation not configured — it falls back to a plain .pmp
@@ -163,23 +220,53 @@ export function ExportScreen() {
       const pack = await api.createPack(name, hashIds); // tokenises (on-chain pack token)
 
       setExportNote('Exporting + minting title NFT…');
-      const result = await api.exportPackWithTitle(pack.id, name, encrypt, titleChain);
+      // Encryption-by-default fails closed: the FIRST encrypted export for a wallet 422s with
+      // `holder_key_unregistered`. Register the owner key (wallet signature → minted payload) and
+      // retry ONCE. A registration failure (no wallet, or a 409 different-key) stops here rather than
+      // silently downgrading to a plaintext export the user didn't ask for.
+      let result;
+      try {
+        result = await api.exportPackWithTitle(pack.id, name, encrypt, titleChain);
+      } catch (err) {
+        if (encrypt && err instanceof HolderKeyUnregisteredError) {
+          setExportNote('Registering your encryption key (sign in your wallet)…');
+          const registered = await registerEncryptionKey();
+          if (!registered) {
+            setExporting(false);
+            return; // registerEncryptionKey already set an explanatory note
+          }
+          setExportNote('Key registered. Exporting + minting title NFT…');
+          result = await api.exportPackWithTitle(pack.id, name, encrypt, titleChain);
+        } else {
+          throw err;
+        }
+      }
 
       const b64 = result.pmp_base64 ?? '';
       const records = result.artifact?.record_count ?? hashIds.length;
       const merkle = result.artifact?.merkle_root ?? pack.attestation?.merkle_root ?? '';
+      // The .pmp is owner-sealed when the server says so, or (defensively) when we asked to encrypt.
+      const encryptionScope: 'owner' | 'none' =
+        result.artifact?.encryption_scope ?? (encrypt ? 'owner' : 'none');
       let sizeLabel = '—';
       if (b64) {
         const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
         sizeLabel = fmtBytes(bytes.length);
         downloadPmp(bytes, result.filename ?? `${name}.pmp`);
       }
-      setArtifact({ fileName: result.filename ?? `${name}.pmp`, records, sizeLabel, merkle });
+      setArtifact({ fileName: result.filename ?? `${name}.pmp`, records, sizeLabel, merkle, encryptionScope, pmpBase64: b64 });
       setExportNote(`Exported ${records.toLocaleString()} records. A 1-of-1 title NFT is minting on ${titleChain === 'base' ? 'Base' : 'Solana'} (best-effort): check your wallet or the explorer.`);
       setExporting(false);
       return;
     } catch (titleErr) {
-      // Title path unavailable here — fall through to a plain export rather than failing the button.
+      // A holder-key registration failure already messaged the user and returned; everything else
+      // (title path unavailable in cortex/API-key mode, tokenisation off) falls through to a plain
+      // export so the button still works.
+      if (titleErr instanceof HolderKeyUnregisteredError) {
+        setExportNote('Could not register your encryption key — encrypted export aborted. Turn off encryption to export plaintext, or try again.');
+        setExporting(false);
+        return;
+      }
       console.warn('Title export unavailable, falling back to a plain .pmp export.', titleErr);
     }
 
@@ -196,12 +283,74 @@ export function ExportScreen() {
       const json = JSON.stringify(pack, null, 2);
       const records = pack.memory_count ?? pack.memories?.length ?? previewTotal;
       downloadPmp(json, `${name}.pmp`);
-      setArtifact({ fileName: `${name}.pmp`, records, sizeLabel: fmtBytes(new Blob([json]).size), merkle: '' });
+      // The fallback path is a plain JSON pack (not an owner-sealed .tar.zst) — no local-decrypt action.
+      setArtifact({ fileName: `${name}.pmp`, records, sizeLabel: fmtBytes(new Blob([json]).size), merkle: '', encryptionScope: 'none', pmpBase64: '' });
       setExportNote(`Exported ${records.toLocaleString()} records (plain .pmp, no title mint in this workspace).`);
     } catch (err) {
       setExportNote(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
     }
     setExporting(false);
+  }
+
+  /**
+   * Decrypt the just-exported owner-sealed `.pmp` ENTIRELY client-side: sign OWNER_SIGN_MESSAGE →
+   * parse the in-memory `.pmp` bytes → decryptPmp → render a short plaintext preview + offer a
+   * plaintext JSONL download. Nothing is POSTed; the signature is zeroed immediately after the
+   * decrypt, and the plaintext is held in state only until the user navigates away.
+   *
+   * The server emits a zstd-compressed `.tar.zst`; `parsePmpBase64` inflates it in-browser via
+   * `fzstd` (no server round-trip), so the whole flow — inflate → USTAR parse → tweetnacl decrypt —
+   * runs locally. A plain (uncompressed) USTAR `.pmp` is handled too. Any parse failure surfaces an
+   * honest message and never fabricates a result.
+   */
+  async function handleDecryptLocally() {
+    if (!artifact || artifact.encryptionScope !== 'owner' || !artifact.pmpBase64) return;
+    setDecrypting(true);
+    setDecryptNote('');
+    setDecryptPreview(null);
+    setPlaintext(null);
+
+    // Parse the .pmp (inflating the .tar.zst in-browser) BEFORE signing, so an unreadable file never
+    // makes the user sign for nothing.
+    let parsed;
+    try {
+      parsed = parsePmpBase64(artifact.pmpBase64);
+    } catch (err) {
+      setDecryptNote(`Could not read the .pmp: ${err instanceof Error ? err.message : String(err)}`);
+      setDecrypting(false);
+      return;
+    }
+
+    setDecryptNote('Sign in your wallet to derive your decryption key…');
+    let sig: Uint8Array | null = null;
+    try {
+      sig = await signOwnerMessage();
+      const { records, verified } = await decryptPmp(parsed.manifest, parsed.records, sig);
+
+      // Build a compact plaintext export (JSONL of decrypted records) + a short preview.
+      const jsonl = records.map((r) => JSON.stringify(r)).join('\n') + '\n';
+      setPlaintext(jsonl);
+      const preview = records
+        .slice(0, 5)
+        .map((r) => `• [${r.kind}] ${String(r.content).slice(0, 120)}${String(r.content).length > 120 ? '…' : ''}`)
+        .join('\n');
+      setDecryptPreview(preview || '(no records)');
+      setDecryptNote(
+        `Decrypted ${records.length.toLocaleString()} records locally. ${verified ? 'Integrity verified (Merkle root + leaf hashes match).' : 'Decrypted, but integrity could not be verified.'}`,
+      );
+    } catch (err) {
+      setDecryptNote(`Decrypt failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      if (sig) sig.fill(0); // zero the signature; the derived key lived only inside decryptPmp
+    }
+    setDecrypting(false);
+  }
+
+  /** Download the locally-decrypted plaintext as a .jsonl (client-side only; never uploaded). */
+  function downloadPlaintext() {
+    if (!plaintext || !artifact) return;
+    const base = artifact.fileName.replace(/\.pmp$/i, '');
+    downloadPmp(plaintext, `${base}-decrypted.jsonl`);
   }
 
   async function copyText(text: string, onMark: (v: boolean) => void) {
@@ -504,11 +653,41 @@ export function ExportScreen() {
               >
                 ↓ {exporting ? 'Packaging…' : 'Download .pmp'}
               </button>
+              {/* Decrypt locally — owner-sealed artifacts only. Client-side only: nothing is uploaded. */}
+              {artifact?.encryptionScope === 'owner' && artifact.pmpBase64 && (
+                <button
+                  className="gbtn"
+                  onClick={handleDecryptLocally}
+                  disabled={decrypting}
+                  style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, color: 'var(--fg)', background: 'transparent', border: '1px solid var(--border-2)', borderRadius: 9, padding: '10px 16px', cursor: decrypting ? 'default' : 'pointer', opacity: decrypting ? 0.7 : 1 }}
+                >
+                  🔓 {decrypting ? 'Decrypting…' : 'Decrypt locally'}
+                </button>
+              )}
               <button className="gbtn" disabled style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-3)', background: 'transparent', border: '1px solid var(--border-2)', borderRadius: 9, padding: '10px 16px', cursor: 'default' }}>Send to desktop</button>
               <button className="gbtn" disabled style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-3)', background: 'transparent', border: '1px solid var(--border-2)', borderRadius: 9, padding: '10px 16px', cursor: 'default' }}>List on marketplace</button>
             </div>
             {exportNote && (
               <div style={{ marginTop: 12, fontSize: 12, color: exportNote.startsWith('Export failed') ? '#ef4444' : '#10b981' }}>{exportNote}</div>
+            )}
+            {/* Local-decrypt result: a short plaintext preview + a plaintext download. Zero-knowledge —
+                the signature/derived key never leave this page and are cleared after the decrypt. */}
+            {decryptNote && (
+              <div style={{ marginTop: 12, fontSize: 12, color: /failed|could not|isn’t|not available/i.test(decryptNote) ? '#f59e0b' : '#10b981', lineHeight: 1.5 }}>{decryptNote}</div>
+            )}
+            {decryptPreview && (
+              <div style={{ marginTop: 12, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px', fontFamily: 'var(--mono)', fontSize: 11.5, lineHeight: 1.6, color: 'var(--fg-2)', whiteSpace: 'pre-wrap', maxHeight: 160, overflow: 'auto' }}>
+                {decryptPreview}
+              </div>
+            )}
+            {plaintext && (
+              <button
+                className="pbtn"
+                onClick={downloadPlaintext}
+                style={{ marginTop: 12, fontSize: 12.5, fontWeight: 600, color: 'var(--accent-fg)', background: 'var(--accent)', border: 'none', borderRadius: 9, padding: '9px 14px', cursor: 'pointer' }}
+              >
+                ↓ Download decrypted plaintext (.jsonl)
+              </button>
             )}
           </div>
         </div>

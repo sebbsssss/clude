@@ -1,5 +1,7 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
+import { useWallets, useSignMessage } from '@privy-io/react-auth/solana';
 import { MemoryExportPanel } from '@clude/ui';
+import { OWNER_SIGN_MESSAGE } from '@clude/shared/core/owner-key-constants';
 import type { ExportResult, PmpArtifact } from '@clude/ui';
 import { useAuthContext } from '../hooks/AuthContext';
 import { useTheme } from '../hooks/useTheme';
@@ -10,14 +12,33 @@ import { createPmpExportApi } from '../lib/pmp-export-api';
  * @clude/ui MemoryExportPanel, wired to the dashboard's owner-scoped
  * /v1/pmp/* endpoints via the API client. Sits alongside the legacy
  * .clude-pack export on /packs.
+ *
+ * Encryption-by-default fails closed for users without a registered owner key, so
+ * the adapter is given a wallet-signature callback: the panel registers the key
+ * on-demand (sign OWNER_SIGN_MESSAGE → POST) and retries the export.
  */
 export function ExportMemories() {
   const { walletAddress } = useAuthContext();
   const { isDark } = useTheme();
+  const { wallets } = useWallets();
+  const { signMessage } = useSignMessage();
 
-  // Stable adapter — the auth token/base URL live on the api singleton, so the
-  // object itself never needs to change between renders.
-  const exportApi = useMemo(() => createPmpExportApi(), []);
+  // Sign the fixed OWNER_SIGN_MESSAGE with the connected Solana wallet → the 64-byte signature the
+  // registration payload derives from. Throws a friendly error when no wallet is connected.
+  const signOwnerMessage = useCallback(async (): Promise<Uint8Array> => {
+    const wallet = wallets[0];
+    if (!wallet) {
+      throw new Error('Connect a Solana wallet to register your encryption key (email-only sessions can’t derive a key).');
+    }
+    const { signature } = await signMessage({
+      message: new TextEncoder().encode(OWNER_SIGN_MESSAGE),
+      wallet,
+    });
+    return signature;
+  }, [wallets, signMessage]);
+
+  // Adapter depends on the sign callback so register-on-demand uses the live wallet.
+  const exportApi = useMemo(() => createPmpExportApi(signOwnerMessage), [signOwnerMessage]);
 
   function handleDownload(_artifact: PmpArtifact, downloadUrl: string) {
     window.open(downloadUrl, '_blank', 'noopener');
