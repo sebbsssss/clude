@@ -11,6 +11,7 @@ import type {
   SelectionPreview,
 } from './types';
 import { MEMORY_TYPES } from './types';
+import { runExportWithRegister } from './pmp/export-flow';
 
 type Theme = 'light' | 'dark';
 
@@ -239,7 +240,11 @@ export function MemoryExportPanel(props: MemoryExportPanelProps) {
         // Chain only matters when a title actually mints; default Solana (the non-custodial default).
         chain: scope === 'pack' && mintAsTitle ? titleChain : undefined,
       };
-      const r = await api.export(req);
+      // Encryption-by-default fails CLOSED: the first encrypted export for a wallet rejects with
+      // `holder_key_unregistered`. runExportWithRegister registers the owner key on-demand (host app:
+      // sign → build → POST) and retries ONCE — never silently downgrading to plaintext. When
+      // registration is unavailable/declined it throws an actionable message we surface below.
+      const r = await runExportWithRegister(api, req);
       setResult(r);
       onExported?.(r);
     } catch (e: unknown) {

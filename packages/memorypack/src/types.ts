@@ -7,6 +7,34 @@
 export const MEMORYPACK_VERSION = '0.2';
 
 /**
+ * Owner-sealed encryption header — `manifest.encryption.owner`.
+ *
+ * Written once per pack when `key_derivation === 'owner-sealed'`. Carries
+ * everything a single holder needs to recover the pack-level DEK (and prove
+ * key ownership) from the FILE ALONE — no server round-trip on import. The
+ * pack DEK is sealed exactly once to the holder's registered X25519 public
+ * key; individual records are ciphertext (`encrypted: true`) under that DEK
+ * with the nonce embedded inside each `content` ciphertext (so records carry
+ * NO separate `nonce` for owner-sealed packs).
+ *
+ * Field names are a hard cross-component contract: the producer
+ * (`encryptRecordsForHolder`) emits this exact shape and the browser decrypt
+ * reads these exact keys. Keep all three in lockstep.
+ */
+export interface OwnerEncryptionHeader {
+  /** The wallet this pack was sealed for (the holder / recipient). */
+  recipient_wallet: string;
+  /** base64 X25519 public key the DEK was sealed to (the holder's registered key). */
+  recipient_pubkey: string;
+  /** Copied verbatim from the holder's key row — lets the browser verify its derived key. */
+  verifier_ct: string;
+  /** base64(nonce ‖ box(DEK)) — the sealed pack DEK. */
+  dek_wrap: string;
+  /** base64 ephemeral sender X25519 pubkey for the sealed box. */
+  wrap_pubkey: string;
+}
+
+/**
  * manifest.json — top-level descriptor for a pack.
  */
 export interface MemoryPackManifest {
@@ -41,8 +69,14 @@ export interface MemoryPackManifest {
     algorithm: 'xsalsa20-poly1305';
     /** How nonces are generated. v0.2 only supports per-record-random. */
     nonce_strategy: 'per-record-random';
-    /** Key derivation. v0.2 ships keys out of band — no on-pack KDF. */
-    key_derivation: 'none';
+    /**
+     * Key derivation.
+     *  - `none`         — keys shipped out of band; no on-pack KDF (v0.2).
+     *  - `owner-sealed` — the pack DEK is sealed to a single holder's key
+     *                     and carried in `owner`; the browser recovers it
+     *                     from the file alone (no server round-trip).
+     */
+    key_derivation: 'none' | 'owner-sealed';
     /**
      * What the encryption envelope covers.
      *  - `records`        — only `record.content` is ciphertext.
@@ -50,9 +84,16 @@ export interface MemoryPackManifest {
      *
      * Readers MUST refuse to surface plaintext from a scope they do not
      * have keys for. Producers SHOULD prefer `records+blobs` for any
-     * pack that contains attachments.
+     * pack that contains attachments. Owner-sealed packs are always
+     * `records`.
      */
     scope: 'records' | 'records+blobs';
+    /**
+     * Present only when `key_derivation === 'owner-sealed'`. The once-per-pack
+     * header a holder uses to recover the pack DEK from the file alone. Typed
+     * (not opaque) because the browser decrypt reads its fields directly.
+     */
+    owner?: OwnerEncryptionHeader;
   };
 
   /** Number of attachments declared in blobs/index.jsonl. */

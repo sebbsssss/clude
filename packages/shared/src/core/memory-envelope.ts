@@ -10,8 +10,14 @@
  * Distinct from the legacy symmetric scheme in encryption.ts (HKDF info differs).
  */
 import nacl from 'tweetnacl';
-import { hkdf } from 'crypto';
+import { hkdf, hkdfSync } from 'crypto';
 import { promisify } from 'util';
+import {
+  HKDF_SALT,
+  HKDF_INFO,
+  VERIFIER_HKDF_INFO,
+  VERIFIER_CONSTANT,
+} from './owner-key-constants.js';
 
 const hkdfAsync = promisify(hkdf);
 
@@ -93,9 +99,9 @@ export function unwrapDek(
   }
 }
 
-const HKDF_SALT = 'clude-cortex-v1';
-const HKDF_INFO = 'memory-encryption-x25519-v2'; // distinct from legacy symmetric scheme
-const VERIFIER_CONSTANT = 'clude-key-verifier-v1';
+// HKDF_SALT / HKDF_INFO / VERIFIER_HKDF_INFO / VERIFIER_CONSTANT are imported from
+// ./owner-key-constants (single source of truth, shared byte-for-byte with the browser decrypt
+// + the browser owner-key registration that mints a verifier this same constant gates).
 
 /**
  * Derive an X25519 box keypair from a wallet signature (sign-to-derive, spec §4.1).
@@ -109,13 +115,25 @@ export async function deriveOwnerEncryptionKeypair(
   return nacl.box.keyPair.fromSecretKey(new Uint8Array(seed as ArrayBuffer));
 }
 
-/** Encrypt the known verifier constant under the derived key (stored as verifier_ct). */
-export function makeVerifierCiphertext(derivedSecretKey: Uint8Array): string {
-  return encryptField(VERIFIER_CONSTANT, derivedSecretKey);
+/**
+ * Derive a DEDICATED secretbox key for the public verifier ciphertext (opsec L1).
+ * The verifier_ct is public (encryption_keys row + every .pmp header), so it must
+ * NOT be encrypted under the raw X25519 box secret that also protects DEKs —
+ * cross-primitive key reuse. HKDF domain-separates it under VERIFIER_HKDF_INFO.
+ */
+function deriveVerifierKey(derivedSecretKey: Uint8Array): Uint8Array {
+  return new Uint8Array(
+    hkdfSync('sha256', derivedSecretKey, HKDF_SALT, VERIFIER_HKDF_INFO, 32) as ArrayBuffer
+  );
 }
 
-/** True iff the stored verifier decrypts to the constant under this session's derived key. */
+/** Encrypt the known verifier constant under the dedicated verifier key (stored as verifier_ct). */
+export function makeVerifierCiphertext(derivedSecretKey: Uint8Array): string {
+  return encryptField(VERIFIER_CONSTANT, deriveVerifierKey(derivedSecretKey));
+}
+
+/** True iff the stored verifier decrypts to the constant under this session's derived verifier key. */
 export function checkVerifier(verifierCt: string, derivedSecretKey: Uint8Array): boolean {
-  return decryptField(verifierCt, derivedSecretKey) === VERIFIER_CONSTANT;
+  return decryptField(verifierCt, deriveVerifierKey(derivedSecretKey)) === VERIFIER_CONSTANT;
 }
 
