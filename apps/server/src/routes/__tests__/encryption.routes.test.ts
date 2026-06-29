@@ -47,6 +47,9 @@ vi.mock('@clude/shared/core/logger', () => ({
 
 // requirePrivyAuth: FAITHFUL — sets ONLY req.privyUser, never verifiedWallet.
 // 401 when there is no session.
+// optionalPrivyAuth: FAITHFUL — attaches privyUser IF a Privy session exists, but NEVER 401s;
+// it always calls next() so a clk_ (no-JWT) caller reaches requireOwnership. The owner-key route
+// uses this (not requirePrivyAuth) so the dashboard's clk_ session can register on-demand.
 vi.mock('@clude/brain/auth/privy-auth', () => ({
   requirePrivyAuth: (req: Request, res: Response, next: NextFunction) => {
     if (!H.state.loggedIn) {
@@ -54,6 +57,12 @@ vi.mock('@clude/brain/auth/privy-auth', () => ({
       return;
     }
     (req as Request & { privyUser?: unknown }).privyUser = { userId: 'did:test', appId: 'test-app' };
+    next();
+  },
+  optionalPrivyAuth: (req: Request, _res: Response, next: NextFunction) => {
+    if (H.state.loggedIn) {
+      (req as Request & { privyUser?: unknown }).privyUser = { userId: 'did:test', appId: 'test-app' };
+    }
     next();
   },
 }));
@@ -329,17 +338,37 @@ describe('POST /v1/keys/revoke-all', () => {
 describe('POST /v1/encryption/owner-key (M1: binding + overwrite guard)', () => {
   const body = { x25519_pubkey: 'PUBKEY_A', verifier_ct: 'VERIFIER_A' };
 
-  it('401 when unauthenticated — never writes a key', async () => {
+  it('rejects an unauthenticated caller (no proven wallet) — never writes a key', async () => {
+    // The route uses optionalPrivyAuth (NOT requirePrivyAuth), so "no Privy JWT" alone no longer
+    // rejects — a clk_ session is allowed through. "Unauthenticated" now means requireOwnership
+    // resolves NO proven wallet at all, which it rejects before the handler runs.
     H.state.loggedIn = false;
+    H.state.callerOwnedWallet = null;
     const res = await request(app()).post('/v1/encryption/owner-key').send(body);
-    expect(res.status).toBe(401);
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.status).toBeLessThan(500);
     expect(upsertCalls).toHaveLength(0);
   });
 
-  it('depends on requireOwnership: no verifiedWallet → 401, no write', async () => {
+  it('REGRESSION (clk_): a session with NO Privy JWT but a proven wallet CAN register', async () => {
+    // The bug this fixes: the route was requirePrivyAuth, which 401s a clk_ Cortex key. The dashboard
+    // runs entirely on clk_ after chat/auto-register swaps the Privy JWT, so first-time encrypted
+    // export (which registers the owner key on-demand) dead-ended at "Session expired" for EVERY
+    // email/wallet user. optionalPrivyAuth lets the clk_ caller reach requireOwnership, which binds
+    // the row to the agent's PROVEN owner wallet.
+    H.state.loggedIn = false; // no Privy JWT — a pure clk_ session
+    H.state.callerOwnedWallet = 'WALLET_A'; // requireOwnership proved the clk_ agent's owner
+    const res = await request(app()).post('/v1/encryption/owner-key').send(body);
+    expect([200, 204]).toContain(res.status);
+    expect(upsertCalls).toHaveLength(1);
+    expect((upsertCalls[0].payload as Record<string, unknown>).owner_wallet).toBe('WALLET_A');
+  });
+
+  it('depends on requireOwnership: no verifiedWallet → rejected, no write', async () => {
     H.state.ownershipSetsWallet = false;
     const res = await request(app()).post('/v1/encryption/owner-key').send(body);
-    expect(res.status).toBe(401);
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.status).toBeLessThan(500);
     expect(upsertCalls).toHaveLength(0);
   });
 
