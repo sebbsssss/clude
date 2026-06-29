@@ -115,6 +115,17 @@ export function ExportScreen() {
     return () => { live = false; };
   }, []);
 
+  // When the selection inputs change, the last export's artifact no longer matches — clear it (and
+  // any local-decrypt view) so the "Download .pmp" button can't re-save a stale pack. No-op on mount
+  // (artifact is already null), and an export doesn't touch these deps, so it never clears its own result.
+  useEffect(() => {
+    setArtifact(null);
+    setExportNote('');
+    setDecryptNote('');
+    setDecryptPreview(null);
+    setPlaintext(null);
+  }, [scope, selectedTypes, tagInput, dateFrom, dateTo, encrypt]);
+
   const byType = (stats?.byType ?? {}) as Record<string, number>;
 
   // For "By type", the preview reflects only the selected types (none selected → all).
@@ -167,6 +178,20 @@ export function ExportScreen() {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+  }
+
+  /**
+   * Re-save the ALREADY-BUILT artifact bytes — a clean, instant download from a fresh user gesture,
+   * with NO server round-trip and NO wallet signature. This is what the "Download .pmp" button does
+   * once an artifact exists: the FIRST encrypted export of a wallet has to register the owner key,
+   * and that wallet-sign modal consumes the click's user-activation, so the browser can block the
+   * automatic download that follows. The bytes are in hand either way, so a second click here saves
+   * them directly. Subsequent exports (key already registered) auto-download fine on the first click.
+   */
+  function downloadArtifactBytes() {
+    if (!artifact?.pmpBase64) return;
+    const bytes = Uint8Array.from(atob(artifact.pmpBase64), (c) => c.charCodeAt(0));
+    downloadPmp(bytes, artifact.fileName);
   }
 
   /**
@@ -244,18 +269,20 @@ export function ExportScreen() {
 
         setExportNote(encrypt ? 'Packaging an encrypted .pmp…' : 'Packaging your .pmp…');
         let result;
+        let registeredThisRun = false;
         try {
           result = await api.pmpExport(req);
         } catch (err) {
           // Encryption-by-default fails closed: register the owner key (wallet signature) + retry once.
           if (encrypt && err instanceof HolderKeyUnregisteredError) {
-            setExportNote('Registering your encryption key (sign in your wallet)…');
+            setExportNote('Setting up encryption — sign in your wallet (one time)…');
             const registered = await registerEncryptionKey();
             if (!registered) {
               setExporting(false);
               return; // registerEncryptionKey already set an explanatory note
             }
-            setExportNote('Key registered. Packaging an encrypted .pmp…');
+            registeredThisRun = true;
+            setExportNote('Encryption enabled. Packaging an encrypted .pmp…');
             result = await api.pmpExport(req);
           } else {
             throw err;
@@ -276,8 +303,13 @@ export function ExportScreen() {
           downloadPmp(bytes, result.filename ?? `${name}.pmp`);
         }
         setArtifact({ fileName: result.filename ?? `${name}.pmp`, records, sizeLabel, merkle, encryptionScope, pmpBase64: b64 });
+        // When we had to register the key this run, the wallet-sign modal consumed the click's
+        // user-activation, so the browser likely BLOCKED the auto-download above. The bytes are
+        // saved on the artifact, so point the user at the (now instant) "Download .pmp" button.
         setExportNote(
-          encryptionScope === 'owner'
+          registeredThisRun && encryptionScope === 'owner'
+            ? `Encryption enabled and your .pmp is ready (${records.toLocaleString()} records, owner-sealed). If the download didn’t start, click “Download .pmp”.`
+            : encryptionScope === 'owner'
             ? `Exported ${records.toLocaleString()} records, owner-sealed. Only your key can decrypt — use "Decrypt locally" to verify.`
             : `Exported ${records.toLocaleString()} records (plaintext .pmp).`,
         );
@@ -644,7 +676,7 @@ export function ExportScreen() {
             <div style={{ display: 'flex', gap: 10, marginTop: 18, flexWrap: 'wrap' }}>
               <button
                 className="pbtn"
-                onClick={handleDownload}
+                onClick={artifact?.pmpBase64 ? downloadArtifactBytes : handleDownload}
                 disabled={exporting}
                 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: 'var(--accent-fg)', background: 'var(--accent)', border: 'none', borderRadius: 9, padding: '10px 16px', cursor: exporting ? 'default' : 'pointer', opacity: exporting ? 0.7 : 1 }}
               >

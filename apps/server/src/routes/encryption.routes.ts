@@ -9,7 +9,7 @@
  */
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { z } from 'zod';
-import { requirePrivyAuth } from '@clude/brain/auth/privy-auth';
+import { requirePrivyAuth, optionalPrivyAuth } from '@clude/brain/auth/privy-auth';
 import { requireOwnership } from '@clude/brain/auth/require-ownership';
 import { revokeMemory, redelegateMemory } from '@clude/brain/memory';
 import { getDb } from '@clude/shared/core/database';
@@ -181,7 +181,15 @@ export function encryptionRoutes(): Router {
   // (identical pubkey + verifier → no-op) but REFUSE (409) to replace it with a DIFFERENT key —
   // silently rotating the holder's key would lock them out of every pack already sealed to the old one.
   // Mirrors ensureCustodialTitleIdentity's read-first no-stomp guard.
-  router.post('/v1/encryption/owner-key', requirePrivyAuth, requireOwnership, async (req: Request, res: Response) => {
+  //
+  // AUTH: optionalPrivyAuth (NOT requirePrivyAuth) + requireOwnership — mirrors the /v1/pmp/export
+  // gate. The dashboard runs on a `clk_` Cortex key after chat/auto-register swaps the Privy JWT, and
+  // requirePrivyAuth 401s a clk_ (it can't be verified as a Privy JWT). Since the ENCRYPTED export
+  // flow registers the owner key on-demand (export 422 `holder_key_unregistered` → register → retry),
+  // a requirePrivyAuth gate here silently breaks first-time encrypted export for EVERY email/wallet
+  // user (they never had a JWT-bearing path). requireOwnership still binds owner_wallet to the PROVEN
+  // verifiedWallet (Privy JWT OR clk_ agent owner) and 400s an unauthenticated caller — no bypass.
+  router.post('/v1/encryption/owner-key', optionalPrivyAuth, requireOwnership, async (req: Request, res: Response) => {
     const wallet = req.verifiedWallet;
     if (!wallet) {
       res.status(401).json({ error: 'unauthenticated' });
