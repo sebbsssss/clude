@@ -16,9 +16,13 @@
  * `pmp.manifest_sig` removed (the artifact's identity); the server re-derives it on register
  * and on verify so a download can be validated without trusting the uploader.
  *
- * AUTH (the fixed Part A/B pattern): owner routes use requirePrivyAuth + requireOwnership and
- * read the wallet ONLY from req.verifiedWallet (ownerFromReq) — a client-supplied ?owner= is
- * NEVER trusted (that was the impersonation hole closed in cc4f2871). /verify is public.
+ * AUTH (the fixed Part A/B pattern): owner routes read the wallet ONLY from req.verifiedWallet
+ * (ownerFromReq) — a client-supplied ?owner= is NEVER trusted (the impersonation hole closed in
+ * cc4f2871). The EXPORT routes (/v1/pmp/export[+/preview]) use optionalPrivyAuth + requireOwnership
+ * so they accept EITHER a Privy JWT OR a Bearer clk_ Cortex key (the credential the dashboard runs
+ * on after chat/auto-register swaps the JWT for a clk_ key); requireOwnership binds verifiedWallet
+ * from the proven identity in both cases, so this widens the CREDENTIAL not the AUTHORISATION. The
+ * artifacts list/detail + import routes stay requirePrivyAuth + requireOwnership. /verify is public.
  *
  * Owner-scoping: every pmp_artifacts / pmp_imports / memories query filters by the caller
  * wallet. §00 MINOR 14: pmp_artifacts.manifest_hash UNIQUE is scoped to (owner_wallet,
@@ -719,7 +723,14 @@ export function pmpArtifactsRoutes(): Router {
    */
   router.post(
     '/v1/pmp/export',
-    requirePrivyAuth,
+    // optionalPrivyAuth (not requirePrivyAuth) so requireOwnership can accept EITHER a Privy JWT OR a
+    // Bearer clk_ Cortex API key. The dashboard swaps the Privy JWT for a clk_ key at login
+    // (chat/auto-register) and runs every authed call on that key, so a hard requirePrivyAuth here
+    // 401s a perfectly valid email/wallet session. requireOwnership binds req.verifiedWallet from the
+    // proven identity in BOTH cases (DID→wallet, or agent_keys.owner_wallet for clk_); the handler
+    // reads the owner ONLY from req.verifiedWallet (ownerFromReq) — no ?owner=/?wallet= is ever
+    // trusted — so this widens the accepted CREDENTIAL without widening WHO is authorised.
+    optionalPrivyAuth,
     requireOwnership,
     async (req: Request, res: Response) => {
       const owner = ownerFromReq(req);
@@ -1028,7 +1039,9 @@ export function pmpArtifactsRoutes(): Router {
    */
   router.post(
     '/v1/pmp/export/preview',
-    requirePrivyAuth,
+    // optionalPrivyAuth + requireOwnership: accept a Privy JWT OR a clk_ Cortex key (see the export
+    // route above for why). Still owner-scoped — a preview can only ever count req.verifiedWallet's rows.
+    optionalPrivyAuth,
     requireOwnership,
     async (req: Request, res: Response) => {
       const owner = ownerFromReq(req);

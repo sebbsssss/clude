@@ -4,22 +4,30 @@
  * The primary panel packages memories into a portable, self-verifiable `.pmp`
  * artifact: a "What to include" scope control, a live per-type preview + stacked
  * distribution bar, a safety scan, owner-held-encryption toggle, and an artifact
- * card whose Download button publishes a tokenised pack, exports the real `.pmp`,
- * best-effort mints its 1-of-1 ownership title NFT, and surfaces records / size /
- * Merkle root from the result. The secondary
+ * card that surfaces records / size / Merkle root from the result. The secondary
  * row briefs another model (smart-export → paste-ready block) and imports from a
  * file (gracefully self-hosted-only in cortex mode).
  *
- * Everything binds to the owner-scoped cortex endpoints; nothing is mocked. Where
- * an endpoint is self-hosted-only (import) or absent (document ingest in cortex,
- * a server-side scan), the UI degrades to a graceful message rather than crashing.
+ * The Download button is MODE-AWARE so it works for every auth mode (email, wallet,
+ * API key) — see handleDownload. A Privy session with a signable wallet (email's
+ * embedded wallet or an external one) gets an ENCRYPTED, owner-sealed `.pmp` from the
+ * owner-scoped selection export (/v1/pmp/export); register-on-demand handles the first
+ * export's fail-closed `holder_key_unregistered`, and "Decrypt locally" verifies it
+ * fully client-side. An API-key/cortex session (no wallet to encrypt to) gets a
+ * PLAINTEXT pack via the cortex pack export, with an honest message — never a
+ * misleading "Session expired". No tokenised pack and no title mint are involved.
+ *
+ * Everything binds to owner-scoped endpoints; nothing is mocked. Where an endpoint is
+ * self-hosted-only (import) or absent (document ingest in cortex, a server-side scan),
+ * the UI degrades to a graceful message rather than crashing.
  */
 import { useEffect, useRef, useState } from 'react';
 import { useWallets, useSignMessage } from '@privy-io/react-auth/solana';
 import { OWNER_SIGN_MESSAGE } from '@clude/shared/core/owner-key-constants';
 import { api, HolderKeyUnregisteredError } from '../lib/api';
 import { buildOwnerKeyRegistration, decryptPmp, parsePmpBase64 } from '@clude/ui';
-import type { MemoryStats, Memory } from '../types/memory';
+import type { ExportRequest, ExportSelection } from '@clude/ui';
+import type { MemoryStats } from '../types/memory';
 import { MEMORY_TYPES } from '../lib/memory-ui';
 
 type Scope = 'all' | 'type' | 'tag' | 'date' | 'pack';
@@ -76,7 +84,6 @@ export function ExportScreen() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [encrypt, setEncrypt] = useState(true);
-  const [titleChain, setTitleChain] = useState<'solana' | 'base'>('solana');
 
   const [exporting, setExporting] = useState(false);
   const [artifact, setArtifact] = useState<Artifact | null>(null);
@@ -125,21 +132,29 @@ export function ExportScreen() {
     });
   }
 
-  // Filter fetched memories to the active scope. The server has no selection-export that ALSO
-  // mints a title, so we enumerate client-side, create a tokenised pack, then export-with-title.
-  function inScope(m: Memory): boolean {
-    if (scope === 'type') return selectedTypes.size === 0 || selectedTypes.has(m.memory_type);
+  /**
+   * Translate the active scope into the server's `ExportSelection`. The server gathers the caller's
+   * OWN memories matching this filter (owner-scoped, paginated) — no client-side enumeration. The
+   * dashboard scope `date` maps to the server's `range`; `pack` (no saved packs in this workspace
+   * yet) and `all` both gather the whole brain. Empty `type`/`tag` selections fall back to `all` so
+   * "By type with nothing ticked" exports everything (matching the preview).
+   */
+  function buildSelection(): ExportSelection {
+    if (scope === 'type' && selectedTypes.size > 0) {
+      return { scope: 'type', types: Array.from(selectedTypes) as ExportSelection['types'] };
+    }
     if (scope === 'tag') {
-      const wanted = tagInput.split(',').map((t) => t.trim()).filter(Boolean);
-      return wanted.length === 0 || (m.tags ?? []).some((t) => wanted.includes(t));
+      const tags = tagInput.split(',').map((t) => t.trim()).filter(Boolean);
+      if (tags.length > 0) return { scope: 'tag', tags };
     }
-    if (scope === 'date') {
-      const t = new Date(m.created_at).getTime();
-      if (dateFrom && t < new Date(dateFrom).getTime()) return false;
-      if (dateTo && t > new Date(dateTo).getTime() + 86_400_000) return false;
-      return true;
+    if (scope === 'date' && (dateFrom || dateTo)) {
+      // Inclusive range. `to` covers the whole end day (server compares created_at <= to).
+      const sel: ExportSelection = { scope: 'range' };
+      if (dateFrom) sel.from = new Date(dateFrom).toISOString();
+      if (dateTo) sel.to = new Date(new Date(dateTo).getTime() + 86_400_000 - 1).toISOString();
+      return sel;
     }
-    return true; // all (and 'pack' has no saved packs in this workspace yet)
+    return { scope: 'all' };
   }
 
   /** Trigger a real browser download of bytes as `<name>.pmp`. */
@@ -194,83 +209,94 @@ export function ExportScreen() {
   }
 
   /**
-   * Export the current selection. The primary path publishes a tokenised pack and best-effort mints
-   * its 1-of-1 title NFT (the demo path). If that path is unavailable here — cortex/API-key mode
-   * (/v1/packs is Privy-only) or Solana tokenisation not configured — it falls back to a plain .pmp
-   * export so the button always works.
+   * Export the current selection — mode-aware so it works for EVERY auth mode (email, wallet, API
+   * key). The auth wiring matters: after a Privy login (email OR external wallet) the dashboard runs
+   * on a `clk_` Cortex key, so we never rely on a Privy-JWT-only route. The selection is gathered
+   * server-side from the owner-scoped /v1/pmp/export (same effective auth as the memory list) — no
+   * client enumeration, no tokenised pack, no title mint.
+   *
+   *  • Privy session WITH a usable wallet (email's embedded wallet or an external one) → an ENCRYPTED,
+   *    owner-sealed `.pmp` via api.pmpExport({ encrypt: true }). Encryption-by-default fails closed:
+   *    the first export for a wallet 422s `holder_key_unregistered`; we register the owner key from a
+   *    wallet signature and retry ONCE. "Decrypt locally" stays available on the result.
+   *  • API-key / cortex mode with NO wallet to sign → a PLAINTEXT pack via api.exportMemoryPack
+   *    (cortex pack export, which the `clk_` key authorises). There is no wallet to encrypt to, so we
+   *    say so plainly rather than show a misleading "Session expired".
+   *  • No wallet AND not cortex (shouldn't happen post-login) → an honest "connect a wallet" message.
    */
   async function handleDownload() {
     setExporting(true);
     setExportNote('');
     setArtifact(null);
     const name = `clude-memory-${new Date().toISOString().slice(0, 10)}`;
+    const hasWallet = !!wallets[0];
 
-    // ── Primary: tokenised pack → export + title mint ──
-    try {
-      setExportNote('Gathering memories…');
-      const { memories } = await api.getMemories({ limit: 5000, hours: 720 }); // 30-day window (server caps hours 720, limit 50)
-      const hashIds = memories.filter(inScope).map((m) => m.hash_id).filter(Boolean).slice(0, 5000);
-      if (hashIds.length === 0) {
-        setExportNote('Export failed: no memories match this selection.');
-        setExporting(false);
-        return;
-      }
-
-      setExportNote(`Publishing a pack of ${hashIds.length.toLocaleString()} memories…`);
-      const pack = await api.createPack(name, hashIds); // tokenises (on-chain pack token)
-
-      setExportNote('Exporting + minting title NFT…');
-      // Encryption-by-default fails closed: the FIRST encrypted export for a wallet 422s with
-      // `holder_key_unregistered`. Register the owner key (wallet signature → minted payload) and
-      // retry ONCE. A registration failure (no wallet, or a 409 different-key) stops here rather than
-      // silently downgrading to a plaintext export the user didn't ask for.
-      let result;
+    // ── Privy session with a signable wallet → encrypted, owner-sealed .pmp ──
+    if (hasWallet) {
       try {
-        result = await api.exportPackWithTitle(pack.id, name, encrypt, titleChain);
-      } catch (err) {
-        if (encrypt && err instanceof HolderKeyUnregisteredError) {
-          setExportNote('Registering your encryption key (sign in your wallet)…');
-          const registered = await registerEncryptionKey();
-          if (!registered) {
-            setExporting(false);
-            return; // registerEncryptionKey already set an explanatory note
-          }
-          setExportNote('Key registered. Exporting + minting title NFT…');
-          result = await api.exportPackWithTitle(pack.id, name, encrypt, titleChain);
-        } else {
-          throw err;
-        }
-      }
+        const req: ExportRequest = {
+          selection: buildSelection(),
+          name,
+          description: `Exported from Clude dashboard, scope: ${scope}`,
+          category: 'personal', // the user's own memories — private, not listable
+          encrypt,
+        };
 
-      const b64 = result.pmp_base64 ?? '';
-      const records = result.artifact?.record_count ?? hashIds.length;
-      const merkle = result.artifact?.merkle_root ?? pack.attestation?.merkle_root ?? '';
-      // The .pmp is owner-sealed when the server says so, or (defensively) when we asked to encrypt.
-      const encryptionScope: 'owner' | 'none' =
-        result.artifact?.encryption_scope ?? (encrypt ? 'owner' : 'none');
-      let sizeLabel = '—';
-      if (b64) {
-        const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-        sizeLabel = fmtBytes(bytes.length);
-        downloadPmp(bytes, result.filename ?? `${name}.pmp`);
+        setExportNote(encrypt ? 'Packaging an encrypted .pmp…' : 'Packaging your .pmp…');
+        let result;
+        try {
+          result = await api.pmpExport(req);
+        } catch (err) {
+          // Encryption-by-default fails closed: register the owner key (wallet signature) + retry once.
+          if (encrypt && err instanceof HolderKeyUnregisteredError) {
+            setExportNote('Registering your encryption key (sign in your wallet)…');
+            const registered = await registerEncryptionKey();
+            if (!registered) {
+              setExporting(false);
+              return; // registerEncryptionKey already set an explanatory note
+            }
+            setExportNote('Key registered. Packaging an encrypted .pmp…');
+            result = await api.pmpExport(req);
+          } else {
+            throw err;
+          }
+        }
+
+        const b64 = result.pmp_base64 ?? '';
+        const records = result.artifact?.record_count ?? previewTotal;
+        const merkle = result.artifact?.merkle_root ?? '';
+        // The server is authoritative on whether the file is owner-sealed; fall back to our intent.
+        const encryptionScope: 'owner' | 'none' =
+          (result.artifact as { encryption_scope?: 'owner' | 'none' } | undefined)?.encryption_scope
+          ?? (encrypt ? 'owner' : 'none');
+        let sizeLabel = '—';
+        if (b64) {
+          const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+          sizeLabel = fmtBytes(bytes.length);
+          downloadPmp(bytes, result.filename ?? `${name}.pmp`);
+        }
+        setArtifact({ fileName: result.filename ?? `${name}.pmp`, records, sizeLabel, merkle, encryptionScope, pmpBase64: b64 });
+        setExportNote(
+          encryptionScope === 'owner'
+            ? `Exported ${records.toLocaleString()} records, owner-sealed. Only your key can decrypt — use "Decrypt locally" to verify.`
+            : `Exported ${records.toLocaleString()} records (plaintext .pmp).`,
+        );
+      } catch (err) {
+        setExportNote(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
       }
-      setArtifact({ fileName: result.filename ?? `${name}.pmp`, records, sizeLabel, merkle, encryptionScope, pmpBase64: b64 });
-      setExportNote(`Exported ${records.toLocaleString()} records. A 1-of-1 title NFT is minting on ${titleChain === 'base' ? 'Base' : 'Solana'} (best-effort): check your wallet or the explorer.`);
       setExporting(false);
       return;
-    } catch (titleErr) {
-      // A holder-key registration failure already messaged the user and returned; everything else
-      // (title path unavailable in cortex/API-key mode, tokenisation off) falls through to a plain
-      // export so the button still works.
-      if (titleErr instanceof HolderKeyUnregisteredError) {
-        setExportNote('Could not register your encryption key — encrypted export aborted. Turn off encryption to export plaintext, or try again.');
-        setExporting(false);
-        return;
-      }
-      console.warn('Title export unavailable, falling back to a plain .pmp export.', titleErr);
     }
 
-    // ── Fallback: plain ephemeral .pmp (no mint) ──
+    // ── No signable wallet ──
+    // API-key / cortex sessions can't derive an encryption key (there's no wallet to sign), so export
+    // PLAINTEXT via the cortex pack endpoint the `clk_` key authorises. Anything else (no wallet AND
+    // not cortex) gets an honest message — never the misleading "Session expired".
+    if (api.getMode() !== 'cortex') {
+      setExportNote('Encrypted export needs a wallet login. Connect a wallet to export an owner-sealed .pmp, or use the CLI.');
+      setExporting(false);
+      return;
+    }
     try {
       const args: { name: string; description: string; types?: string[]; tags?: string[] } = {
         name,
@@ -283,9 +309,9 @@ export function ExportScreen() {
       const json = JSON.stringify(pack, null, 2);
       const records = pack.memory_count ?? pack.memories?.length ?? previewTotal;
       downloadPmp(json, `${name}.pmp`);
-      // The fallback path is a plain JSON pack (not an owner-sealed .tar.zst) — no local-decrypt action.
+      // Plaintext pack (not an owner-sealed .tar.zst) — no local-decrypt action, and we say why.
       setArtifact({ fileName: `${name}.pmp`, records, sizeLabel: fmtBytes(new Blob([json]).size), merkle: '', encryptionScope: 'none', pmpBase64: '' });
-      setExportNote(`Exported ${records.toLocaleString()} records (plain .pmp, no title mint in this workspace).`);
+      setExportNote(`Exported ${records.toLocaleString()} records (plaintext — API-key sessions have no wallet to encrypt to). Connect a wallet for an owner-sealed .pmp.`);
     } catch (err) {
       setExportNote(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -583,35 +609,6 @@ export function ExportScreen() {
                     background: '#fff', transition: 'left 0.16s ease',
                   }} />
                 </button>
-              </div>
-              {/* Title mint chain — which network the 1-of-1 ownership title lands on. */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>Title mint chain</div>
-                  <div style={{ fontSize: 11.5, color: 'var(--fg-3)', marginTop: 2 }}>
-                    {titleChain === 'base' ? 'Base — custodial title address' : 'Solana — non-custodial, your own wallet'}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: 6, flex: 'none' }}>
-                  {(['solana', 'base'] as const).map((c) => {
-                    const active = titleChain === c;
-                    return (
-                      <button
-                        key={c}
-                        onClick={() => setTitleChain(c)}
-                        style={{
-                          fontSize: 12, fontWeight: active ? 600 : 500, cursor: 'pointer', borderRadius: 7,
-                          padding: '6px 13px', textTransform: 'capitalize',
-                          color: active ? 'var(--accent-text)' : 'var(--fg-2)',
-                          background: active ? 'var(--accent-soft)' : 'var(--surface-2)',
-                          border: active ? '1px solid var(--accent)' : '1px solid var(--border)',
-                        }}
-                      >
-                        {c}
-                      </button>
-                    );
-                  })}
-                </div>
               </div>
             </div>
           </div>

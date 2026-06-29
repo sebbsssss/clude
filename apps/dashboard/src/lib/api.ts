@@ -353,9 +353,11 @@ class CludeAPI {
   }
 
   // ── Portable Memory Pack (.pmp) ──
-  // Drives the @clude/ui MemoryExportPanel. These hit the owner-scoped
-  // /v1/pmp/* endpoints and reuse the same Bearer-token auth (and 401
-  // auth-expiry handling) as every other authed call above.
+  // Powers the dashboard's ExportScreen (and the @clude/ui types). These hit the
+  // owner-scoped /v1/pmp/* endpoints and reuse the same Bearer-token auth (and 401
+  // auth-expiry handling) as every other authed call above. The export routes accept
+  // either a Privy JWT OR the clk_ Cortex key the dashboard runs on after login
+  // (optionalPrivyAuth + requireOwnership server-side), so they work for every mode.
 
   /** Cheap count-only preview for the current selection. */
   async pmpPreview(selection: ExportSelection): Promise<SelectionPreview> {
@@ -399,65 +401,6 @@ class CludeAPI {
       throw new AuthExpiredError();
     }
     if (res.status === 422) {
-      let body: { error?: string } | null = null;
-      try { body = await res.json(); } catch { body = null; }
-      if (body?.error === 'holder_key_unregistered') throw new HolderKeyUnregisteredError();
-    }
-    throw new Error(`API error: ${res.status} ${res.statusText}`);
-  }
-
-  /**
-   * Create + tokenise a saved pack from explicit memory hash ids. Tokenising commits a pack
-   * token on-chain, so this is a real on-chain action (the prerequisite for a title mint).
-   * Returns the new pack id (`.id`).
-   */
-  async createPack(name: string, memoryHashIds: string[]): Promise<{ id: string; memory_count?: number; attestation?: { merkle_root?: string } }> {
-    return this.fetch('/v1/packs', {
-      method: 'POST',
-      body: JSON.stringify({ name, memory_hash_ids: memoryHashIds }),
-    });
-  }
-
-  /**
-   * Export an already-saved pack as a `.pmp` AND best-effort mint its 1-of-1 ownership title NFT.
-   * The server marks the pack `sale_mode='title'` and mints on the chosen chain: `solana` (default)
-   * mints a non-custodial 1-of-1 to the caller's own wallet; `base` mints on the Base PORT. Either
-   * way the `.pmp` bytes come back inline. The mint is best-effort: a missing title env or a chain
-   * hiccup never fails the export.
-   */
-  async exportPackWithTitle(
-    packId: string,
-    name: string,
-    encrypt: boolean,
-    chain: 'solana' | 'base' = 'solana',
-  ): Promise<{
-    artifact?: { merkle_root?: string; record_count?: number; encryption_scope?: 'owner' | 'none' };
-    pmp_base64?: string;
-    filename?: string;
-  }> {
-    // Fetch inline (not via request()/fetch()) so a 422 `holder_key_unregistered` body can be read
-    // and distinguished from a generic validation error: encryption-by-default fails closed when no
-    // key is registered, and the caller recovers by registering + retrying. Bearer auth + 401
-    // auth-expiry handling mirror the shared helpers.
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
-    let res: Response;
-    try {
-      res = await fetch(`${this.agentEndpoint}/v1/pmp/export`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ pack_id: packId, name, encrypt, mint_as_title: true, chain }),
-      });
-    } catch {
-      throw new Error('API error: 0 Network error');
-    }
-    if (res.ok) return res.json();
-    if (res.status === 401) {
-      this.authExpiredCallback?.();
-      throw new AuthExpiredError();
-    }
-    if (res.status === 422) {
-      // Only the holder-key case is recoverable; any other 422 is a real validation error.
       let body: { error?: string } | null = null;
       try { body = await res.json(); } catch { body = null; }
       if (body?.error === 'holder_key_unregistered') throw new HolderKeyUnregisteredError();
