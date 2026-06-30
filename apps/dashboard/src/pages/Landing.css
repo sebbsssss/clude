@@ -8,21 +8,21 @@
   min-height: 100vh;
   display: grid;
   grid-template-columns: 1.05fr 0.95fr;
-  background: var(--bg);
   color: var(--fg);
+  /* One continuous surface: the accent glow spans both columns so the two sides
+     blend with no seam or divider. */
+  background:
+    radial-gradient(1150px 640px at 14% -6%, var(--accent-soft), transparent 60%),
+    var(--bg);
 }
 
-/* ── hero (left) ── */
+/* ── hero (left) ── no border, no own background: it blends into .dlogin ── */
 .dlogin__hero {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   gap: 40px;
   padding: 56px clamp(40px, 6vw, 96px);
-  border-right: 1px solid var(--border);
-  background:
-    radial-gradient(820px 460px at 0% 0%, var(--accent-soft), transparent 62%),
-    var(--bg);
 }
 .dlogin__top { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .dlogin__wordmark { display: flex; align-items: center; gap: 11px; }
@@ -114,8 +114,8 @@
 /* ── responsive: stack, hero shrinks above the card ── */
 @media (max-width: 880px) {
   .dlogin { grid-template-columns: 1fr; }
-  .dlogin__hero { border-right: none; border-bottom: 1px solid var(--border); padding: 36px clamp(24px, 7vw, 48px); gap: 26px; }
-  .dlogin__form { padding: 36px clamp(20px, 7vw, 48px); }
+  .dlogin__hero { padding: 36px clamp(24px, 7vw, 48px) 12px; gap: 26px; }
+  .dlogin__form { padding: 12px clamp(20px, 7vw, 48px) 36px; }
 }
 @media (max-width: 560px) {
   .dlogin__caps { display: none; }
