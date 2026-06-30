@@ -10,7 +10,7 @@ process.env.LOG_LEVEL = 'error'; // Suppress pino noise during benchmark
 import dotenv from 'dotenv';
 dotenv.config();
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { Cortex } from '../src/sdk';
+import { Cortex } from '@clude/brain/sdk';
 
 // Suppress uncaught rejections from fire-and-forget Solana memo writes
 process.on('unhandledRejection', (err: any) => {
