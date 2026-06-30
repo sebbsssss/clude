@@ -35,15 +35,16 @@
     var(--bg);
 }
 
-/* ── hero (left): wordmark pinned top, headline vertically centred (lede uses
-   auto margins to absorb the free space when the column stretches on desktop) ── */
+/* ── hero (left): wordmark top, headline centred, "Memory online" status pinned
+   bottom-left — three elements spread down the column. ── */
 .dlogin__hero {
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 40px;
   padding: 56px clamp(40px, 6vw, 96px);
 }
+.dlogin__status { align-self: flex-start; }
 .dlogin__top { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .dlogin__wordmark { display: flex; align-items: center; gap: 11px; }
 .dlogin__mark { font-size: 15px; font-weight: 700; letter-spacing: 0.2em; color: var(--fg); }
@@ -57,7 +58,7 @@
 }
 .dlogin__dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.16); }
 
-.dlogin__lede { max-width: 32ch; margin: auto 0; }
+.dlogin__lede { max-width: 32ch; }
 .dlogin__eyebrow { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent-text); margin-bottom: 20px; }
 .dlogin__h1 { font-size: clamp(32px, 3.6vw, 50px); font-weight: 700; line-height: 1.04; letter-spacing: -0.02em; margin: 0 0 20px; color: var(--fg); }
 .dlogin__h1-em { color: var(--accent); }
