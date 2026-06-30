@@ -21,6 +21,15 @@ export class AuthExpiredError extends Error {
   constructor() { super('Session expired'); this.name = 'AuthExpiredError'; }
 }
 
+/**
+ * Thrown by an encrypted export when the holder has NO registered encryption key (server 422
+ * `holder_key_unregistered`). Encryption-by-default fails closed, so the UI catches this, registers
+ * the key from a wallet signature, and retries the export once.
+ */
+export class HolderKeyUnregisteredError extends Error {
+  constructor() { super('Encryption key not registered'); this.name = 'HolderKeyUnregisteredError'; }
+}
+
 class CludeAPI {
   private token: string | null = null;
   private agentEndpoint: string = API_BASE;
@@ -344,9 +353,11 @@ class CludeAPI {
   }
 
   // ── Portable Memory Pack (.pmp) ──
-  // Drives the @clude/ui MemoryExportPanel. These hit the owner-scoped
-  // /v1/pmp/* endpoints and reuse the same Bearer-token auth (and 401
-  // auth-expiry handling) as every other authed call above.
+  // Powers the dashboard's ExportScreen (and the @clude/ui types). These hit the
+  // owner-scoped /v1/pmp/* endpoints and reuse the same Bearer-token auth (and 401
+  // auth-expiry handling) as every other authed call above. The export routes accept
+  // either a Privy JWT OR the clk_ Cortex key the dashboard runs on after login
+  // (optionalPrivyAuth + requireOwnership server-side), so they work for every mode.
 
   /** Cheap count-only preview for the current selection. */
   async pmpPreview(selection: ExportSelection): Promise<SelectionPreview> {
@@ -356,51 +367,75 @@ class CludeAPI {
     });
   }
 
-  /** Build (or idempotently re-register) a .pmp artifact for a selection. */
+  /**
+   * Build (or idempotently re-register) a .pmp artifact for a selection. Encryption-by-default
+   * fails CLOSED: a selection export with no registered owner key 422s with `holder_key_unregistered`.
+   * We fetch inline (not via fetch()/request()) so that 422 body can be read and surfaced as
+   * HolderKeyUnregisteredError — the recoverable signal the shared panel catches to register-on-demand
+   * and retry. Bearer auth + 401 auth-expiry mirror the shared helpers.
+   */
   async pmpExport(req: ExportRequest): Promise<ExportResult> {
-    return this.fetch('/v1/pmp/export', {
-      method: 'POST',
-      body: JSON.stringify({
-        selection: req.selection,
-        name: req.name,
-        description: req.description,
-        category: req.category,
-        encrypt: req.encrypt,
-        mint_as_title: req.mint_as_title,
-        chain: req.chain,
-      }),
-    });
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+    let res: Response;
+    try {
+      res = await fetch(`${this.agentEndpoint}/v1/pmp/export`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          selection: req.selection,
+          name: req.name,
+          description: req.description,
+          category: req.category,
+          encrypt: req.encrypt,
+          mint_as_title: req.mint_as_title,
+          chain: req.chain,
+        }),
+      });
+    } catch {
+      throw new Error('API error: 0 Network error');
+    }
+    if (res.ok) return res.json();
+    if (res.status === 401) {
+      this.authExpiredCallback?.();
+      throw new AuthExpiredError();
+    }
+    if (res.status === 422) {
+      let body: { error?: string } | null = null;
+      try { body = await res.json(); } catch { body = null; }
+      if (body?.error === 'holder_key_unregistered') throw new HolderKeyUnregisteredError();
+    }
+    throw new Error(`API error: ${res.status} ${res.statusText}`);
   }
 
   /**
-   * Create + tokenise a saved pack from explicit memory hash ids. Tokenising commits a pack
-   * token on-chain, so this is a real on-chain action (the prerequisite for a title mint).
-   * Returns the new pack id (`.id`).
+   * Register the caller's owner-held encryption key so encrypted exports can seal a DEK to it.
+   * The browser mints `{ x25519_pubkey, verifier_ct }` (both PUBLIC) via buildOwnerKeyRegistration;
+   * this POSTs them to the owner-scoped /v1/encryption/owner-key with the SAME Bearer auth as every
+   * other authed call. The server binds the row to the PROVEN wallet — never to this payload.
+   *
+   * Idempotent: re-posting the identical key is a 200 no-op. A 409 (`owner_key_exists`) means a
+   * DIFFERENT key is already registered for this wallet (the server refuses to orphan packs sealed
+   * to the old key) — surfaced as `{ ok: false, reason: 'key_exists' }` so callers can message the
+   * user instead of treating it as a hard error. The private key is NEVER sent.
    */
-  async createPack(name: string, memoryHashIds: string[]): Promise<{ id: string; memory_count?: number; attestation?: { merkle_root?: string } }> {
-    return this.fetch('/v1/packs', {
+  async registerOwnerKey(
+    x25519_pubkey: string,
+    verifier_ct: string,
+  ): Promise<{ ok: true } | { ok: false; reason: 'key_exists' }> {
+    const result = await this.request(`${this.agentEndpoint}/v1/encryption/owner-key`, {
       method: 'POST',
-      body: JSON.stringify({ name, memory_hash_ids: memoryHashIds }),
+      headers: {
+        'Content-Type': 'application/json',
+        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
+      },
+      body: JSON.stringify({ x25519_pubkey, verifier_ct }),
     });
-  }
-
-  /**
-   * Export an already-saved pack as a `.pmp` AND best-effort mint its 1-of-1 ownership title NFT.
-   * The server marks the pack `sale_mode='title'` and mints on the chosen chain: `solana` (default)
-   * mints a non-custodial 1-of-1 to the caller's own wallet; `base` mints on the Base PORT. Either
-   * way the `.pmp` bytes come back inline. The mint is best-effort: a missing title env or a chain
-   * hiccup never fails the export.
-   */
-  async exportPackWithTitle(
-    packId: string,
-    name: string,
-    encrypt: boolean,
-    chain: 'solana' | 'base' = 'solana',
-  ): Promise<{ artifact?: { merkle_root?: string; record_count?: number }; pmp_base64?: string; filename?: string }> {
-    return this.fetch('/v1/pmp/export', {
-      method: 'POST',
-      body: JSON.stringify({ pack_id: packId, name, encrypt, mint_as_title: true, chain }),
-    });
+    if (result.ok) return { ok: true }; // 200 register or idempotent no-op
+    if (result.error === 'auth_expired') throw new AuthExpiredError();
+    // A different key already registered for this wallet — distinct, recoverable signal.
+    if (result.status === 409) return { ok: false, reason: 'key_exists' };
+    throw new Error(`Owner-key registration failed: ${result.status} ${result.message}`);
   }
 
   /** List the caller's previously-exported .pmp artifacts. */

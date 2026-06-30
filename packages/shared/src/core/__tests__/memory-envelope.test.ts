@@ -10,7 +10,7 @@ import {
   deriveOwnerEncryptionKeypair,
   makeVerifierCiphertext,
   checkVerifier,
-} from '../memory-envelope';
+} from '../memory-envelope.js';
 
 describe('DEK + field encryption', () => {
   it('generateDek returns 32 random bytes', () => {
@@ -127,5 +127,23 @@ describe('owner key derivation + verifier token', () => {
     const drift = await deriveOwnerEncryptionKeypair(sigB); // simulates a signer that added entropy
     const ct = makeVerifierCiphertext(good.secretKey);
     expect(checkVerifier(ct, drift.secretKey)).toBe(false);
+  });
+
+  it('a DIFFERENT secret key fails the verifier check (round-trip is key-bound)', async () => {
+    const k = await deriveOwnerEncryptionKeypair(sigA);
+    const other = nacl.box.keyPair(); // an unrelated box secret
+    const ct = makeVerifierCiphertext(k.secretKey);
+    expect(checkVerifier(ct, k.secretKey)).toBe(true);
+    expect(checkVerifier(ct, other.secretKey)).toBe(false);
+  });
+
+  it('L1: verifier_ct is NOT encrypted under the raw box secret (dedicated HKDF key)', async () => {
+    // If the verifier ciphertext were made under the X25519 box secret itself
+    // (the old cross-primitive reuse), decrypting it WITH that box secret would
+    // recover the constant. A dedicated derived key means the box secret cannot
+    // open the public verifier_ct directly.
+    const k = await deriveOwnerEncryptionKeypair(sigA);
+    const ct = makeVerifierCiphertext(k.secretKey);
+    expect(decryptField(ct, k.secretKey)).toBeNull();
   });
 });

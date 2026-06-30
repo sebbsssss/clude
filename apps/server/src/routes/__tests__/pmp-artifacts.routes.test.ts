@@ -29,6 +29,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import request from 'supertest';
 import { writeFileSync } from 'node:fs';
+import nacl from 'tweetnacl';
 
 // ── Logger ──
 vi.mock('@clude/shared/core/logger', () => ({
@@ -513,6 +514,24 @@ function seedSelectionCorpus() {
 }
 
 /**
+ * Seed an `encryption_keys` row for `wallet` so encryptRecordsForHolder (real crypto, NOT mocked)
+ * can seal the pack DEK to a registered X25519 key. The pubkey is a REAL nacl.box keypair's public
+ * key (base64) so wrapDek produces a genuine sealed box; verifier_ct is an opaque copy-through field.
+ * Returns the keypair in case a test wants to unwrap + assert the DEK round-trips (none do yet).
+ */
+function seedHolderKey(wallet = OWNER): nacl.BoxKeyPair {
+  const kp = nacl.box.keyPair();
+  seed('encryption_keys', [
+    {
+      owner_wallet: wallet,
+      x25519_pubkey: Buffer.from(kp.publicKey).toString('base64'),
+      verifier_ct: 'verifier-ct-opaque-base64',
+    },
+  ]);
+  return kp;
+}
+
+/**
  * Make readMemoryPack return a verifiable .pmp: two records whose leaf hashes match
  * memoryContentHash, with the declared pmp.manifest_hash + merkle_root in the manifest.
  * `tamper` flips one record's content so the recomputed root diverges from the declared one.
@@ -603,6 +622,7 @@ describe('POST /v1/pmp/export', () => {
   it('mint_as_title flags an owned tokenised pack as a title (the trigger that fires the Base mint)', async () => {
     authedWallet = OWNER;
     const packId = seedOwnedPack(); // tokenised, sale_mode 'copy'
+    seedHolderKey(OWNER); // export now encrypts by default → needs the owner's registered key
     writeMemoryPack.mockImplementationOnce((file: string) => writeFileSync(file, Buffer.from('PMP')));
 
     const res = await request(app()).post('/v1/pmp/export').send({ pack_id: packId, mint_as_title: true });
@@ -630,6 +650,7 @@ describe('POST /v1/pmp/export', () => {
   it('accepts chain:"base" on a tokenised title pack (the Base PORT opt-in) and still exports', async () => {
     authedWallet = OWNER;
     const packId = seedOwnedPack();
+    seedHolderKey(OWNER); // encrypt-by-default needs the owner's registered key
     writeMemoryPack.mockImplementationOnce((file: string) => writeFileSync(file, Buffer.from('PMP')));
 
     const res = await request(app())
@@ -655,6 +676,8 @@ describe('POST /v1/pmp/export', () => {
   it('builds a .pmp from the owner pack and registers an artifact with the right manifest_hash', async () => {
     authedWallet = OWNER;
     const packId = seedOwnedPack();
+    seedHolderKey(OWNER); // encrypt-by-default needs the owner's registered key (manifest_hash is over
+    // the pmp identity block, NOT the records, so it is unchanged by encryption)
     // Stage real .pmp bytes via the (mocked) writer so the route reads them back for the inline download.
     const pmpBytes = Buffer.from('PMP-TEST-BYTES');
     writeMemoryPack.mockImplementationOnce((file: string) => writeFileSync(file, pmpBytes));
@@ -697,6 +720,8 @@ describe('POST /v1/pmp/export', () => {
   it('manifest_hash is deterministic for the same pack content (re-derivable)', async () => {
     authedWallet = OWNER;
     const packId = seedOwnedPack();
+    seedHolderKey(OWNER); // encrypt-by-default; manifest_hash is over the pmp block (not the records
+    // nor the per-export random DEK/wrap), so it stays deterministic across two encrypted exports
     const a = await request(app()).post('/v1/pmp/export').send({ pack_id: packId });
     // Reset only the registry table so the second export sees the same pack but a clean insert log.
     insertedRows.length = 0;
@@ -738,6 +763,7 @@ describe('POST /v1/pmp/export — no dangling download link', () => {
   it('the 201 export response advertises no download URL', async () => {
     authedWallet = OWNER;
     const packId = seedOwnedPack();
+    seedHolderKey(OWNER); // encrypt-by-default needs the owner's registered key
 
     const res = await request(app()).post('/v1/pmp/export').send({ pack_id: packId });
 
@@ -752,6 +778,7 @@ describe('POST /v1/pmp/export — no dangling download link', () => {
   it('the dedup-200 export response advertises no download URL', async () => {
     authedWallet = OWNER;
     const packId = seedOwnedPack();
+    seedHolderKey(OWNER); // encrypt-by-default needs the owner's registered key
 
     const first = await request(app()).post('/v1/pmp/export').send({ pack_id: packId });
     expect(first.status).toBe(201);
@@ -769,6 +796,7 @@ describe('POST /v1/pmp/export — no dangling download link', () => {
   it('the formerly-advertised /download path has no handler (would 404)', async () => {
     authedWallet = OWNER;
     const packId = seedOwnedPack();
+    seedHolderKey(OWNER); // encrypt-by-default needs the owner's registered key
     const exp = await request(app()).post('/v1/pmp/export').send({ pack_id: packId });
     const artifactId = exp.body.artifact.artifact_id as string;
 
@@ -795,6 +823,9 @@ describe('POST /v1/pmp/export — selection path', () => {
     const res = await request(app())
       .post('/v1/pmp/export')
       .send({
+        // encrypt:false pins the PLAINTEXT path so the content assertions below test the GATHER
+        // filter (not ciphertext). Encrypt-by-default has its own dedicated tests above.
+        encrypt: false,
         selection: { scope: 'type', types: ['episodic'] },
         name: 'My Episodics',
         category: 'personal',
@@ -831,7 +862,7 @@ describe('POST /v1/pmp/export — selection path', () => {
 
     const res = await request(app())
       .post('/v1/pmp/export')
-      .send({ selection: { scope: 'all' }, name: 'Everything', category: 'knowledge' });
+      .send({ encrypt: false, selection: { scope: 'all' }, name: 'Everything', category: 'knowledge' });
 
     expect(res.status).toBe(201);
     const [, writtenRecords] = writeMemoryPack.mock.calls[0] as [string, any[], any];
@@ -853,7 +884,7 @@ describe('POST /v1/pmp/export — selection path', () => {
 
     const res = await request(app())
       .post('/v1/pmp/export')
-      .send({ selection: { scope: 'tag', tags: ['solana'] }, name: 'Solana', category: 'knowledge' });
+      .send({ encrypt: false, selection: { scope: 'tag', tags: ['solana'] }, name: 'Solana', category: 'knowledge' });
 
     expect(res.status).toBe(201);
     const [, writtenRecords] = writeMemoryPack.mock.calls[0] as [string, any[], any];
@@ -868,6 +899,7 @@ describe('POST /v1/pmp/export — selection path', () => {
     const res = await request(app())
       .post('/v1/pmp/export')
       .send({
+        encrypt: false,
         selection: { scope: 'range', from: '2026-03-04T00:00:00.000Z', to: '2026-03-12T00:00:00.000Z' },
         name: 'Early March',
         category: 'personal',
@@ -886,6 +918,7 @@ describe('POST /v1/pmp/export — selection path', () => {
     const res = await request(app())
       .post('/v1/pmp/export')
       .send({
+        encrypt: false,
         selection: { scope: 'tag', tags: ['solana', 'trade'] },
         name: 'Solana Trades',
         category: 'personal',
@@ -995,6 +1028,7 @@ describe('POST /v1/pmp/export — selection path', () => {
   it('a selection export DEDUPES on UNIQUE(owner_wallet, manifest_hash) → 200 deduped', async () => {
     authedWallet = OWNER;
     seedSelectionCorpus();
+    seedHolderKey(OWNER); // encrypt-by-default needs the owner's registered key
 
     const first = await request(app())
       .post('/v1/pmp/export')
@@ -1015,6 +1049,7 @@ describe('POST /v1/pmp/export — selection path', () => {
   it('a selection with scope=pack + pack_id routes through the PACK path (not the new gather)', async () => {
     authedWallet = OWNER;
     const packId = seedOwnedPack();
+    seedHolderKey(OWNER); // encrypt-by-default needs the owner's registered key
     // No name/category supplied — proves scope:'pack' is the pack path, which does not require them.
     const res = await request(app())
       .post('/v1/pmp/export')
@@ -1077,7 +1112,7 @@ describe('POST /v1/pmp/export — selection path', () => {
 
     const res = await request(app())
       .post('/v1/pmp/export')
-      .send({ selection: { scope: 'tag', tags: ['bulk'] }, name: 'Bulk', category: 'knowledge' });
+      .send({ encrypt: false, selection: { scope: 'tag', tags: ['bulk'] }, name: 'Bulk', category: 'knowledge' });
 
     expect(res.status).toBe(201);
     const [, writtenRecords] = writeMemoryPack.mock.calls[0] as [string, any[], any];
@@ -1090,6 +1125,187 @@ describe('POST /v1/pmp/export — selection path', () => {
     const contents = writtenRecords.map((r) => r.content);
     expect(contents).toContain('pg-00000');
     expect(contents).toContain('pg-01499');
+  });
+});
+
+// ───────────────── POST /v1/pmp/export — encryption (Task 4: encrypt-by-default, fail-CLOSED) ─────────────────
+// The UI promises an encrypted export; the server must DELIVER ciphertext by default and never
+// silently emit plaintext. encryptRecordsForHolder runs REAL crypto here (memory-envelope is not
+// mocked), so the holder's encryption_keys row (a genuine nacl.box pubkey) is the only fixture the
+// crypto needs. Four guarantees:
+//   1. encrypt OMITTED  → the .pmp records are CIPHERTEXT (encrypted:true, content != plaintext),
+//      the writer gets the owner-sealed header, and the row's encryption_scope is 'owner'.
+//   2. encrypt:false    → plaintext records, NO owner header, encryption_scope 'none' (explicit opt-out).
+//   3. holder has NO key + encrypt omitted → 422 holder_key_unregistered, and NO file is written
+//      (writeMemoryPack is never called — fail closed, emit nothing).
+//   4. the SELECTION path encrypts-by-default too (the dual write-site is wired, not just the pack path).
+
+describe('POST /v1/pmp/export — encryption (encrypt-by-default, fail-closed)', () => {
+  it('encrypts by default (encrypt OMITTED): records are ciphertext, writer gets the owner header, scope=owner', async () => {
+    authedWallet = OWNER;
+    const packId = seedOwnedPack(); // member contents are plaintext 'alpha' + 'beta'
+    seedHolderKey(OWNER); // a registered X25519 key to seal the pack DEK to
+    writeMemoryPack.mockImplementationOnce((file: string) => writeFileSync(file, Buffer.from('PMP')));
+
+    // No `encrypt` field at all — the fail-closed default must still encrypt.
+    const res = await request(app()).post('/v1/pmp/export').send({ pack_id: packId });
+
+    expect(res.status).toBe(201);
+    expect(writeMemoryPack).toHaveBeenCalledTimes(1);
+
+    // The records handed to the writer are CIPHERTEXT — every one flagged encrypted, none carrying
+    // the seeded plaintext content. (Real secretbox output is base64 of nonce‖ct, never 'alpha'/'beta'.)
+    const [, writtenRecords, writeOpts] = writeMemoryPack.mock.calls[0] as [string, any[], any];
+    expect(writtenRecords).toHaveLength(2);
+    expect(writtenRecords.every((r) => r.encrypted === true)).toBe(true);
+    const writtenContents = writtenRecords.map((r) => r.content);
+    expect(writtenContents).not.toContain('alpha');
+    expect(writtenContents).not.toContain('beta');
+
+    // The writer was handed the owner-sealed encryption header with all five contract fields.
+    expect(writeOpts.ownerEncryption).toBeTruthy();
+    expect(writeOpts.ownerEncryption).toEqual(
+      expect.objectContaining({
+        recipient_wallet: OWNER,
+        recipient_pubkey: expect.any(String),
+        verifier_ct: expect.any(String),
+        dek_wrap: expect.any(String),
+        wrap_pubkey: expect.any(String),
+      }),
+    );
+    expect(writeOpts.ownerEncryption.recipient_wallet).toBe(OWNER);
+
+    // The registered artifact row records the owner encryption scope.
+    const row = insertedRows.find((r) => r.table === 'pmp_artifacts')!.rows[0];
+    expect(row.encryption_scope).toBe('owner');
+
+    // The merkle leaf is computed over PLAINTEXT upstream and survives encryption untouched, so the
+    // embedded root is unchanged by encryption (the on-chain commitment is unaffected).
+    expect(writeOpts.pmp.merkle_root).toBe(row.merkle_root);
+  });
+
+  it('F1: encrypt-by-default seals third-party related_user/related_wallet into related_ct (no plaintext PII reaches the writer)', async () => {
+    authedWallet = OWNER;
+    const packId = 'pack-rel1';
+    const RELATED_USER = 'third-party-user-77ab';
+    const RELATED_WALLET = 'GhostWaLLet9999999999999999999999third99';
+    // A pack whose single member memory carries NON-NULL related_* — the social-graph PII the F1
+    // leak shipped in cleartext. The route runs REAL encryptRecordsForHolder, so a leak here is a
+    // leak in production bytes.
+    seed('memory_packs', [
+      {
+        pack_id: packId,
+        author_wallet: OWNER,
+        name: 'Related pack',
+        description: 'has a relation',
+        version: '1.0.0',
+        memory_count: 1,
+        merkle_root: 'root(lh:rel)',
+        pack_token_address: 'memo:txsig2',
+        content_category: 'knowledge',
+        sale_mode: 'copy',
+      },
+    ]);
+    seed('memory_pack_contents', [
+      { pack_id: packId, memory_id: 91, leaf_index: 0, content_hash: 'lh:rel' },
+    ]);
+    seed('memories', [
+      {
+        id: 91,
+        hash_id: 'clude-rel00091',
+        memory_type: 'semantic',
+        content: 'gamma references a counterparty',
+        summary: 'gamma summary',
+        owner_wallet: OWNER,
+        created_at: '2026-02-01T00:00:00.000Z',
+        tags: ['solana'],
+        source: 'chat',
+        related_user: RELATED_USER,
+        related_wallet: RELATED_WALLET,
+        content_hash: 'lh:rel',
+        tokenization_status: 'minted',
+      },
+    ]);
+    seedHolderKey(OWNER);
+    writeMemoryPack.mockImplementationOnce((file: string) => writeFileSync(file, Buffer.from('PMP')));
+
+    const res = await request(app()).post('/v1/pmp/export').send({ pack_id: packId });
+    expect(res.status).toBe(201);
+
+    const [, writtenRecords, writeOpts] = writeMemoryPack.mock.calls[0] as [string, any[], any];
+    expect(writtenRecords).toHaveLength(1);
+    const meta = writtenRecords[0].metadata as Record<string, unknown>;
+    // No plaintext related_* in the emitted record metadata.
+    expect(meta.related_user).toBeUndefined();
+    expect(meta.related_wallet).toBeUndefined();
+    // related_ct is present (base64 ciphertext); leaf_hash + owner_wallet stay plaintext.
+    expect(typeof meta.related_ct).toBe('string');
+    expect(typeof meta.leaf_hash).toBe('string');
+    expect(meta.owner_wallet).toBe(OWNER);
+    // Belt-and-braces: serialise everything the writer was handed and confirm the PII is GONE.
+    const blob = JSON.stringify({ writtenRecords, ownerEncryption: writeOpts.ownerEncryption });
+    expect(blob).not.toContain(RELATED_USER);
+    expect(blob).not.toContain(RELATED_WALLET);
+  });
+
+  it('encrypt:false opts out: records stay plaintext, NO owner header, scope=none', async () => {
+    authedWallet = OWNER;
+    const packId = seedOwnedPack();
+    seedHolderKey(OWNER); // present, but an explicit opt-out must ignore it
+    writeMemoryPack.mockImplementationOnce((file: string) => writeFileSync(file, Buffer.from('PMP')));
+
+    const res = await request(app()).post('/v1/pmp/export').send({ pack_id: packId, encrypt: false });
+
+    expect(res.status).toBe(201);
+    const [, writtenRecords, writeOpts] = writeMemoryPack.mock.calls[0] as [string, any[], any];
+    // Plaintext path: the seeded content rides through verbatim, nothing flagged encrypted.
+    expect(writtenRecords.map((r) => r.content).sort()).toEqual(['alpha', 'beta']);
+    expect(writtenRecords.some((r) => r.encrypted === true)).toBe(false);
+    // No owner-sealed header is handed to the writer.
+    expect(writeOpts.ownerEncryption).toBeUndefined();
+    // And the row records no encryption scope.
+    const row = insertedRows.find((r) => r.table === 'pmp_artifacts')!.rows[0];
+    expect(row.encryption_scope).toBe('none');
+  });
+
+  it('FAIL-CLOSED: holder has NO registered key + encrypt omitted → 422 holder_key_unregistered, NO file written', async () => {
+    authedWallet = OWNER;
+    const packId = seedOwnedPack();
+    // Deliberately DO NOT seed an encryption_keys row → encryptRecordsForHolder throws.
+
+    const res = await request(app()).post('/v1/pmp/export').send({ pack_id: packId });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('holder_key_unregistered');
+    // The crux: NO bytes were emitted — the writer was never called, and no artifact row landed.
+    expect(writeMemoryPack).not.toHaveBeenCalled();
+    expect(insertedRows.find((r) => r.table === 'pmp_artifacts')).toBeFalsy();
+  });
+
+  it('SELECTION path also encrypts by default (the dual write-site is wired)', async () => {
+    authedWallet = OWNER;
+    seedSelectionCorpus(); // OWNER: 2 episodic + 1 semantic + 1 procedural
+    seedHolderKey(OWNER);
+    writeMemoryPack.mockImplementationOnce((file: string) => writeFileSync(file, Buffer.from('PMP')));
+
+    // encrypt OMITTED on the selection body — must still encrypt.
+    const res = await request(app())
+      .post('/v1/pmp/export')
+      .send({ selection: { scope: 'type', types: ['episodic'] }, name: 'My Episodics', category: 'personal' });
+
+    expect(res.status).toBe(201);
+    const [, writtenRecords, writeOpts] = writeMemoryPack.mock.calls[0] as [string, any[], any];
+    expect(writtenRecords).toHaveLength(2);
+    expect(writtenRecords.every((r) => r.encrypted === true)).toBe(true);
+    // The seeded plaintext is NOT present in the ciphertext records.
+    const writtenContents = writtenRecords.map((r) => r.content);
+    expect(writtenContents).not.toContain('sel-ep-one');
+    expect(writtenContents).not.toContain('sel-ep-two');
+    // Owner-sealed header present, and the row carries the owner scope.
+    expect(writeOpts.ownerEncryption).toBeTruthy();
+    expect(writeOpts.ownerEncryption.recipient_wallet).toBe(OWNER);
+    const row = insertedRows.find((r) => r.table === 'pmp_artifacts')!.rows[0];
+    expect(row.encryption_scope).toBe('owner');
   });
 });
 
@@ -1466,7 +1682,9 @@ describe('export → verify round-trip', () => {
     authedWallet = OWNER;
     const packId = seedOwnedPack();
 
-    const exp = await request(app()).post('/v1/pmp/export').send({ pack_id: packId });
+    // encrypt:false — server-side /v1/pmp/verify is the PLAINTEXT path (an encrypted pack is verified
+    // in the browser after decrypt). The round-trip leaf-recompute only closes over plaintext content.
+    const exp = await request(app()).post('/v1/pmp/export').send({ pack_id: packId, encrypt: false });
     expect(exp.status).toBe(201);
 
     // Capture exactly what the route handed the writer: the records + the embedded pmp block.
@@ -1488,7 +1706,8 @@ describe('export → verify round-trip', () => {
   it('verify rejects the exported pack once a single record body is mutated post-export', async () => {
     authedWallet = OWNER;
     const packId = seedOwnedPack();
-    const exp = await request(app()).post('/v1/pmp/export').send({ pack_id: packId });
+    // encrypt:false — same plaintext-verify rationale as the intact round-trip above.
+    const exp = await request(app()).post('/v1/pmp/export').send({ pack_id: packId, encrypt: false });
     const [, writtenRecords, writeOpts] = writeMemoryPack.mock.calls[0] as [string, any[], any];
 
     // Tamper ONE record's content after export; the declared root still describes the original.
@@ -1584,6 +1803,7 @@ describe('POST /v1/pmp/export — edge cases', () => {
   it('a duplicate export of the same pack dedupes on UNIQUE(owner_wallet, manifest_hash) → 200 deduped', async () => {
     authedWallet = OWNER;
     const packId = seedOwnedPack();
+    seedHolderKey(OWNER); // encrypt-by-default needs the owner's registered key
 
     // First export registers the artifact (201).
     const first = await request(app()).post('/v1/pmp/export').send({ pack_id: packId });

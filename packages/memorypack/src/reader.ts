@@ -103,6 +103,17 @@ export interface ReaderOptions {
 // ────────────────────────────────────────────────────────────────────
 
 /**
+ * True when the pack's manifest declares owner-sealed encryption — i.e. the
+ * pack DEK is sealed to a single holder and carried in
+ * `manifest.encryption.owner`. Consumers (e.g. the browser decrypt) use this
+ * to decide whether to attempt DEK recovery from the header. Returns false for
+ * plaintext packs and for symmetric (`key_derivation: 'none'`) packs.
+ */
+export function isOwnerSealed(manifest: MemoryPackManifest): boolean {
+  return manifest.encryption?.key_derivation === 'owner-sealed';
+}
+
+/**
  * Read a MemoryPack from disk. Accepts either a directory or a
  * `.tar.zst` tarball; tarballs are auto-extracted to a temp dir which
  * is cleaned up before this function returns.

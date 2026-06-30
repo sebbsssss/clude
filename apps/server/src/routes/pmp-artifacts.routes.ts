@@ -16,9 +16,13 @@
  * `pmp.manifest_sig` removed (the artifact's identity); the server re-derives it on register
  * and on verify so a download can be validated without trusting the uploader.
  *
- * AUTH (the fixed Part A/B pattern): owner routes use requirePrivyAuth + requireOwnership and
- * read the wallet ONLY from req.verifiedWallet (ownerFromReq) — a client-supplied ?owner= is
- * NEVER trusted (that was the impersonation hole closed in cc4f2871). /verify is public.
+ * AUTH (the fixed Part A/B pattern): owner routes read the wallet ONLY from req.verifiedWallet
+ * (ownerFromReq) — a client-supplied ?owner= is NEVER trusted (the impersonation hole closed in
+ * cc4f2871). The EXPORT routes (/v1/pmp/export[+/preview]) use optionalPrivyAuth + requireOwnership
+ * so they accept EITHER a Privy JWT OR a Bearer clk_ Cortex key (the credential the dashboard runs
+ * on after chat/auto-register swaps the JWT for a clk_ key); requireOwnership binds verifiedWallet
+ * from the proven identity in both cases, so this widens the CREDENTIAL not the AUTHORISATION. The
+ * artifacts list/detail + import routes stay requirePrivyAuth + requireOwnership. /verify is public.
  *
  * Owner-scoping: every pmp_artifacts / pmp_imports / memories query filters by the caller
  * wallet. §00 MINOR 14: pmp_artifacts.manifest_hash UNIQUE is scoped to (owner_wallet,
@@ -50,6 +54,7 @@ import { getBaseIdentityResolver } from '../lib/payments/base-identity.js';
 import { mintTitleOnExport } from '../lib/payments/mint-title-on-export.js';
 import { mintSolanaTitleOnExport } from '../lib/payments/mint-solana-title-on-export.js';
 import { getSolanaTitleMintClient } from '../lib/solana-title-mint.js';
+import { encryptRecordsForHolder, type OwnerEncHeader } from '../lib/pmp/encrypt-records-for-holder.js';
 
 const log = createChildLogger('pmp-artifacts-routes');
 
@@ -486,6 +491,15 @@ interface WriteRegisterArgs {
   artifactId: string;
   records: MemoryPackRecord[];
   leaves: string[];
+  /**
+   * Encrypt the `.pmp` to the owner before writing (the fail-CLOSED default — the UI promises
+   * encryption). When true, each record's sensitive fields are sealed under a fresh per-pack DEK
+   * (encryptRecordsForHolder) and the file carries an owner-sealed header; when false, the legacy
+   * plaintext bytes are written. The merkle `leaves` are computed over PLAINTEXT upstream and are
+   * unaffected either way (encryption preserves metadata.leaf_hash), so the on-chain commitment is
+   * identical. A holder with no registered key on the encrypt path fails closed: 422, no file.
+   */
+  encrypt: boolean;
   title: string;
   description: string | null;
   licenseType: 'copy' | 'title';
@@ -517,6 +531,7 @@ async function writeRegisterRespond(args: WriteRegisterArgs): Promise<{ handled:
     pmpFilenameBase,
     logContext,
     mkStagedDir,
+    encrypt,
   } = args;
 
   // 5. Compute the pack-level Merkle root (REUSE buildPackTree).
@@ -540,16 +555,47 @@ async function writeRegisterRespond(args: WriteRegisterArgs): Promise<{ handled:
     creator_pubkey: owner,
   };
 
+  // 6b. ENCRYPT-BY-DEFAULT (fail-CLOSED). When `encrypt`, seal a fresh per-pack DEK to the owner's
+  //     registered X25519 key and re-encrypt each record's sensitive fields BEFORE any file is
+  //     staged — so a holder with no registered key produces a 422 and NO bytes. The merkle leaves
+  //     were hashed over PLAINTEXT (above) and encryptRecordsForHolder leaves metadata.leaf_hash
+  //     untouched, so the Merkle root / manifest_hash / on-chain commitment are unaffected; the
+  //     buyer re-hashes plaintext after a BROWSER-side decrypt (a later task). When !encrypt, the
+  //     legacy plaintext bytes are written verbatim. NEVER log the DEK, header, or plaintext.
+  let recordsToWrite: MemoryPackRecord[] = records;
+  let ownerEncryption: OwnerEncHeader | undefined;
+  if (encrypt) {
+    try {
+      const { records: encRecords, header } = await encryptRecordsForHolder(db, records, owner);
+      recordsToWrite = encRecords;
+      ownerEncryption = header;
+    } catch (encErr) {
+      if (encErr instanceof Error && encErr.message === 'holder_key_unregistered') {
+        // Fail closed: refuse to emit a file the holder could never decrypt. No staging dir was
+        // created (this runs BEFORE mkStagedDir), so nothing to clean up — and no bytes ship.
+        res.status(422).json({
+          error: 'holder_key_unregistered',
+          hint: 'register your encryption key before an encrypted export',
+        } satisfies ErrorBody);
+        return { handled: true };
+      }
+      throw encErr; // a genuine DB / crypto error → surfaces to the route's catch as a 500
+    }
+  }
+
   // 7. Write the .pmp tarball via the REUSED writer, EMBEDDING the pmp block (so verify can read
-  //    pmp.merkle_root back out of the file). Producer public_key is the owner (provenance).
+  //    pmp.merkle_root back out of the file). Producer public_key is the owner (provenance). On the
+  //    encrypt path the records are CIPHERTEXT and `ownerEncryption` is the owner-sealed header the
+  //    writer persists into manifest.encryption (key_derivation 'owner-sealed').
   const stagedDir = mkStagedDir();
   const outFile = join(stagedDir, `${pmpFilenameBase}.pmp`);
-  writeMemoryPack(outFile, records, {
+  writeMemoryPack(outFile, recordsToWrite, {
     producer: { name: 'clude-server', version: MEMORYPACK_VERSION, public_key: owner },
     record_schema: RECORD_SCHEMA,
     format: 'tarball',
     anchor_chain: anchorChain ?? undefined,
     pmp: pmpIdentity,
+    ...(ownerEncryption ? { ownerEncryption } : {}),
   });
 
   // 8. Compute manifest_hash over the canonical manifest (sig removed) using the SAME pmp block
@@ -593,7 +639,7 @@ async function writeRegisterRespond(args: WriteRegisterArgs): Promise<{ handled:
     manifest_hash: manifestHash,
     creator_pubkey: owner,
     manifest_sig: '', // server export is unsigned-by-user; desktop signs the title path
-    encryption_scope: 'none' as const,
+    encryption_scope: encrypt ? ('owner' as const) : ('none' as const),
     storage_url: null,
     byte_size: byteSize,
     source_kind: 'web' as const,
@@ -677,7 +723,14 @@ export function pmpArtifactsRoutes(): Router {
    */
   router.post(
     '/v1/pmp/export',
-    requirePrivyAuth,
+    // optionalPrivyAuth (not requirePrivyAuth) so requireOwnership can accept EITHER a Privy JWT OR a
+    // Bearer clk_ Cortex API key. The dashboard swaps the Privy JWT for a clk_ key at login
+    // (chat/auto-register) and runs every authed call on that key, so a hard requirePrivyAuth here
+    // 401s a perfectly valid email/wallet session. requireOwnership binds req.verifiedWallet from the
+    // proven identity in BOTH cases (DID→wallet, or agent_keys.owner_wallet for clk_); the handler
+    // reads the owner ONLY from req.verifiedWallet (ownerFromReq) — no ?owner=/?wallet= is ever
+    // trusted — so this widens the accepted CREDENTIAL without widening WHO is authorised.
+    optionalPrivyAuth,
     requireOwnership,
     async (req: Request, res: Response) => {
       const owner = ownerFromReq(req);
@@ -792,6 +845,9 @@ export function pmpArtifactsRoutes(): Router {
               stagedDir = mkdtempSync(join(tmpdir(), 'pmp-out-'));
               return stagedDir;
             },
+            // FAIL-CLOSED: an omitted `encrypt` defaults to ENCRYPTED. Only an explicit false
+            // produces plaintext — the server never depends on the client sending encrypt:true.
+            encrypt: body.encrypt ?? true,
           });
           if (!result.handled) {
             // writeRegisterRespond always responds; this is unreachable but keeps the type honest.
@@ -943,6 +999,8 @@ export function pmpArtifactsRoutes(): Router {
             stagedDir = mkdtempSync(join(tmpdir(), 'pmp-out-'));
             return stagedDir;
           },
+          // FAIL-CLOSED: omitted `encrypt` ⇒ ENCRYPTED. Only an explicit false yields plaintext.
+          encrypt: body.encrypt ?? true,
         });
         if (!result.handled) {
           res.status(500).json({ error: 'export_failed' } satisfies ErrorBody);
@@ -981,7 +1039,9 @@ export function pmpArtifactsRoutes(): Router {
    */
   router.post(
     '/v1/pmp/export/preview',
-    requirePrivyAuth,
+    // optionalPrivyAuth + requireOwnership: accept a Privy JWT OR a clk_ Cortex key (see the export
+    // route above for why). Still owner-scoped — a preview can only ever count req.verifiedWallet's rows.
+    optionalPrivyAuth,
     requireOwnership,
     async (req: Request, res: Response) => {
       const owner = ownerFromReq(req);

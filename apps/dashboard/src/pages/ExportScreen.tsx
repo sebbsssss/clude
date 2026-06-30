@@ -4,19 +4,30 @@
  * The primary panel packages memories into a portable, self-verifiable `.pmp`
  * artifact: a "What to include" scope control, a live per-type preview + stacked
  * distribution bar, a safety scan, owner-held-encryption toggle, and an artifact
- * card whose Download button publishes a tokenised pack, exports the real `.pmp`,
- * best-effort mints its 1-of-1 ownership title NFT, and surfaces records / size /
- * Merkle root from the result. The secondary
+ * card that surfaces records / size / Merkle root from the result. The secondary
  * row briefs another model (smart-export → paste-ready block) and imports from a
  * file (gracefully self-hosted-only in cortex mode).
  *
- * Everything binds to the owner-scoped cortex endpoints; nothing is mocked. Where
- * an endpoint is self-hosted-only (import) or absent (document ingest in cortex,
- * a server-side scan), the UI degrades to a graceful message rather than crashing.
+ * The Download button is MODE-AWARE so it works for every auth mode (email, wallet,
+ * API key) — see handleDownload. A Privy session with a signable wallet (email's
+ * embedded wallet or an external one) gets an ENCRYPTED, owner-sealed `.pmp` from the
+ * owner-scoped selection export (/v1/pmp/export); register-on-demand handles the first
+ * export's fail-closed `holder_key_unregistered`, and "Decrypt locally" verifies it
+ * fully client-side. An API-key/cortex session (no wallet to encrypt to) gets a
+ * PLAINTEXT pack via the cortex pack export, with an honest message — never a
+ * misleading "Session expired". No tokenised pack and no title mint are involved.
+ *
+ * Everything binds to owner-scoped endpoints; nothing is mocked. Where an endpoint is
+ * self-hosted-only (import) or absent (document ingest in cortex, a server-side scan),
+ * the UI degrades to a graceful message rather than crashing.
  */
 import { useEffect, useRef, useState } from 'react';
-import { api } from '../lib/api';
-import type { MemoryStats, Memory } from '../types/memory';
+import { useWallets, useSignMessage } from '@privy-io/react-auth/solana';
+import { OWNER_SIGN_MESSAGE } from '@clude/shared/core/owner-key-constants';
+import { api, HolderKeyUnregisteredError } from '../lib/api';
+import { buildOwnerKeyRegistration, decryptPmp, parsePmpBase64 } from '@clude/ui';
+import type { ExportRequest, ExportSelection } from '@clude/ui';
+import type { MemoryStats } from '../types/memory';
 import { MEMORY_TYPES } from '../lib/memory-ui';
 
 type Scope = 'all' | 'type' | 'tag' | 'date' | 'pack';
@@ -42,6 +53,10 @@ interface Artifact {
   records: number;
   sizeLabel: string;
   merkle: string; // full hex; abbreviated for display
+  /** 'owner' when the .pmp is owner-sealed — gates the "Decrypt locally" action. */
+  encryptionScope: 'owner' | 'none';
+  /** The exported .pmp bytes (base64), held in memory so a local decrypt needs no server round-trip. */
+  pmpBase64: string;
 }
 
 /** Format a byte count as a compact size label, e.g. 4.8 MB / 612 KB. */
@@ -58,6 +73,10 @@ function abbrevHex(hex: string): string {
 }
 
 export function ExportScreen() {
+  // Privy Solana signing — used to sign OWNER_SIGN_MESSAGE for owner-key registration + local decrypt.
+  const { wallets } = useWallets();
+  const { signMessage } = useSignMessage();
+
   const [stats, setStats] = useState<MemoryStats | null>(null);
   const [scope, setScope] = useState<Scope>('all');
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
@@ -65,12 +84,18 @@ export function ExportScreen() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [encrypt, setEncrypt] = useState(true);
-  const [titleChain, setTitleChain] = useState<'solana' | 'base'>('solana');
 
   const [exporting, setExporting] = useState(false);
   const [artifact, setArtifact] = useState<Artifact | null>(null);
   const [merkleCopied, setMerkleCopied] = useState(false);
   const [exportNote, setExportNote] = useState('');
+
+  // "Decrypt locally" — owner-encrypted artifacts only. Plaintext preview + a plaintext download,
+  // all client-side; the signature + derived key are cleared after use (never logged/persisted).
+  const [decrypting, setDecrypting] = useState(false);
+  const [decryptNote, setDecryptNote] = useState('');
+  const [decryptPreview, setDecryptPreview] = useState<string | null>(null);
+  const [plaintext, setPlaintext] = useState<string | null>(null);
 
   const [provider, setProvider] = useState<Provider>('chatgpt');
   const [brief, setBrief] = useState('');
@@ -90,6 +115,17 @@ export function ExportScreen() {
     return () => { live = false; };
   }, []);
 
+  // When the selection inputs change, the last export's artifact no longer matches — clear it (and
+  // any local-decrypt view) so the "Download .pmp" button can't re-save a stale pack. No-op on mount
+  // (artifact is already null), and an export doesn't touch these deps, so it never clears its own result.
+  useEffect(() => {
+    setArtifact(null);
+    setExportNote('');
+    setDecryptNote('');
+    setDecryptPreview(null);
+    setPlaintext(null);
+  }, [scope, selectedTypes, tagInput, dateFrom, dateTo, encrypt]);
+
   const byType = (stats?.byType ?? {}) as Record<string, number>;
 
   // For "By type", the preview reflects only the selected types (none selected → all).
@@ -107,21 +143,29 @@ export function ExportScreen() {
     });
   }
 
-  // Filter fetched memories to the active scope. The server has no selection-export that ALSO
-  // mints a title, so we enumerate client-side, create a tokenised pack, then export-with-title.
-  function inScope(m: Memory): boolean {
-    if (scope === 'type') return selectedTypes.size === 0 || selectedTypes.has(m.memory_type);
+  /**
+   * Translate the active scope into the server's `ExportSelection`. The server gathers the caller's
+   * OWN memories matching this filter (owner-scoped, paginated) — no client-side enumeration. The
+   * dashboard scope `date` maps to the server's `range`; `pack` (no saved packs in this workspace
+   * yet) and `all` both gather the whole brain. Empty `type`/`tag` selections fall back to `all` so
+   * "By type with nothing ticked" exports everything (matching the preview).
+   */
+  function buildSelection(): ExportSelection {
+    if (scope === 'type' && selectedTypes.size > 0) {
+      return { scope: 'type', types: Array.from(selectedTypes) as ExportSelection['types'] };
+    }
     if (scope === 'tag') {
-      const wanted = tagInput.split(',').map((t) => t.trim()).filter(Boolean);
-      return wanted.length === 0 || (m.tags ?? []).some((t) => wanted.includes(t));
+      const tags = tagInput.split(',').map((t) => t.trim()).filter(Boolean);
+      if (tags.length > 0) return { scope: 'tag', tags };
     }
-    if (scope === 'date') {
-      const t = new Date(m.created_at).getTime();
-      if (dateFrom && t < new Date(dateFrom).getTime()) return false;
-      if (dateTo && t > new Date(dateTo).getTime() + 86_400_000) return false;
-      return true;
+    if (scope === 'date' && (dateFrom || dateTo)) {
+      // Inclusive range. `to` covers the whole end day (server compares created_at <= to).
+      const sel: ExportSelection = { scope: 'range' };
+      if (dateFrom) sel.from = new Date(dateFrom).toISOString();
+      if (dateTo) sel.to = new Date(new Date(dateTo).getTime() + 86_400_000 - 1).toISOString();
+      return sel;
     }
-    return true; // all (and 'pack' has no saved packs in this workspace yet)
+    return { scope: 'all' };
   }
 
   /** Trigger a real browser download of bytes as `<name>.pmp`. */
@@ -137,53 +181,154 @@ export function ExportScreen() {
   }
 
   /**
-   * Export the current selection. The primary path publishes a tokenised pack and best-effort mints
-   * its 1-of-1 title NFT (the demo path). If that path is unavailable here — cortex/API-key mode
-   * (/v1/packs is Privy-only) or Solana tokenisation not configured — it falls back to a plain .pmp
-   * export so the button always works.
+   * Re-save the ALREADY-BUILT artifact bytes — a clean, instant download from a fresh user gesture,
+   * with NO server round-trip and NO wallet signature. This is what the "Download .pmp" button does
+   * once an artifact exists: the FIRST encrypted export of a wallet has to register the owner key,
+   * and that wallet-sign modal consumes the click's user-activation, so the browser can block the
+   * automatic download that follows. The bytes are in hand either way, so a second click here saves
+   * them directly. Subsequent exports (key already registered) auto-download fine on the first click.
+   */
+  function downloadArtifactBytes() {
+    if (!artifact?.pmpBase64) return;
+    const bytes = Uint8Array.from(atob(artifact.pmpBase64), (c) => c.charCodeAt(0));
+    downloadPmp(bytes, artifact.fileName);
+  }
+
+  /**
+   * Sign the fixed OWNER_SIGN_MESSAGE with the connected Solana wallet → the 64-byte signature both
+   * owner-key registration and local decrypt derive the encryption keypair from. Throws a friendly
+   * error if no wallet is connected (e.g. email-only or cortex API-key sessions). The caller is
+   * responsible for zeroing the returned bytes once done.
+   */
+  async function signOwnerMessage(): Promise<Uint8Array> {
+    const wallet = wallets[0];
+    if (!wallet) {
+      throw new Error('Connect a Solana wallet to sign for encryption (email-only sessions can’t derive a key).');
+    }
+    const { signature } = await signMessage({
+      message: new TextEncoder().encode(OWNER_SIGN_MESSAGE),
+      wallet,
+    });
+    return signature;
+  }
+
+  /**
+   * Register the owner's encryption key (sign → mint {pubkey, verifier_ct} → POST). Returns true on
+   * success (or idempotent no-op). The signature + derived material are zeroed immediately after the
+   * payload is built — nothing secret is logged or persisted. A 409 (a DIFFERENT key already
+   * registered) surfaces a clear message and returns false.
+   */
+  async function registerEncryptionKey(): Promise<boolean> {
+    const sig = await signOwnerMessage();
+    try {
+      const reg = await buildOwnerKeyRegistration(sig);
+      const result = await api.registerOwnerKey(reg.x25519_pubkey, reg.verifier_ct);
+      if (!result.ok) {
+        setExportNote('A different encryption key is already registered for this wallet. Decrypt earlier packs with that key.');
+        return false;
+      }
+      return true;
+    } finally {
+      sig.fill(0); // zero the signature regardless of outcome
+    }
+  }
+
+  /**
+   * Export the current selection — mode-aware so it works for EVERY auth mode (email, wallet, API
+   * key). The auth wiring matters: after a Privy login (email OR external wallet) the dashboard runs
+   * on a `clk_` Cortex key, so we never rely on a Privy-JWT-only route. The selection is gathered
+   * server-side from the owner-scoped /v1/pmp/export (same effective auth as the memory list) — no
+   * client enumeration, no tokenised pack, no title mint.
+   *
+   *  • Privy session WITH a usable wallet (email's embedded wallet or an external one) → an ENCRYPTED,
+   *    owner-sealed `.pmp` via api.pmpExport({ encrypt: true }). Encryption-by-default fails closed:
+   *    the first export for a wallet 422s `holder_key_unregistered`; we register the owner key from a
+   *    wallet signature and retry ONCE. "Decrypt locally" stays available on the result.
+   *  • API-key / cortex mode with NO wallet to sign → a PLAINTEXT pack via api.exportMemoryPack
+   *    (cortex pack export, which the `clk_` key authorises). There is no wallet to encrypt to, so we
+   *    say so plainly rather than show a misleading "Session expired".
+   *  • No wallet AND not cortex (shouldn't happen post-login) → an honest "connect a wallet" message.
    */
   async function handleDownload() {
     setExporting(true);
     setExportNote('');
     setArtifact(null);
     const name = `clude-memory-${new Date().toISOString().slice(0, 10)}`;
+    const hasWallet = !!wallets[0];
 
-    // ── Primary: tokenised pack → export + title mint ──
-    try {
-      setExportNote('Gathering memories…');
-      const { memories } = await api.getMemories({ limit: 5000 }); // capped — /v1/packs caps at 10k
-      const hashIds = memories.filter(inScope).map((m) => m.hash_id).filter(Boolean).slice(0, 5000);
-      if (hashIds.length === 0) {
-        setExportNote('Export failed: no memories match this selection.');
-        setExporting(false);
-        return;
+    // ── Privy session with a signable wallet → encrypted, owner-sealed .pmp ──
+    if (hasWallet) {
+      try {
+        const req: ExportRequest = {
+          selection: buildSelection(),
+          name,
+          description: `Exported from Clude dashboard, scope: ${scope}`,
+          category: 'personal', // the user's own memories — private, not listable
+          encrypt,
+        };
+
+        setExportNote(encrypt ? 'Packaging an encrypted .pmp…' : 'Packaging your .pmp…');
+        let result;
+        let registeredThisRun = false;
+        try {
+          result = await api.pmpExport(req);
+        } catch (err) {
+          // Encryption-by-default fails closed: register the owner key (wallet signature) + retry once.
+          if (encrypt && err instanceof HolderKeyUnregisteredError) {
+            setExportNote('Setting up encryption — sign in your wallet (one time)…');
+            const registered = await registerEncryptionKey();
+            if (!registered) {
+              setExporting(false);
+              return; // registerEncryptionKey already set an explanatory note
+            }
+            registeredThisRun = true;
+            setExportNote('Encryption enabled. Packaging an encrypted .pmp…');
+            result = await api.pmpExport(req);
+          } else {
+            throw err;
+          }
+        }
+
+        const b64 = result.pmp_base64 ?? '';
+        const records = result.artifact?.record_count ?? previewTotal;
+        const merkle = result.artifact?.merkle_root ?? '';
+        // The server is authoritative on whether the file is owner-sealed; fall back to our intent.
+        const encryptionScope: 'owner' | 'none' =
+          (result.artifact as { encryption_scope?: 'owner' | 'none' } | undefined)?.encryption_scope
+          ?? (encrypt ? 'owner' : 'none');
+        let sizeLabel = '—';
+        if (b64) {
+          const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+          sizeLabel = fmtBytes(bytes.length);
+          downloadPmp(bytes, result.filename ?? `${name}.pmp`);
+        }
+        setArtifact({ fileName: result.filename ?? `${name}.pmp`, records, sizeLabel, merkle, encryptionScope, pmpBase64: b64 });
+        // When we had to register the key this run, the wallet-sign modal consumed the click's
+        // user-activation, so the browser likely BLOCKED the auto-download above. The bytes are
+        // saved on the artifact, so point the user at the (now instant) "Download .pmp" button.
+        setExportNote(
+          registeredThisRun && encryptionScope === 'owner'
+            ? `Encryption enabled and your .pmp is ready (${records.toLocaleString()} records, owner-sealed). If the download didn’t start, click “Download .pmp”.`
+            : encryptionScope === 'owner'
+            ? `Exported ${records.toLocaleString()} records, owner-sealed. Only your key can decrypt — use "Decrypt locally" to verify.`
+            : `Exported ${records.toLocaleString()} records (plaintext .pmp).`,
+        );
+      } catch (err) {
+        setExportNote(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
       }
-
-      setExportNote(`Publishing a pack of ${hashIds.length.toLocaleString()} memories…`);
-      const pack = await api.createPack(name, hashIds); // tokenises (on-chain pack token)
-
-      setExportNote('Exporting + minting title NFT…');
-      const result = await api.exportPackWithTitle(pack.id, name, encrypt, titleChain);
-
-      const b64 = result.pmp_base64 ?? '';
-      const records = result.artifact?.record_count ?? hashIds.length;
-      const merkle = result.artifact?.merkle_root ?? pack.attestation?.merkle_root ?? '';
-      let sizeLabel = '—';
-      if (b64) {
-        const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-        sizeLabel = fmtBytes(bytes.length);
-        downloadPmp(bytes, result.filename ?? `${name}.pmp`);
-      }
-      setArtifact({ fileName: result.filename ?? `${name}.pmp`, records, sizeLabel, merkle });
-      setExportNote(`Exported ${records.toLocaleString()} records. A 1-of-1 title NFT is minting on ${titleChain === 'base' ? 'Base' : 'Solana'} (best-effort): check your wallet or the explorer.`);
       setExporting(false);
       return;
-    } catch (titleErr) {
-      // Title path unavailable here — fall through to a plain export rather than failing the button.
-      console.warn('Title export unavailable, falling back to a plain .pmp export.', titleErr);
     }
 
-    // ── Fallback: plain ephemeral .pmp (no mint) ──
+    // ── No signable wallet ──
+    // API-key / cortex sessions can't derive an encryption key (there's no wallet to sign), so export
+    // PLAINTEXT via the cortex pack endpoint the `clk_` key authorises. Anything else (no wallet AND
+    // not cortex) gets an honest message — never the misleading "Session expired".
+    if (api.getMode() !== 'cortex') {
+      setExportNote('Encrypted export needs a wallet login. Connect a wallet to export an owner-sealed .pmp, or use the CLI.');
+      setExporting(false);
+      return;
+    }
     try {
       const args: { name: string; description: string; types?: string[]; tags?: string[] } = {
         name,
@@ -196,12 +341,74 @@ export function ExportScreen() {
       const json = JSON.stringify(pack, null, 2);
       const records = pack.memory_count ?? pack.memories?.length ?? previewTotal;
       downloadPmp(json, `${name}.pmp`);
-      setArtifact({ fileName: `${name}.pmp`, records, sizeLabel: fmtBytes(new Blob([json]).size), merkle: '' });
-      setExportNote(`Exported ${records.toLocaleString()} records (plain .pmp, no title mint in this workspace).`);
+      // Plaintext pack (not an owner-sealed .tar.zst) — no local-decrypt action, and we say why.
+      setArtifact({ fileName: `${name}.pmp`, records, sizeLabel: fmtBytes(new Blob([json]).size), merkle: '', encryptionScope: 'none', pmpBase64: '' });
+      setExportNote(`Exported ${records.toLocaleString()} records (plaintext — API-key sessions have no wallet to encrypt to). Connect a wallet for an owner-sealed .pmp.`);
     } catch (err) {
       setExportNote(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
     }
     setExporting(false);
+  }
+
+  /**
+   * Decrypt the just-exported owner-sealed `.pmp` ENTIRELY client-side: sign OWNER_SIGN_MESSAGE →
+   * parse the in-memory `.pmp` bytes → decryptPmp → render a short plaintext preview + offer a
+   * plaintext JSONL download. Nothing is POSTed; the signature is zeroed immediately after the
+   * decrypt, and the plaintext is held in state only until the user navigates away.
+   *
+   * The server emits a zstd-compressed `.tar.zst`; `parsePmpBase64` inflates it in-browser via
+   * `fzstd` (no server round-trip), so the whole flow — inflate → USTAR parse → tweetnacl decrypt —
+   * runs locally. A plain (uncompressed) USTAR `.pmp` is handled too. Any parse failure surfaces an
+   * honest message and never fabricates a result.
+   */
+  async function handleDecryptLocally() {
+    if (!artifact || artifact.encryptionScope !== 'owner' || !artifact.pmpBase64) return;
+    setDecrypting(true);
+    setDecryptNote('');
+    setDecryptPreview(null);
+    setPlaintext(null);
+
+    // Parse the .pmp (inflating the .tar.zst in-browser) BEFORE signing, so an unreadable file never
+    // makes the user sign for nothing.
+    let parsed;
+    try {
+      parsed = parsePmpBase64(artifact.pmpBase64);
+    } catch (err) {
+      setDecryptNote(`Could not read the .pmp: ${err instanceof Error ? err.message : String(err)}`);
+      setDecrypting(false);
+      return;
+    }
+
+    setDecryptNote('Sign in your wallet to derive your decryption key…');
+    let sig: Uint8Array | null = null;
+    try {
+      sig = await signOwnerMessage();
+      const { records, verified } = await decryptPmp(parsed.manifest, parsed.records, sig);
+
+      // Build a compact plaintext export (JSONL of decrypted records) + a short preview.
+      const jsonl = records.map((r) => JSON.stringify(r)).join('\n') + '\n';
+      setPlaintext(jsonl);
+      const preview = records
+        .slice(0, 5)
+        .map((r) => `• [${r.kind}] ${String(r.content).slice(0, 120)}${String(r.content).length > 120 ? '…' : ''}`)
+        .join('\n');
+      setDecryptPreview(preview || '(no records)');
+      setDecryptNote(
+        `Decrypted ${records.length.toLocaleString()} records locally. ${verified ? 'Integrity verified (Merkle root + leaf hashes match).' : 'Decrypted, but integrity could not be verified.'}`,
+      );
+    } catch (err) {
+      setDecryptNote(`Decrypt failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      if (sig) sig.fill(0); // zero the signature; the derived key lived only inside decryptPmp
+    }
+    setDecrypting(false);
+  }
+
+  /** Download the locally-decrypted plaintext as a .jsonl (client-side only; never uploaded). */
+  function downloadPlaintext() {
+    if (!plaintext || !artifact) return;
+    const base = artifact.fileName.replace(/\.pmp$/i, '');
+    downloadPmp(plaintext, `${base}-decrypted.jsonl`);
   }
 
   async function copyText(text: string, onMark: (v: boolean) => void) {
@@ -435,35 +642,6 @@ export function ExportScreen() {
                   }} />
                 </button>
               </div>
-              {/* Title mint chain — which network the 1-of-1 ownership title lands on. */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>Title mint chain</div>
-                  <div style={{ fontSize: 11.5, color: 'var(--fg-3)', marginTop: 2 }}>
-                    {titleChain === 'base' ? 'Base — custodial title address' : 'Solana — non-custodial, your own wallet'}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: 6, flex: 'none' }}>
-                  {(['solana', 'base'] as const).map((c) => {
-                    const active = titleChain === c;
-                    return (
-                      <button
-                        key={c}
-                        onClick={() => setTitleChain(c)}
-                        style={{
-                          fontSize: 12, fontWeight: active ? 600 : 500, cursor: 'pointer', borderRadius: 7,
-                          padding: '6px 13px', textTransform: 'capitalize',
-                          color: active ? 'var(--accent-text)' : 'var(--fg-2)',
-                          background: active ? 'var(--accent-soft)' : 'var(--surface-2)',
-                          border: active ? '1px solid var(--accent)' : '1px solid var(--border)',
-                        }}
-                      >
-                        {c}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
             </div>
           </div>
 
@@ -498,17 +676,47 @@ export function ExportScreen() {
             <div style={{ display: 'flex', gap: 10, marginTop: 18, flexWrap: 'wrap' }}>
               <button
                 className="pbtn"
-                onClick={handleDownload}
+                onClick={artifact?.pmpBase64 ? downloadArtifactBytes : handleDownload}
                 disabled={exporting}
                 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: 'var(--accent-fg)', background: 'var(--accent)', border: 'none', borderRadius: 9, padding: '10px 16px', cursor: exporting ? 'default' : 'pointer', opacity: exporting ? 0.7 : 1 }}
               >
                 ↓ {exporting ? 'Packaging…' : 'Download .pmp'}
               </button>
+              {/* Decrypt locally — owner-sealed artifacts only. Client-side only: nothing is uploaded. */}
+              {artifact?.encryptionScope === 'owner' && artifact.pmpBase64 && (
+                <button
+                  className="gbtn"
+                  onClick={handleDecryptLocally}
+                  disabled={decrypting}
+                  style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, color: 'var(--fg)', background: 'transparent', border: '1px solid var(--border-2)', borderRadius: 9, padding: '10px 16px', cursor: decrypting ? 'default' : 'pointer', opacity: decrypting ? 0.7 : 1 }}
+                >
+                  🔓 {decrypting ? 'Decrypting…' : 'Decrypt locally'}
+                </button>
+              )}
               <button className="gbtn" disabled style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-3)', background: 'transparent', border: '1px solid var(--border-2)', borderRadius: 9, padding: '10px 16px', cursor: 'default' }}>Send to desktop</button>
               <button className="gbtn" disabled style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-3)', background: 'transparent', border: '1px solid var(--border-2)', borderRadius: 9, padding: '10px 16px', cursor: 'default' }}>List on marketplace</button>
             </div>
             {exportNote && (
               <div style={{ marginTop: 12, fontSize: 12, color: exportNote.startsWith('Export failed') ? '#ef4444' : '#10b981' }}>{exportNote}</div>
+            )}
+            {/* Local-decrypt result: a short plaintext preview + a plaintext download. Zero-knowledge —
+                the signature/derived key never leave this page and are cleared after the decrypt. */}
+            {decryptNote && (
+              <div style={{ marginTop: 12, fontSize: 12, color: /failed|could not|isn’t|not available/i.test(decryptNote) ? '#f59e0b' : '#10b981', lineHeight: 1.5 }}>{decryptNote}</div>
+            )}
+            {decryptPreview && (
+              <div style={{ marginTop: 12, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px', fontFamily: 'var(--mono)', fontSize: 11.5, lineHeight: 1.6, color: 'var(--fg-2)', whiteSpace: 'pre-wrap', maxHeight: 160, overflow: 'auto' }}>
+                {decryptPreview}
+              </div>
+            )}
+            {plaintext && (
+              <button
+                className="pbtn"
+                onClick={downloadPlaintext}
+                style={{ marginTop: 12, fontSize: 12.5, fontWeight: 600, color: 'var(--accent-fg)', background: 'var(--accent)', border: 'none', borderRadius: 9, padding: '9px 14px', cursor: 'pointer' }}
+              >
+                ↓ Download decrypted plaintext (.jsonl)
+              </button>
             )}
           </div>
         </div>

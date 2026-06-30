@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
-import { usePrivy } from '@privy-io/react-auth';
 import { MemoryExportPanel } from '@clude/ui';
 import type { PmpArtifact } from '@clude/ui';
+import { useSolanaWallet } from '../hooks/use-solana-wallet';
 import { createPmpExportApi } from '../lib/pmp-export-api';
 
 /**
@@ -9,12 +9,19 @@ import { createPmpExportApi } from '../lib/pmp-export-api';
  * Mounts the shared @clude/ui MemoryExportPanel, authenticated with the user's
  * Privy access token (the /v1/pmp/* endpoints are Privy-gated). The backend
  * resolves the owner wallet from the verified token.
+ *
+ * Encryption-by-default fails closed for users without a registered owner key, so
+ * the adapter is given the wallet's `signMessage` + address: the panel registers
+ * the key on-demand (sign OWNER_SIGN_MESSAGE → POST) and retries the export.
  */
 export function ExportMemories() {
-  const { getAccessToken, user } = usePrivy();
+  const { getAccessToken, signMessage, wallets } = useSolanaWallet();
+  const walletAddress = wallets[0]?.address ?? null;
 
-  const exportApi = useMemo(() => createPmpExportApi(getAccessToken), [getAccessToken]);
-  const walletAddress = user?.wallet?.address ?? null;
+  const exportApi = useMemo(
+    () => createPmpExportApi(getAccessToken, signMessage, walletAddress),
+    [getAccessToken, signMessage, walletAddress],
+  );
 
   function handleDownload(_artifact: PmpArtifact, downloadUrl: string) {
     window.open(downloadUrl, '_blank', 'noopener');

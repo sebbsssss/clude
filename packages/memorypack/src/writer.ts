@@ -21,6 +21,7 @@ import {
   MemoryPackRevocation,
   MemoryPackRevocationAnchor,
   MemoryPackSignature,
+  OwnerEncryptionHeader,
 } from './types.js';
 import {
   encryptBuffer,
@@ -73,8 +74,27 @@ export interface WriterOptions {
 
   /** `directory` (default) emits a folder; `tarball` emits `.tar.zst`. */
   format?: 'directory' | 'tarball';
-  /** Pack-level encryption envelope. */
+  /**
+   * Symmetric pack-level encryption. The writer holds the 32-byte key and
+   * encrypts `record.content` (and, under `records+blobs`, blob bytes) itself.
+   * Produces `key_derivation: 'none'` (keys shipped out of band).
+   *
+   * Mutually exclusive with `ownerEncryption` — that path takes records that
+   * are ALREADY ciphertext and the writer never sees a key.
+   */
   encryption?: WriterEncryption;
+  /**
+   * Owner-sealed encryption header (`manifest.encryption.owner`). Supply this
+   * when `records` are ALREADY ciphertext (`encrypted: true`, base64 `content`,
+   * nonce embedded) and the pack DEK has been sealed to a single holder out of
+   * band (e.g. `encryptRecordsForHolder`). The writer does NOT re-encrypt — it
+   * persists records verbatim and writes the owner-sealed envelope so a holder
+   * can recover the DEK from the file alone.
+   *
+   * Mutually exclusive with `encryption`. When absent, the manifest carries no
+   * encryption block (byte-identical to a plaintext pack).
+   */
+  ownerEncryption?: OwnerEncryptionHeader;
   /** Map of blob hash (`sha256:hex` of plaintext) → blob payload. */
   blobs?: Map<string, WriterBlob>;
   /** Caller-supplied chain anchor entries (written to anchors.jsonl). */
@@ -193,6 +213,16 @@ function writeDirectory(
 
   const clock = opts.clock ?? (() => new Date().toISOString());
 
+  // The two encryption paths are mutually exclusive: `encryption` has the
+  // writer hold the key and encrypt in place; `ownerEncryption` takes records
+  // that are already ciphertext and only writes the sealed envelope. Mixing
+  // them would double-encrypt and produce a manifest that lies about its DEK.
+  if (opts.encryption && opts.ownerEncryption) {
+    throw new Error(
+      'writeMemoryPack: `encryption` and `ownerEncryption` are mutually exclusive',
+    );
+  }
+
   // Encryption normalization: default scope based on whether blobs are present.
   const encryption = opts.encryption
     ? {
@@ -205,7 +235,9 @@ function writeDirectory(
   }
   const encryptBlobs = encryption?.scope === 'records+blobs';
 
-  // ── records (with optional encryption) ──
+  // ── records (with optional symmetric encryption) ──
+  // Owner-sealed packs are written verbatim: the records are ALREADY ciphertext
+  // (Task 2 sealed them), so we never re-encrypt and never stamp a nonce here.
   const recordsToWrite: MemoryPackRecord[] = records.map((r) => {
     if (!encryption) return r;
     const { ciphertext, nonce } = encryptString(r.content, encryption.key);
@@ -223,14 +255,24 @@ function writeDirectory(
     anchor_chain: opts.anchor_chain,
     pack_format: 'directory',
     blobs_count: opts.blobs && opts.blobs.size > 0 ? opts.blobs.size : undefined,
-    encryption: encryption
+    encryption: opts.ownerEncryption
       ? {
+          // Owner-sealed: records are pre-encrypted ciphertext; the pack DEK is
+          // sealed once to the holder in `owner`. Scope is always `records`.
           algorithm: 'xsalsa20-poly1305',
           nonce_strategy: 'per-record-random',
-          key_derivation: 'none',
-          scope: encryption.scope!,
+          key_derivation: 'owner-sealed',
+          scope: 'records',
+          owner: opts.ownerEncryption,
         }
-      : undefined,
+      : encryption
+        ? {
+            algorithm: 'xsalsa20-poly1305',
+            nonce_strategy: 'per-record-random',
+            key_derivation: 'none',
+            scope: encryption.scope!,
+          }
+        : undefined,
     pmp: opts.pmp,
   };
   writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2));
