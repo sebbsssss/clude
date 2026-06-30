@@ -113,9 +113,15 @@
 
 /* ── responsive: stack, hero shrinks above the card ── */
 @media (max-width: 880px) {
-  .dlogin { grid-template-columns: 1fr; }
-  .dlogin__hero { padding: 36px clamp(24px, 7vw, 48px) 12px; gap: 26px; }
-  .dlogin__form { padding: 12px clamp(20px, 7vw, 48px) 36px; }
+  /* align-content:start so the rows don't stretch to fill the viewport (extra space
+     falls to the bottom, not between sections). */
+  .dlogin { grid-template-columns: 1fr; align-content: start; }
+  /* flex-start so the hero flows top-down with just `gap`, instead of spreading its
+     content across a stretched column. */
+  .dlogin__hero { justify-content: flex-start; padding: 36px clamp(24px, 7vw, 48px) 12px; gap: 22px; }
+  /* Drop the centred 540px box: the form goes full-width and left-aligns with the
+     SAME horizontal padding as the hero, so the card edge lines up with the headline. */
+  .dlogin__form { max-width: none; margin: 0; padding: 12px clamp(24px, 7vw, 48px) 36px; }
 }
 @media (max-width: 560px) {
   .dlogin__caps { display: none; }
