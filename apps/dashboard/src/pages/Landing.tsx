@@ -97,7 +97,6 @@ export function Landing() {
             <span className="dlogin__mark">CLUDE</span>
             <span className="dlogin__badge">Dashboard</span>
           </div>
-          <span className="dlogin__tag"><span className="dlogin__dot" />◎ Memory online</span>
         </div>
 
         <div className="dlogin__lede">
@@ -111,6 +110,8 @@ export function Landing() {
             and portable.
           </p>
         </div>
+
+        <span className="dlogin__tag dlogin__status"><span className="dlogin__dot" />◎ Memory online</span>
       </section>
 
       {/* ── form ── */}
