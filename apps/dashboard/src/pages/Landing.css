@@ -1,53 +1,67 @@
 /*
- * Dashboard login, aligned with the /chat (CcAuth) two-column hero + Privy card.
- * Uses the revamp design tokens (--fg / --accent / --surface) so it matches the
- * signed-in dashboard, and stacks to a single column on narrow screens.
+ * Dashboard login — matches the /chat (CcAuth) login: warm-monochrome DARK palette
+ * (clude-black / clude-offwhite), clude-blue accent, Funnel Sans + Inconsolata.
+ *
+ * The login scopes its own dark tokens on .dlogin so it is ALWAYS dark, independent
+ * of the dashboard's theme default (which is light outside the signed-in shell — the
+ * reason this screen used to render bright).
  */
+@import url('https://fonts.googleapis.com/css2?family=Funnel+Sans:ital,wght@0,300..800;1,300..800&family=Inconsolata:wght@300..700&display=swap');
 
 .dlogin {
+  /* chat dark palette (colors_and_type.css .theme-dark) */
+  --bg: #0B0B0B;
+  --surface: #141414;
+  --surface-2: #1E1E1E;
+  --fg: #F2F0E8;
+  --fg-2: #B5B3AA;
+  --fg-3: #7A7770;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-2: rgba(255, 255, 255, 0.15);
+  --accent: #2244FF;           /* clude-blue (logo / brand) */
+  --accent-fg: #ffffff;
+  --accent-soft: rgba(34, 68, 255, 0.14);
+  --accent-text: #8496ff;      /* lighter blue for text accents on black */
+  --mono: 'Inconsolata', ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+
   min-height: 100vh;
   display: grid;
   grid-template-columns: 1.05fr 0.95fr;
   color: var(--fg);
-  /* One continuous surface: the accent glow spans both columns so the two sides
-     blend with no seam or divider. */
+  font-family: 'Funnel Sans', ui-sans-serif, system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  /* one continuous surface — the glow spans both columns, no seam */
   background:
     radial-gradient(1150px 640px at 14% -6%, var(--accent-soft), transparent 60%),
     var(--bg);
 }
 
-/* ── hero (left) ── no border, no own background: it blends into .dlogin ── */
+/* ── hero (left): wordmark pinned top, headline vertically centred (lede uses
+   auto margins to absorb the free space when the column stretches on desktop) ── */
 .dlogin__hero {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 40px;
   padding: 56px clamp(40px, 6vw, 96px);
 }
 .dlogin__top { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .dlogin__wordmark { display: flex; align-items: center; gap: 11px; }
-.dlogin__mark { font-size: 14px; font-weight: 800; letter-spacing: 0.2em; color: var(--fg); }
+.dlogin__mark { font-size: 15px; font-weight: 700; letter-spacing: 0.2em; color: var(--fg); }
 .dlogin__badge {
-  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase;
-  color: var(--accent-text); border: 1px solid var(--border-2); border-radius: 999px; padding: 3px 9px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--accent-text); border: 1px solid var(--border-2); border-radius: 999px; padding: 3px 10px;
 }
 .dlogin__tag {
-  font-family: var(--mono); font-size: 10.5px; color: var(--fg-3); letter-spacing: 0.06em;
+  font-family: var(--mono); font-size: 11px; color: var(--fg-3); letter-spacing: 0.04em;
   display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
 }
 .dlogin__dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.16); }
 
-.dlogin__lede { max-width: 30ch; }
-.dlogin__eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent-text); margin-bottom: 18px; }
-.dlogin__h1 { font-size: clamp(30px, 3.4vw, 46px); font-weight: 800; line-height: 1.06; letter-spacing: -0.02em; margin: 0 0 18px; color: var(--fg); }
-.dlogin__h1-em { background: linear-gradient(135deg, var(--accent), #8aa0ff); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
-.dlogin__lede p { font-size: 14.5px; line-height: 1.7; color: var(--fg-2); margin: 0; max-width: 44ch; }
-
-.dlogin__caps { display: flex; flex-wrap: wrap; gap: 8px; }
-.dlogin__cap {
-  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-3);
-  border: 1px solid var(--border); border-radius: 8px; padding: 7px 11px; background: var(--surface-2);
-}
+.dlogin__lede { max-width: 32ch; margin: auto 0; }
+.dlogin__eyebrow { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent-text); margin-bottom: 20px; }
+.dlogin__h1 { font-size: clamp(32px, 3.6vw, 50px); font-weight: 700; line-height: 1.04; letter-spacing: -0.02em; margin: 0 0 20px; color: var(--fg); }
+.dlogin__h1-em { color: var(--accent); }
+.dlogin__lede p { font-size: 15px; line-height: 1.7; color: var(--fg-2); margin: 0; max-width: 46ch; }
 
 /* ── form (right) ── */
 .dlogin__form {
@@ -55,20 +69,20 @@
   padding: 56px clamp(28px, 5vw, 72px); width: 100%; max-width: 540px; margin: 0 auto;
 }
 .dlogin__formhead { display: flex; align-items: center; justify-content: space-between; }
-.dlogin__privy { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-3); }
+.dlogin__privy { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-3); }
 .dlogin__privy strong { color: var(--fg); }
 
 .dlogin__card {
-  border: 1px solid var(--border); background: var(--surface); border-radius: 16px;
-  padding: 26px; display: flex; flex-direction: column; gap: 18px;
+  border: 1px solid var(--border); background: var(--surface); border-radius: 14px;
+  padding: 28px; display: flex; flex-direction: column; gap: 18px;
 }
-.dlogin__title { font-size: 21px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.01em; color: var(--fg); }
-.dlogin__desc { font-size: 13px; line-height: 1.6; color: var(--fg-2); margin: 0; }
+.dlogin__title { font-size: 22px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.01em; color: var(--fg); }
+.dlogin__desc { font-size: 13.5px; line-height: 1.6; color: var(--fg-2); margin: 0; }
 
-.dlogin__field { display: flex; flex-direction: column; gap: 7px; }
-.dlogin__label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-3); }
+.dlogin__field { display: flex; flex-direction: column; gap: 8px; }
+.dlogin__label { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-3); }
 .dlogin__input {
-  font-size: 14px; padding: 12px 13px; border: 1px solid var(--border-2); border-radius: 10px;
+  font-size: 14.5px; font-family: inherit; padding: 12px 14px; border: 1px solid var(--border-2); border-radius: 10px;
   background: var(--bg); color: var(--fg); outline: none; transition: border-color 0.15s; width: 100%; box-sizing: border-box;
 }
 .dlogin__input::placeholder { color: var(--fg-3); }
@@ -77,22 +91,23 @@
 
 .dlogin__primary {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  font-size: 13.5px; font-weight: 600; padding: 12px 16px; border-radius: 10px;
-  border: 1px solid var(--accent); background: var(--accent); color: var(--accent-fg); cursor: pointer; transition: opacity 0.15s;
+  font-family: inherit; font-size: 14px; font-weight: 600; padding: 13px 16px; border-radius: 10px;
+  border: 1px solid var(--accent); background: var(--accent); color: var(--accent-fg); cursor: pointer; transition: filter 0.15s;
 }
+.dlogin__primary:hover:not(:disabled) { filter: brightness(1.08); }
 .dlogin__primary:disabled { opacity: 0.5; cursor: default; }
 .dlogin__ghost { background: transparent; color: var(--fg); border: 1px solid var(--border-2); }
-.dlogin__ghost:hover:not(:disabled) { border-color: var(--fg-3); }
+.dlogin__ghost:hover:not(:disabled) { border-color: var(--fg-3); filter: none; }
 
-.dlogin__divider { display: flex; align-items: center; gap: 12px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-3); }
+.dlogin__divider { display: flex; align-items: center; gap: 12px; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-3); }
 .dlogin__divider::before, .dlogin__divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 
 .dlogin__inlinebtns { display: flex; justify-content: space-between; gap: 14px; }
-.dlogin__link { background: transparent; border: none; padding: 0; font-family: var(--mono); font-size: 11px; color: var(--fg-3); cursor: pointer; }
+.dlogin__link { background: transparent; border: none; padding: 0; font-family: var(--mono); font-size: 11.5px; color: var(--fg-3); cursor: pointer; }
 .dlogin__link:hover { color: var(--fg); }
 
 .dlogin__adv { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 2px; }
-.dlogin__adv > summary { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-3); cursor: pointer; list-style: none; }
+.dlogin__adv > summary { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-3); cursor: pointer; list-style: none; }
 .dlogin__adv > summary::-webkit-details-marker { display: none; }
 .dlogin__adv > summary:hover { color: var(--fg-2); }
 .dlogin__advbody { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
@@ -103,26 +118,16 @@
 }
 .dlogin__go:disabled { background: var(--surface-2); border-color: var(--border-2); color: var(--fg-3); cursor: not-allowed; }
 
-.dlogin__err { font-family: var(--mono); font-size: 11px; color: #ef4444; margin-top: -4px; }
-.dlogin__legal { font-size: 11px; line-height: 1.6; color: var(--fg-3); }
+.dlogin__err { font-family: var(--mono); font-size: 11.5px; color: #EF4444; }
+.dlogin__legal { font-size: 11.5px; line-height: 1.6; color: var(--fg-3); }
 .dlogin__legal a { color: var(--fg-2); text-decoration: underline; }
-.dlogin__foot { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-3); margin-top: 12px; }
 
 .dlogin__spinner { width: 13px; height: 13px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: dlogin-spin 0.7s linear infinite; }
 @keyframes dlogin-spin { to { transform: rotate(360deg); } }
 
-/* ── responsive: stack, hero shrinks above the card ── */
+/* ── responsive: stack, full-width left-aligned form (card edge on the headline) ── */
 @media (max-width: 880px) {
-  /* align-content:start so the rows don't stretch to fill the viewport (extra space
-     falls to the bottom, not between sections). */
   .dlogin { grid-template-columns: 1fr; align-content: start; }
-  /* flex-start so the hero flows top-down with just `gap`, instead of spreading its
-     content across a stretched column. */
-  .dlogin__hero { justify-content: flex-start; padding: 36px clamp(24px, 7vw, 48px) 12px; gap: 22px; }
-  /* Drop the centred 540px box: the form goes full-width and left-aligns with the
-     SAME horizontal padding as the hero, so the card edge lines up with the headline. */
-  .dlogin__form { max-width: none; margin: 0; padding: 12px clamp(24px, 7vw, 48px) 36px; }
-}
-@media (max-width: 560px) {
-  .dlogin__caps { display: none; }
+  .dlogin__hero { justify-content: flex-start; padding: 40px clamp(24px, 7vw, 48px) 12px; gap: 22px; }
+  .dlogin__form { max-width: none; margin: 0; padding: 12px clamp(24px, 7vw, 48px) 40px; }
 }

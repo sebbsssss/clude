@@ -3,8 +3,6 @@ import { useLoginWithEmail } from '@privy-io/react-auth';
 import { useAuthContext } from '../hooks/AuthContext';
 import './Landing.css';
 
-const CAPS = ['Memory Timeline', 'Entity Graph', 'Brain View', 'Memory Packs'];
-
 /**
  * Logged-out dashboard screen, aligned with the /chat CcAuth login.
  *
@@ -112,12 +110,6 @@ export function Landing() {
             search and export packs, and carry knowledge across agents. Typed, decay-aware,
             and portable.
           </p>
-        </div>
-
-        <div className="dlogin__caps">
-          {CAPS.map((c) => (
-            <span key={c} className="dlogin__cap">{c}</span>
-          ))}
         </div>
       </section>
 
@@ -236,11 +228,6 @@ export function Landing() {
             By continuing you agree to the <a href="https://clude.io" target="_blank" rel="noreferrer">Terms</a> and{' '}
             <a href="https://clude.io" target="_blank" rel="noreferrer">Privacy Policy</a>. Memory is portable, export anytime.
           </div>
-        </div>
-
-        <div className="dlogin__foot">
-          <span>◇ dashboard</span>
-          <span>◎ clude.io</span>
         </div>
       </section>
     </div>
