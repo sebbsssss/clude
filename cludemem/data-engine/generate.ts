@@ -8,6 +8,7 @@ import { makeTeacher } from './teacher';
 import { deriveExamples } from './derive';
 import { runGauntlet } from './gauntlet';
 import type { Example, TaskName } from './taxonomy';
+import { seededRng } from './noise';
 
 // Load worktree-root .env so --teacher can read TEACHER_* creds (never committed).
 dotenv.config({ path: fileURLToPath(new URL('../../.env', import.meta.url)) });
@@ -51,6 +52,33 @@ function toChat(ex: Example) {
     task: ex.task,
     meta: ex.meta,
   };
+}
+
+// Per-task quota balancer (--balance): seeded-shuffle each task's pool and keep up
+// to its target. CLASSIFY/ENTITIES are 1 per fact (abundant); COMPACT/CONSOLIDATE
+// are ~1 per script (rare), so raising the rare ones needs MORE SCRIPTS (--count),
+// and this trims the abundant ones down. Without it the abundant tasks swamp the
+// corpus (~21x) and the model overtrains on them. Runs AFTER the gauntlet +
+// self-checks, so those still validate the full generated set; balancing only
+// shapes what gets written.
+const BALANCE_TARGETS: Record<TaskName, number> = {
+  CLASSIFY: 8000, ENTITIES: 8000, TEMPORAL: 8000,
+  QUERY: 6000, ANSWER: 6000, EXTRACT: 5000,
+  RECONCILE: 3000, CONSOLIDATE: 2500, COMPACT: 2500,
+};
+function balanceExamplesByTask(examples: Example[], seed: number): Example[] {
+  const rng = seededRng(`balance:${seed}`);
+  const byTask = new Map<TaskName, Example[]>();
+  for (const e of examples) (byTask.get(e.task) ?? byTask.set(e.task, []).get(e.task)!).push(e);
+  const out: Example[] = [];
+  for (const [task, pool] of byTask) {
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    out.push(...pool.slice(0, BALANCE_TARGETS[task] ?? pool.length));
+  }
+  return out;
 }
 
 async function main() {
@@ -137,6 +165,10 @@ async function main() {
     assert(longTasks.length > 0 && longOnes / longTasks.length >= 0.2, `length stratification: only ${((100 * longOnes) / Math.max(1, longTasks.length)).toFixed(0)}% of long-context examples >=4000 chars (<20%)`);
   }
 
+  // Optional per-task balancing (--balance): shape the written shard's task mix.
+  const doBalance = process.argv.includes('--balance');
+  const emitted = doBalance ? balanceExamplesByTask(kept, seed) : kept;
+
   // Write the shard. Default smoke -> sample.jsonl (committed, small);
   // any scaled run -> train.jsonl (gitignored). Override with --out <file>.
   const outArgIdx = process.argv.indexOf('--out');
@@ -145,14 +177,14 @@ async function main() {
   const outDir = fileURLToPath(new URL('../data/', import.meta.url));
   mkdirSync(outDir, { recursive: true });
   const outPath = `${outDir}${outName}`;
-  writeFileSync(outPath, kept.map((e) => JSON.stringify(toChat(e))).join('\n') + '\n');
+  writeFileSync(outPath, emitted.map((e) => JSON.stringify(toChat(e))).join('\n') + '\n');
 
   // Summary.
   const perTask = expectTasks
-    .map((t) => `${t}=${kept.filter((e) => e.task === t).length}`)
+    .map((t) => `${t}=${emitted.filter((e) => e.task === t).length}`)
     .join('  ');
   const rate = all.length ? ((100 * rejected.length) / all.length).toFixed(1) : '0';
-  console.log(`CludeMem data engine — wrote ${kept.length} examples (${rejected.length} rejected, ${rate}%) to ${outPath}`);
+  console.log(`CludeMem data engine — wrote ${emitted.length} examples (${rejected.length} rejected, ${rate}%) to ${outPath}`);
   console.log(`  scripts: ${scripts.length}   renderer: ${useTeacher ? 'teacher' : 'template'}   tasks: ${perTask}`);
   if (rejected.length) console.log(`  sample rejections: ${rejected.slice(0, 3).map((r) => r.reason).join(' | ')}`);
 }
