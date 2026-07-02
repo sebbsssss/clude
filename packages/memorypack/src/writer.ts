@@ -1,8 +1,11 @@
 import {
+  closeSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readFileSync,
+  readSync,
   readdirSync,
   renameSync,
   rmSync,
@@ -172,13 +175,15 @@ export function writeMemoryPack(
   targetPath: string,
   records: MemoryPackRecord[],
   opts: WriterOptions,
-): void {
+): MemoryPackManifest {
+  // Returns the manifest AS WRITTEN (Memory 3.0 B1.2): callers that record a
+  // manifest hash must hash what actually landed in the pack, not a synthetic
+  // reconstruction that silently drifts when the writer adds fields.
   const format = opts.format ?? 'directory';
   if (format === 'tarball') {
-    writeTarball(targetPath, records, opts);
-    return;
+    return writeTarball(targetPath, records, opts);
   }
-  writeDirectory(targetPath, records, opts);
+  return writeDirectory(targetPath, records, opts);
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -189,7 +194,7 @@ function writeDirectory(
   dir: string,
   records: MemoryPackRecord[],
   opts: WriterOptions,
-): void {
+): MemoryPackManifest {
   // Clear known prior outputs so a re-export over an existing pack
   // directory doesn't leak stale signatures/anchors/blobs into the new
   // pack. Only removes our own well-known files; foreign files in the
@@ -356,6 +361,8 @@ function writeDirectory(
       indexEntries.map((e) => JSON.stringify(e)).join('\n') + '\n',
     );
   }
+
+  return manifest;
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -366,7 +373,7 @@ function writeTarball(
   targetPath: string,
   records: MemoryPackRecord[],
   opts: WriterOptions,
-): void {
+): MemoryPackManifest {
   const targetAbs = resolve(targetPath);
   const parent = dirname(targetAbs);
   // Stable inner-dir name: derived from the target filename so the
@@ -380,7 +387,8 @@ function writeTarball(
     // Stage as a directory pack, then tar the inner directory.
     writeDirectory(stagingDir, records, opts);
 
-    // Patch manifest to reflect the actual on-disk packaging.
+    // Patch manifest to reflect the actual on-disk packaging. This re-read
+    // copy IS the manifest inside the tarball — it is what gets returned.
     const manifestPath = join(stagingDir, 'manifest.json');
     const manifest = JSON.parse(
       require('fs').readFileSync(manifestPath, 'utf-8'),
@@ -410,6 +418,8 @@ function writeTarball(
     if (!existsSync(targetAbs) || statSync(targetAbs).size === 0) {
       throw new Error('MemoryPack: tar produced an empty archive');
     }
+
+    return manifest;
   } finally {
     rmSync(tmpRoot, { recursive: true, force: true });
   }
@@ -620,16 +630,31 @@ function appendRevocationAnchorsToDirectory(
 // locking. Documented in CHANGELOG.
 // ────────────────────────────────────────────────────────────────────
 
-function isTarballPath(path: string): boolean {
+const ZSTD_MAGIC = Buffer.from([0x28, 0xb5, 0x2f, 0xfd]);
+
+/** @internal exported for tests only. */
+export function isTarballPath(path: string): boolean {
   if (/\.tar\.zst$/i.test(path)) return true;
-  // Some callers may pass a tarball without the canonical extension.
-  // Stat-then-isFile so directory packs (which we want to handle in
-  // directory-mode) don't get routed through the tarball path.
+  // Extensionless callers (Memory 3.0 B1 fix): only route existing FILES that
+  // actually carry the zstd magic through tarball extraction. Previously ANY
+  // existing file was routed blindly, so a non-tarball died downstream with an
+  // opaque 'tar failed (exit)'. Directories and nonexistent paths stay in
+  // directory-mode; a non-zstd file now fails loudly here instead.
   try {
-    return statSync(path).isFile();
+    if (!statSync(path).isFile()) return false;
   } catch {
     return false;
   }
+  const fd = openSync(path, 'r');
+  try {
+    const head = Buffer.alloc(4);
+    if (readSync(fd, head, 0, 4, 0) === 4 && head.equals(ZSTD_MAGIC)) return true;
+  } finally {
+    closeSync(fd);
+  }
+  throw new Error(
+    `memorypack: '${path}' is an existing file but not a .tar.zst (bad magic); refusing tarball extraction`,
+  );
 }
 
 function withExtractedTarball<T>(

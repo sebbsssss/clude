@@ -46,6 +46,7 @@ import {
 } from '@clude/memorypack';
 import { memoryContentHash, buildPackTree, type MemoryType } from '@clude/tokenization';
 import { getDb } from '@clude/shared/core/database';
+import { anchorExportBestEffort, attestExport } from '../lib/export-anchor';
 import { requirePrivyAuth, optionalPrivyAuth } from '@clude/brain/auth/privy-auth';
 import { requireOwnership } from '@clude/brain/auth/require-ownership';
 import { createChildLogger } from '@clude/shared/core/logger';
@@ -261,15 +262,39 @@ function stableStringify(value: unknown): string {
 }
 
 /**
- * Compute the artifact's `manifest_hash`: sha256 over the canonical manifest JSON with the
- * `pmp.manifest_sig` stripped. Deterministic for identical pack content (§4.1: "binds title,
- * license, count, Merkle root under one signature").
+ * Compute the artifact's `manifest_hash` (Memory 3.0 B1.2): sha256 over the
+ * IDENTITY PROJECTION of a manifest — an explicit pick-list, not the raw
+ * manifest — so export, import, and verify all hash the same shape:
+ *
+ *   - created_at is blanked: identity is content, not wall-clock, so two
+ *     exports of identical content share a hash (the dedup key, §00 MINOR 14)
+ *   - encryption / pack_format / writer-added fields are excluded: an
+ *     encrypted export of the same content shares identity with its
+ *     plaintext twin
+ *   - pmp.manifest_sig is stripped: the hash is what gets signed
+ *
+ * Export feeds this the manifest the WRITER RETURNED (what actually landed
+ * in the file); import feeds it the manifest READ from the file. Before this,
+ * export hashed a synthetic reconstruction while import hashed the raw file
+ * manifest (real created_at, encryption block included), so
+ * pmp_imports.artifact_manifest_hash could NEVER join to
+ * pmp_artifacts.manifest_hash. The pick-list reproduces the historical
+ * export-side hash exactly, so existing rows keep their identity.
  */
-function computeManifestHash(manifest: MemoryPackManifest): string {
-  // Deep-clone + strip the signature so the hash is over everything-but-the-sig.
-  const clone = JSON.parse(JSON.stringify(manifest)) as Record<string, unknown>;
-  const pmp = clone.pmp as Record<string, unknown> | undefined;
-  if (pmp && 'manifest_sig' in pmp) delete pmp.manifest_sig;
+function manifestIdentityHash(manifest: MemoryPackManifest): string {
+  const pmp = { ...((manifest.pmp ?? {}) as Record<string, unknown>) };
+  delete pmp.manifest_sig;
+  const identity = {
+    memorypack_version: manifest.memorypack_version,
+    producer: manifest.producer,
+    created_at: '',
+    record_count: manifest.record_count,
+    record_schema: manifest.record_schema,
+    pmp,
+  };
+  // Deep-clone through JSON to normalize undefined fields away, matching the
+  // historical computeManifestHash behavior byte-for-byte.
+  const clone = JSON.parse(JSON.stringify(identity)) as Record<string, unknown>;
   return createHash('sha256').update(stableStringify(clone), 'utf8').digest('hex');
 }
 
@@ -589,7 +614,7 @@ async function writeRegisterRespond(args: WriteRegisterArgs): Promise<{ handled:
   //    writer persists into manifest.encryption (key_derivation 'owner-sealed').
   const stagedDir = mkStagedDir();
   const outFile = join(stagedDir, `${pmpFilenameBase}.pmp`);
-  writeMemoryPack(outFile, recordsToWrite, {
+  const writtenManifest = writeMemoryPack(outFile, recordsToWrite, {
     producer: { name: 'clude-server', version: MEMORYPACK_VERSION, public_key: owner },
     record_schema: RECORD_SCHEMA,
     format: 'tarball',
@@ -598,9 +623,14 @@ async function writeRegisterRespond(args: WriteRegisterArgs): Promise<{ handled:
     ...(ownerEncryption ? { ownerEncryption } : {}),
   });
 
-  // 8. Compute manifest_hash over the canonical manifest (sig removed) using the SAME pmp block
-  //    that was written to disk, so the stored hash describes the actual artifact.
-  const manifestForHash: MemoryPackManifest = {
+  // 8. Compute manifest_hash over the identity projection of the manifest the
+  //    writer ACTUALLY WROTE (B1.2: the stored hash describes the artifact's
+  //    real bytes, not a synthetic reconstruction). The synthetic shape stays
+  //    as a fallback for callers/mocks on the old void-returning writer, and
+  //    as a drift tripwire: if the projection of the written manifest ever
+  //    disagrees with the synthetic expectation, the writer changed something
+  //    identity-relevant and we want to know loudly.
+  const syntheticManifest: MemoryPackManifest = {
     memorypack_version: MEMORYPACK_VERSION,
     producer: { name: 'clude-server', version: MEMORYPACK_VERSION, public_key: owner },
     created_at: '', // excluded from identity — stable across exports
@@ -608,7 +638,16 @@ async function writeRegisterRespond(args: WriteRegisterArgs): Promise<{ handled:
     record_schema: RECORD_SCHEMA,
     pmp: pmpIdentity,
   };
-  const manifestHash = computeManifestHash(manifestForHash);
+  const manifestHash = manifestIdentityHash(writtenManifest ?? syntheticManifest);
+  if (writtenManifest) {
+    const expected = manifestIdentityHash(syntheticManifest);
+    if (expected !== manifestHash) {
+      log.warn(
+        { ...logContext, expected, actual: manifestHash },
+        'export: written-manifest identity differs from synthetic expectation (writer drift?)',
+      );
+    }
+  }
 
   // Read the staged .pmp once: its size for the row, and its bytes (base64) for an INLINE download
   // so the client can save the file directly — no server-side blob storage, no dangling /download URL.
@@ -677,10 +716,31 @@ async function writeRegisterRespond(args: WriteRegisterArgs): Promise<{ handled:
     return { handled: true };
   }
 
+  // Per-export on-chain anchor (Memory 3.0 B1.4): commits (merkle_root,
+  // manifest_hash) via a Solana memo signed by the DEDICATED anchor keypair,
+  // never the treasury. Default off (ANCHOR_EXPORTS_ON_CHAIN). Fire-and-forget
+  // so exports never block on chain latency, but the result IS captured: the
+  // helper persists anchor_tx_sig onto this artifact row when confirmed.
+  void anchorExportBestEffort(artifactId, tree.root, manifestHash).catch(() => {
+    /* logged inside; anchoring must never affect the export */
+  });
+
+  // Export attestation (B1.2b): detached ed25519 signature by the proof-plane
+  // keypair over this export's identity tuple — offline-verifiable proof that
+  // Clude produced this exact (merkle_root, manifest_hash). Null until the
+  // anchor keypair env is set; never blocks the export.
+  const attestation = attestExport({
+    artifactId,
+    merkleRoot: tree.root,
+    manifestHash,
+    createdAt: nowIso,
+  });
+
   // Return the artifact metadata + the .pmp bytes inline (base64) so the client downloads the file
   // directly. No storage_url / no /download handler: the bytes are served once here, on export.
   res.status(201).json({
     artifact: artifactRow,
+    attestation,
     pmp_base64: pmpBase64,
     filename: pmpFilename,
   });
@@ -1282,17 +1342,38 @@ export function pmpArtifactsRoutes(): Router {
           (manifest.producer && manifest.producer.public_key) || block.creator_pubkey || null;
 
         // 1+2. Hash-verify each record. A declared leaf_hash that disagrees with the recompute
-        //      is a rejected record (the byte stream was tampered post-signing). Encrypted
-        //      records (ciphertext content without a key) cannot be leaf-verified → rejected.
+        //      is a rejected record (the byte stream was tampered post-signing).
+        //
+        //      Encrypted records (B1.3, ciphertext-preserving import): the server can NEVER
+        //      decrypt them — the pack DEK is sealed to the holder's key, which is derived from
+        //      a wallet signature the server does not have. That is the zero-knowledge design,
+        //      not a limitation to code around. So encrypted records are importable ONLY when
+        //      the pack is owner-sealed TO THE IMPORTER (anyone else could never read them),
+        //      and they land as COLD rows: ciphertext content, provider_delegated=false, the
+        //      pack DEK wrap copied per-row into memory_dek_wraps so the existing owner-key
+        //      machinery can decrypt each row independently (browser/redelegate). Their leaf
+        //      hash cannot be recomputed server-side, so the DECLARED hash is recorded with
+        //      hash_verified=false — trust anchored to the pack's Merkle commitment, not to a
+        //      server recompute.
         interface VerifiedRecord {
           rec: MemoryPackRecord;
           leaf: string;
         }
+        const ownerEnc =
+          manifest.encryption?.key_derivation === 'owner-sealed' ? manifest.encryption.owner : undefined;
+        const encImportable = Boolean(ownerEnc && ownerEnc.recipient_wallet === owner);
         const verified: VerifiedRecord[] = [];
+        const encryptedVerified: VerifiedRecord[] = [];
         let rejectedCount = 0;
         for (const rec of result.records) {
           if (rec.encrypted) {
-            rejectedCount += 1;
+            const declaredEnc = declaredLeafHash(rec);
+            if (!encImportable || declaredEnc === null) {
+              // Sealed to someone else (or hashless): unreadable forever for this owner → reject.
+              rejectedCount += 1;
+              continue;
+            }
+            encryptedVerified.push({ rec, leaf: declaredEnc });
             continue;
           }
           const leaf = leafHashFor(leafInputFromRecord(rec, owner));
@@ -1310,7 +1391,11 @@ export function pmpArtifactsRoutes(): Router {
 
         // 3. Dedupe by content_hash against the owner's existing memories. One IN-query over
         //    the candidate leaf set, scoped to the caller — never another tenant's rows.
-        const candidateLeaves = Array.from(new Set(verified.map((v) => v.leaf)));
+        //    Encrypted candidates participate via their DECLARED leaves: an encrypted import
+        //    of content the owner already holds in plaintext dedupes against it.
+        const candidateLeaves = Array.from(
+          new Set([...verified.map((v) => v.leaf), ...encryptedVerified.map((v) => v.leaf)]),
+        );
         const existingHashes = new Set<string>();
         if (candidateLeaves.length > 0) {
           const { data: existingRaw, error: existErr } = await db
@@ -1363,6 +1448,46 @@ export function pmpArtifactsRoutes(): Router {
           });
         }
 
+        // 4b. Encrypted survivors (B1.3): cold owner-sealed rows. summary '' (no plaintext,
+        //     the revoke-state precedent), provider_delegated=false (server cannot read),
+        //     nonce preserved in metadata (needed to decrypt the record body later).
+        let importedEncryptedCount = 0;
+        const encryptedLeaves: string[] = [];
+        for (const { rec, leaf } of encryptedVerified) {
+          if (existingHashes.has(leaf) || seenInBatch.has(leaf)) {
+            dedupedCount += 1;
+            continue;
+          }
+          seenInBatch.add(leaf);
+          importedCount += 1;
+          importedEncryptedCount += 1;
+          encryptedLeaves.push(leaf);
+          const baseTags = Array.isArray(rec.tags) ? rec.tags.filter((t) => t !== importTag) : [];
+          toInsert.push({
+            memory_type: recordMemoryType(rec.kind),
+            content: rec.content, // ciphertext — never logged, never plaintext-indexed
+            summary: '',
+            tags: [...baseTags, importTag],
+            importance: typeof rec.importance === 'number' ? rec.importance : 0.5,
+            access_count: 0,
+            source: importTag,
+            related_user: null,
+            related_wallet: null,
+            metadata: {
+              imported_from_pmp: block.artifact_id ?? null,
+              source_pubkey: sourcePubkey,
+              pmp_encrypted_import: { hash_verified: false, nonce: (rec as { nonce?: string }).nonce ?? null },
+            },
+            owner_wallet: owner,
+            content_hash: leaf,
+            encrypted: true,
+            provider_delegated: false,
+            encryption_pubkey: ownerEnc!.recipient_pubkey,
+            tokenization_status: 'pending',
+            created_at: rec.created_at && !Number.isNaN(Date.parse(rec.created_at)) ? rec.created_at : nowIso,
+          });
+        }
+
         if (toInsert.length > 0) {
           const { error: insErr } = await db.from('memories').insert(toInsert);
           if (insErr) {
@@ -1372,12 +1497,36 @@ export function pmpArtifactsRoutes(): Router {
           }
         }
 
+        // 4c. Copy the pack DEK wrap onto each encrypted row so the existing owner-key
+        //     machinery (browser decrypt, redelegate) treats it like any owner-sealed memory.
+        //     Best-effort: a wrap failure leaves the row cold-but-recoverable via re-import.
+        if (encryptedLeaves.length > 0 && ownerEnc) {
+          const { data: encRows } = await db
+            .from('memories')
+            .select('id, content_hash')
+            .eq('owner_wallet', owner)
+            .in('content_hash', encryptedLeaves);
+          const wraps = ((encRows ?? []) as Array<{ id: number; content_hash: string }>).map((r) => ({
+            memory_id: r.id,
+            recipient: 'owner',
+            wrapped_dek: ownerEnc.dek_wrap,
+            wrap_pubkey: ownerEnc.wrap_pubkey,
+          }));
+          if (wraps.length > 0) {
+            const { error: wrapErr } = await db.from('memory_dek_wraps').insert(wraps);
+            if (wrapErr) log.warn({ err: wrapErr }, 'import: owner DEK wrap insert failed (rows cold, re-import recovers)');
+          }
+        }
+
         // 5. Write the import receipt (owner-scoped accounting).
         const importId = generateImportId();
         const receipt = {
           import_id: importId,
           owner_wallet: owner,
-          artifact_manifest_hash: computeManifestHash(manifest),
+          // Identity projection (B1.2): hashes the same shape export records,
+          // so import receipts JOIN to pmp_artifacts.manifest_hash (the raw
+          // file manifest — real created_at, encryption block — never could).
+          artifact_manifest_hash: manifestIdentityHash(manifest),
           source_pubkey: sourcePubkey,
           record_count: result.records.length,
           imported_count: importedCount,
@@ -1395,6 +1544,9 @@ export function pmpArtifactsRoutes(): Router {
           import_id: importId,
           record_count: result.records.length,
           imported_count: importedCount,
+          // B1.3: of imported_count, how many landed as cold owner-sealed rows
+          // (ciphertext preserved, decryptable only by the owner's key).
+          imported_encrypted_count: importedEncryptedCount,
           deduped_count: dedupedCount,
           rejected_count: rejectedCount,
           source_pubkey: sourcePubkey,
