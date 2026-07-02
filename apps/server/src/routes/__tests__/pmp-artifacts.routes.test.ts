@@ -1789,6 +1789,70 @@ describe('POST /v1/pmp/import — encrypted records (B1.3 ciphertext-preserving)
     });
   });
 
+  it('JOIN PROPERTY (B1.2a x B1.5): an import receipt for a pack hashes to the export row it came from', async () => {
+    authedWallet = OWNER;
+    const packId = seedOwnedPack();
+    seedHolderKey(OWNER);
+
+    // Export: the writer mock RETURNS a full as-written manifest (real
+    // created_at, tarball format, owner-sealed encryption block) — the shape
+    // that used to break the join when import hashed it raw.
+    let fullManifest: any = null;
+    writeMemoryPack.mockImplementationOnce((file: string, records: any[], opts: any) => {
+      writeFileSync(file, Buffer.from('PMP'));
+      fullManifest = {
+        memorypack_version: '0.2',
+        producer: opts.producer,
+        created_at: '2026-07-03T09:00:00.000Z', // real wall clock, unlike the identity form
+        record_count: records.length,
+        record_schema: opts.record_schema,
+        pack_format: 'tarball',
+        ...(opts.ownerEncryption
+          ? {
+              encryption: {
+                algorithm: 'xsalsa20-poly1305',
+                nonce_strategy: 'per-record-random',
+                key_derivation: 'owner-sealed',
+                scope: 'records',
+                owner: opts.ownerEncryption,
+              },
+            }
+          : {}),
+        pmp: opts.pmp,
+      };
+      return fullManifest;
+    });
+
+    const exportRes = await request(app()).post('/v1/pmp/export').send({ pack_id: packId });
+    expect(exportRes.status).toBe(201);
+    const exportedHash = exportRes.body.artifact.manifest_hash as string;
+    expect(exportedHash).toBeTruthy();
+    expect(fullManifest).not.toBeNull();
+
+    // Import the SAME manifest (as a reader would find it in the file).
+    readMemoryPack.mockReturnValue({
+      manifest: fullManifest,
+      records: [],
+      minimalRecords: [],
+      verifiedRecords: new Set<string>(),
+      unsignedRecords: new Set<string>(),
+      anchors: [],
+      verifiedBlobs: new Set<string>(),
+      verifiedAnchors: new Set<string>(),
+      revocations: [],
+      revokedRecordHashes: new Set<string>(),
+      revocationAnchors: [],
+      verifiedRevocationAnchors: new Set<string>(),
+      warnings: [],
+    });
+    const importRes = await request(app()).post('/v1/pmp/import').send({ pmp_base64: b64('fake') });
+    expect(importRes.status).toBe(201);
+
+    const receipts = insertedRows.filter((i) => i.table === 'pmp_imports').flatMap((i) => i.rows);
+    expect(receipts).toHaveLength(1);
+    expect((receipts[0] as any).artifact_manifest_hash).toBe(exportedHash);
+  });
+
   it('dedupes an encrypted record whose DECLARED hash matches an existing plaintext memory', async () => {
     authedWallet = OWNER;
     stubEncryptedPmp({ recipientWallet: OWNER, records: [ENC_RECORD] });
