@@ -168,3 +168,43 @@ export async function optionalOwnership(
   }
   return requireOwnership(req, res, next);
 }
+
+/**
+ * Non-middleware ownership probe (Memory 3.0 C0 owner fence): does the caller
+ * on this request provably own `wallet`? Same two auth paths as
+ * requireOwnership (Privy JWT → linked wallets; Bearer clk_ → agent owner),
+ * but returns a boolean instead of writing a response, so route handlers can
+ * gate individual resources (e.g. a fetched memory's owner_wallet) and choose
+ * their own failure shape (404 vs 403 vs log-only).
+ *
+ * Fails CLOSED: any resolution error counts as "does not own".
+ */
+export async function callerOwnsWallet(req: Request, wallet: string): Promise<boolean> {
+  if (!wallet) return false;
+  if (req.verifiedWallet === wallet) return true;
+
+  if (req.privyUser) {
+    try {
+      // Reuse wallets if an earlier middleware already resolved them.
+      const cached = req.privyUser.wallets;
+      const idToken = req.headers['x-privy-id-token'] as string | undefined;
+      const wallets = cached ?? (await resolveWalletsForDid(req.privyUser.userId, idToken));
+      req.privyUser.wallets = wallets;
+      if (wallets.includes(wallet)) return true;
+    } catch (err) {
+      log.warn({ err: err instanceof Error ? err.message : String(err) }, 'callerOwnsWallet: Privy wallet resolution failed (fail closed)');
+    }
+  }
+
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith('Bearer clk_')) {
+    try {
+      const agent = await authenticateAgent(authHeader.slice(7));
+      if (agent?.owner_wallet === wallet) return true;
+    } catch (err) {
+      log.warn({ err: err instanceof Error ? err.message : String(err) }, 'callerOwnsWallet: API-key resolution failed (fail closed)');
+    }
+  }
+
+  return false;
+}

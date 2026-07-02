@@ -16,6 +16,15 @@ export async function bootstrap(): Promise<void> {
   await startServer();
   log.info({ port: config.server.port }, 'Server listening');
 
+  // Recall canary (Memory 3.0 C0) — probes every recall RPC lane with an owner-scoped
+  // sentinel on deploy + hourly, and logs at ERROR when a lane silently dies (the
+  // migration-028 class: vector recall broken for weeks with keyword fallback masking it).
+  // Gated on Supabase creds; RECALL_CANARY=false opts out.
+  if (process.env.SUPABASE_URL && process.env.RECALL_CANARY !== 'false') {
+    const { startRecallCanary } = require('./workers/recall-canary');
+    startRecallCanary();
+  }
+
   // Durable marketplace delivery poller (§00 M6) — the backstop that drives paid copy orders to
   // 'delivered' even if the post-webhook delivery nudge is lost to a crash. Only run it when the
   // Stripe rail is configured (no paid orders exist otherwise); harmless either way (it no-ops).
