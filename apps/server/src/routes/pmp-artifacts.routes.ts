@@ -262,15 +262,39 @@ function stableStringify(value: unknown): string {
 }
 
 /**
- * Compute the artifact's `manifest_hash`: sha256 over the canonical manifest JSON with the
- * `pmp.manifest_sig` stripped. Deterministic for identical pack content (§4.1: "binds title,
- * license, count, Merkle root under one signature").
+ * Compute the artifact's `manifest_hash` (Memory 3.0 B1.2): sha256 over the
+ * IDENTITY PROJECTION of a manifest — an explicit pick-list, not the raw
+ * manifest — so export, import, and verify all hash the same shape:
+ *
+ *   - created_at is blanked: identity is content, not wall-clock, so two
+ *     exports of identical content share a hash (the dedup key, §00 MINOR 14)
+ *   - encryption / pack_format / writer-added fields are excluded: an
+ *     encrypted export of the same content shares identity with its
+ *     plaintext twin
+ *   - pmp.manifest_sig is stripped: the hash is what gets signed
+ *
+ * Export feeds this the manifest the WRITER RETURNED (what actually landed
+ * in the file); import feeds it the manifest READ from the file. Before this,
+ * export hashed a synthetic reconstruction while import hashed the raw file
+ * manifest (real created_at, encryption block included), so
+ * pmp_imports.artifact_manifest_hash could NEVER join to
+ * pmp_artifacts.manifest_hash. The pick-list reproduces the historical
+ * export-side hash exactly, so existing rows keep their identity.
  */
-function computeManifestHash(manifest: MemoryPackManifest): string {
-  // Deep-clone + strip the signature so the hash is over everything-but-the-sig.
-  const clone = JSON.parse(JSON.stringify(manifest)) as Record<string, unknown>;
-  const pmp = clone.pmp as Record<string, unknown> | undefined;
-  if (pmp && 'manifest_sig' in pmp) delete pmp.manifest_sig;
+function manifestIdentityHash(manifest: MemoryPackManifest): string {
+  const pmp = { ...((manifest.pmp ?? {}) as Record<string, unknown>) };
+  delete pmp.manifest_sig;
+  const identity = {
+    memorypack_version: manifest.memorypack_version,
+    producer: manifest.producer,
+    created_at: '',
+    record_count: manifest.record_count,
+    record_schema: manifest.record_schema,
+    pmp,
+  };
+  // Deep-clone through JSON to normalize undefined fields away, matching the
+  // historical computeManifestHash behavior byte-for-byte.
+  const clone = JSON.parse(JSON.stringify(identity)) as Record<string, unknown>;
   return createHash('sha256').update(stableStringify(clone), 'utf8').digest('hex');
 }
 
@@ -590,7 +614,7 @@ async function writeRegisterRespond(args: WriteRegisterArgs): Promise<{ handled:
   //    writer persists into manifest.encryption (key_derivation 'owner-sealed').
   const stagedDir = mkStagedDir();
   const outFile = join(stagedDir, `${pmpFilenameBase}.pmp`);
-  writeMemoryPack(outFile, recordsToWrite, {
+  const writtenManifest = writeMemoryPack(outFile, recordsToWrite, {
     producer: { name: 'clude-server', version: MEMORYPACK_VERSION, public_key: owner },
     record_schema: RECORD_SCHEMA,
     format: 'tarball',
@@ -599,9 +623,14 @@ async function writeRegisterRespond(args: WriteRegisterArgs): Promise<{ handled:
     ...(ownerEncryption ? { ownerEncryption } : {}),
   });
 
-  // 8. Compute manifest_hash over the canonical manifest (sig removed) using the SAME pmp block
-  //    that was written to disk, so the stored hash describes the actual artifact.
-  const manifestForHash: MemoryPackManifest = {
+  // 8. Compute manifest_hash over the identity projection of the manifest the
+  //    writer ACTUALLY WROTE (B1.2: the stored hash describes the artifact's
+  //    real bytes, not a synthetic reconstruction). The synthetic shape stays
+  //    as a fallback for callers/mocks on the old void-returning writer, and
+  //    as a drift tripwire: if the projection of the written manifest ever
+  //    disagrees with the synthetic expectation, the writer changed something
+  //    identity-relevant and we want to know loudly.
+  const syntheticManifest: MemoryPackManifest = {
     memorypack_version: MEMORYPACK_VERSION,
     producer: { name: 'clude-server', version: MEMORYPACK_VERSION, public_key: owner },
     created_at: '', // excluded from identity — stable across exports
@@ -609,7 +638,16 @@ async function writeRegisterRespond(args: WriteRegisterArgs): Promise<{ handled:
     record_schema: RECORD_SCHEMA,
     pmp: pmpIdentity,
   };
-  const manifestHash = computeManifestHash(manifestForHash);
+  const manifestHash = manifestIdentityHash(writtenManifest ?? syntheticManifest);
+  if (writtenManifest) {
+    const expected = manifestIdentityHash(syntheticManifest);
+    if (expected !== manifestHash) {
+      log.warn(
+        { ...logContext, expected, actual: manifestHash },
+        'export: written-manifest identity differs from synthetic expectation (writer drift?)',
+      );
+    }
+  }
 
   // Read the staged .pmp once: its size for the row, and its bytes (base64) for an INLINE download
   // so the client can save the file directly — no server-side blob storage, no dangling /download URL.
@@ -1387,7 +1425,10 @@ export function pmpArtifactsRoutes(): Router {
         const receipt = {
           import_id: importId,
           owner_wallet: owner,
-          artifact_manifest_hash: computeManifestHash(manifest),
+          // Identity projection (B1.2): hashes the same shape export records,
+          // so import receipts JOIN to pmp_artifacts.manifest_hash (the raw
+          // file manifest — real created_at, encryption block — never could).
+          artifact_manifest_hash: manifestIdentityHash(manifest),
           source_pubkey: sourcePubkey,
           record_count: result.records.length,
           imported_count: importedCount,
