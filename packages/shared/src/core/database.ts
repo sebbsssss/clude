@@ -19,11 +19,16 @@ export function _setDb(client: SupabaseClient): void {
   supabase = client;
 }
 
-export async function initDatabase(): Promise<void> {
-  const db = getDb();
-
-  // Create tables via SQL (using Supabase's rpc or direct REST)
-  // We'll use the Supabase SQL editor approach — run migrations via rpc
+/**
+ * The boot DDL blob — the full schema for a FRESH database. Since Memory 3.0 C0
+ * (P0.4) this is NOT replayed on every start: replaying hundreds of lines of
+ * CREATE OR REPLACE on boot silently reverts hand-applied migrations whenever
+ * this blob is stale (the migration-028 class: a reverted RPC killed vector
+ * recall for weeks). Migrations are the single schema writer for ESTABLISHED
+ * databases; this blob only bootstraps empty ones (the self-hosted SDK
+ * zero-config path). Keep it in sync with supabase-schema.sql + migrations.
+ */
+async function runBootDdl(db: SupabaseClient): Promise<void> {
   try {
     const { error } = await db.rpc('exec_sql', {
       query: `
@@ -778,8 +783,134 @@ export async function initDatabase(): Promise<void> {
   } catch {
     log.warn('rpc exec_sql not available. Create tables via Supabase SQL editor.');
   }
+}
 
-  log.info('Database initialized');
+// ---- Schema verification (Memory 3.0 C0 / P0.4: the boot-blob freeze) ---- //
+
+/** Core tables every deployment must have; `memories` doubles as the fresh-DB probe. */
+const CORE_TABLES = [
+  'memories',
+  'memory_fragments',
+  'memory_links',
+  'agent_keys',
+  'dream_logs',
+  'rate_limits',
+  'chat_conversations',
+  'chat_messages',
+] as const;
+
+/** Core RPCs whose absence means a stale/partial schema (both live in the blob + migrations). */
+const CORE_RPC_PROBES: Array<{ name: string; args: Record<string, unknown> }> = [
+  { name: 'get_linked_memories', args: { seed_ids: [], min_strength: 0.1, max_results: 1, filter_owner: null } },
+  { name: 'bm25_search_memories', args: { search_query: '', match_count: 1, min_decay: 0.1, filter_owner: null } },
+];
+
+export interface SchemaReport {
+  at: string;
+  status: 'ok' | 'fresh-bootstrapped' | 'drift' | 'unknown' | 'replayed';
+  missingTables: string[];
+  brokenRpcs: string[];
+}
+
+let lastSchemaReport: SchemaReport | null = null;
+
+/** Last schema verification result, for /health or dashboard surfacing. */
+export function getSchemaDriftReport(): SchemaReport | null {
+  return lastSchemaReport;
+}
+
+const MISSING_RE = /does not exist|could not find|schema cache/i;
+
+async function verifyCoreSchema(db: SupabaseClient): Promise<{ missingTables: string[]; brokenRpcs: string[]; probeErrors: string[] }> {
+  const missingTables: string[] = [];
+  const probeErrors: string[] = [];
+
+  for (const table of CORE_TABLES) {
+    try {
+      const { error } = await db.from(table).select('id', { head: true, count: 'exact' }).limit(1);
+      if (error) {
+        if (MISSING_RE.test(error.message ?? '')) missingTables.push(table);
+        else probeErrors.push(`${table}: ${error.message}`);
+      }
+    } catch (err) {
+      probeErrors.push(`${table}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  const brokenRpcs: string[] = [];
+  for (const probe of CORE_RPC_PROBES) {
+    try {
+      const { error } = await db.rpc(probe.name, probe.args);
+      if (error && MISSING_RE.test(error.message ?? '')) brokenRpcs.push(probe.name);
+    } catch (err) {
+      probeErrors.push(`${probe.name}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  return { missingTables, brokenRpcs, probeErrors };
+}
+
+/**
+ * Initialize the database (Memory 3.0 C0 / P0.4 semantics).
+ *
+ * Modes via INIT_DB_MODE:
+ *   'auto' (default) — verify-only drift check. Mutates schema ONLY when the
+ *       database is verifiably FRESH (the `memories` table itself is missing),
+ *       which preserves the self-hosted SDK zero-config bootstrap. Anything
+ *       else missing on an established DB is DRIFT: log.error, never mutate —
+ *       apply the corresponding migration by hand.
+ *   'verify' — never mutates, even on a fresh DB (drift check only).
+ *   'replay' — legacy behavior, unconditional DDL replay (escape hatch).
+ *
+ * @param dbOverride test injection; production callers pass nothing.
+ */
+export async function initDatabase(dbOverride?: SupabaseClient): Promise<void> {
+  const db = dbOverride ?? getDb();
+  const mode = process.env.INIT_DB_MODE ?? 'auto';
+
+  if (mode === 'replay') {
+    await runBootDdl(db);
+    lastSchemaReport = { at: new Date().toISOString(), status: 'replayed', missingTables: [], brokenRpcs: [] };
+    log.info('Database initialized (legacy replay mode)');
+    return;
+  }
+
+  let { missingTables, brokenRpcs, probeErrors } = await verifyCoreSchema(db);
+
+  // Fresh database: the memories table itself is deterministically absent.
+  if (mode === 'auto' && missingTables.includes('memories')) {
+    log.info('Fresh database detected (no memories table) — running boot DDL');
+    await runBootDdl(db);
+    ({ missingTables, brokenRpcs, probeErrors } = await verifyCoreSchema(db));
+    const healthy = missingTables.length === 0 && brokenRpcs.length === 0;
+    lastSchemaReport = {
+      at: new Date().toISOString(),
+      status: healthy ? 'fresh-bootstrapped' : 'drift',
+      missingTables,
+      brokenRpcs,
+    };
+    if (healthy) log.info('Database bootstrapped from boot DDL');
+    else log.error({ missingTables, brokenRpcs }, 'SCHEMA DRIFT after fresh bootstrap — check exec_sql availability');
+    return;
+  }
+
+  if (probeErrors.length > 0 && missingTables.length === 0 && brokenRpcs.length === 0) {
+    // Probes errored for non-schema reasons (network, auth) — health unknown, never mutate.
+    lastSchemaReport = { at: new Date().toISOString(), status: 'unknown', missingTables, brokenRpcs };
+    log.warn({ probeErrors: probeErrors.slice(0, 3) }, 'Schema verification inconclusive (probe errors); skipping');
+    return;
+  }
+
+  const healthy = missingTables.length === 0 && brokenRpcs.length === 0;
+  lastSchemaReport = { at: new Date().toISOString(), status: healthy ? 'ok' : 'drift', missingTables, brokenRpcs };
+  if (healthy) {
+    log.info('Database schema verified (boot blob frozen; migrations are the single schema writer)');
+  } else {
+    log.error(
+      { missingTables, brokenRpcs },
+      'SCHEMA DRIFT — core objects missing on an established database; apply the corresponding migration by hand (the boot blob no longer auto-repairs)',
+    );
+  }
 }
 
 
