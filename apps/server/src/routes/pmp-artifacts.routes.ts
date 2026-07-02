@@ -46,6 +46,7 @@ import {
 } from '@clude/memorypack';
 import { memoryContentHash, buildPackTree, type MemoryType } from '@clude/tokenization';
 import { getDb } from '@clude/shared/core/database';
+import { anchorExportBestEffort } from '../lib/export-anchor';
 import { requirePrivyAuth, optionalPrivyAuth } from '@clude/brain/auth/privy-auth';
 import { requireOwnership } from '@clude/brain/auth/require-ownership';
 import { createChildLogger } from '@clude/shared/core/logger';
@@ -676,6 +677,15 @@ async function writeRegisterRespond(args: WriteRegisterArgs): Promise<{ handled:
     res.status(500).json({ error: 'export_failed' } satisfies ErrorBody);
     return { handled: true };
   }
+
+  // Per-export on-chain anchor (Memory 3.0 B1.4): commits (merkle_root,
+  // manifest_hash) via a Solana memo signed by the DEDICATED anchor keypair,
+  // never the treasury. Default off (ANCHOR_EXPORTS_ON_CHAIN). Fire-and-forget
+  // so exports never block on chain latency, but the result IS captured: the
+  // helper persists anchor_tx_sig onto this artifact row when confirmed.
+  void anchorExportBestEffort(artifactId, tree.root, manifestHash).catch(() => {
+    /* logged inside; anchoring must never affect the export */
+  });
 
   // Return the artifact metadata + the .pmp bytes inline (base64) so the client downloads the file
   // directly. No storage_url / no /download handler: the bytes are served once here, on export.
