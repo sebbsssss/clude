@@ -555,6 +555,8 @@ export async function initDatabase(): Promise<void> {
             provider_delegated = false
           WHERE id = p_memory_id;
           DELETE FROM memory_dek_wraps WHERE memory_id = p_memory_id AND recipient = 'provider';
+          -- Fragment parity (migration 043): fragments hold plaintext + live embeddings.
+          DELETE FROM memory_fragments WHERE memory_id = p_memory_id;
         END;
         $rev$;
 

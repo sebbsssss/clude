@@ -146,6 +146,35 @@ export function applyOwnerPostGuard<T extends { owner_wallet?: string | null }>(
   return { kept, stripped: results.length - kept.length };
 }
 
+/**
+ * Fragment-lane RPC args (Memory 3.0 C0 / P0.3 fragment parity). The extended
+ * filters (min_decay, filter_types) exist only in the migration-043 signature
+ * of match_memory_fragments; PostgREST matches RPCs by named args, so sending
+ * them to the old 4-arg function finds no match and the lane dies. Flip
+ * MEMORY_FRAGMENT_FILTERS=true only AFTER 043 is applied. The reverse is safe:
+ * old-style 4-arg calls keep working against the new function via parameter
+ * defaults, so the flip is one-way and the flag can be retired later.
+ */
+export function buildFragmentRpcArgs(opts: {
+  embeddingJson: string;
+  matchThreshold: number;
+  matchCount: number;
+  minDecay: number;
+  memoryTypes?: string[] | null;
+}): Record<string, unknown> {
+  const args: Record<string, unknown> = {
+    query_embedding: opts.embeddingJson,
+    match_threshold: opts.matchThreshold,
+    match_count: opts.matchCount,
+    filter_owner: getOwnerScope(),
+  };
+  if (process.env.MEMORY_FRAGMENT_FILTERS === 'true') {
+    args.min_decay = opts.minDecay;
+    args.filter_types = opts.memoryTypes && opts.memoryTypes.length > 0 ? opts.memoryTypes : null;
+  }
+  return args;
+}
+
 // ============================================================
 // HASH-BASED IDs (Beads-inspired)
 //
@@ -973,12 +1002,13 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
             ];
             if (!opts.skipExpansion) {
               searches.push(
-                Promise.resolve(db.rpc('match_memory_fragments', {
-                  query_embedding: JSON.stringify(emb),
-                  match_threshold: VECTOR_MATCH_THRESHOLD,
-                  match_count: limit * 2,
-                  filter_owner: getOwnerScope(),
-                })).then(r => r.data || []),
+                Promise.resolve(db.rpc('match_memory_fragments', buildFragmentRpcArgs({
+                  embeddingJson: JSON.stringify(emb),
+                  matchThreshold: VECTOR_MATCH_THRESHOLD,
+                  matchCount: limit * 2,
+                  minDecay,
+                  memoryTypes: opts.memoryTypes,
+                }))).then(r => r.data || []),
               );
             }
             return searches;
@@ -1168,7 +1198,17 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
         let vectorQuery = db
           .from('memories')
           .select('*')
-          .in('id', missingIds);
+          .in('id', missingIds)
+          // P0.3: the backfill used to trust upstream filtering. The memory-level
+          // lane does filter by decay, but the FRAGMENT lane (pre-migration-043)
+          // does not — so decayed parents could re-enter here. Filter explicitly.
+          .gte('decay_factor', minDecay)
+          // Revoked-memory resurrection guard: every missing ID came from vector
+          // similarity, and fragments are only written after the parent summary
+          // embedding is stored — so a parent with a NULL embedding here means it
+          // was revoked (revoke clears the embedding but pre-043 left fragments
+          // live). Never resurrect it through the fragment lane.
+          .not('embedding', 'is', null);
         vectorQuery = scopeToOwner(vectorQuery);
         // Respect memoryTypes filter even for vector-matched results
         if (opts.memoryTypes && opts.memoryTypes.length > 0) {
