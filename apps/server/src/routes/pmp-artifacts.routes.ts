@@ -46,7 +46,7 @@ import {
 } from '@clude/memorypack';
 import { memoryContentHash, buildPackTree, type MemoryType } from '@clude/tokenization';
 import { getDb } from '@clude/shared/core/database';
-import { anchorExportBestEffort } from '../lib/export-anchor';
+import { anchorExportBestEffort, attestExport } from '../lib/export-anchor';
 import { requirePrivyAuth, optionalPrivyAuth } from '@clude/brain/auth/privy-auth';
 import { requireOwnership } from '@clude/brain/auth/require-ownership';
 import { createChildLogger } from '@clude/shared/core/logger';
@@ -725,10 +725,22 @@ async function writeRegisterRespond(args: WriteRegisterArgs): Promise<{ handled:
     /* logged inside; anchoring must never affect the export */
   });
 
+  // Export attestation (B1.2b): detached ed25519 signature by the proof-plane
+  // keypair over this export's identity tuple — offline-verifiable proof that
+  // Clude produced this exact (merkle_root, manifest_hash). Null until the
+  // anchor keypair env is set; never blocks the export.
+  const attestation = attestExport({
+    artifactId,
+    merkleRoot: tree.root,
+    manifestHash,
+    createdAt: nowIso,
+  });
+
   // Return the artifact metadata + the .pmp bytes inline (base64) so the client downloads the file
   // directly. No storage_url / no /download handler: the bytes are served once here, on export.
   res.status(201).json({
     artifact: artifactRow,
+    attestation,
     pmp_base64: pmpBase64,
     filename: pmpFilename,
   });

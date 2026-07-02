@@ -28,6 +28,7 @@ import {
   sendAndConfirmTransaction,
 } from '@solana/web3.js';
 import bs58 from 'bs58';
+import nacl from 'tweetnacl';
 import { getConnection } from '@clude/shared/core/solana-client';
 import { MEMO_PROGRAM_ID } from '@clude/shared/utils/constants';
 import { createChildLogger } from '@clude/shared/core/logger';
@@ -137,6 +138,86 @@ export async function anchorExportOnChain(
     const message = err instanceof Error ? err.message : String(err);
     log.error({ artifactId: input.artifactId, err: message }, 'Export anchoring failed (export unaffected)');
     return { status: 'error', error: message };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Export attestation (Memory 3.0 B1.2b, decision A: one proof-plane identity).
+//
+// A detached ed25519 signature by the SAME dedicated anchor keypair over the
+// export's identity tuple. This is what makes verify stop being
+// self-consistency-only: anyone holding the pack + the published Clude
+// attestation pubkey can check, OFFLINE, that Clude produced this exact
+// (merkle_root, manifest_hash) at created_at — no chain access, no server
+// round-trip. The on-chain anchor is the timestamped public receipt; the
+// attestation is its offline twin. Solana keypairs ARE ed25519, so the anchor
+// key signs natively (nacl.sign.detached over the 64-byte secret).
+//
+// Placement: returned in the export response and verifiable via
+// verifyExportAttestation(). Deliberately NOT written into manifest_sig (that
+// column is reserved for USER signatures on the desktop title path) and NOT
+// into the pmp block (a new hashed field would shift every identity hash).
+// The persisted/pack-native home lands with B2's provenance profile v2.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const ATTESTATION_VERSION = 'v1';
+
+export interface ExportAttestation {
+  /** The exact signed bytes, reproducible by any verifier. */
+  message: string;
+  /** base58 detached ed25519 signature over utf8(message). */
+  signature_b58: string;
+  /** base58 attestation pubkey (= the anchor keypair's public key). */
+  pubkey_b58: string;
+  algorithm: 'ed25519';
+}
+
+export function buildAttestationMessage(input: {
+  artifactId: string;
+  merkleRoot: string;
+  manifestHash: string;
+  createdAt: string;
+}): string {
+  return `clude-attest|${ATTESTATION_VERSION}|${input.artifactId}|${input.merkleRoot}|${input.manifestHash}|${input.createdAt}`;
+}
+
+/**
+ * Sign an export's identity tuple with the dedicated anchor keypair.
+ * Returns null (never throws into the export flow) when the key is absent or
+ * refused (treasury guard inherited from loadAnchorSigner).
+ */
+export function attestExport(
+  input: { artifactId: string; merkleRoot: string; manifestHash: string; createdAt: string },
+  env: NodeJS.ProcessEnv = process.env,
+): ExportAttestation | null {
+  try {
+    const signer = loadAnchorSigner(env);
+    const message = buildAttestationMessage(input);
+    const sig = nacl.sign.detached(Buffer.from(message, 'utf8'), signer.secretKey);
+    return {
+      message,
+      signature_b58: bs58.encode(sig),
+      pubkey_b58: signer.publicKey.toBase58(),
+      algorithm: 'ed25519',
+    };
+  } catch (err) {
+    // Unset key = attestation simply absent (pre-rollout exports); refused key = logged loudly.
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes('TREASURY')) log.error({ err: message }, 'attestation REFUSED: key resolves to the treasury');
+    return null;
+  }
+}
+
+/** Offline verification: does `attestation` check out against its own pubkey? */
+export function verifyExportAttestation(attestation: ExportAttestation): boolean {
+  try {
+    return nacl.sign.detached.verify(
+      Buffer.from(attestation.message, 'utf8'),
+      bs58.decode(attestation.signature_b58),
+      bs58.decode(attestation.pubkey_b58),
+    );
+  } catch {
+    return false;
   }
 }
 

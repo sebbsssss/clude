@@ -47,6 +47,8 @@ import {
   buildAnchorMemo,
   anchorExportOnChain,
   anchorExportBestEffort,
+  attestExport,
+  verifyExportAttestation,
 } from '../export-anchor';
 
 const anchorKp = Keypair.generate();
@@ -164,5 +166,41 @@ describe('isExportAnchoringEnabled', () => {
     expect(isExportAnchoringEnabled({} as NodeJS.ProcessEnv)).toBe(false);
     expect(isExportAnchoringEnabled({ ANCHOR_EXPORTS_ON_CHAIN: '1' } as NodeJS.ProcessEnv)).toBe(false);
     expect(isExportAnchoringEnabled({ ANCHOR_EXPORTS_ON_CHAIN: 'true' } as NodeJS.ProcessEnv)).toBe(true);
+  });
+});
+
+describe('attestExport / verifyExportAttestation (B1.2b, one proof-plane identity)', () => {
+  const INPUT = {
+    artifactId: 'pmp_7',
+    merkleRoot: 'a'.repeat(64),
+    manifestHash: 'b'.repeat(64),
+    createdAt: '2026-07-03T00:00:00.000Z',
+  };
+  const ENV = { ANCHOR_WALLET_PRIVATE_KEY: anchorB58, BOT_WALLET_PRIVATE_KEY: treasuryB58 } as NodeJS.ProcessEnv;
+
+  it('signs the identity tuple with the anchor key and verifies OFFLINE', () => {
+    const att = attestExport(INPUT, ENV);
+    expect(att).not.toBeNull();
+    expect(att!.pubkey_b58).toBe(anchorKp.publicKey.toBase58());
+    expect(att!.message).toBe(`clude-attest|v1|pmp_7|${INPUT.merkleRoot}|${INPUT.manifestHash}|${INPUT.createdAt}`);
+    expect(verifyExportAttestation(att!)).toBe(true);
+  });
+
+  it('a tampered message fails verification (this is what kills self-consistency-only verify)', () => {
+    const att = attestExport(INPUT, ENV)!;
+    expect(verifyExportAttestation({ ...att, message: att.message.replace('a', 'c') })).toBe(false);
+    expect(verifyExportAttestation({ ...att, signature_b58: att.signature_b58.slice(0, -2) + 'zz' })).toBe(false);
+  });
+
+  it('returns null when no key is configured (pre-rollout exports carry no attestation)', () => {
+    expect(attestExport(INPUT, {} as NodeJS.ProcessEnv)).toBeNull();
+  });
+
+  it('REFUSES to attest with the treasury key (returns null, never signs)', () => {
+    const att = attestExport(INPUT, {
+      ANCHOR_WALLET_PRIVATE_KEY: treasuryB58,
+      BOT_WALLET_PRIVATE_KEY: treasuryB58,
+    } as NodeJS.ProcessEnv);
+    expect(att).toBeNull();
   });
 });
