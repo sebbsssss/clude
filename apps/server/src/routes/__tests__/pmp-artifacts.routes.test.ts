@@ -1671,6 +1671,209 @@ function plainRecord(content: string, extra: Record<string, any> = {}) {
 
 const b64 = (s: string) => Buffer.from(s).toString('base64');
 
+// ── B1.3: owner-sealed pack stub — like stubReadPmp but the manifest carries the
+//    owner-sealed encryption header and the records are ciphertext with declared leaves. ──
+function stubEncryptedPmp(opts: { recipientWallet: string; records: any[] }) {
+  readMemoryPack.mockReturnValue({
+    manifest: {
+      memorypack_version: '0.2',
+      producer: { name: 'clude-server', version: '0.2', public_key: 'ExporterPubKey' },
+      record_count: opts.records.length,
+      record_schema: 'clude-memory-v1',
+      encryption: {
+        algorithm: 'xsalsa20-poly1305',
+        nonce_strategy: 'per-record-random',
+        key_derivation: 'owner-sealed',
+        scope: 'records',
+        owner: {
+          recipient_wallet: opts.recipientWallet,
+          recipient_pubkey: 'b64:recipient-x25519',
+          verifier_ct: 'b64:verifier',
+          dek_wrap: 'b64:sealed-dek',
+          wrap_pubkey: 'b64:ephemeral-pub',
+        },
+      },
+      pmp: {
+        pmp_version: '0.8',
+        artifact_id: 'pmpa-enc01',
+        title: 'Sealed Pack',
+        license_type: 'copy',
+        merkle_root: 'root(lh:secret)',
+      },
+    },
+    records: opts.records,
+    minimalRecords: opts.records,
+    verifiedRecords: new Set<string>(),
+    unsignedRecords: new Set<string>(),
+    anchors: [],
+    verifiedBlobs: new Set<string>(),
+    verifiedAnchors: new Set<string>(),
+    revocations: [],
+    revokedRecordHashes: new Set<string>(),
+    revocationAnchors: [],
+    verifiedRevocationAnchors: new Set<string>(),
+    warnings: [],
+  });
+}
+
+const ENC_RECORD = {
+  kind: 'semantic',
+  content: 'CIPHERTEXTBYTES',
+  encrypted: true,
+  nonce: 'b64:nonce1',
+  leaf_hash: 'lh:secret',
+  tags: [],
+  created_at: '2026-06-01T00:00:00.000Z',
+};
+
+describe('POST /v1/pmp/import — encrypted records (B1.3 ciphertext-preserving)', () => {
+  const postImport = () =>
+    request(app()).post('/v1/pmp/import').send({ pmp_base64: b64('fake') });
+
+  it('still rejects encrypted records in a pack WITHOUT an owner-sealed header (legacy)', async () => {
+    authedWallet = OWNER;
+    stubReadPmp({ records: [ENC_RECORD], declaredRoot: 'root(lh:secret)' });
+    const res = await postImport();
+    expect(res.status).toBe(201);
+    expect(res.body.rejected_count).toBe(1);
+    expect(res.body.imported_count).toBe(0);
+  });
+
+  it('rejects encrypted records sealed to a DIFFERENT wallet (unreadable forever for this owner)', async () => {
+    authedWallet = OWNER;
+    stubEncryptedPmp({ recipientWallet: 'SomeoneElseWallet', records: [ENC_RECORD] });
+    const res = await postImport();
+    expect(res.status).toBe(201);
+    expect(res.body.rejected_count).toBe(1);
+    expect(res.body.imported_encrypted_count).toBe(0);
+  });
+
+  it('rejects an encrypted record with NO declared leaf hash (no identity, no dedup, no proof)', async () => {
+    authedWallet = OWNER;
+    const hashless: Record<string, any> = { ...ENC_RECORD };
+    delete hashless.leaf_hash;
+    stubEncryptedPmp({ recipientWallet: OWNER, records: [hashless] });
+    const res = await postImport();
+    expect(res.status).toBe(201);
+    expect(res.body.rejected_count).toBe(1);
+  });
+
+  it('imports an encrypted record sealed to the importer as a cold owner-sealed row + DEK wrap', async () => {
+    authedWallet = OWNER;
+    stubEncryptedPmp({ recipientWallet: OWNER, records: [ENC_RECORD] });
+    const res = await postImport();
+
+    expect(res.status).toBe(201);
+    expect(res.body.imported_count).toBe(1);
+    expect(res.body.imported_encrypted_count).toBe(1);
+    expect(res.body.rejected_count).toBe(0);
+
+    // The inserted row preserves ciphertext + envelope semantics.
+    const memRows = insertedRows.filter((i) => i.table === 'memories').flatMap((i) => i.rows);
+    expect(memRows).toHaveLength(1);
+    const row = memRows[0] as any;
+    expect(row.encrypted).toBe(true);
+    expect(row.provider_delegated).toBe(false); // the server can NEVER read it
+    expect(row.content).toBe('CIPHERTEXTBYTES');
+    expect(row.content_hash).toBe('lh:secret'); // declared; trust anchored to the pack merkle root
+    expect(row.encryption_pubkey).toBe('b64:recipient-x25519');
+    expect(row.metadata.pmp_encrypted_import).toEqual({ hash_verified: false, nonce: 'b64:nonce1' });
+
+    // The pack DEK wrap was copied onto the row so owner-key machinery can decrypt it.
+    const wraps = insertedRows.filter((i) => i.table === 'memory_dek_wraps').flatMap((i) => i.rows);
+    expect(wraps).toHaveLength(1);
+    expect(wraps[0]).toMatchObject({
+      recipient: 'owner',
+      wrapped_dek: 'b64:sealed-dek',
+      wrap_pubkey: 'b64:ephemeral-pub',
+    });
+  });
+
+  it('JOIN PROPERTY (B1.2a x B1.5): an import receipt for a pack hashes to the export row it came from', async () => {
+    authedWallet = OWNER;
+    const packId = seedOwnedPack();
+    seedHolderKey(OWNER);
+
+    // Export: the writer mock RETURNS a full as-written manifest (real
+    // created_at, tarball format, owner-sealed encryption block) — the shape
+    // that used to break the join when import hashed it raw.
+    let fullManifest: any = null;
+    writeMemoryPack.mockImplementationOnce((file: string, records: any[], opts: any) => {
+      writeFileSync(file, Buffer.from('PMP'));
+      fullManifest = {
+        memorypack_version: '0.2',
+        producer: opts.producer,
+        created_at: '2026-07-03T09:00:00.000Z', // real wall clock, unlike the identity form
+        record_count: records.length,
+        record_schema: opts.record_schema,
+        pack_format: 'tarball',
+        ...(opts.ownerEncryption
+          ? {
+              encryption: {
+                algorithm: 'xsalsa20-poly1305',
+                nonce_strategy: 'per-record-random',
+                key_derivation: 'owner-sealed',
+                scope: 'records',
+                owner: opts.ownerEncryption,
+              },
+            }
+          : {}),
+        pmp: opts.pmp,
+      };
+      return fullManifest;
+    });
+
+    const exportRes = await request(app()).post('/v1/pmp/export').send({ pack_id: packId });
+    expect(exportRes.status).toBe(201);
+    const exportedHash = exportRes.body.artifact.manifest_hash as string;
+    expect(exportedHash).toBeTruthy();
+    expect(fullManifest).not.toBeNull();
+
+    // Import the SAME manifest (as a reader would find it in the file).
+    readMemoryPack.mockReturnValue({
+      manifest: fullManifest,
+      records: [],
+      minimalRecords: [],
+      verifiedRecords: new Set<string>(),
+      unsignedRecords: new Set<string>(),
+      anchors: [],
+      verifiedBlobs: new Set<string>(),
+      verifiedAnchors: new Set<string>(),
+      revocations: [],
+      revokedRecordHashes: new Set<string>(),
+      revocationAnchors: [],
+      verifiedRevocationAnchors: new Set<string>(),
+      warnings: [],
+    });
+    const importRes = await request(app()).post('/v1/pmp/import').send({ pmp_base64: b64('fake') });
+    expect(importRes.status).toBe(201);
+
+    const receipts = insertedRows.filter((i) => i.table === 'pmp_imports').flatMap((i) => i.rows);
+    expect(receipts).toHaveLength(1);
+    expect((receipts[0] as any).artifact_manifest_hash).toBe(exportedHash);
+  });
+
+  it('dedupes an encrypted record whose DECLARED hash matches an existing plaintext memory', async () => {
+    authedWallet = OWNER;
+    stubEncryptedPmp({ recipientWallet: OWNER, records: [ENC_RECORD] });
+    seed('memories', [
+      {
+        id: 61,
+        owner_wallet: OWNER,
+        content: 'secret',
+        content_hash: 'lh:secret',
+        memory_type: 'semantic',
+        tags: [],
+        created_at: '2026-01-01T00:00:00.000Z',
+      },
+    ]);
+    const res = await postImport();
+    expect(res.status).toBe(201);
+    expect(res.body.deduped_count).toBe(1);
+    expect(res.body.imported_encrypted_count).toBe(0);
+  });
+});
+
 // ───────────────────── export → verify round-trip (closed loop) ─────────────────────
 // The four acceptance tests verify EACH leg with hand-stubbed records, but never feed
 // export's ACTUAL written output into verify. This closes the loop: take the records +
