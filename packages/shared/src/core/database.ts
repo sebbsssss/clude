@@ -215,7 +215,11 @@ export async function initDatabase(): Promise<void> {
           WHERE ml.source_id = ANY(seed_ids)
             AND ml.target_id != ALL(seed_ids)
             AND ml.strength >= min_strength
-            AND (filter_owner IS NULL OR m.owner_wallet = filter_owner)
+            AND (
+      filter_owner IS NULL
+      OR (filter_owner = '__BOT_OWN__' AND m.owner_wallet IS NULL)
+      OR m.owner_wallet = filter_owner
+    )
           UNION
           SELECT DISTINCT ON (ml.source_id, ml.link_type)
             ml.source_id AS memory_id,
@@ -227,7 +231,11 @@ export async function initDatabase(): Promise<void> {
           WHERE ml.target_id = ANY(seed_ids)
             AND ml.source_id != ALL(seed_ids)
             AND ml.strength >= min_strength
-            AND (filter_owner IS NULL OR m.owner_wallet = filter_owner)
+            AND (
+      filter_owner IS NULL
+      OR (filter_owner = '__BOT_OWN__' AND m.owner_wallet IS NULL)
+      OR m.owner_wallet = filter_owner
+    )
           ORDER BY strength DESC
           LIMIT max_results;
         $$;
@@ -484,7 +492,11 @@ export async function initDatabase(): Promise<void> {
             AND m.decay_factor >= min_decay
             AND (filter_types IS NULL OR m.memory_type = ANY(filter_types))
             AND (filter_user IS NULL OR m.related_user = filter_user)
-            AND (filter_owner IS NULL OR m.owner_wallet = filter_owner)
+            AND (
+      filter_owner IS NULL
+      OR (filter_owner = '__BOT_OWN__' AND m.owner_wallet IS NULL)
+      OR m.owner_wallet = filter_owner
+    )
             AND (filter_tags IS NULL OR m.tags && filter_tags)
             AND (1 - (m.embedding <=> query_embedding)) > match_threshold
             AND (start_date IS NULL OR COALESCE(m.event_date, m.created_at) >= start_date)
@@ -599,7 +611,11 @@ export async function initDatabase(): Promise<void> {
           FROM memories m
           WHERE (m.ts_summary @@ tsquery_val OR m.content_tokens @@ tsquery_val)
             AND m.decay_factor >= min_decay
-            AND (filter_owner IS NULL OR m.owner_wallet = filter_owner)
+            AND (
+      filter_owner IS NULL
+      OR (filter_owner = '__BOT_OWN__' AND m.owner_wallet IS NULL)
+      OR m.owner_wallet = filter_owner
+    )
             AND (filter_types IS NULL OR m.memory_type = ANY(filter_types))
             AND (filter_tags IS NULL OR m.tags && filter_tags)
           ORDER BY rank DESC
