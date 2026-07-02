@@ -1,8 +1,11 @@
 import {
+  closeSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readFileSync,
+  readSync,
   readdirSync,
   renameSync,
   rmSync,
@@ -620,16 +623,31 @@ function appendRevocationAnchorsToDirectory(
 // locking. Documented in CHANGELOG.
 // ────────────────────────────────────────────────────────────────────
 
-function isTarballPath(path: string): boolean {
+const ZSTD_MAGIC = Buffer.from([0x28, 0xb5, 0x2f, 0xfd]);
+
+/** @internal exported for tests only. */
+export function isTarballPath(path: string): boolean {
   if (/\.tar\.zst$/i.test(path)) return true;
-  // Some callers may pass a tarball without the canonical extension.
-  // Stat-then-isFile so directory packs (which we want to handle in
-  // directory-mode) don't get routed through the tarball path.
+  // Extensionless callers (Memory 3.0 B1 fix): only route existing FILES that
+  // actually carry the zstd magic through tarball extraction. Previously ANY
+  // existing file was routed blindly, so a non-tarball died downstream with an
+  // opaque 'tar failed (exit)'. Directories and nonexistent paths stay in
+  // directory-mode; a non-zstd file now fails loudly here instead.
   try {
-    return statSync(path).isFile();
+    if (!statSync(path).isFile()) return false;
   } catch {
     return false;
   }
+  const fd = openSync(path, 'r');
+  try {
+    const head = Buffer.alloc(4);
+    if (readSync(fd, head, 0, 4, 0) === 4 && head.equals(ZSTD_MAGIC)) return true;
+  } finally {
+    closeSync(fd);
+  }
+  throw new Error(
+    `memorypack: '${path}' is an existing file but not a .tar.zst (bad magic); refusing tarball extraction`,
+  );
 }
 
 function withExtractedTarball<T>(
