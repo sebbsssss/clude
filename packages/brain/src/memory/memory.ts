@@ -147,6 +147,27 @@ export function applyOwnerPostGuard<T extends { owner_wallet?: string | null }>(
 }
 
 /**
+ * BENCH_MODE (Memory 3.0 C0): read-only recall. Benchmarks must observe the
+ * corpus, not mutate it — access boosts (access_count / last_accessed /
+ * decay_factor bumps) and Hebbian link reinforcement change retrieval state on
+ * every read, which is why a reused seeded wallet drifts (+2.6pp measured from
+ * data freshness alone). The harness preflight asserts this is set; prod never
+ * sets it.
+ */
+export function isBenchMode(): boolean {
+  return process.env.BENCH_MODE === 'true';
+}
+
+/**
+ * Should this recall mutate read-state? Callers pass RecallOptions; BENCH_MODE
+ * overrides everything. Pure, exported for tests.
+ */
+export function shouldTrackAccess(opts: { trackAccess?: boolean }): boolean {
+  if (isBenchMode()) return false;
+  return opts.trackAccess !== false;
+}
+
+/**
  * Fragment-lane RPC args (Memory 3.0 C0 / P0.3 fragment parity). The extended
  * filters (min_decay, filter_types) exist only in the migration-043 signature
  * of match_memory_fragments; PostgREST matches RPCs by named args, so sending
@@ -1420,7 +1441,8 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
 
     // Update access counts in parallel (skip for internal processing like dream cycles).
     // Access tracking only — importance is no longer boosted on read (see migration 019).
-    if (opts.trackAccess !== false) {
+    // BENCH_MODE forces this off: reads must not mutate retrieval state under measurement.
+    if (shouldTrackAccess(opts)) {
       const ids = results.map((m: Memory) => m.id);
       const sources = results.map((m: Memory) => m.source || '');
       updateMemoryAccess(ids, sources).catch(err => log.warn({ err }, 'Memory access tracking failed'));
