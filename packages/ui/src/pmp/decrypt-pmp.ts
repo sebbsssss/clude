@@ -210,6 +210,51 @@ async function computeMerkleRoot(leaves: string[]): Promise<string> {
   return current[0]!;
 }
 
+// ── sha256-merkle-v2 browser twin (Memory 3.0 B2.1) ─────────────────────────────────────────
+// Mirrors @clude/tokenization pack-merkle.ts v2 byte-for-byte: CT-style domain
+// separation (leaf = sha256(0x00 ‖ leafBytes), inner = sha256(0x01 ‖ L ‖ R)) and
+// odd-tail PROMOTION instead of duplicate-last — the construction that makes
+// [A,B,C] and [A,B,C,C] commit to different roots. Parity is pinned by a
+// cross-implementation test against the Node canonical source; any drift here
+// is an integrity bug, not a style choice. Dispatch on the pack's recorded
+// merkle_algorithm: 'sha256-merkle-v2' → these, anything else → v1 above.
+
+async function leafHashV2Browser(leafHex: string): Promise<string> {
+  const leaf = hexToBytes(leafHex);
+  const buf = new Uint8Array(1 + leaf.length);
+  buf[0] = 0x00;
+  buf.set(leaf, 1);
+  return sha256Hex(buf);
+}
+
+async function innerHashV2Browser(left: string, right: string): Promise<string> {
+  const a = hexToBytes(left);
+  const b = hexToBytes(right);
+  const buf = new Uint8Array(1 + a.length + b.length);
+  buf[0] = 0x01;
+  buf.set(a, 1);
+  buf.set(b, 1 + a.length);
+  return sha256Hex(buf);
+}
+
+/** Build the v2 pack merkle root (domain-separated, odd tails promoted unchanged). */
+export async function computeMerkleRootV2(leaves: string[]): Promise<string> {
+  if (leaves.length === 0) throw new Error('decryptPmp: cannot build merkle root over zero leaves');
+  let current = await Promise.all(leaves.map(leafHashV2Browser));
+  while (current.length > 1) {
+    const next: string[] = [];
+    for (let i = 0; i < current.length; i += 2) {
+      if (i + 1 < current.length) {
+        next.push(await innerHashV2Browser(current[i]!, current[i + 1]!));
+      } else {
+        next.push(current[i]!); // promote the odd tail — never duplicate
+      }
+    }
+    current = next;
+  }
+  return current[0]!;
+}
+
 // ── Public types ─────────────────────────────────────────────────────────────────────────────
 
 /** The owner-sealed encryption header carried in `manifest.encryption.owner`. */
