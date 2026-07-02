@@ -93,15 +93,107 @@ export function getOwnerWallet(): string | null {
 /** Sentinel value: scope to memories where owner_wallet IS NULL (bot's own). */
 export const SCOPE_BOT_OWN = '__BOT_OWN__';
 
-export function scopeToOwner<T>(query: T): T {
+/**
+ * Owner-scope fail-closed flag (Memory 3.0 C0). Read live so benchmarks and
+ * staged rollouts can flip it without a rebuild. When ON, "no owner in scope"
+ * resolves to SCOPE_BOT_OWN (the bot's own memories) instead of null (no
+ * filter = every tenant's memories, the fail-open half of the PR #290 class).
+ */
+export function isOwnerScopeFailClosed(): boolean {
+  return process.env.OWNER_SCOPE_FAILCLOSED === 'true';
+}
+
+/**
+ * Effective owner scope for READ paths: a tenant wallet, SCOPE_BOT_OWN, or null.
+ * Null (legacy fail-open) survives only while the flag is off. Migration 019
+ * teaches the recall RPCs the sentinel; against an older RPC the sentinel
+ * matches zero rows, so an early flip fails CLOSED, never cross-tenant.
+ *
+ * WRITE paths must keep using getOwnerWallet() (the sentinel is a filter,
+ * never a value to store — bot rows stay owner_wallet NULL).
+ */
+export function getOwnerScope(): string | null {
   const wallet = getOwnerWallet();
-  if (wallet === SCOPE_BOT_OWN) {
+  if (wallet) return wallet;
+  return isOwnerScopeFailClosed() ? SCOPE_BOT_OWN : null;
+}
+
+export function scopeToOwner<T>(query: T): T {
+  const scope = getOwnerScope();
+  if (scope === SCOPE_BOT_OWN) {
     return (query as any).is('owner_wallet', null);
   }
-  if (wallet) {
-    return (query as any).eq('owner_wallet', wallet);
+  if (scope) {
+    return (query as any).eq('owner_wallet', scope);
   }
   return query;
+}
+
+/**
+ * Owner post-guard (defense-in-depth, Memory 3.0 C0): strips rows that escaped
+ * RPC-level scoping via the entity / graph / fragment expansion paths. Pure so
+ * it is directly testable; recallMemories applies it after every phase merged.
+ */
+export function applyOwnerPostGuard<T extends { owner_wallet?: string | null }>(
+  results: T[],
+  scope: string | null,
+): { kept: T[]; stripped: number } {
+  if (!scope) return { kept: results, stripped: 0 };
+  const kept =
+    scope === SCOPE_BOT_OWN
+      ? results.filter((m) => m.owner_wallet == null)
+      : results.filter((m) => m.owner_wallet === scope);
+  return { kept, stripped: results.length - kept.length };
+}
+
+/**
+ * BENCH_MODE (Memory 3.0 C0): read-only recall. Benchmarks must observe the
+ * corpus, not mutate it — access boosts (access_count / last_accessed /
+ * decay_factor bumps) and Hebbian link reinforcement change retrieval state on
+ * every read, which is why a reused seeded wallet drifts (+2.6pp measured from
+ * data freshness alone). The harness preflight asserts this is set; prod never
+ * sets it.
+ */
+export function isBenchMode(): boolean {
+  return process.env.BENCH_MODE === 'true';
+}
+
+/**
+ * Should this recall mutate read-state? Callers pass RecallOptions; BENCH_MODE
+ * overrides everything. Pure, exported for tests.
+ */
+export function shouldTrackAccess(opts: { trackAccess?: boolean }): boolean {
+  if (isBenchMode()) return false;
+  return opts.trackAccess !== false;
+}
+
+/**
+ * Fragment-lane RPC args (Memory 3.0 C0 / P0.3 fragment parity). The extended
+ * filters (min_decay, filter_types) exist only in the migration-043 signature
+ * of match_memory_fragments; PostgREST matches RPCs by named args, so sending
+ * them to the old 4-arg function finds no match and the lane dies. Flip
+ * MEMORY_FRAGMENT_FILTERS=true only AFTER 043 is applied. The reverse is safe:
+ * old-style 4-arg calls keep working against the new function via parameter
+ * defaults, so the flip is one-way and the flag can be retired later.
+ */
+export function buildFragmentRpcArgs(opts: {
+  embeddingJson: string;
+  matchThreshold: number;
+  matchCount: number;
+  minDecay: number;
+  memoryTypes?: string[] | null;
+}): Record<string, unknown> {
+  const args: Record<string, unknown> = {
+    query_embedding: opts.embeddingJson,
+    match_threshold: opts.matchThreshold,
+    match_count: opts.matchCount,
+    filter_owner: getOwnerScope(),
+  };
+  if (process.env.MEMORY_FRAGMENT_FILTERS === 'true') {
+    args.min_decay = opts.minDecay;
+    args.filter_types = opts.memoryTypes && opts.memoryTypes.length > 0 ? opts.memoryTypes : null;
+  }
+  return args;
 }
 
 // ============================================================
@@ -925,18 +1017,19 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
                 filter_types: opts.memoryTypes || null,
                 filter_user: opts.relatedUser || null,
                 min_decay: minDecay,
-                filter_owner: getOwnerWallet() || null,
+                filter_owner: getOwnerScope(),
                 filter_tags: opts.tags && opts.tags.length > 0 ? opts.tags : null,
               })).then(r => r.data || []),
             ];
             if (!opts.skipExpansion) {
               searches.push(
-                Promise.resolve(db.rpc('match_memory_fragments', {
-                  query_embedding: JSON.stringify(emb),
-                  match_threshold: VECTOR_MATCH_THRESHOLD,
-                  match_count: limit * 2,
-                  filter_owner: getOwnerWallet() || null,
-                })).then(r => r.data || []),
+                Promise.resolve(db.rpc('match_memory_fragments', buildFragmentRpcArgs({
+                  embeddingJson: JSON.stringify(emb),
+                  matchThreshold: VECTOR_MATCH_THRESHOLD,
+                  matchCount: limit * 2,
+                  minDecay,
+                  memoryTypes: opts.memoryTypes,
+                }))).then(r => r.data || []),
               );
             }
             return searches;
@@ -1024,7 +1117,7 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
           // so the bare var is null under hosted/wrapped calls and BM25 would search the
           // ENTIRE table unscoped — burying the owner's exact-match facts. This is why
           // BM25 silently never surfaced bench facts even after the RPC was fixed.
-          filterOwner: getOwnerWallet() || undefined,
+          filterOwner: getOwnerScope() || undefined,
           filterTypes: opts.memoryTypes || undefined,
           filterTags: opts.tags || undefined,
         });
@@ -1126,7 +1219,17 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
         let vectorQuery = db
           .from('memories')
           .select('*')
-          .in('id', missingIds);
+          .in('id', missingIds)
+          // P0.3: the backfill used to trust upstream filtering. The memory-level
+          // lane does filter by decay, but the FRAGMENT lane (pre-migration-043)
+          // does not — so decayed parents could re-enter here. Filter explicitly.
+          .gte('decay_factor', minDecay)
+          // Revoked-memory resurrection guard: every missing ID came from vector
+          // similarity, and fragments are only written after the parent summary
+          // embedding is stored — so a parent with a NULL embedding here means it
+          // was revoked (revoke clears the embedding but pre-043 left fragments
+          // live). Never resurrect it through the fragment lane.
+          .not('embedding', 'is', null);
         vectorQuery = scopeToOwner(vectorQuery);
         // Respect memoryTypes filter even for vector-matched results
         if (opts.memoryTypes && opts.memoryTypes.length > 0) {
@@ -1240,7 +1343,7 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
           seed_ids: seedIds,
           min_strength: 0.2,
           max_results: limit,
-          filter_owner: getOwnerWallet() || null,
+          filter_owner: getOwnerScope(),
         });
 
         if (linked && linked.length > 0) {
@@ -1321,20 +1424,25 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
       }
     }
 
-    // Final owner_wallet guard: strip any memories that don't belong to the current owner
-    // This catches leaks from entity/graph/fragment paths that may not filter by owner
-    const finalOwner = getOwnerWallet();
-    if (finalOwner) {
-      const beforeCount = results.length;
-      results = results.filter((m: Memory) => m.owner_wallet === finalOwner);
-      if (results.length < beforeCount) {
-        log.warn({ stripped: beforeCount - results.length, owner: finalOwner }, 'Owner guard stripped foreign memories from recall results');
+    // Final owner_wallet guard: strip any memories that don't belong to the current
+    // scope. Catches leaks from entity/graph/fragment paths that may not filter by
+    // owner. Sentinel-aware (Memory 3.0 C0): under SCOPE_BOT_OWN only null-owner
+    // rows survive; under the fail-closed flag an unscoped context resolves to the
+    // sentinel, so this guard now also runs for bot-context recalls.
+    const finalScope = getOwnerScope();
+    {
+      const { kept, stripped } = applyOwnerPostGuard(results, finalScope);
+      if (stripped > 0) {
+        // No wallet addresses in logs — scope shape only.
+        log.warn({ stripped, botOwn: finalScope === SCOPE_BOT_OWN }, 'Owner guard stripped foreign memories from recall results');
       }
+      results = kept;
     }
 
     // Update access counts in parallel (skip for internal processing like dream cycles).
     // Access tracking only — importance is no longer boosted on read (see migration 019).
-    if (opts.trackAccess !== false) {
+    // BENCH_MODE forces this off: reads must not mutate retrieval state under measurement.
+    if (shouldTrackAccess(opts)) {
       const ids = results.map((m: Memory) => m.id);
       const sources = results.map((m: Memory) => m.source || '');
       updateMemoryAccess(ids, sources).catch(err => log.warn({ err }, 'Memory access tracking failed'));
@@ -1716,7 +1824,7 @@ async function autoLinkMemory(memoryId: number, opts: StoreMemoryOptions): Promi
         query_embedding: JSON.stringify(embedding),
         match_threshold: LINK_SIMILARITY_THRESHOLD,
         match_count: MAX_AUTO_LINKS * 2,
-        filter_owner: getOwnerWallet() || null,
+        filter_owner: getOwnerScope(),
       });
 
       if (similar) {
@@ -2368,7 +2476,8 @@ export async function matchByEmbedding(opts: {
     query_embedding: JSON.stringify(opts.embedding),
     match_threshold: opts.threshold,
     match_count: opts.limit,
-    filter_owner: opts.ownerWallet ?? null,
+    // Explicit ownerWallet wins; otherwise the ambient scope (sentinel-aware, C0).
+    filter_owner: opts.ownerWallet ?? getOwnerScope(),
   });
   return (data ?? []).map((r: { id: number; similarity: number }) => ({
     id: r.id,
