@@ -1330,17 +1330,38 @@ export function pmpArtifactsRoutes(): Router {
           (manifest.producer && manifest.producer.public_key) || block.creator_pubkey || null;
 
         // 1+2. Hash-verify each record. A declared leaf_hash that disagrees with the recompute
-        //      is a rejected record (the byte stream was tampered post-signing). Encrypted
-        //      records (ciphertext content without a key) cannot be leaf-verified → rejected.
+        //      is a rejected record (the byte stream was tampered post-signing).
+        //
+        //      Encrypted records (B1.3, ciphertext-preserving import): the server can NEVER
+        //      decrypt them — the pack DEK is sealed to the holder's key, which is derived from
+        //      a wallet signature the server does not have. That is the zero-knowledge design,
+        //      not a limitation to code around. So encrypted records are importable ONLY when
+        //      the pack is owner-sealed TO THE IMPORTER (anyone else could never read them),
+        //      and they land as COLD rows: ciphertext content, provider_delegated=false, the
+        //      pack DEK wrap copied per-row into memory_dek_wraps so the existing owner-key
+        //      machinery can decrypt each row independently (browser/redelegate). Their leaf
+        //      hash cannot be recomputed server-side, so the DECLARED hash is recorded with
+        //      hash_verified=false — trust anchored to the pack's Merkle commitment, not to a
+        //      server recompute.
         interface VerifiedRecord {
           rec: MemoryPackRecord;
           leaf: string;
         }
+        const ownerEnc =
+          manifest.encryption?.key_derivation === 'owner-sealed' ? manifest.encryption.owner : undefined;
+        const encImportable = Boolean(ownerEnc && ownerEnc.recipient_wallet === owner);
         const verified: VerifiedRecord[] = [];
+        const encryptedVerified: VerifiedRecord[] = [];
         let rejectedCount = 0;
         for (const rec of result.records) {
           if (rec.encrypted) {
-            rejectedCount += 1;
+            const declaredEnc = declaredLeafHash(rec);
+            if (!encImportable || declaredEnc === null) {
+              // Sealed to someone else (or hashless): unreadable forever for this owner → reject.
+              rejectedCount += 1;
+              continue;
+            }
+            encryptedVerified.push({ rec, leaf: declaredEnc });
             continue;
           }
           const leaf = leafHashFor(leafInputFromRecord(rec, owner));
@@ -1358,7 +1379,11 @@ export function pmpArtifactsRoutes(): Router {
 
         // 3. Dedupe by content_hash against the owner's existing memories. One IN-query over
         //    the candidate leaf set, scoped to the caller — never another tenant's rows.
-        const candidateLeaves = Array.from(new Set(verified.map((v) => v.leaf)));
+        //    Encrypted candidates participate via their DECLARED leaves: an encrypted import
+        //    of content the owner already holds in plaintext dedupes against it.
+        const candidateLeaves = Array.from(
+          new Set([...verified.map((v) => v.leaf), ...encryptedVerified.map((v) => v.leaf)]),
+        );
         const existingHashes = new Set<string>();
         if (candidateLeaves.length > 0) {
           const { data: existingRaw, error: existErr } = await db
@@ -1411,12 +1436,73 @@ export function pmpArtifactsRoutes(): Router {
           });
         }
 
+        // 4b. Encrypted survivors (B1.3): cold owner-sealed rows. summary '' (no plaintext,
+        //     the revoke-state precedent), provider_delegated=false (server cannot read),
+        //     nonce preserved in metadata (needed to decrypt the record body later).
+        let importedEncryptedCount = 0;
+        const encryptedLeaves: string[] = [];
+        for (const { rec, leaf } of encryptedVerified) {
+          if (existingHashes.has(leaf) || seenInBatch.has(leaf)) {
+            dedupedCount += 1;
+            continue;
+          }
+          seenInBatch.add(leaf);
+          importedCount += 1;
+          importedEncryptedCount += 1;
+          encryptedLeaves.push(leaf);
+          const baseTags = Array.isArray(rec.tags) ? rec.tags.filter((t) => t !== importTag) : [];
+          toInsert.push({
+            memory_type: recordMemoryType(rec.kind),
+            content: rec.content, // ciphertext — never logged, never plaintext-indexed
+            summary: '',
+            tags: [...baseTags, importTag],
+            importance: typeof rec.importance === 'number' ? rec.importance : 0.5,
+            access_count: 0,
+            source: importTag,
+            related_user: null,
+            related_wallet: null,
+            metadata: {
+              imported_from_pmp: block.artifact_id ?? null,
+              source_pubkey: sourcePubkey,
+              pmp_encrypted_import: { hash_verified: false, nonce: (rec as { nonce?: string }).nonce ?? null },
+            },
+            owner_wallet: owner,
+            content_hash: leaf,
+            encrypted: true,
+            provider_delegated: false,
+            encryption_pubkey: ownerEnc!.recipient_pubkey,
+            tokenization_status: 'pending',
+            created_at: rec.created_at && !Number.isNaN(Date.parse(rec.created_at)) ? rec.created_at : nowIso,
+          });
+        }
+
         if (toInsert.length > 0) {
           const { error: insErr } = await db.from('memories').insert(toInsert);
           if (insErr) {
             log.warn({ err: insErr }, 'import: memory insert failed');
             res.status(500).json({ error: 'import_failed' } satisfies ErrorBody);
             return;
+          }
+        }
+
+        // 4c. Copy the pack DEK wrap onto each encrypted row so the existing owner-key
+        //     machinery (browser decrypt, redelegate) treats it like any owner-sealed memory.
+        //     Best-effort: a wrap failure leaves the row cold-but-recoverable via re-import.
+        if (encryptedLeaves.length > 0 && ownerEnc) {
+          const { data: encRows } = await db
+            .from('memories')
+            .select('id, content_hash')
+            .eq('owner_wallet', owner)
+            .in('content_hash', encryptedLeaves);
+          const wraps = ((encRows ?? []) as Array<{ id: number; content_hash: string }>).map((r) => ({
+            memory_id: r.id,
+            recipient: 'owner',
+            wrapped_dek: ownerEnc.dek_wrap,
+            wrap_pubkey: ownerEnc.wrap_pubkey,
+          }));
+          if (wraps.length > 0) {
+            const { error: wrapErr } = await db.from('memory_dek_wraps').insert(wraps);
+            if (wrapErr) log.warn({ err: wrapErr }, 'import: owner DEK wrap insert failed (rows cold, re-import recovers)');
           }
         }
 
@@ -1446,6 +1532,9 @@ export function pmpArtifactsRoutes(): Router {
           import_id: importId,
           record_count: result.records.length,
           imported_count: importedCount,
+          // B1.3: of imported_count, how many landed as cold owner-sealed rows
+          // (ciphertext preserved, decryptable only by the owner's key).
+          imported_encrypted_count: importedEncryptedCount,
           deduped_count: dedupedCount,
           rejected_count: rejectedCount,
           source_pubkey: sourcePubkey,
