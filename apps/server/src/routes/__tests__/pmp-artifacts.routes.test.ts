@@ -1444,10 +1444,73 @@ describe('GET /v1/pmp/artifacts', () => {
     const ok = await request(app()).get('/v1/pmp/artifacts/pmpa-mine01');
     expect(ok.status).toBe(200);
     expect(ok.body.artifact.artifact_id).toBe('pmpa-mine01');
+    // B2.2: the owner card carries the trust bundle (attestation null without an anchor key here).
+    expect(ok.body.proof).toBeDefined();
 
     authedWallet = OTHER;
     const denied = await request(app()).get('/v1/pmp/artifacts/pmpa-mine01');
     expect(denied.status).toBe(404); // not 403 — don't leak existence cross-tenant
+  });
+});
+
+// ─────────────────── GET /v1/pmp/artifacts/:id/proof (B2.2, public oracle) ───────────────────
+
+describe('GET /v1/pmp/artifacts/:id/proof (public verification oracle)', () => {
+  const anchored = {
+    artifact_id: 'pmpa-anchor',
+    owner_wallet: OWNER,
+    pack_id: 'pack-aaaa',
+    title: 'Anchored',
+    license_type: 'copy',
+    record_count: 3,
+    merkle_root: 'a'.repeat(64),
+    manifest_hash: 'b'.repeat(64),
+    pmp_version: '0.8',
+    creator_pubkey: 'CreatorPubKey111',
+    manifest_sig: '',
+    anchor_chain: 'solana',
+    anchor_tx_sig: '3XRgTxSigForTheAnchorMemo',
+    created_at: '2026-07-01T00:00:00.000Z',
+  };
+
+  it('is PUBLIC (no auth) and derives the Solscan explorer link from anchor_tx_sig', async () => {
+    seed('pmp_artifacts', [anchored]);
+    authedWallet = null; // unauthenticated caller — proof-of-commitment is public
+    const res = await request(app()).get('/v1/pmp/artifacts/pmpa-anchor/proof');
+    expect(res.status).toBe(200);
+    expect(res.body.merkle_root).toBe('a'.repeat(64));
+    expect(res.body.manifest_hash).toBe('b'.repeat(64));
+    expect(res.body.anchor).toEqual({
+      chain: 'solana',
+      tx_sig: '3XRgTxSigForTheAnchorMemo',
+      explorer_url: 'https://solscan.io/tx/3XRgTxSigForTheAnchorMemo',
+    });
+  });
+
+  it('does NOT leak owner_wallet or private metadata', async () => {
+    seed('pmp_artifacts', [anchored]);
+    authedWallet = null;
+    const res = await request(app()).get('/v1/pmp/artifacts/pmpa-anchor/proof');
+    expect(res.body.owner_wallet).toBeUndefined();
+    expect(res.body.title).toBeUndefined();
+    // Proof-relevant identity only.
+    expect(res.body.creator_pubkey).toBe('CreatorPubKey111');
+  });
+
+  it('reports anchor:null for an un-anchored artifact (attestation still present once keyed)', async () => {
+    seed('pmp_artifacts', [{ ...anchored, artifact_id: 'pmpa-noanchor', anchor_tx_sig: null, anchor_chain: null }]);
+    authedWallet = null;
+    const res = await request(app()).get('/v1/pmp/artifacts/pmpa-noanchor/proof');
+    expect(res.status).toBe(200);
+    expect(res.body.anchor).toBeNull();
+    expect(res.body).toHaveProperty('attestation'); // null here (no ANCHOR key in test env), but always present
+  });
+
+  it('404s an unknown artifact', async () => {
+    authedWallet = null;
+    const res = await request(app()).get('/v1/pmp/artifacts/pmpa-ghost/proof');
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('artifact_not_found');
   });
 });
 

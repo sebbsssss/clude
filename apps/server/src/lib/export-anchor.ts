@@ -27,12 +27,22 @@ import {
   TransactionInstruction,
   sendAndConfirmTransaction,
 } from '@solana/web3.js';
-import bs58 from 'bs58';
+import { createRequire } from 'node:module';
 import nacl from 'tweetnacl';
-import { getConnection } from '@clude/shared/core/solana-client';
+import { getConnection, solscanTxUrl } from '@clude/shared/core/solana-client';
 import { MEMO_PROGRAM_ID } from '@clude/shared/utils/constants';
 import { createChildLogger } from '@clude/shared/core/logger';
 import { getDb } from '@clude/shared/core/database';
+
+// bs58 ships as ESM (type:module); ANY static `import ... from 'bs58'` (default OR namespace)
+// trips TS1479 in this CommonJS build (node16), because the emit becomes require('bs58') which
+// cannot load an ESM module. createRequire loads bs58's CJS entry at runtime, invisible to TS's
+// module resolution — the proven pattern in solana-title-mint.ts (same directory). A default
+// import here (B1.4, 2026-07-02) is what has been silently failing the server Docker build.
+const bs58 = createRequire(__filename)('bs58') as {
+  encode(b: Uint8Array): string;
+  decode(s: string): Uint8Array;
+};
 
 const log = createChildLogger('export-anchor');
 
@@ -219,6 +229,61 @@ export function verifyExportAttestation(attestation: ExportAttestation): boolean
   } catch {
     return false;
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Proof bundle (Memory 3.0 B2.2): the trust surface a citation chip renders.
+//
+// Given a stored artifact row, reconstruct its verifiable commitment WITHOUT
+// re-doing the export: the ed25519 attestation is deterministic, so re-signing
+// the same (artifact_id, merkle_root, manifest_hash, created_at) tuple yields
+// the identical signature returned at export time — no attestation column
+// needed. The on-chain half is read straight off anchor_tx_sig + anchor_chain
+// (populated async by anchorExportBestEffort) and turned into an explorer link.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AnchorSurface {
+  chain: string;
+  tx_sig: string;
+  /** Explorer deep-link; only Solana memos resolve to Solscan today. */
+  explorer_url: string | null;
+}
+
+export interface ProofBundle {
+  attestation: ExportAttestation | null;
+  anchor: AnchorSurface | null;
+}
+
+export interface ArtifactProofRow {
+  artifact_id: string;
+  merkle_root: string;
+  manifest_hash: string;
+  created_at: string;
+  anchor_chain: string | null;
+  anchor_tx_sig: string | null;
+}
+
+export function buildProofBundle(row: ArtifactProofRow, env: NodeJS.ProcessEnv = process.env): ProofBundle {
+  const attestation = attestExport(
+    {
+      artifactId: row.artifact_id,
+      merkleRoot: row.merkle_root,
+      manifestHash: row.manifest_hash,
+      createdAt: row.created_at,
+    },
+    env,
+  );
+
+  const chain = row.anchor_chain ?? 'solana';
+  const anchor: AnchorSurface | null = row.anchor_tx_sig
+    ? {
+        chain,
+        tx_sig: row.anchor_tx_sig,
+        explorer_url: chain === 'solana' ? solscanTxUrl(row.anchor_tx_sig) : null,
+      }
+    : null;
+
+  return { attestation, anchor };
 }
 
 /**
