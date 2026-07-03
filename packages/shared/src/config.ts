@@ -116,6 +116,32 @@ export const config = {
     queryApiKey: optional("EMBEDDING_QUERY_API_KEY", ""),
     queryModel: optional("EMBEDDING_QUERY_MODEL", ""),
   },
+  migration: {
+    /**
+     * Database backend that getDb() targets during the GCP parallel-run.
+     * 'supabase' (default, current live infra) | 'cloudsql' (PostgREST /
+     * self-hosted Supabase in front of Cloud SQL). Flip per-layer for the
+     * shadow-stack cutover; Supabase stays the source of truth until sunset.
+     */
+    dbTarget: optional("DB_TARGET", "supabase") as "supabase" | "cloudsql",
+    /** PostgREST endpoint for the Cloud SQL backend (used only when DB_TARGET=cloudsql). */
+    cloudsqlUrl: optional("CLOUDSQL_PGREST_URL", ""),
+    /** Service key for the Cloud SQL PostgREST backend (used only when DB_TARGET=cloudsql). */
+    cloudsqlServiceKey: optional("CLOUDSQL_SERVICE_KEY", ""),
+    /**
+     * Active embedding vector space for ingest + recall. 'voyage' (default,
+     * current corpus) | 'vertex' (shadow column, only after the LongMemEval gate
+     * passes). Separate from EMBEDDING_PROVIDER so the swap is A/B, not one-way.
+     */
+    embeddingActive: optional("EMBEDDING_ACTIVE", "voyage") as "voyage" | "vertex",
+    /**
+     * Whether THIS process runs the in-server singleton timers (recall canary,
+     * marketplace delivery poller, title-mint reconciliation). Default true =
+     * current Railway behavior. Set false on the Cloud Run server so exactly one
+     * owner (the worker) runs them and autoscaling never duplicates them.
+     */
+    runInProcessTimers: optional("RUN_INPROCESS_TIMERS", "true") === "true",
+  },
   openrouter: {
     apiKey: optional("OPENROUTER_API_KEY", ""),
     model: optional("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct"),

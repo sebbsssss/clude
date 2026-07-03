@@ -1,6 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { config } from '../config';
 import { createChildLogger } from './logger';
+import { resolveDbConnection } from './migration-profile';
 
 const log = createChildLogger('database');
 
@@ -8,8 +9,12 @@ let supabase: SupabaseClient;
 
 export function getDb(): SupabaseClient {
   if (!supabase) {
-    supabase = createClient(config.supabase.url, config.supabase.serviceKey);
-    log.info('Supabase client initialized');
+    // Switch-layer seam (GCP parallel-run): connect to whatever the migration
+    // profile resolves — Supabase by default, Cloud SQL's PostgREST endpoint when
+    // DB_TARGET=cloudsql. The ~600 .from()/.rpc() call sites are untouched.
+    const conn = resolveDbConnection();
+    supabase = createClient(conn.url, conn.serviceKey);
+    log.info({ dbTarget: config.migration.dbTarget }, 'Database client initialized');
   }
   return supabase;
 }
