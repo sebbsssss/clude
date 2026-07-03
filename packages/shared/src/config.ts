@@ -142,6 +142,25 @@ export const config = {
      */
     runInProcessTimers: optional("RUN_INPROCESS_TIMERS", "true") === "true",
   },
+  vertex: {
+    /**
+     * Vertex AI embedding backend (the GCP replacement for Voyage), used only when
+     * ingest/backfill/recall target the 'vertex' space (EMBEDDING_ACTIVE=vertex or an
+     * explicit generateEmbeddingForSpace('vertex') call). Separate from config.embedding
+     * so the Vertex space can be backfilled + A/B-gated while Voyage stays live.
+     */
+    project: optional("VERTEX_PROJECT", optional("GCP_PROJECT", "")),
+    location: optional("VERTEX_LOCATION", "us-central1"),
+    model: optional("VERTEX_EMBEDDING_MODEL", "gemini-embedding-001"),
+    /** Output dims — MRL-truncated to 1024 so vector(1024) columns + HNSW + match_* RPCs are unchanged. */
+    dimensions: parseInt(optional("VERTEX_EMBEDDING_DIMENSIONS", "1024"), 10),
+    /**
+     * Optional static OAuth token override (from `gcloud auth print-access-token`) for
+     * local dev / smoke tests. Empty in prod: Cloud Run mints a token from the attached
+     * service account via the metadata server (SDK-free), no static key stored.
+     */
+    accessToken: optional("VERTEX_ACCESS_TOKEN", ""),
+  },
   openrouter: {
     apiKey: optional("OPENROUTER_API_KEY", ""),
     model: optional("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct"),

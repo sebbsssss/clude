@@ -1,5 +1,6 @@
 import { config } from '../config';
 import { createChildLogger } from './logger';
+import type { EmbeddingSpace } from './migration-profile';
 
 const log = createChildLogger('embeddings');
 
@@ -246,4 +247,119 @@ export async function generateEmbeddings(texts: string[]): Promise<(number[] | n
     log.error({ err }, 'Batch embedding generation failed');
     return texts.map(() => null);
   }
+}
+
+// ============================================================
+// VERTEX AI EMBEDDING PROVIDER (GCP replacement for Voyage) — migration Slice 3
+//
+// Vertex does not fit the OpenAI-shaped PROVIDERS contract above: a different URL
+// (project + location + model), a different body ({instances,parameters}), a
+// different response ({predictions:[{embeddings:{values}}]}), and a short-lived GCP
+// OAuth token instead of a static key. So it lives in its own path, kept behind
+// generateEmbeddingForSpace('vertex') / config.vertex, so the Voyage space stays the
+// live default until the LongMemEval gate passes. Auth is SDK-free (metadata server).
+// ============================================================
+
+interface VertexToken { token: string; expiresAtMs: number; }
+let _vertexToken: VertexToken | null = null;
+
+/** @internal test hook — clears the cached Vertex OAuth token. */
+export function _resetVertexAuthCache(): void {
+  _vertexToken = null;
+}
+
+const METADATA_TOKEN_URL =
+  'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token';
+
+/**
+ * @internal SDK-free access-token fetch from the Cloud Run / GCE metadata server,
+ * which mints a token from the instance's attached service account. No key stored.
+ */
+export async function _fetchMetadataToken(): Promise<{ token: string; expiresInSec: number }> {
+  const res = await fetch(METADATA_TOKEN_URL, { headers: { 'Metadata-Flavor': 'Google' } });
+  if (!res.ok) throw new Error(`Vertex metadata token fetch failed: ${res.status}`);
+  const j = (await res.json()) as { access_token: string; expires_in: number };
+  return { token: j.access_token, expiresInSec: j.expires_in };
+}
+
+async function getVertexAccessToken(): Promise<string> {
+  // Local/smoke override (`gcloud auth print-access-token`); empty in prod.
+  const override = config.vertex.accessToken;
+  if (override) return override;
+  const now = Date.now();
+  if (_vertexToken && _vertexToken.expiresAtMs > now + 60_000) return _vertexToken.token;
+  const { token, expiresInSec } = await _fetchMetadataToken();
+  _vertexToken = { token, expiresAtMs: now + expiresInSec * 1000 };
+  return token;
+}
+
+function vertexPredictUrl(model: string): string {
+  const { project, location } = config.vertex;
+  return `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:predict`;
+}
+
+/**
+ * Generate Vertex embeddings for one or more texts. Returns an array matching input
+ * length (null entries for failures), never throws. Independent of EMBEDDING_PROVIDER
+ * so ingest can dual-write and the backfill can populate the shadow vector column
+ * while the live Voyage space is untouched.
+ */
+export async function generateVertexEmbeddings(
+  texts: string[],
+  dimensions?: number,
+): Promise<(number[] | null)[]> {
+  if (texts.length === 0) return [];
+  const { project, model, dimensions: defaultDims } = config.vertex;
+  if (!project) {
+    log.warn('Vertex embeddings requested but VERTEX_PROJECT is unset');
+    return texts.map(() => null);
+  }
+  const outputDimensionality = dimensions ?? defaultDims;
+  const startMs = Date.now();
+  try {
+    const token = await getVertexAccessToken();
+    const res = await fetch(vertexPredictUrl(model), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        instances: texts.map((t) => ({ content: t.slice(0, 8000) })),
+        parameters: { outputDimensionality },
+      }),
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      log.error({ status: res.status, body: errText.slice(0, 200), provider: 'vertex' }, 'Vertex embedding API error');
+      return texts.map(() => null);
+    }
+    const data = (await res.json()) as { predictions?: Array<{ embeddings?: { values?: number[] } }> };
+    const preds = data.predictions ?? [];
+    log.debug({ provider: 'vertex', model, count: texts.length, elapsed: Date.now() - startMs }, 'Vertex embeddings generated');
+    return texts.map((_, i) => preds[i]?.embeddings?.values ?? null);
+  } catch (err) {
+    log.error({ err, provider: 'vertex' }, 'Vertex embedding generation failed');
+    return texts.map(() => null);
+  }
+}
+
+/** Single-text Vertex embedding convenience wrapper. */
+export async function generateVertexEmbedding(text: string, dimensions?: number): Promise<number[] | null> {
+  const [vec] = await generateVertexEmbeddings([text], dimensions);
+  return vec ?? null;
+}
+
+/**
+ * Generate an embedding for a specific vector SPACE — the migration switch seam.
+ * 'vertex' -> Vertex gemini-embedding-001 (the shadow space); any other value -> the
+ * current Voyage / EMBEDDING_PROVIDER path. Recall passes activeEmbeddingSpace() so a
+ * flag flip moves the query embedding to match the column recall reads.
+ */
+export async function generateEmbeddingForSpace(
+  space: EmbeddingSpace,
+  text: string,
+): Promise<number[] | null> {
+  if (space === 'vertex') return generateVertexEmbedding(text);
+  return generateEmbedding(text);
 }
