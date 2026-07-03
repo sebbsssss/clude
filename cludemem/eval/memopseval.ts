@@ -69,6 +69,21 @@ function score(task: TaskName, gold: any, pred: any): boolean {
       const p = new Set((pred.insights ?? []).flatMap((i: any) => i.evidence));
       return [...g].some((e) => p.has(e));
     }
+    case 'COMPACT': {
+      // Semantic check, like CONSOLIDATE/ENTITIES: a real summary was written,
+      // every planted entity is retained (containment-tolerant so "The Ridge"
+      // still preserves "Ridge"), and the exact date span was recovered — all
+      // three are derivable from the input by construction (derive.ts).
+      if (typeof pred.summary !== 'string' || !pred.summary.trim()) return false;
+      const p = (pred.preserved_entities ?? []).map((e: any) => String(e).toLowerCase());
+      const entitiesKept = (gold.preserved_entities ?? []).every((g: any) =>
+        p.some((n: string) => n.includes(String(g).toLowerCase())),
+      );
+      const dateOk =
+        gold.date_range?.start === pred.date_range?.start &&
+        gold.date_range?.end === pred.date_range?.end;
+      return entitiesKept && dateOk;
+    }
     case 'QUERY':
       return gold.intent === pred.intent;
     case 'ANSWER':
