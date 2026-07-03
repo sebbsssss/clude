@@ -298,6 +298,11 @@ function vertexPredictUrl(model: string): string {
   return `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:predict`;
 }
 
+/** True when Vertex is configured (VERTEX_PROJECT set) — the gate for ingest dual-write. */
+export function isVertexConfigured(): boolean {
+  return !!config.vertex.project;
+}
+
 /**
  * Generate Vertex embeddings for one or more texts. Returns an array matching input
  * length (null entries for failures), never throws. Independent of EMBEDDING_PROVIDER
@@ -362,4 +367,18 @@ export async function generateEmbeddingForSpace(
 ): Promise<number[] | null> {
   if (space === 'vertex') return generateVertexEmbedding(text);
   return generateEmbedding(text);
+}
+
+/**
+ * Query-time variant of generateEmbeddingForSpace. 'vertex' -> Vertex; any other value
+ * -> generateQueryEmbedding (which keeps the Voyage fast query-provider optimization).
+ * Recall passes activeEmbeddingSpace() so the query vector lands in the same space as
+ * the column the (base or _vertex) match RPC reads.
+ */
+export async function generateQueryEmbeddingForSpace(
+  space: EmbeddingSpace,
+  text: string,
+): Promise<number[] | null> {
+  if (space === 'vertex') return generateVertexEmbedding(text);
+  return generateQueryEmbedding(text);
 }

@@ -79,6 +79,19 @@ export function shouldRunInProcessTimers(
   return profile.runInProcessTimers;
 }
 
+/**
+ * Resolve the recall RPC name for the active embedding space: the Voyage originals
+ * (e.g. `match_memories`) read the `embedding` column; the `_vertex` variants
+ * (`match_memories_vertex`) read the shadow `embedding_vertex` column (migration 040).
+ * Recall must call the variant that matches the space its query vector was embedded in.
+ */
+export function vectorRpcName(
+  baseRpc: string,
+  profile: MigrationProfile = config.migration,
+): string {
+  return activeEmbeddingSpace(profile) === 'vertex' ? `${baseRpc}_vertex` : baseRpc;
+}
+
 /** Fail-fast validation for boot: rejects a mistyped or under-configured cutover flag. */
 export function assertValidMigrationProfile(
   profile: MigrationProfile = config.migration,

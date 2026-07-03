@@ -24,6 +24,7 @@ vi.mock('../logger', () => ({ createChildLogger: () => logSpies }));
 
 import {
   generateEmbeddingForSpace,
+  generateQueryEmbeddingForSpace,
   generateVertexEmbeddings,
   _fetchMetadataToken,
   _resetVertexAuthCache,
@@ -80,6 +81,20 @@ describe('generateEmbeddingForSpace("vertex")', () => {
   it('delegates voyage space to the existing path (no Vertex call)', async () => {
     // Voyage isn't configured under SITE_ONLY, so this resolves to null without hitting Vertex.
     const vec = await generateEmbeddingForSpace('voyage', 'x');
+    expect(vec).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('generateQueryEmbeddingForSpace', () => {
+  it('routes vertex queries to Vertex', async () => {
+    fetchMock.mockReturnValueOnce(ok({ predictions: [{ embeddings: { values: [9, 9] } }] }));
+    const vec = await generateQueryEmbeddingForSpace('vertex', 'q');
+    expect(vec).toEqual([9, 9]);
+  });
+
+  it('routes voyage queries to the existing query path (no Vertex call)', async () => {
+    const vec = await generateQueryEmbeddingForSpace('voyage', 'q');
     expect(vec).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });

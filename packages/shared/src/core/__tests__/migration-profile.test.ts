@@ -3,6 +3,7 @@ import {
   resolveDbConnection,
   activeEmbeddingSpace,
   shouldRunInProcessTimers,
+  vectorRpcName,
   assertValidMigrationProfile,
   describeMigrationProfile,
   type MigrationProfile,
@@ -73,6 +74,19 @@ describe('shouldRunInProcessTimers', () => {
 
   it('is false when the process opts out (Cloud Run server delegates to the worker)', () => {
     expect(shouldRunInProcessTimers({ ...baseProfile, runInProcessTimers: false })).toBe(false);
+  });
+});
+
+describe('vectorRpcName', () => {
+  it('returns the base RPC (Voyage / embedding column) by default', () => {
+    expect(vectorRpcName('match_memories', baseProfile)).toBe('match_memories');
+    expect(vectorRpcName('match_memory_fragments', baseProfile)).toBe('match_memory_fragments');
+  });
+
+  it('appends _vertex (shadow embedding_vertex column) when vertex is active', () => {
+    const p: MigrationProfile = { ...baseProfile, embeddingActive: 'vertex' };
+    expect(vectorRpcName('match_memories', p)).toBe('match_memories_vertex');
+    expect(vectorRpcName('match_memories_temporal', p)).toBe('match_memories_temporal_vertex');
   });
 });
 
