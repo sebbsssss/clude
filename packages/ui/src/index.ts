@@ -53,6 +53,8 @@ export type {
   AnchorSurfaceLike,
 } from './pmp/proof-verify';
 export { computeMerkleRootV2 } from './pmp/decrypt-pmp';
+export { ArtifactProofBadge } from './pmp/ArtifactProofBadge';
+export type { ArtifactProofBadgeProps } from './pmp/ArtifactProofBadge';
 
 // Re-export the owner-key sign-message so apps that can't depend on `@clude/shared` directly (the
 // chat app) still register against the SAME fixed message the server + dashboard use. Dependency-
