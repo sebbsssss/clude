@@ -27,12 +27,22 @@ import {
   TransactionInstruction,
   sendAndConfirmTransaction,
 } from '@solana/web3.js';
-import bs58 from 'bs58';
+import { createRequire } from 'node:module';
 import nacl from 'tweetnacl';
 import { getConnection, solscanTxUrl } from '@clude/shared/core/solana-client';
 import { MEMO_PROGRAM_ID } from '@clude/shared/utils/constants';
 import { createChildLogger } from '@clude/shared/core/logger';
 import { getDb } from '@clude/shared/core/database';
+
+// bs58 ships as ESM (type:module); ANY static `import ... from 'bs58'` (default OR namespace)
+// trips TS1479 in this CommonJS build (node16), because the emit becomes require('bs58') which
+// cannot load an ESM module. createRequire loads bs58's CJS entry at runtime, invisible to TS's
+// module resolution — the proven pattern in solana-title-mint.ts (same directory). A default
+// import here (B1.4, 2026-07-02) is what has been silently failing the server Docker build.
+const bs58 = createRequire(__filename)('bs58') as {
+  encode(b: Uint8Array): string;
+  decode(s: string): Uint8Array;
+};
 
 const log = createChildLogger('export-anchor');
 
