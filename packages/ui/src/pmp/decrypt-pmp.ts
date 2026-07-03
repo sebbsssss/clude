@@ -219,7 +219,8 @@ async function computeMerkleRoot(leaves: string[]): Promise<string> {
 // is an integrity bug, not a style choice. Dispatch on the pack's recorded
 // merkle_algorithm: 'sha256-merkle-v2' → these, anything else → v1 above.
 
-async function leafHashV2Browser(leafHex: string): Promise<string> {
+/** @internal exported for proof-verify.ts (the inclusion-proof twin). */
+export async function leafHashV2Browser(leafHex: string): Promise<string> {
   const leaf = hexToBytes(leafHex);
   const buf = new Uint8Array(1 + leaf.length);
   buf[0] = 0x00;
@@ -227,7 +228,8 @@ async function leafHashV2Browser(leafHex: string): Promise<string> {
   return sha256Hex(buf);
 }
 
-async function innerHashV2Browser(left: string, right: string): Promise<string> {
+/** @internal exported for proof-verify.ts (the inclusion-proof twin). */
+export async function innerHashV2Browser(left: string, right: string): Promise<string> {
   const a = hexToBytes(left);
   const b = hexToBytes(right);
   const buf = new Uint8Array(1 + a.length + b.length);

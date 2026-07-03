@@ -34,6 +34,26 @@ export type {
 export { parsePmpBase64, PmpUnreadableError, PmpZstdDecodeError } from './pmp/parse-pmp';
 export type { ParsedPmp } from './pmp/parse-pmp';
 
+// ── B2.3: browser-side proof verification (citation-chip substrate) ──
+// Verifies the GET /v1/pmp/artifacts/:id/proof bundle WITHOUT trusting the
+// server that served it: ed25519 attestation check + sha256-merkle-v2
+// inclusion proofs, browser-clean (dependency-free base58, Web Crypto).
+export {
+  verifyAttestationBrowser,
+  verifyInclusionProofV2,
+  evaluateProofBundle,
+  b58Decode,
+} from './pmp/proof-verify';
+export type {
+  ExportAttestationLike,
+  InclusionProofV2Like,
+  ProofBundleLike,
+  ProofEvaluation,
+  ProofStatus,
+  AnchorSurfaceLike,
+} from './pmp/proof-verify';
+export { computeMerkleRootV2 } from './pmp/decrypt-pmp';
+
 // Re-export the owner-key sign-message so apps that can't depend on `@clude/shared` directly (the
 // chat app) still register against the SAME fixed message the server + dashboard use. Dependency-
 // free ASCII constant — browser-safe.
