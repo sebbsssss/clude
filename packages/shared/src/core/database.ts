@@ -185,7 +185,7 @@ async function runBootDdl(db: SupabaseClient): Promise<void> {
           target_id BIGINT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
           link_type TEXT NOT NULL CHECK (link_type IN (
             'supports', 'contradicts', 'elaborates', 'causes', 'follows', 'relates', 'resolves',
-            'happens_before', 'happens_after', 'concurrent_with'
+            'supersedes', 'happens_before', 'happens_after', 'concurrent_with'
           )),
           strength REAL DEFAULT 0.5,
           created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -461,6 +461,35 @@ async function runBootDdl(db: SupabaseClient): Promise<void> {
         CREATE INDEX IF NOT EXISTS idx_memories_delegated ON memories(provider_delegated) WHERE encrypted = TRUE;
         ALTER TABLE memories ADD COLUMN IF NOT EXISTS summary_ciphertext TEXT;
         ALTER TABLE memories ADD COLUMN IF NOT EXISTS embedding_ciphertext TEXT;
+
+        -- Memory 3.0 Phase 1 (migration 044): bi-temporal validity + provenance (additive/nullable, inert until MEMORY_RECONCILE)
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS valid_from TIMESTAMPTZ;
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS invalid_at TIMESTAMPTZ;
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS superseded_by TEXT;
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS fact_key TEXT;
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS extractor_version TEXT;
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS extraction_confidence REAL;
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS source_turn_ref JSONB;
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS hash_id_v2 TEXT;
+        CREATE INDEX IF NOT EXISTS idx_memories_valid ON memories(id) WHERE invalid_at IS NULL;
+        CREATE INDEX IF NOT EXISTS idx_memories_fact_key ON memories(fact_key) WHERE fact_key IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_memories_hash_id_v2 ON memories(hash_id_v2) WHERE hash_id_v2 IS NOT NULL;
+
+        -- Memory 3.0 Phase 1 (migration 044): the C2 durable write outbox.
+        CREATE TABLE IF NOT EXISTS memory_write_jobs (
+          id BIGSERIAL PRIMARY KEY,
+          memory_id BIGINT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+          job_type TEXT NOT NULL CHECK (job_type IN ('embed', 'link', 'extract', 'reconcile', 'backfill_v2')),
+          status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'done', 'failed')),
+          attempts INT NOT NULL DEFAULT 0,
+          next_retry_at TIMESTAMPTZ DEFAULT NOW(),
+          last_error TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_write_jobs_claim ON memory_write_jobs(status, next_retry_at) WHERE status IN ('pending', 'failed');
+        CREATE INDEX IF NOT EXISTS idx_write_jobs_memory ON memory_write_jobs(memory_id);
+
         DO $do$
         BEGIN
           IF NOT EXISTS (
