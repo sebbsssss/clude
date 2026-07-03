@@ -98,8 +98,38 @@ CREATE TABLE IF NOT EXISTS memories (
   ts_summary tsvector GENERATED ALWAYS AS (
     setweight(to_tsvector('english', COALESCE(summary, '')), 'A')
   ) STORED,                               -- summary-only lexemes; content lexemes live in content_tokens (encryption §9)
-  content_tokens tsvector                 -- content lexemes, app-maintained via set_memory_content_tokens; cleared on revoke
+  content_tokens tsvector,                -- content lexemes, app-maintained via set_memory_content_tokens; cleared on revoke
+  -- Memory 3.0 Phase 1 (migration 044): bi-temporal validity + provenance (all nullable, inert until MEMORY_RECONCILE)
+  valid_from TIMESTAMPTZ,                  -- fact lifetime start (defaults to created_at at reconcile time)
+  invalid_at TIMESTAMPTZ,                  -- NULL = currently valid; set = superseded/retired (never DELETE)
+  superseded_by TEXT,                     -- hash_id of the memory that replaced this one
+  fact_key TEXT,                          -- (entity, attribute) reconciliation key
+  extractor_version TEXT,                 -- provenance: which extractor produced this
+  extraction_confidence REAL,             -- 0..1 extractor confidence
+  source_turn_ref JSONB,                  -- pointer back to the source conversation turn
+  hash_id_v2 TEXT                         -- 16-byte server-minted id (dual identity; legacy hash_id untouched)
 );
+-- Phase 1 hot-path indexes: recall filters to currently-valid rows; reconciliation groups by fact_key.
+CREATE INDEX IF NOT EXISTS idx_memories_valid ON memories(id) WHERE invalid_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_memories_fact_key ON memories(fact_key) WHERE fact_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_memories_hash_id_v2 ON memories(hash_id_v2) WHERE hash_id_v2 IS NOT NULL;
+
+-- Memory 3.0 Phase 1 (migration 044): the C2 durable write outbox — replaces the
+-- fire-and-forget embed/link/extract triad (errors were silently swallowed).
+CREATE TABLE IF NOT EXISTS memory_write_jobs (
+  id BIGSERIAL PRIMARY KEY,
+  memory_id BIGINT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+  job_type TEXT NOT NULL CHECK (job_type IN ('embed', 'link', 'extract', 'reconcile', 'backfill_v2')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'done', 'failed')),
+  attempts INT NOT NULL DEFAULT 0,
+  next_retry_at TIMESTAMPTZ DEFAULT NOW(),
+  last_error TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_write_jobs_claim ON memory_write_jobs(status, next_retry_at)
+  WHERE status IN ('pending', 'failed');
+CREATE INDEX IF NOT EXISTS idx_write_jobs_memory ON memory_write_jobs(memory_id);
 
 -- Memory fragments: granular vector decomposition for precision retrieval
 -- Each memory is split into semantic fragments (summary, content chunks, tag context)
@@ -372,6 +402,7 @@ CREATE TABLE IF NOT EXISTS memory_links (
     'follows',         -- temporal sequence
     'relates',         -- general semantic association
     'resolves',        -- contradiction resolution outcome
+    'supersedes',      -- decisive replacement: new fact overrides an older one (Memory 3.0 C1, migration 044)
     'happens_before',  -- temporal ordering
     'happens_after',   -- temporal ordering
     'concurrent_with'  -- temporal co-occurrence
