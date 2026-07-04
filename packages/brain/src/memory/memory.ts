@@ -40,6 +40,7 @@ import {
 import { getExperimentalConfig } from '../experimental/config';
 import { bm25SearchMemories } from '../experimental/bm25-search';
 import { setContentTokens } from './content-tokens';
+import { runReconcileShadow } from './reconcile-shadow';
 import { encryptForStorage, delegationStateForWrite } from './memory-encryption';
 import { generateOpenRouterResponse, isOpenRouterEnabled } from '@clude/shared/core/openrouter-client';
 import { isEncryptionEnabled, getEncryptionPubkey, encryptContent } from '@clude/shared/core/encryption';
@@ -667,9 +668,19 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
       enqueued = await enqueueEnrichJob(db, data.id);
     }
     if (!enqueued) {
-      embedMemory(data.id, opts).catch(err => log.warn({ err }, 'Embedding generation failed'));
+      const embedP = embedMemory(data.id, opts);
+      embedP.catch(err => log.warn({ err }, 'Embedding generation failed'));
       autoLinkMemory(data.id, opts).catch(err => log.warn({ err }, 'Auto-linking failed'));
       extractAndLinkEntitiesForMemory(data.id, opts).catch(err => log.debug({ err }, 'Entity extraction failed'));
+      // Memory 3.0 C1 SHADOW: record a proposed reconcile op AFTER the embedding is persisted (it
+      // reads memories.embedding — no re-embed). Scope captured eagerly (getOwnerScope() can be
+      // null / fail-open when the C0 fence flag is off, so pass the write's own resolved owner).
+      // Fully detached — chained on embedP but never awaited before return; runReconcileShadow
+      // never throws, so the .catch only swallows an embed rejection.
+      if (config.memory.reconcileEnabled) {
+        const reconcileScope = ownerWallet || SCOPE_BOT_OWN;
+        embedP.then(() => runReconcileShadow(data.id, reconcileScope)).catch(() => {});
+      }
     }
 
     return data.id;
@@ -841,6 +852,13 @@ export async function runEnrichPipeline(memoryId: number, opts: StoreMemoryOptio
   await embedMemory(memoryId, opts, { replaceFragments: true });
   await autoLinkMemory(memoryId, opts);
   await extractAndLinkEntitiesForMemory(memoryId, opts);
+  // Memory 3.0 C1 SHADOW: the outbox path's reconcile home — after embedMemory persisted the
+  // vector this reads. The worker wraps this in withOwnerWallet(job owner), so getOwnerWallet() is
+  // the job's owner; fall back to the bot-own sentinel (never null → always owner-fenced). Never
+  // throws; never mutates a memory row.
+  if (config.memory.reconcileEnabled) {
+    await runReconcileShadow(memoryId, getOwnerWallet() || SCOPE_BOT_OWN);
+  }
 }
 
 /**
