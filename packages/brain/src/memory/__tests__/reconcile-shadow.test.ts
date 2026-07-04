@@ -73,6 +73,15 @@ const mockDb = {
 };
 vi.mock('@clude/shared/core/database', () => ({ getDb: () => mockDb }));
 
+// Router (slice 1.5) mocked: default OFF, so the >= LO branch logs needs_router exactly as slice 1.
+const { isRouterConfigured, routerBudgetAvailable, noteRouterCall, routeReconcile } = vi.hoisted(() => ({
+  isRouterConfigured: vi.fn(() => false),
+  routerBudgetAvailable: vi.fn(() => true),
+  noteRouterCall: vi.fn(),
+  routeReconcile: vi.fn(),
+}));
+vi.mock('../reconcile-router', () => ({ isRouterConfigured, routerBudgetAvailable, noteRouterCall, routeReconcile }));
+
 import { runReconcileShadow, _resetReconcileDegradeLog } from '../reconcile-shadow';
 
 beforeEach(() => {
@@ -84,6 +93,9 @@ beforeEach(() => {
   insertResp = { error: null };
   delete process.env.BENCH_MODE;
   _resetReconcileDegradeLog();
+  isRouterConfigured.mockReturnValue(false);
+  routerBudgetAvailable.mockReturnValue(true);
+  routeReconcile.mockReset();
 });
 
 const only = () => { expect(inserted).toHaveLength(1); return inserted[0]; };
@@ -200,5 +212,32 @@ describe('runReconcileShadow — safety invariants', () => {
   it('every row is stamped with the gate_version (thresholds regime) for later filtering', async () => {
     await runReconcileShadow(1, 'wallet-A');
     expect(only().gate_version).toBe('c1-shadow-v1:floor=0.5:lo=0.85:hi=0.95');
+  });
+});
+
+describe('runReconcileShadow — router (slice 1.5)', () => {
+  it('router on → logs the router op (update) with router_used + model, and notes the budget', async () => {
+    isRouterConfigured.mockReturnValue(true);
+    routeReconcile.mockResolvedValue({ op: 'update', targetId: 42, reason: 'newer date', model: 'anthropic/claude-haiku-4.5' });
+    await runReconcileShadow(1, 'wallet-A');
+    expect(noteRouterCall).toHaveBeenCalledWith('wallet-A');
+    expect(only()).toMatchObject({
+      proposed_op: 'update', target_memory_id: 42, router_used: true, router_model: 'anthropic/claude-haiku-4.5',
+    });
+  });
+
+  it('router decision add → target null even though a candidate matched (cosine did not decide)', async () => {
+    isRouterConfigured.mockReturnValue(true);
+    routeReconcile.mockResolvedValue({ op: 'add', targetId: null, reason: 'distinct', model: 'm' });
+    await runReconcileShadow(1, 'wallet-A');
+    expect(only()).toMatchObject({ proposed_op: 'add', target_memory_id: null, router_used: true });
+  });
+
+  it('over budget → needs_router, the router is NOT called', async () => {
+    isRouterConfigured.mockReturnValue(true);
+    routerBudgetAvailable.mockReturnValue(false);
+    await runReconcileShadow(1, 'wallet-A');
+    expect(routeReconcile).not.toHaveBeenCalled();
+    expect(only()).toMatchObject({ proposed_op: 'needs_router', router_used: false });
   });
 });

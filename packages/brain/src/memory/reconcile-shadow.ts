@@ -1,6 +1,7 @@
 import { getDb } from '@clude/shared/core/database';
 import { config } from '@clude/shared/config';
 import { createChildLogger } from '@clude/shared/core/logger';
+import { isRouterConfigured, routerBudgetAvailable, noteRouterCall, routeReconcile } from './reconcile-router';
 
 const log = createChildLogger('reconcile-shadow');
 
@@ -37,7 +38,8 @@ interface ShadowRow {
   target_memory_id: number | null;
   max_cosine: number | null;
   band: Band;
-  router_used: false;
+  router_used: boolean;
+  router_model?: string | null;
   fact_key: null;
   reason: string;
   gate_version: string;
@@ -114,10 +116,16 @@ export async function runReconcileShadow(memoryId: number, scope: string): Promi
   // 1. Read the persisted summary embedding (embedMemory wrote memories.embedding = the summary
   //    vector — the same vector recall's primary lane screens on). No re-embed.
   let embedding: unknown;
+  let newSummary = '';
+  let newEventDate: string | null = null;
   try {
-    const { data, error } = await db.from('memories').select('embedding').eq('id', memoryId).maybeSingle();
+    const { data, error } = await db.from('memories')
+      .select('embedding, summary, event_date, created_at').eq('id', memoryId).maybeSingle();
     if (error) { logReconcileDegradeOnce(error, memoryId); return; }
-    embedding = (data as { embedding?: unknown } | null)?.embedding ?? null;
+    const row = data as { embedding?: unknown; summary?: string; event_date?: string | null; created_at?: string | null } | null;
+    embedding = row?.embedding ?? null;
+    newSummary = row?.summary ?? '';
+    newEventDate = row?.event_date ?? row?.created_at ?? null;
   } catch (err) {
     logReconcileDegradeOnce(err, memoryId); return;
   }
@@ -160,21 +168,21 @@ export async function runReconcileShadow(memoryId: number, scope: string): Promi
   //    whereas getOwnerScope() is not when the C0 flag is off).
   const ids = candidates.map((c) => c.id);
   let validIds: Set<number>;
+  const hydratedById = new Map<number, { summary: string; eventDate: string | null }>();
   try {
     // `any` on the builder: the PostgREST generic chain (.select().in().eq/is) is deep enough to
     // trip TS2589 (excessively deep instantiation); we validate the row shape ourselves below.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const base: any = db.from('memories').select('id, owner_wallet, invalid_at').in('id', ids);
+    const base: any = db.from('memories').select('id, owner_wallet, invalid_at, summary, event_date, created_at').in('id', ids);
     const scoped = scope === SCOPE_BOT_OWN ? base.is('owner_wallet', null) : base.eq('owner_wallet', scope);
     const { data, error } = await scoped;
     if (error) { logReconcileDegradeOnce(error, memoryId); return; }
-    const rows = (data as Array<{ id: number; owner_wallet: string | null; invalid_at: string | null }> | null) ?? [];
-    validIds = new Set(
-      rows
-        .filter((r) => r.invalid_at == null)
-        .filter((r) => (scope === SCOPE_BOT_OWN ? r.owner_wallet == null : r.owner_wallet === scope))
-        .map((r) => r.id),
-    );
+    const rows = (data as Array<{ id: number; owner_wallet: string | null; invalid_at: string | null; summary?: string; event_date?: string | null; created_at?: string | null }> | null) ?? [];
+    const valid = rows
+      .filter((r) => r.invalid_at == null)
+      .filter((r) => (scope === SCOPE_BOT_OWN ? r.owner_wallet == null : r.owner_wallet === scope));
+    validIds = new Set(valid.map((r) => r.id));
+    for (const r of valid) hydratedById.set(r.id, { summary: r.summary ?? '', eventDate: r.event_date ?? r.created_at ?? null });
   } catch (err) {
     logReconcileDegradeOnce(err, memoryId); return;
   }
@@ -187,12 +195,30 @@ export async function runReconcileShadow(memoryId: number, scope: string): Promi
   const { reconcileLo: LO, reconcileHi: HI } = config.memory;
   if (maxCosine < LO) { await add('below_lo', maxCosine, 'lo'); return; }
 
-  // 4. >= LO: a similar prior fact exists → needs_router (the LLM router, slice 1.5, decides
-  //    add/update/noop). Cosine NEVER decides supersession here.
+  // 4. >= LO: a similar prior fact exists. The LLM router (slice 1.5) classifies add/update/noop;
+  //    cosine NEVER decides supersession. Router OFF / over budget / no provider → needs_router
+  //    (gate-only instrumentation). The router only ever sees THIS owner's candidate summaries.
   const band: Band = maxCosine >= HI ? 'hi' : 'mid';
+  const top = surviving[0];
+  if (isRouterConfigured() && routerBudgetAvailable(ownerWalletForRow)) {
+    noteRouterCall(ownerWalletForRow);
+    const routerCandidates = surviving.map((c) => ({
+      id: c.id,
+      summary: hydratedById.get(c.id)?.summary ?? '',
+      eventDate: hydratedById.get(c.id)?.eventDate ?? null,
+    }));
+    const decision = await routeReconcile({ summary: newSummary, eventDate: newEventDate }, routerCandidates);
+    await insertShadowRow({
+      memory_id: memoryId, owner_wallet: ownerWalletForRow, mode: 'shadow', proposed_op: decision.op,
+      target_memory_id: decision.op === 'add' ? null : decision.targetId, max_cosine: maxCosine, band,
+      router_used: true, router_model: decision.model, fact_key: null,
+      reason: decision.reason || 'router', gate_version: gv,
+    });
+    return;
+  }
   await insertShadowRow({
     memory_id: memoryId, owner_wallet: ownerWalletForRow, mode: 'shadow', proposed_op: 'needs_router',
-    target_memory_id: surviving[0].id, max_cosine: maxCosine, band, router_used: false, fact_key: null,
+    target_memory_id: top.id, max_cosine: maxCosine, band, router_used: false, fact_key: null,
     reason: 'similar_prior_fact', gate_version: gv,
   });
 }

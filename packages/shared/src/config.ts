@@ -218,5 +218,17 @@ export const config = {
     reconcileLo: Number(optional("MEMORY_RECONCILE_LO", "0.85")),
     /** hi/mid band LABEL boundary for analysis (not a decision boundary). */
     reconcileHi: Number(optional("MEMORY_RECONCILE_HI", "0.95")),
+    /**
+     * C1 slice 1.5: the LLM router. Its own sub-flag (default OFF, independent of reconcileEnabled)
+     * so gate-only instrumentation runs first and LO is calibrated from that data before any LLM
+     * spend. When on, a >= LO write is classified add/update/noop by reconcileModel (still SHADOW —
+     * the op is logged, never applied). Requires OpenRouter configured.
+     */
+    reconcileRouter: optional("MEMORY_RECONCILE_ROUTER", "false") === "true",
+    /** Router model — an explicit id (NEVER a cognitiveFunction, which would silently override it
+     * with the fast llama slot). Haiku-class default: capable enough for dup-vs-update, cheap. */
+    reconcileModel: optional("MEMORY_RECONCILE_MODEL", "anthropic/claude-haiku-4.5"),
+    /** Per-owner soft daily cap on router calls (approximate, per-process) — bounds LLM spend. */
+    reconcileBudget: Number(optional("MEMORY_RECONCILE_BUDGET", "200")),
   },
 } as const;
