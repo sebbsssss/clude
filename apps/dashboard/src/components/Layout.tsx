@@ -30,6 +30,13 @@ const NAV: Array<{ path: string; label: string; icon: React.ReactNode }> = [
   { path: '/settings', label: 'Settings', icon: SettingsIcon },
 ];
 
+/* Constellation — a private nav entry shown ONLY to the ansem@clude.io account
+ * (his 38k-memory bull constellation; the route itself is gated too). */
+const ANSEM_EMAIL = 'ansem@clude.io';
+const ConstellationIcon = (
+  <svg width="19" height="19" viewBox="0 0 24 24"><circle cx="6" cy="5" r="1.6" /><circle cx="18" cy="5" r="1.6" /><circle cx="12" cy="11" r="2.2" /><circle cx="8" cy="19" r="1.6" /><circle cx="16" cy="19" r="1.6" /><line x1="7" y1="6.2" x2="10.6" y2="9.6" /><line x1="17" y1="6.2" x2="13.4" y2="9.6" /><line x1="10.8" y1="12.8" x2="8.6" y2="17.6" /><line x1="13.2" y1="12.8" x2="15.4" y2="17.6" /></svg>
+);
+
 function ThemeButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
     <button
@@ -110,6 +117,22 @@ export function Layout({ children }: { children: React.ReactNode }) {
               {n.icon}{n.label}
             </NavLink>
           ))}
+          {(email || '').toLowerCase() === ANSEM_EMAIL && (
+            <NavLink
+              to="/constellation"
+              className="navi"
+              style={({ isActive }) => ({
+                display: 'flex', alignItems: 'center', gap: 12, padding: '9px 11px', borderRadius: 9,
+                fontSize: 13.5, textDecoration: 'none', fontFamily: 'var(--font-sans)',
+                fontWeight: isActive ? 600 : 500,
+                color: isActive ? '#3ddc73' : 'var(--fg-2)',
+                background: isActive ? 'rgba(61,220,115,0.09)' : 'transparent',
+                transition: 'background .12s, color .12s',
+              })}
+            >
+              {ConstellationIcon}Constellation
+            </NavLink>
+          )}
         </nav>
 
         {/* Search / palette */}
