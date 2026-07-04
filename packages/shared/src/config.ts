@@ -194,4 +194,13 @@ export const config = {
         ? "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU" // devnet USDC (Circle faucet)
         : "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // mainnet USDC
   },
+  memory: {
+    /**
+     * Memory 3.0 C2: route storeMemory enrichment (embed/link/extract) through the durable
+     * memory_write_jobs outbox instead of fire-and-forget. Default OFF — fire-and-forget stays
+     * the default until the worker is proven. Requires migrations 044 + 045; degrades gracefully
+     * (falls back to fire-and-forget) if unapplied.
+     */
+    outboxEnabled: optional("MEMORY_OUTBOX", "false") === "true",
+  },
 } as const;
