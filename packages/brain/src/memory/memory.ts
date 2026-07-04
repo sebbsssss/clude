@@ -1,4 +1,5 @@
 import { getDb } from '@clude/shared/core/database';
+import { config } from '@clude/shared/config';
 import { createChildLogger } from '@clude/shared/core/logger';
 import { renderGroundedLine, byMemoryDateAsc } from '@clude/shared/core/memory-grounding';
 import {
@@ -39,6 +40,7 @@ import {
 import { getExperimentalConfig } from '../experimental/config';
 import { bm25SearchMemories } from '../experimental/bm25-search';
 import { setContentTokens } from './content-tokens';
+import { runReconcileShadow } from './reconcile-shadow';
 import { encryptForStorage, delegationStateForWrite } from './memory-encryption';
 import { generateOpenRouterResponse, isOpenRouterEnabled } from '@clude/shared/core/openrouter-client';
 import { isEncryptionEnabled, getEncryptionPubkey, encryptContent } from '@clude/shared/core/encryption';
@@ -648,22 +650,38 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
       source: opts.source,
     });
 
-    // Commit memory to Solana (fire-and-forget). v0.1: dual-writes the legacy
-    // solana_signature AND the new PMP tokenisation columns (content_hash,
-    // cnft_address, cnft_tx_sig, tokenization_status). v0.2 will drop the legacy
-    // path once verifiers are on PMP exclusively.
+    // Commit memory to Solana (fire-and-forget). ALWAYS runs, independent of the outbox flag —
+    // it has its own durability story (tokenization_status) and is NOT an outbox job. v0.1:
+    // dual-writes the legacy solana_signature AND the PMP tokenisation columns. v0.2 will drop
+    // the legacy path once verifiers are on PMP exclusively.
     commitMemoryToChain(data.id, opts, data as MemoryRowForTokenisation, plaintextContent, envelope !== null || legacyEncrypt).catch(err =>
       log.warn({ err }, 'On-chain memory commit failed'),
     );
 
-    // Generate embeddings and store fragments (fire-and-forget)
-    embedMemory(data.id, opts).catch(err => log.warn({ err }, 'Embedding generation failed'));
-
-    // Auto-link to related memories (fire-and-forget, runs after embedding is available)
-    autoLinkMemory(data.id, opts).catch(err => log.warn({ err }, 'Auto-linking failed'));
-
-    // Extract entities and build knowledge graph (fire-and-forget)
-    extractAndLinkEntitiesForMemory(data.id, opts).catch(err => log.debug({ err }, 'Entity extraction failed'));
+    // Enrichment (embed → link → extract). Memory 3.0 C2: when MEMORY_OUTBOX is on AND the
+    // enqueue lands, a single durable 'enrich' job replaces the fire-and-forget triad (whose
+    // errors were swallowed with no retry — 429s at scale silently dropped enrichment). If the
+    // flag is off, or the enqueue degrades (migration 044 unapplied), fall back to fire-and-forget
+    // so behavior is never worse than today.
+    let enqueued = false;
+    if (config.memory.outboxEnabled) {
+      enqueued = await enqueueEnrichJob(db, data.id);
+    }
+    if (!enqueued) {
+      const embedP = embedMemory(data.id, opts);
+      embedP.catch(err => log.warn({ err }, 'Embedding generation failed'));
+      autoLinkMemory(data.id, opts).catch(err => log.warn({ err }, 'Auto-linking failed'));
+      extractAndLinkEntitiesForMemory(data.id, opts).catch(err => log.debug({ err }, 'Entity extraction failed'));
+      // Memory 3.0 C1 SHADOW: record a proposed reconcile op AFTER the embedding is persisted (it
+      // reads memories.embedding — no re-embed). Scope captured eagerly (getOwnerScope() can be
+      // null / fail-open when the C0 fence flag is off, so pass the write's own resolved owner).
+      // Fully detached — chained on embedP but never awaited before return; runReconcileShadow
+      // never throws, so the .catch only swallows an embed rejection.
+      if (config.memory.reconcileEnabled) {
+        const reconcileScope = ownerWallet || SCOPE_BOT_OWN;
+        embedP.then(() => runReconcileShadow(data.id, reconcileScope)).catch(() => {});
+      }
+    }
 
     return data.id;
   } catch (err) {
@@ -787,7 +805,87 @@ async function commitMemoryToChain(
 /**
  * Generate vector embedding for a memory's summary and store it.
  */
-async function embedMemory(memoryId: number, opts: StoreMemoryOptions): Promise<void> {
+// ── Memory 3.0 C2: durable enrichment outbox enqueue ────────────────────────
+// storeMemory enqueues ONE 'enrich' job (embed → link → extract run in order by the worker)
+// when MEMORY_OUTBOX is on. Never throws: any error (e.g. relation-missing 42P01 when migration
+// 044 is unapplied) returns false so the caller falls back to fire-and-forget — behavior is never
+// worse than today. The degrade is logged exactly once to avoid log spam.
+let outboxDegradeLogged = false;
+function logOutboxDegradeOnce(err: unknown, memoryId: number): void {
+  if (outboxDegradeLogged) return;
+  outboxDegradeLogged = true;
+  const e = err as { code?: string; message?: string };
+  log.warn(
+    { code: e?.code, message: e?.message, memoryId },
+    'Outbox enqueue degraded — falling back to fire-and-forget (migration 044 unapplied?)',
+  );
+}
+
+async function enqueueEnrichJob(db: ReturnType<typeof getDb>, memoryId: number): Promise<boolean> {
+  try {
+    const { error } = await db.from('memory_write_jobs').insert({ memory_id: memoryId, job_type: 'enrich' });
+    if (error) {
+      logOutboxDegradeOnce(error, memoryId);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    logOutboxDegradeOnce(err, memoryId);
+    return false;
+  }
+}
+
+/** @internal test-only reset for the once-guard. */
+export function _resetOutboxDegradeLog(): void {
+  outboxDegradeLogged = false;
+}
+
+/**
+ * Memory 3.0 C2: the enrichment pipeline the outbox worker runs for an 'enrich' job, in
+ * dependency order (autoLinkMemory reads the memory's own embedding, written by embedMemory).
+ * Sequential + awaited (unlike the fire-and-forget triad) so a whole-job retry re-runs all three;
+ * each step is idempotent (embed delete-before-insert, link unique-index upsert, extract
+ * upsert-RPC). The caller (outbox-worker) wraps this in withOwnerWallet(job owner) so the
+ * ambient owner scope is correct off the poller tick.
+ */
+export async function runEnrichPipeline(memoryId: number, opts: StoreMemoryOptions): Promise<void> {
+  await embedMemory(memoryId, opts, { replaceFragments: true });
+  await autoLinkMemory(memoryId, opts);
+  await extractAndLinkEntitiesForMemory(memoryId, opts);
+  // Memory 3.0 C1 SHADOW: the outbox path's reconcile home — after embedMemory persisted the
+  // vector this reads. The worker wraps this in withOwnerWallet(job owner), so getOwnerWallet() is
+  // the job's owner; fall back to the bot-own sentinel (never null → always owner-fenced). Never
+  // throws; never mutates a memory row.
+  if (config.memory.reconcileEnabled) {
+    await runReconcileShadow(memoryId, getOwnerWallet() || SCOPE_BOT_OWN);
+  }
+}
+
+/**
+ * storeMemory + outbox status, for callers that want the {hash_id, jobs_queued} shape (the design
+ * contract). storeMemory itself keeps its number|null signature (zero call-site churn); this thin
+ * wrapper reads the ground truth back: jobs_queued counts the memory's outbox rows (1 when the
+ * enrich job enqueued, 0 when the flag is off or the enqueue degraded to fire-and-forget).
+ */
+export async function storeMemoryWithOutbox(
+  opts: StoreMemoryOptions,
+): Promise<{ id: number; hash_id: string; jobs_queued: number } | null> {
+  const id = await storeMemory(opts);
+  if (id === null) return null;
+  const db = getDb();
+  const { data: row } = await db.from('memories').select('hash_id').eq('id', id).maybeSingle();
+  const { count } = await db
+    .from('memory_write_jobs')
+    .select('id', { count: 'exact', head: true })
+    .eq('memory_id', id);
+  return { id, hash_id: (row?.hash_id as string) ?? '', jobs_queued: count ?? 0 };
+}
+
+async function embedMemory(
+  memoryId: number,
+  opts: StoreMemoryOptions,
+  embedOpts: { replaceFragments?: boolean } = {},
+): Promise<void> {
   if (!isEmbeddingEnabled()) return;
 
   const db = getDb();
@@ -858,6 +956,13 @@ async function embedMemory(memoryId: number, opts: StoreMemoryOptions): Promise<
     .filter(r => r.embedding !== null);
 
   if (fragmentRows.length > 0) {
+    // Memory 3.0 C2: the outbox worker re-runs enrichment on retry, so it passes
+    // replaceFragments to make this idempotent (delete-before-insert). Embeddings are already
+    // computed above, so the destructive gap is the ms between delete and insert — no network
+    // call sits inside it. The fire-and-forget path (flag off) keeps the plain insert.
+    if (embedOpts.replaceFragments) {
+      await db.from('memory_fragments').delete().eq('memory_id', memoryId);
+    }
     const { error } = await db.from('memory_fragments').insert(fragmentRows);
     if (error) {
       log.warn({ err: error.message, memoryId }, 'Failed to store memory fragments (summary embedding intact)');

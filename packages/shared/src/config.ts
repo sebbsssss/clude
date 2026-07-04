@@ -194,4 +194,41 @@ export const config = {
         ? "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU" // devnet USDC (Circle faucet)
         : "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // mainnet USDC
   },
+  memory: {
+    /**
+     * Memory 3.0 C2: route storeMemory enrichment (embed/link/extract) through the durable
+     * memory_write_jobs outbox instead of fire-and-forget. Default OFF — fire-and-forget stays
+     * the default until the worker is proven. Requires migrations 044 + 045; degrades gracefully
+     * (falls back to fire-and-forget) if unapplied.
+     */
+    outboxEnabled: optional("MEMORY_OUTBOX", "false") === "true",
+    /**
+     * Memory 3.0 C1: write-time reconciliation, SHADOW slice (LLM-free). When on, each write records
+     * a PROPOSED reconcile op (add / needs_router / skip) into memory_reconciliation_log WITHOUT
+     * applying it — the labeled sample the enforce path must earn its turn-on from. Default OFF;
+     * runs fully detached after embedMemory (zero write latency); degrades gracefully if migration
+     * 046 is unapplied. Disabled under BENCH_MODE. The router is a later slice; only the cosine gate
+     * runs here.
+     */
+    reconcileEnabled: optional("MEMORY_RECONCILE", "false") === "true",
+    /** Screen floor passed to match_memories_temporal — LOW so max_cosine is captured for below-LO
+     * writes (LO is tuned from the shadow data, not fixed up-front). */
+    reconcileFloor: Number(optional("MEMORY_RECONCILE_FLOOR", "0.5")),
+    /** "similar enough to reconcile" boundary → needs_router (vs add). A starting probe, not gospel. */
+    reconcileLo: Number(optional("MEMORY_RECONCILE_LO", "0.85")),
+    /** hi/mid band LABEL boundary for analysis (not a decision boundary). */
+    reconcileHi: Number(optional("MEMORY_RECONCILE_HI", "0.95")),
+    /**
+     * C1 slice 1.5: the LLM router. Its own sub-flag (default OFF, independent of reconcileEnabled)
+     * so gate-only instrumentation runs first and LO is calibrated from that data before any LLM
+     * spend. When on, a >= LO write is classified add/update/noop by reconcileModel (still SHADOW —
+     * the op is logged, never applied). Requires OpenRouter configured.
+     */
+    reconcileRouter: optional("MEMORY_RECONCILE_ROUTER", "false") === "true",
+    /** Router model — an explicit id (NEVER a cognitiveFunction, which would silently override it
+     * with the fast llama slot). Haiku-class default: capable enough for dup-vs-update, cheap. */
+    reconcileModel: optional("MEMORY_RECONCILE_MODEL", "anthropic/claude-haiku-4.5"),
+    /** Per-owner soft daily cap on router calls (approximate, per-process) — bounds LLM spend. */
+    reconcileBudget: Number(optional("MEMORY_RECONCILE_BUDGET", "200")),
+  },
 } as const;
