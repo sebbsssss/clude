@@ -13,7 +13,7 @@ vi.mock('@clude/shared/core/logger', () => ({
   createChildLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }));
 
-const drainWriteJobsOnce = vi.fn(async () => ({ examined: 0 }));
+const drainWriteJobsOnce = vi.fn((..._a: unknown[]) => Promise.resolve({ examined: 0 }));
 vi.mock('@clude/brain/memory/outbox-worker', () => ({
   drainWriteJobsOnce: (...a: unknown[]) => drainWriteJobsOnce(...a),
 }));

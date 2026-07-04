@@ -27,14 +27,16 @@ vi.mock('@clude/shared/core/owner-context', () => ({
 }));
 
 // Replace the whole ./memory module (huge, config-heavy) with just what the worker imports.
-const runEnrichPipeline = vi.fn(async () => undefined);
+const runEnrichPipeline = vi.fn((_id: number, _opts: unknown) => Promise.resolve<void>(undefined));
 vi.mock('../memory', () => ({
   SCOPE_BOT_OWN: '__BOT_OWN__',
-  runEnrichPipeline: (...a: unknown[]) => runEnrichPipeline(...a),
+  runEnrichPipeline: (id: number, opts: unknown) => runEnrichPipeline(id, opts),
 }));
 
-const decryptOneContent = vi.fn(async (row: { content: string }) => row.content);
-vi.mock('../memory-decryption', () => ({ decryptOneContent: (...a: unknown[]) => decryptOneContent(...a) }));
+// Real decryptOneContent returns string | null (null = revoked/undecryptable). Type the mock the
+// same so mockResolvedValue(null) typechecks.
+const decryptOneContent = vi.fn((_row: unknown): Promise<string | null> => Promise.resolve(''));
+vi.mock('../memory-decryption', () => ({ decryptOneContent: (row: unknown) => decryptOneContent(row) }));
 
 // DB mock: records job updates + claim-RPC calls; serves a rehydrate row.
 const jobUpdates: Array<{ patch: any; id: number }> = [];
@@ -61,7 +63,7 @@ beforeEach(() => {
   rehydrateRow = { id: 7, content: 'c', summary: 's', tags: ['t'], source: 'chat', related_user: null, related_wallet: null, memory_type: 'semantic', evidence_ids: [], encrypted: false, metadata: {} };
   claimResult = { data: [], error: null };
   runEnrichPipeline.mockResolvedValue(undefined);
-  decryptOneContent.mockImplementation(async (row: { content: string }) => row.content);
+  decryptOneContent.mockImplementation((row) => Promise.resolve((row as { content: string }).content));
 });
 
 describe('runMemoryWriteJob — enrich', () => {
