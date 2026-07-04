@@ -47,13 +47,15 @@ Phase 1 pins the server to `min=max=1` with `RUN_INPROCESS_TIMERS=true`, reprodu
 
 ### Worker (autonomous bot loops)
 
-The worker (`node apps/workers/dist/index.js`) is a pure loop process with no HTTP listener, so it does NOT fit a standard Cloud Run service (which health-checks a port). Pick one:
+```bash
+IMAGE_TAG=$(git rev-parse --short HEAD) ./infra/gcp/deploy-worker.sh
+```
 
-- **Cloud Run Worker Pool** (recommended, GA 2026): no HTTP endpoint, runs the same image with the command overridden, at exactly 1 instance, CPU always allocated. Verify the exact `gcloud run worker-pools deploy` flags against your gcloud version.
-- **Compute Engine VM** (`e2-small`) running the image via `docker run` with `--command`: simplest, fully predictable, ~$15/mo.
-- Add a tiny `/health` HTTP listener to `apps/workers` so it can run as a normal Cloud Run service `min=max=1`.
+The worker (`node apps/workers/dist/index.js`) now ships a minimal `/health` server (`apps/workers/src/index.ts`, built-in `http`, no dependency), so it runs as a **normal Cloud Run service** pinned to `min=max=1` with the command overridden. This avoids the newer Worker Pool primitive entirely. It exposes only `/health` (`--no-allow-unauthenticated`).
 
-Set `RUN_INPROCESS_TIMERS=false` on the worker unless/until the three server timers are extracted into it (Phase 2 below).
+Alternatives if you prefer: a Cloud Run **Worker Pool** (no HTTP needed, GA 2026; verify the `gcloud run worker-pools deploy` flags against your gcloud version) or a small **Compute Engine VM** (`e2-small`, ~$15/mo) running the image with the command override.
+
+The `RUN_INPROCESS_TIMERS` flag governs the three in-SERVER timers, so it is set `false` on the worker for clarity; the worker's own loops are always on. See Phase 2 for moving those server timers here to scale the server past one instance.
 
 ### Domains and PR previews
 
