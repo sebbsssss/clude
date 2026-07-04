@@ -503,6 +503,45 @@ async function runBootDdl(db: SupabaseClient): Promise<void> {
           END IF;
         END $do$;
 
+        -- Semantic search RPC (memory-level vector similarity) — the PRIMARY recall vector lane.
+        -- Sentinel-aware owner filter (Memory 3.0 C0). Kept byte-equivalent to migration 042 /
+        -- supabase-schema.sql. Was absent from this boot blob until 2026-07 (only the temporal
+        -- variant below was inline), so a box provisioned SOLELY by this blob — a fresh SDK
+        -- self-host or a brand-new Railway DB — lacked match_memories and every recall silently
+        -- fell back to keyword-only (the migration-028 class). Established prod is unaffected
+        -- (it was provisioned via supabase-schema.sql + migrations, which have it).
+        CREATE OR REPLACE FUNCTION match_memories(
+          query_embedding vector(1024),
+          match_threshold float DEFAULT 0.3,
+          match_count int DEFAULT 10,
+          filter_types text[] DEFAULT NULL,
+          filter_user text DEFAULT NULL,
+          min_decay float DEFAULT 0.1,
+          filter_owner text DEFAULT NULL,
+          filter_tags text[] DEFAULT NULL
+        )
+        RETURNS TABLE (id bigint, similarity float)
+        LANGUAGE plpgsql AS $$
+        BEGIN
+          RETURN QUERY
+          SELECT m.id, (1 - (m.embedding <=> query_embedding))::float AS similarity
+          FROM memories m
+          WHERE m.embedding IS NOT NULL
+            AND m.decay_factor >= min_decay
+            AND (filter_types IS NULL OR m.memory_type = ANY(filter_types))
+            AND (filter_user IS NULL OR m.related_user = filter_user)
+            AND (
+      filter_owner IS NULL
+      OR (filter_owner = '__BOT_OWN__' AND m.owner_wallet IS NULL)
+      OR m.owner_wallet = filter_owner
+    )
+            AND (filter_tags IS NULL OR m.tags && filter_tags)
+            AND (1 - (m.embedding <=> query_embedding)) > match_threshold
+          ORDER BY m.embedding <=> query_embedding
+          LIMIT match_count;
+        END;
+        $$;
+
         -- Temporal-aware semantic search RPC (Exp 9)
         CREATE OR REPLACE FUNCTION match_memories_temporal(
           query_embedding vector(1024),
@@ -832,6 +871,10 @@ const CORE_TABLES = [
 const CORE_RPC_PROBES: Array<{ name: string; args: Record<string, unknown> }> = [
   { name: 'get_linked_memories', args: { seed_ids: [], min_strength: 0.1, max_results: 1, filter_owner: null } },
   { name: 'bm25_search_memories', args: { search_query: '', match_count: 1, min_decay: 0.1, filter_owner: null } },
+  // Primary recall vector lane. query_embedding is NULL (no dimension/typmod cast, so no false
+  // error) + match_count 0 (trivially empty) — the probe only asserts the function RESOLVES.
+  // Absence yields PostgREST "Could not find the function match_memories(...)" → MISSING_RE → drift.
+  { name: 'match_memories', args: { query_embedding: null, match_threshold: 0.3, match_count: 0, min_decay: 0.1, filter_owner: null } },
 ];
 
 export interface SchemaReport {

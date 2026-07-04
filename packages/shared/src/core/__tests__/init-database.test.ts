@@ -102,6 +102,18 @@ describe('initDatabase (boot blob frozen)', () => {
     expect(getSchemaDriftReport()?.brokenRpcs).toEqual(['bm25_search_memories']);
   });
 
+  it('reports DRIFT when the primary vector lane match_memories is missing', async () => {
+    // Regression: match_memories was absent from the boot blob, so a box provisioned solely
+    // by initDatabase lacked it and recall silently degraded to keyword-only. The probe must
+    // now catch that at boot. PostgREST reports absence as "Could not find the function ...".
+    const db = fakeDb({
+      rpcErrors: { match_memories: { message: 'Could not find the function public.match_memories in the schema cache' } },
+    });
+    await initDatabase(db);
+    expect(db._state.execSqlCalls).toBe(0);
+    expect(getSchemaDriftReport()?.brokenRpcs).toEqual(['match_memories']);
+  });
+
   it('bootstraps a FRESH database (memories table absent) exactly once', async () => {
     const db = fakeDb({
       tableErrors: { memories: MISSING('memories'), memory_links: MISSING('memory_links') },
