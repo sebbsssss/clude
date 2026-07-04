@@ -544,6 +544,32 @@ async function runBootDdl(db: SupabaseClient): Promise<void> {
                 evidence_memory_ids = (SELECT ARRAY(SELECT DISTINCT e FROM unnest(entity_relations.evidence_memory_ids || EXCLUDED.evidence_memory_ids) AS e));
         $uerfn$;
 
+        -- Memory 3.0 C1 (migration 046): reconciliation SHADOW decision log. MIRROR — byte-equivalent
+        -- to migration 046. Records a PROPOSED reconcile op per write without applying it, so enforce
+        -- can be greenlit from a labeled sample. Deliberately NOT added to CORE_TABLES (dormant,
+        -- default-off; must not trip SCHEMA DRIFT at boot on an un-migrated prod box — C2 precedent).
+        CREATE TABLE IF NOT EXISTS memory_reconciliation_log (
+          id               BIGSERIAL PRIMARY KEY,
+          memory_id        BIGINT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+          owner_wallet     TEXT,
+          mode             TEXT NOT NULL DEFAULT 'shadow' CHECK (mode IN ('shadow','enforce')),
+          proposed_op      TEXT NOT NULL CHECK (proposed_op IN ('add','update','noop','needs_router','skip')),
+          target_memory_id BIGINT,
+          max_cosine       REAL,
+          band             TEXT CHECK (band IN ('hi','mid','lo','none')),
+          router_used      BOOLEAN NOT NULL DEFAULT false,
+          router_model     TEXT,
+          fact_key         TEXT,
+          reason           TEXT,
+          label            TEXT,
+          labeled_at       TIMESTAMPTZ,
+          gate_version     TEXT,
+          created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_reconcile_log_owner_created ON memory_reconciliation_log(owner_wallet, created_at);
+        CREATE INDEX IF NOT EXISTS idx_reconcile_log_op ON memory_reconciliation_log(proposed_op);
+        CREATE INDEX IF NOT EXISTS idx_reconcile_log_router ON memory_reconciliation_log(mode, router_used);
+
         DO $do$
         BEGIN
           IF NOT EXISTS (
