@@ -25,6 +25,17 @@ export async function bootstrap(): Promise<void> {
     startRecallCanary();
   }
 
+  // Memory 3.0 C2 durable enrichment outbox. Drains the single 'enrich' job storeMemory enqueues
+  // when MEMORY_OUTBOX is on (embed → link → extract, owner-scoped, crash-safe via stale-'running'
+  // reclaim; degrades silently to a no-op if migrations 044/045 are unapplied). Gated on the flag
+  // AND Supabase creds — flag off means nothing enqueues, so the drain would be a pointless empty
+  // RPC every tick.
+  if (process.env.SUPABASE_URL && config.memory.outboxEnabled) {
+    const { startOutboxWorkerPoller } = require('./workers/outbox-worker-poller');
+    startOutboxWorkerPoller();
+    log.info('Memory outbox worker started');
+  }
+
   // Durable marketplace delivery poller (§00 M6) — the backstop that drives paid copy orders to
   // 'delivered' even if the post-webhook delivery nudge is lost to a crash. Only run it when the
   // Stripe rail is configured (no paid orders exist otherwise); harmless either way (it no-ops).
