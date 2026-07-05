@@ -2,6 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
 import http from 'http';
 
+// compound.routes now imports @clude/shared/config (for OWNER_WALLET) + real withOwnerWallet to
+// scope its recalls (Memory 3.0 C0). SITE_ONLY short-circuits config validation; OWNER_WALLET is the
+// scope those recalls run under and the value the scope test asserts.
+vi.hoisted(() => {
+  process.env.SITE_ONLY = 'true';
+  process.env.OWNER_WALLET = 'BOT_OWNER_WALLET';
+});
+
 // Post brain-refactor, compound.routes.ts imports from @clude/shared/* and
 // @clude/brain/* — NOT the old relative paths. The mocks must target the exact
 // specifiers the route imports, or the real modules load and hit the live DB.
@@ -48,6 +56,9 @@ vi.mock('@clude/shared/core/database', () => ({
   }),
 }));
 
+// Real owner-context (shared AsyncLocalStorage) so we can read the ambient scope compound.routes'
+// withOwnerWallet establishes around its recalls.
+import { getContextOwnerWallet } from '@clude/shared/core/owner-context';
 import { compoundRoutes } from '../compound.routes.js';
 
 // Simple HTTP test helper (no supertest needed)
@@ -197,6 +208,16 @@ describe('GET /api/compound/markets/:id', () => {
     const res = await get(app, '/api/compound/markets/1');
     expect(res.status).toBe(404);
     expect(res.body.error).toMatch(/not a Compound prediction/);
+  });
+
+  it('recalls under the bot OWNER_WALLET scope, not the unscoped fail-open (Memory 3.0 C0)', async () => {
+    let recallScope: string | null | undefined = 'UNSET';
+    mockHydrateMemories.mockResolvedValueOnce([makePredictionMemory()]);
+    // Capture the ambient owner scope the recall runs under. It must be OWNER_WALLET — else, under
+    // OWNER_SCOPE_FAILCLOSED=true, the recall would scope to bot-own and drop worker-written rows.
+    mockRecallMemories.mockImplementationOnce(() => { recallScope = getContextOwnerWallet(); return Promise.resolve([]); });
+    await get(app, '/api/compound/markets/42');
+    expect(recallScope).toBe('BOT_OWNER_WALLET');
   });
 
   it('returns full market detail with reasoning and evidence', async () => {
