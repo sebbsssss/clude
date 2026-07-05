@@ -2,6 +2,8 @@
 // backend imports. Each app supplies the `api` implementation (wired to its own
 // authenticated client), so this package never touches fetch/Privy directly.
 
+import type { ProofBundleLike } from './pmp/proof-verify';
+
 export type MemoryType =
   | 'episodic'
   | 'semantic'
@@ -83,6 +85,10 @@ export interface ExportResult {
   download?: string;
   /** true when this exact pack was already registered (idempotent re-export). */
   deduped?: boolean;
+  /** The trust bundle (Clude-signed attestation + optional on-chain anchor) returned by
+   *  POST /v1/pmp/export, rendered by ArtifactProofBadge on the export card. Absent for
+   *  pre-B2.5 servers; the badge simply isn't shown when missing. */
+  proof?: ProofBundleLike;
 }
 
 /**
@@ -159,4 +165,8 @@ export interface MemoryExportPanelProps {
   onSendToDesktop?: (artifact: PmpArtifact) => void;
   /** Wire the "List on marketplace" action. Hidden if absent. Disabled for personal packs. */
   onListOnMarketplace?: (artifact: PmpArtifact) => void;
+  /** The published Clude proof-plane pubkey (base58). When supplied, the export card's
+   *  ArtifactProofBadge PINS the attestation signer to this key (rejects a valid-but-wrong-key
+   *  signature). When omitted, the badge verifies signature-consistency but not signer identity. */
+  proofPlanePubkey?: string;
 }
