@@ -12,6 +12,7 @@ import type {
 } from './types';
 import { MEMORY_TYPES } from './types';
 import { runExportWithRegister } from './pmp/export-flow';
+import { ArtifactProofBadge } from './pmp/ArtifactProofBadge';
 
 type Theme = 'light' | 'dark';
 
@@ -143,6 +144,7 @@ export function MemoryExportPanel(props: MemoryExportPanelProps) {
     onDownload,
     onSendToDesktop,
     onListOnMarketplace,
+    proofPlanePubkey,
   } = props;
 
   const theme = resolveTheme(themeProp);
@@ -608,6 +610,8 @@ export function MemoryExportPanel(props: MemoryExportPanelProps) {
       {result && (
         <ResultCard
           p={p}
+          theme={theme}
+          proofPlanePubkey={proofPlanePubkey}
           result={result}
           listable={listable}
           onDownload={handleDownload}
@@ -729,6 +733,8 @@ function ScanStatus({ p, flagged }: { p: Palette; flagged: number }) {
 
 function ResultCard({
   p,
+  theme,
+  proofPlanePubkey,
   result,
   listable,
   onDownload,
@@ -736,6 +742,8 @@ function ResultCard({
   onListOnMarketplace,
 }: {
   p: Palette;
+  theme: Theme;
+  proofPlanePubkey?: string;
   result: ExportResult;
   listable: boolean;
   onDownload: () => void;
@@ -784,6 +792,11 @@ function ResultCard({
           ✓ self-verifiable{result.deduped ? ' · already exported' : ''}
         </span>
       </div>
+      {result.proof && (
+        <div style={{ marginBottom: 12 }}>
+          <ArtifactProofBadge proof={result.proof} expectedPubkeyB58={proofPlanePubkey} theme={theme} />
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 12 }}>
         <Stat p={p} label="records" value={fmtNum(a.record_count)} />
         <Stat p={p} label="size" value={fmtBytes(a.byte_size)} />
