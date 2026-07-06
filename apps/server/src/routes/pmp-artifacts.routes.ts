@@ -705,6 +705,8 @@ async function writeRegisterRespond(args: WriteRegisterArgs): Promise<{ handled:
         res.status(200).json({
           artifact: existing,
           deduped: true,
+          // B2.5: same trust bundle the export card renders (ArtifactProofBadge).
+          proof: buildProofBundle(existing as never),
           pmp_base64: pmpBase64,
           filename: pmpFilename,
         });
@@ -740,7 +742,9 @@ async function writeRegisterRespond(args: WriteRegisterArgs): Promise<{ handled:
   // directly. No storage_url / no /download handler: the bytes are served once here, on export.
   res.status(201).json({
     artifact: artifactRow,
-    attestation,
+    // B2.5: the trust bundle the export card renders (ArtifactProofBadge). Reuse the attestation
+    // just signed (same createdAt=nowIso); anchor is null here — on-chain confirmation is async.
+    proof: { attestation, anchor: null },
     pmp_base64: pmpBase64,
     filename: pmpFilename,
   });
