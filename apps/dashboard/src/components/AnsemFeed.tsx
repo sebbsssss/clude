@@ -37,10 +37,13 @@ export function AnsemFeed() {
   const [posts, setPosts] = useState<AnsemFeedPost[]>([]);
   // enabled: null = unknown (loading), true = live, false = server has no bearer
   const [enabled, setEnabled] = useState<boolean | null>(null);
-  const [open, setOpen] = useState(true);
+  // collapse by default on narrow viewports so the feed never buries the constellation
+  const [open, setOpen] = useState(() => typeof window === 'undefined' || window.innerWidth >= 720);
   // ids we've already shown — anything new gets the enter animation once
   const seenRef = useRef<Set<string>>(new Set());
   const [freshIds, setFreshIds] = useState<Set<string>>(new Set());
+  // how many new posts the latest poll surfaced — drives the header "+N new" burst + dot ping
+  const [burst, setBurst] = useState(0);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -63,7 +66,9 @@ export function AnsemFeed() {
       setPosts(data.posts);
       if (!firstLoad && incomingFresh.size > 0) {
         setFreshIds(incomingFresh);
-        window.setTimeout(() => setFreshIds(new Set()), 1400);
+        setBurst(incomingFresh.size);
+        window.setTimeout(() => setFreshIds(new Set()), 2000);
+        window.setTimeout(() => setBurst(0), 3200);
       }
     } catch {
       // network hiccup — keep whatever we have; if we never loaded, hide the panel
@@ -86,7 +91,7 @@ export function AnsemFeed() {
     return (
       <div
         style={{
-          position: 'fixed', left: 'clamp(12px,3vw,26px)', top: 'clamp(150px,24vh,190px)', zIndex: 30,
+          position: 'fixed', left: 'clamp(16px,3vw,34px)', top: 'clamp(182px,25vh,206px)', zIndex: 30,
           padding: '7px 12px', borderRadius: 999,
           background: 'rgba(2,12,7,.7)', border: '1px solid rgba(72,224,122,.18)',
           fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
@@ -106,8 +111,10 @@ export function AnsemFeed() {
     <>
       <style>{`
         @keyframes ansemLivePulse { 0%,100% { opacity:1; box-shadow:0 0 0 0 rgba(92,240,138,.5); } 50% { opacity:.65; box-shadow:0 0 0 6px rgba(92,240,138,0); } }
-        @keyframes ansemFeedIn { from { opacity:0; transform:translateX(-14px); } to { opacity:1; transform:translateX(0); } }
-        @keyframes ansemFeedFlash { 0% { background:rgba(60,224,120,.16); } 100% { background:rgba(255,255,255,.03); } }
+        @keyframes ansemLivePing { 0% { box-shadow:0 0 0 0 rgba(92,240,138,.9); } 100% { box-shadow:0 0 0 15px rgba(92,240,138,0); } }
+        @keyframes ansemFeedIn { from { opacity:0; transform:translateY(-12px) scale(.975); } to { opacity:1; transform:translateY(0) scale(1); } }
+        @keyframes ansemFeedFlash { 0% { background:rgba(60,224,120,.24); border-color:rgba(92,240,138,.6); } 100% { background:rgba(255,255,255,.03); border-color:rgba(255,255,255,.07); } }
+        @keyframes ansemBurstIn { 0% { opacity:0; transform:scale(.55) translateX(-4px); } 60% { transform:scale(1.08); } 100% { opacity:1; transform:scale(1) translateX(0); } }
         #ansem-feed-list::-webkit-scrollbar{ width:5px; }
         #ansem-feed-list::-webkit-scrollbar-thumb{ background:rgba(72,224,122,.22); border-radius:3px; }
         .ansem-feed-card{ transition:border-color .18s ease, background .18s ease; }
@@ -116,9 +123,9 @@ export function AnsemFeed() {
 
       <div
         style={{
-          position: 'fixed', left: 'clamp(12px,3vw,26px)', top: 'clamp(150px,24vh,190px)', zIndex: 30,
-          width: open ? 'min(320px, calc(100vw - 24px))' : 'auto',
-          maxHeight: 'min(56vh, 520px)',
+          position: 'fixed', left: 'clamp(16px,3vw,34px)', top: 'clamp(182px,25vh,206px)', zIndex: 30,
+          width: open ? 'min(320px, calc(100vw - 32px))' : 'auto',
+          maxHeight: 'min(52vh, 500px)',
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
           borderRadius: 14,
           border: `1px solid rgba(72,224,122,${open ? '.3' : '.4'})`,
@@ -141,13 +148,26 @@ export function AnsemFeed() {
         >
           <span
             style={{
-              width: 9, height: 9, borderRadius: '50%', flexShrink: 0,
-              background: '#5cf08a', animation: 'ansemLivePulse 2s ease-in-out infinite',
+              width: 9, height: 9, borderRadius: '50%', flexShrink: 0, background: '#5cf08a',
+              animation: burst > 0
+                ? 'ansemLivePing .85s ease-out 2, ansemLivePulse 2s ease-in-out infinite'
+                : 'ansemLivePulse 2s ease-in-out infinite',
             }}
           />
           <span style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.1em', color: '#eafff0' }}>
-              $ANSEM LIVE
+            <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.1em', color: '#eafff0' }}>
+                $ANSEM LIVE
+              </span>
+              {burst > 0 && (
+                <span style={{
+                  fontSize: 8.5, fontWeight: 800, letterSpacing: '.04em', color: '#04240f',
+                  background: '#5cf08a', borderRadius: 999, padding: '1.5px 6px', whiteSpace: 'nowrap',
+                  animation: 'ansemBurstIn .45s cubic-bezier(.2,.9,.2,1)',
+                }}>
+                  +{burst} new
+                </span>
+              )}
             </span>
             {open && (
               <span style={{ display: 'block', fontSize: 8.5, letterSpacing: '.12em', textTransform: 'uppercase', color: 'rgba(147,232,178,.5)', marginTop: 3 }}>
@@ -189,7 +209,7 @@ export function AnsemFeed() {
                     padding: '8px 9px', borderRadius: 9,
                     background: 'rgba(255,255,255,.03)',
                     border: '1px solid rgba(255,255,255,.07)',
-                    animation: isFresh ? 'ansemFeedIn .5s cubic-bezier(.2,.8,.2,1), ansemFeedFlash 1.4s ease-out' : undefined,
+                    animation: isFresh ? 'ansemFeedIn .55s cubic-bezier(.2,.9,.2,1), ansemFeedFlash 1.9s ease-out' : undefined,
                   }}
                 >
                   {/* author row */}
