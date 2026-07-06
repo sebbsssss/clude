@@ -12,6 +12,8 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { ansemApi } from '../lib/ansem-api';
 import type { AnsemNode } from '../lib/ansem-api';
+import { AvatarBull } from '../components/AvatarBull';
+import type { AvatarBullHandle } from '../components/AvatarBull';
 
 // ── Data fetching ───────────────────────────────────────────────────────────
 
@@ -72,6 +74,10 @@ function BullConstellation({
   highlightRef.current = highlightIds;
   const nodesRef = useRef<AnsemNode[]>(nodes);
   nodesRef.current = nodes;
+  // View transform (zoom + pan). Mutated by wheel/drag handlers, read in the rAF
+  // loop AND in the hit-test so tooltips stay correct under zoom. Kept in a ref
+  // (not state) so panning/zooming never re-runs the build effect.
+  const viewRef = useRef({ scale: 1, ox: 0, oy: 0 });
 
   useEffect(() => {
     const wrap = wrapRef.current;
@@ -250,6 +256,8 @@ function BullConstellation({
       cv!.width = Math.round(W * DPR); cv!.height = Math.round(H * DPR); cv!.style.width = W + 'px'; cv!.style.height = H + 'px';
       ctx!.setTransform(DPR, 0, 0, DPR, 0, 0);
       S = Math.min(W, H) * 0.92; OX = (W - S) / 2; OY = (H - S) / 2 + H * 0.012;
+      // A viewport resize re-fits the constellation → reset zoom/pan to identity.
+      viewRef.current = { scale: 1, ox: 0, oy: 0 };
       build();
     }
 
@@ -264,19 +272,28 @@ function BullConstellation({
       if (!reduce) { pxp += (txp - pxp) * 0.045; pyp += (typ - pyp) * 0.045; }
       const hl = highlightRef.current;
       const hasHl = hl.size > 0;
+      const vw = viewRef.current;                          // {scale, ox, oy} zoom+pan
+      const vs = vw.scale, vox = vw.ox, voy = vw.oy;
       ctx!.clearRect(0, 0, W, H);
       ctx!.globalCompositeOperation = 'lighter';           // additive light — the glow look
-      for (let b = 0; b < 3; b++) { const [ox, oy] = bucketOff(b); ctx!.drawImage(edgeLayers[b].cv, ox, oy, W, H); }
+      // Edge layers are full-canvas images; scale+offset them with the view transform.
+      for (let b = 0; b < 3; b++) { const [ox, oy] = bucketOff(b); ctx!.drawImage(edgeLayers[b].cv, ox * vs + vox, oy * vs + voy, W * vs, H * vs); }
       for (const n of nodes) {
         const [ox, oy] = bucketOff(zBucket(n.z));
-        const x = n.x + ox, y = n.y + oy;
+        // world position (parallax) → screen position (zoom+pan)
+        const x = (n.x + ox) * vs + vox, y = (n.y + oy) * vs + voy;
         // chat→highlight: recalled memories pulse + enlarge + brighten; rest dim.
         const isHl = hasHl && n.id !== undefined && hl.has(n.id);
         const dim = hasHl && !isHl ? 0.22 : 1;
         const pulse = isHl ? 1.35 + 0.35 * Math.sin(t * 3.4 + n.ph) : 1;
+        // Zoom scales the drawn radii so nodes grow as you dive in. The diffuse
+        // glow halos grow more gently (sqrt) than the crisp cores so they don't
+        // blow out and wash the field white at high zoom.
+        const rScale = vs;
+        const glowScale = Math.sqrt(vs);
         if (n.bright) {
           const tw = 0.74 + 0.26 * Math.sin(t * 1.1 + n.ph);
-          const R = n.r * 4.6 * tw * pulse;
+          const R = n.r * 4.6 * tw * pulse * glowScale;
           ctx!.globalAlpha = 0.85 * tw * dim;
           ctx!.drawImage(SPR_STAR, x - R, y - R, R * 2, R * 2);
         } else {
@@ -284,22 +301,39 @@ function BullConstellation({
           const depth = 0.5 + 0.5 * n.z;
           ctx!.globalAlpha = Math.min(1, (n.a || 0.4) * tw * depth * 1.5) * dim;
           const spr = n.glow ? SPR_STAR : (n.g ? SPR_GLOW : SPR_DOT);
-          const R = n.r * (n.glow ? 4 : 2.6) * pulse;
+          const R = n.r * (n.glow ? 4 : 2.6) * pulse * glowScale;
           ctx!.drawImage(spr, x - R, y - R, R * 2, R * 2);
         }
         // recalled-star ring — the "graph responds to the conversation" moment
         if (isHl) {
           ctx!.globalAlpha = 0.6 + 0.4 * Math.sin(t * 3.4 + n.ph);
           ctx!.strokeStyle = 'rgba(140,255,180,0.9)'; ctx!.lineWidth = 1.2;
-          ctx!.beginPath(); ctx!.arc(x, y, (n.bright ? n.r * 2.2 : 6) + 5 * pulse, 0, 6.2832); ctx!.stroke();
+          ctx!.beginPath(); ctx!.arc(x, y, ((n.bright ? n.r * 2.2 : 6) + 5 * pulse) * rScale, 0, 6.2832); ctx!.stroke();
+        }
+        // At high zoom, label the brightest (most-liked) data nodes with a snippet
+        // of their tweet so the constellation becomes readable up close.
+        if (vs > 3.2 && n.bright && n.t && dim > 0.5) {
+          const txt = n.t.replace(/\s+/g, ' ').trim().slice(0, 48);
+          if (txt) {
+            ctx!.globalCompositeOperation = 'source-over';
+            ctx!.globalAlpha = Math.min(1, (vs - 3.2) / 1.6) * dim;
+            ctx!.font = '11px ui-monospace,Menlo,monospace';
+            ctx!.fillStyle = 'rgba(234,255,240,0.92)';
+            ctx!.textAlign = 'center';
+            const R = n.r * 4.6 * glowScale;
+            ctx!.fillText(txt, x, y + R + 12);
+            ctx!.textAlign = 'left';
+            ctx!.globalCompositeOperation = 'lighter';
+          }
         }
       }
       ctx!.globalAlpha = 1;
       if (hover) {
         const [ox, oy] = bucketOff(zBucket(hover.z));
+        const hx = (hover.x + ox) * vs + vox, hy = (hover.y + oy) * vs + voy;
         ctx!.globalCompositeOperation = 'source-over';
         ctx!.strokeStyle = 'rgba(234,255,240,.92)'; ctx!.lineWidth = 1.4;
-        ctx!.beginPath(); ctx!.arc(hover.x + ox, hover.y + oy, (hover.bright ? hover.r * 2.2 : 5) + 3, 0, 6.2832); ctx!.stroke();
+        ctx!.beginPath(); ctx!.arc(hx, hy, ((hover.bright ? hover.r * 2.2 : 5) + 3) * vs, 0, 6.2832); ctx!.stroke();
       }
       ctx!.globalCompositeOperation = 'source-over';
       raf = requestAnimationFrame(frame);
@@ -307,11 +341,16 @@ function BullConstellation({
 
     let hover: StarNode | null = null;
     function pick(mx: number, my: number): StarNode | null {
+      // Same view transform as the render loop: node world pos → screen pos, so
+      // the hit-test stays aligned with what's drawn when zoomed/panned.
+      const vw = viewRef.current, vs = vw.scale, vox = vw.ox, voy = vw.oy;
       let best: StarNode | null = null, bd = 1e9;
       for (const n of dataNodes) {
         const [ox, oy] = bucketOff(zBucket(n.z));
-        const d = (n.x + ox - mx) ** 2 + (n.y + oy - my) ** 2;
-        const hit = n.bright ? Math.max(16, n.r * 2.6) : 9;
+        const sx = (n.x + ox) * vs + vox, sy = (n.y + oy) * vs + voy;
+        const d = (sx - mx) ** 2 + (sy - my) ** 2;
+        // hit radius grows with zoom (nodes are bigger) but keeps a sane floor.
+        const hit = (n.bright ? Math.max(16, n.r * 2.6) : 9) * Math.max(1, vs * 0.85);
         if (d < hit * hit && d < bd) { bd = d; best = n; }
       }
       return best;
@@ -324,20 +363,112 @@ function BullConstellation({
       if (ty > H - 96) ty = my - 14 - (tip!.offsetHeight || 80);
       tip!.style.left = tx + 'px'; tip!.style.top = ty + 'px';
     }
+    // ── zoom + pan interaction ───────────────────────────────────────────────
+    const MIN_SCALE = 0.6, MAX_SCALE = 7;
+    const clampScale = (s: number) => Math.max(MIN_SCALE, Math.min(MAX_SCALE, s));
+    // Keep the pan within a generous bound so the constellation can't be lost.
+    function clampPan() {
+      const v = viewRef.current;
+      const margin = Math.max(W, H) * (v.scale - 0.5);
+      v.ox = Math.max(-W * v.scale - margin, Math.min(W * v.scale + margin, v.ox));
+      v.oy = Math.max(-H * v.scale - margin, Math.min(H * v.scale + margin, v.oy));
+    }
+    // Zoom toward a screen point (sx,sy): keep the world point under it fixed.
+    function zoomAt(sx: number, sy: number, factor: number) {
+      const v = viewRef.current;
+      const next = clampScale(v.scale * factor);
+      if (next === v.scale) return;
+      const worldX = (sx - v.ox) / v.scale, worldY = (sy - v.oy) / v.scale;
+      v.scale = next;
+      v.ox = sx - worldX * next;
+      v.oy = sy - worldY * next;
+      clampPan();
+    }
+    function resetView() { viewRef.current = { scale: 1, ox: 0, oy: 0 }; }
+
+    let dragging = false, dragX = 0, dragY = 0;
+
     const onMove = (e: MouseEvent) => {
       const rc = wrap!.getBoundingClientRect(), mx = e.clientX - rc.left, my = e.clientY - rc.top;
+      if (dragging) {
+        const dx = mx - dragX, dy = my - dragY;
+        const v = viewRef.current;
+        v.ox += dx; v.oy += dy;
+        dragX = mx; dragY = my;
+        clampPan();
+        if (hover) { hover = null; tip!.classList.remove('on'); }
+        return;
+      }
       txp = (mx / W - 0.5) * 2; typ = (my / H - 0.5) * 2;
       const n = pick(mx, my);
       if (n) { hover = n; moveTip(mx, my, n); } else if (hover) { hover = null; tip!.classList.remove('on'); }
     };
     const onLeave = () => { hover = null; tip!.classList.remove('on'); txp = 0; typ = 0; };
-    const onTouch = (e: TouchEvent) => {
-      const rc = wrap!.getBoundingClientRect(), tch = e.touches[0], mx = tch.clientX - rc.left, my = tch.clientY - rc.top;
-      const n = pick(mx, my); if (n) { hover = n; moveTip(mx, my, n); } else { hover = null; tip!.classList.remove('on'); }
+    const onDown = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      const rc = wrap!.getBoundingClientRect();
+      dragging = true;
+      dragX = e.clientX - rc.left; dragY = e.clientY - rc.top;
+      hover = null; tip!.classList.remove('on');
+      wrap!.style.cursor = 'grabbing';
     };
+    const onUp = () => { dragging = false; wrap!.style.cursor = ''; };
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rc = wrap!.getBoundingClientRect(), mx = e.clientX - rc.left, my = e.clientY - rc.top;
+      // trackpad + wheel: exponential zoom for a smooth feel
+      const factor = Math.exp(-e.deltaY * 0.0015);
+      zoomAt(mx, my, factor);
+    };
+    const onDblClick = (e: MouseEvent) => { e.preventDefault(); resetView(); hover = null; tip!.classList.remove('on'); };
+
+    // ── touch: one-finger pan (+ tap-to-read), two-finger pinch-zoom ──
+    let touchMode: 'none' | 'pan' | 'pinch' = 'none';
+    let tPrevX = 0, tPrevY = 0, tPrevDist = 0;
+    const touchDist = (a: Touch, b: Touch) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    const onTouchStart = (e: TouchEvent) => {
+      const rc = wrap!.getBoundingClientRect();
+      if (e.touches.length === 1) {
+        touchMode = 'pan';
+        tPrevX = e.touches[0].clientX - rc.left; tPrevY = e.touches[0].clientY - rc.top;
+        // provisional hover on tap
+        const n = pick(tPrevX, tPrevY);
+        if (n) { hover = n; moveTip(tPrevX, tPrevY, n); } else { hover = null; tip!.classList.remove('on'); }
+      } else if (e.touches.length === 2) {
+        touchMode = 'pinch';
+        tPrevDist = touchDist(e.touches[0], e.touches[1]);
+      }
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      const rc = wrap!.getBoundingClientRect();
+      if (touchMode === 'pan' && e.touches.length === 1) {
+        const mx = e.touches[0].clientX - rc.left, my = e.touches[0].clientY - rc.top;
+        const dx = mx - tPrevX, dy = my - tPrevY;
+        if (Math.abs(dx) + Math.abs(dy) > 3) {
+          const v = viewRef.current; v.ox += dx; v.oy += dy; clampPan();
+          hover = null; tip!.classList.remove('on');
+        }
+        tPrevX = mx; tPrevY = my;
+      } else if (touchMode === 'pinch' && e.touches.length === 2) {
+        const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rc.left;
+        const my = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rc.top;
+        const dist = touchDist(e.touches[0], e.touches[1]);
+        if (tPrevDist > 0) zoomAt(mx, my, dist / tPrevDist);
+        tPrevDist = dist;
+      }
+    };
+    const onTouchEnd = () => { touchMode = 'none'; };
+
     wrap.addEventListener('mousemove', onMove);
     wrap.addEventListener('mouseleave', onLeave);
-    wrap.addEventListener('touchstart', onTouch, { passive: true });
+    wrap.addEventListener('mousedown', onDown);
+    window.addEventListener('mouseup', onUp);
+    wrap.addEventListener('wheel', onWheel, { passive: false });
+    wrap.addEventListener('dblclick', onDblClick);
+    wrap.addEventListener('touchstart', onTouchStart, { passive: true });
+    wrap.addEventListener('touchmove', onTouchMove, { passive: true });
+    wrap.addEventListener('touchend', onTouchEnd, { passive: true });
+    wrap.style.cursor = 'grab';
 
     let rt = 0;
     const onResize = () => { clearTimeout(rt); rt = window.setTimeout(resize, 140); };
@@ -353,7 +484,13 @@ function BullConstellation({
       clearTimeout(rt);
       wrap.removeEventListener('mousemove', onMove);
       wrap.removeEventListener('mouseleave', onLeave);
-      wrap.removeEventListener('touchstart', onTouch);
+      wrap.removeEventListener('mousedown', onDown);
+      window.removeEventListener('mouseup', onUp);
+      wrap.removeEventListener('wheel', onWheel);
+      wrap.removeEventListener('dblclick', onDblClick);
+      wrap.removeEventListener('touchstart', onTouchStart);
+      wrap.removeEventListener('touchmove', onTouchMove);
+      wrap.removeEventListener('touchend', onTouchEnd);
       window.removeEventListener('resize', onResize);
     };
     // Rebuild only when the node set changes (highlight is read via ref, no rebuild).
@@ -404,12 +541,150 @@ function AnsemChat({
   });
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
-  const [expanded, setExpanded] = useState(messages.length > 0);
+  // The whole panel collapses to a floating orb by default (open only if we already have history).
+  const [open, setOpen] = useState(false);
+  // Voice playback: muted toggle (default unmuted — but no audio plays until the
+  // first user submit, which is the gesture that satisfies browser autoplay policy).
+  const [muted, setMuted] = useState(false);
+  const mutedRef = useRef(false);
+  mutedRef.current = muted;
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const contentRef = useRef('');
   const rafRef = useRef(0);
   const lastUpdateRef = useRef(0);
+
+  // ── Avatar amplitude driving ────────────────────────────────────────────────
+  // The bull avatar exposes setAmp(0..1). We drive it TWO ways:
+  //   1) REAL voice — POST /api/ansem/speak → {audio_url}, played through a Web
+  //      Audio AnalyserNode; each frame we read the RMS level of the actual
+  //      Sterling audio and feed it into setAmp, so the mouth/eyes/head move to
+  //      the real speech. On audio end → setAmp(0).
+  //   2) FALLBACK synthetic flutter — if /api/ansem/speak is unavailable (e.g.
+  //      501 voice_not_configured) or errors, we keep a lively speech-like
+  //      flutter running for the duration of the stream so the bull still
+  //      "talks" without audio.
+  const avatarRef = useRef<AvatarBullHandle>(null);
+  const talkRafRef = useRef(0);          // synthetic-flutter rAF (fallback + during stream)
+  const audioRafRef = useRef(0);         // real-audio analyser rAF
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
+  const audioSrcRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const speakingRef = useRef(false);     // true while real audio is driving the avatar
+
+  const API_BASE = import.meta.env.VITE_API_BASE || '';
+
+  // Create/resume the AudioContext. MUST be called from a user gesture (the first
+  // chat submit) to satisfy browser autoplay policy.
+  const ensureAudio = useCallback(() => {
+    if (!audioCtxRef.current) {
+      const Ctor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!Ctor) return null;
+      const ctx = new Ctor();
+      const el = new Audio();
+      el.crossOrigin = 'anonymous';   // needed for AnalyserNode to read cross-origin audio
+      const src = ctx.createMediaElementSource(el);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 1024;
+      src.connect(analyser);
+      analyser.connect(ctx.destination);
+      audioCtxRef.current = ctx;
+      audioElRef.current = el;
+      audioSrcRef.current = src;
+      analyserRef.current = analyser;
+    }
+    if (audioCtxRef.current.state === 'suspended') { void audioCtxRef.current.resume(); }
+    return audioCtxRef.current;
+  }, []);
+
+  // Synthetic speech-like flutter — the fallback + the during-stream animation.
+  const startTalking = useCallback(() => {
+    if (talkRafRef.current || speakingRef.current) return;   // already talking (synthetic or real)
+    const t0 = performance.now();
+    const tick = (now: number) => {
+      if (speakingRef.current) { talkRafRef.current = 0; return; }   // real audio took over
+      const t = (now - t0) / 1000;
+      // layered sines → an organic mouth flutter, biased lively (~0.35..0.95)
+      const flutter =
+        0.5 + 0.32 * Math.abs(Math.sin(t * 11.0)) * Math.abs(Math.sin(t * 6.3 + 0.7))
+        + 0.14 * Math.sin(t * 3.1);
+      avatarRef.current?.setAmp(Math.max(0.2, Math.min(1, flutter)));
+      talkRafRef.current = requestAnimationFrame(tick);
+    };
+    talkRafRef.current = requestAnimationFrame(tick);
+  }, []);
+
+  const stopTalking = useCallback(() => {
+    if (talkRafRef.current) { cancelAnimationFrame(talkRafRef.current); talkRafRef.current = 0; }
+    if (!speakingRef.current) {
+      // ramp back toward idle-quiet; the avatar's own idle-sim resumes from here
+      avatarRef.current?.setAmp(0.05);
+    }
+  }, []);
+
+  // Real voice: fetch TTS for `text`, play it, and drive setAmp from the live RMS
+  // level. Returns true if audio actually started (so the caller can drop the
+  // synthetic flutter); false → caller keeps the synthetic animation.
+  const speak = useCallback(async (text: string): Promise<boolean> => {
+    if (mutedRef.current || !text.trim()) return false;
+    const ctx = ensureAudio();
+    const el = audioElRef.current, analyser = analyserRef.current;
+    if (!ctx || !el || !analyser) return false;
+
+    let audioUrl = '';
+    try {
+      const res = await fetch(`${API_BASE}/api/ansem/speak`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      // 501 voice_not_configured (or any non-OK) → graceful fallback to synthetic
+      if (!res.ok) return false;
+      const data = (await res.json()) as { audio_url?: string };
+      audioUrl = data.audio_url || '';
+      if (!audioUrl) return false;
+    } catch {
+      return false;   // network/parse error → fallback
+    }
+
+    // Real audio is available — take over from the synthetic flutter.
+    if (talkRafRef.current) { cancelAnimationFrame(talkRafRef.current); talkRafRef.current = 0; }
+    speakingRef.current = true;
+
+    return await new Promise<boolean>((resolve) => {
+      const buf = new Uint8Array(analyser.fftSize);
+      const drive = () => {
+        analyser.getByteTimeDomainData(buf);
+        // RMS of the centered waveform → 0..1 level
+        let sum = 0;
+        for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
+        const rms = Math.sqrt(sum / buf.length);
+        // scale up (speech RMS is small) + clamp; gentle floor so the mouth stays lively
+        const level = Math.max(0, Math.min(1, rms * 2.6));
+        avatarRef.current?.setAmp(level);
+        audioRafRef.current = requestAnimationFrame(drive);
+      };
+      const cleanup = () => {
+        if (audioRafRef.current) { cancelAnimationFrame(audioRafRef.current); audioRafRef.current = 0; }
+        speakingRef.current = false;
+        avatarRef.current?.setAmp(0);   // audio end → mouth closes
+      };
+      el.onended = () => { cleanup(); resolve(true); };
+      el.onerror = () => { cleanup(); resolve(false); };
+      el.src = audioUrl;
+      audioRafRef.current = requestAnimationFrame(drive);
+      el.play().catch(() => { cleanup(); resolve(false); });
+    });
+  }, [API_BASE, ensureAudio]);
+
+  // clean up any loops if the component unmounts mid-stream
+  useEffect(() => () => {
+    if (talkRafRef.current) cancelAnimationFrame(talkRafRef.current);
+    if (audioRafRef.current) cancelAnimationFrame(audioRafRef.current);
+    if (audioElRef.current) { audioElRef.current.pause(); audioElRef.current.src = ''; }
+    if (audioCtxRef.current) { void audioCtxRef.current.close(); }
+  }, []);
 
   // Persist non-streaming messages to localStorage
   useEffect(() => {
@@ -422,11 +697,14 @@ function AnsemChat({
   }, [messages]);
 
   const scrollToBottom = () => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); };
-  useEffect(scrollToBottom, [messages]);
-  useEffect(() => { if (messages.length > 0) setExpanded(true); }, [messages.length]);
+  useEffect(scrollToBottom, [messages, open]);
 
   const handleSend = useCallback(async () => {
     if (!input.trim() || streaming) return;
+
+    // This submit is a user gesture → create/resume the AudioContext now, so the
+    // TTS audio is allowed to play later (browser autoplay policy).
+    ensureAudio();
 
     const userMsg: ChatMessage = { id: `user-${Date.now()}`, role: 'user', content: input.trim() };
     const assistantId = `assistant-${Date.now()}`;
@@ -446,6 +724,8 @@ function AnsemChat({
         userMsg.content,
         history,
         (chunk) => {
+          // first chunk → the clone is "speaking": animate the avatar
+          startTalking();
           contentRef.current += chunk;
           const now = performance.now();
           if (now - lastUpdateRef.current < 66) return;
@@ -457,16 +737,23 @@ function AnsemChat({
             setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: display } : m)));
           });
         },
-        (ids) => { onHighlight(new Set(ids)); },   // recalled_ids — light nodes as they come in
+        (ids) => { onHighlight(new Set(ids)); },   // recalled_ids — light nodes in the BACKGROUND constellation as they come in
         (data) => {
           if (rafRef.current) cancelAnimationFrame(rafRef.current);
           const cleanContent = data.clean_content || contentRef.current.replace(/\n?MEMORY_IDS:\s*\[[^\]]*\]\s*$/, '').trim();
+          // memory_ids → pulse/highlight those nodes in the hero constellation
           if (data.memory_ids && data.memory_ids.length > 0) onHighlight(new Set(data.memory_ids));
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId ? { ...m, content: cleanContent, memoryIds: data.memory_ids, streaming: false } : m,
             ),
           );
+          // reply text complete → speak it with the REAL Sterling voice, driving
+          // the bull from the live audio RMS. If /api/ansem/speak is unavailable
+          // (501 / error), speak() returns false and the synthetic flutter that's
+          // been running through the stream keeps the bull "talking"; either way
+          // stopTalking() lands the mouth back to idle when playback finishes.
+          void speak(cleanContent).finally(() => { stopTalking(); });
         },
         abort.signal,
       );
@@ -479,11 +766,13 @@ function AnsemChat({
           ),
         );
       }
+      stopTalking();   // error/abort → land the avatar back to idle
+                       // (the success path stops in onDone, after speak() resolves)
     } finally {
       setStreaming(false);
       abortRef.current = null;
     }
-  }, [input, streaming, messages, onHighlight]);
+  }, [input, streaming, messages, onHighlight, startTalking, stopTalking, speak, ensureAudio]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -491,97 +780,215 @@ function AnsemChat({
 
   const handleClear = () => {
     setMessages([]);
-    setExpanded(false);
     onHighlight(new Set());
     contentRef.current = '';
   };
 
+  const stopAudio = useCallback(() => {
+    if (audioRafRef.current) { cancelAnimationFrame(audioRafRef.current); audioRafRef.current = 0; }
+    speakingRef.current = false;
+    const el = audioElRef.current;
+    if (el) { el.pause(); el.onended = null; el.onerror = null; }
+    avatarRef.current?.setAmp(0);
+  }, []);
+
+  const handleCollapse = () => {
+    abortRef.current?.abort();
+    stopAudio();
+    stopTalking();
+    onHighlight(new Set());   // clear the constellation highlight when the panel closes
+    setOpen(false);
+  };
+
+  const toggleMute = () => {
+    setMuted((m) => {
+      const next = !m;
+      if (next) stopAudio();   // muting mid-playback stops the current voice
+      return next;
+    });
+  };
+
   return (
-    <div style={{
-      position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 20,
-      width: 'calc(100% - 32px)', maxWidth: 760, display: 'flex', flexDirection: 'column', alignItems: 'center',
-    }}>
+    <>
       <style>{`
         @keyframes ansemDotPulse { 0%, 60%, 100% { opacity: 0.2; transform: scale(1); } 30% { opacity: 1; transform: scale(1.3); } }
+        @keyframes ansemOrbPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(60,224,120,.45), 0 8px 34px rgba(0,0,0,.55); } 50% { box-shadow: 0 0 0 10px rgba(60,224,120,0), 0 8px 34px rgba(0,0,0,.55); } }
+        @keyframes ansemPanelIn { from { opacity: 0; transform: translateY(14px) scale(.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
         #ansem-msgs::-webkit-scrollbar{width:6px}
         #ansem-msgs::-webkit-scrollbar-thumb{background:rgba(72,224,122,.25);border-radius:3px}
+        .ansem-orb{transition:transform .18s ease, filter .18s ease}
+        .ansem-orb:hover{transform:scale(1.06);filter:brightness(1.12)}
       `}</style>
 
-      {expanded && messages.length > 0 && (
-        <div id="ansem-msgs" style={{
-          width: '100%', maxHeight: 280, overflowY: 'auto', marginBottom: 8, padding: '10px 12px',
-          background: 'rgba(2,14,8,.92)', borderRadius: 12, border: '1px solid rgba(72,224,122,.28)',
-          backdropFilter: 'blur(8px)', boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
-          display: 'flex', flexDirection: 'column', gap: 6,
-          fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button
-              onClick={handleClear}
-              style={{ background: 'none', border: 'none', color: 'rgba(92,240,138,.55)', fontSize: 9, cursor: 'pointer', letterSpacing: 0.5, fontFamily: 'inherit' }}
-            >
-              Clear
-            </button>
-          </div>
-          {messages.map((msg) => (
-            <div key={msg.id} style={{ alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '90%' }}>
-              <div style={{
-                padding: '7px 11px',
-                borderRadius: msg.role === 'user' ? '10px 10px 2px 10px' : '10px 10px 10px 2px',
-                background: msg.role === 'user' ? 'rgba(60,224,120,.14)' : 'rgba(255,255,255,.04)',
-                border: `1px solid ${msg.role === 'user' ? 'rgba(72,224,122,.32)' : 'rgba(255,255,255,.08)'}`,
-                fontSize: 12, lineHeight: 1.55, color: '#eafff0', whiteSpace: 'pre-wrap',
-              }}>
-                {msg.content}
-                {msg.streaming && !msg.content && (
-                  <span style={{ color: 'rgba(147,232,178,.7)', letterSpacing: 2, fontSize: 14 }}>
-                    <span style={{ animation: 'ansemDotPulse 1.4s infinite', animationDelay: '0s' }}>.</span>
-                    <span style={{ animation: 'ansemDotPulse 1.4s infinite', animationDelay: '0.2s' }}>.</span>
-                    <span style={{ animation: 'ansemDotPulse 1.4s infinite', animationDelay: '0.4s' }}>.</span>
-                  </span>
-                )}
-                {msg.streaming && msg.content && <span style={{ opacity: 0.35 }}>|</span>}
-              </div>
-            </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
-      )}
-
-      <div style={{
-        width: '100%', display: 'flex', gap: 0,
-        background: 'rgba(2,14,8,.92)', borderRadius: 14, border: '1px solid rgba(72,224,122,.32)',
-        overflow: 'hidden', backdropFilter: 'blur(8px)', boxShadow: '0 8px 40px rgba(0,0,0,0.55)',
-      }}>
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Speak to Ansem…"
-          disabled={streaming}
-          style={{
-            flex: 1, padding: '13px 18px', fontSize: 13,
-            fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
-            background: 'transparent', border: 'none', color: '#eafff0', outline: 'none',
-          }}
-        />
+      {/* ── Collapsed: floating "Speak to Ansem" orb (bottom-right) ───────────── */}
+      {!open && (
         <button
-          onClick={streaming ? () => abortRef.current?.abort() : handleSend}
-          disabled={!streaming && !input.trim()}
+          className="ansem-orb"
+          onClick={() => setOpen(true)}
+          aria-label="Speak to Ansem"
           style={{
-            padding: '13px 20px', fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase',
+            position: 'fixed', right: 'clamp(16px,3vw,28px)', bottom: 'clamp(16px,3vh,28px)', zIndex: 40,
+            display: 'flex', alignItems: 'center', gap: 10, padding: '13px 18px 13px 15px',
+            borderRadius: 999, cursor: 'pointer',
+            background: 'linear-gradient(180deg, rgba(6,26,16,.96), rgba(2,14,8,.96))',
+            border: '1px solid rgba(72,224,122,.5)', backdropFilter: 'blur(8px)',
+            animation: 'ansemOrbPulse 2.6s ease-in-out infinite',
             fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
-            background: 'transparent',
-            color: streaming ? '#f87171' : !input.trim() ? 'rgba(92,240,138,.4)' : '#5cf08a',
-            border: 'none', borderLeft: '1px solid rgba(72,224,122,.22)',
-            cursor: !streaming && !input.trim() ? 'default' : 'pointer', flexShrink: 0,
           }}
         >
-          {streaming ? 'Stop' : 'Send'}
+          <span style={{
+            width: 11, height: 11, borderRadius: '50%', flexShrink: 0,
+            background: '#5cf08a', boxShadow: '0 0 14px #3ddc73',
+          }} />
+          <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#eafff0' }}>
+            Speak to Ansem
+          </span>
         </button>
-      </div>
-    </div>
+      )}
+
+      {/* ── Expanded: floating conversation window ────────────────────────────── */}
+      {open && (
+        <div style={{
+          position: 'fixed', right: 'clamp(12px,3vw,28px)', bottom: 'clamp(12px,3vh,28px)', zIndex: 40,
+          width: 'min(380px, calc(100vw - 24px))', height: 'min(560px, calc(100dvh - 24px))',
+          display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          borderRadius: 18, border: '1px solid rgba(72,224,122,.34)',
+          background: 'rgba(2,12,7,.94)', backdropFilter: 'blur(12px)',
+          boxShadow: '0 20px 70px rgba(0,0,0,.72), 0 0 34px rgba(34,197,94,.12)',
+          animation: 'ansemPanelIn .28s cubic-bezier(.2,.8,.2,1)',
+          fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
+        }}>
+          {/* (a) the neural-wave bull avatar — the "face" of the clone (~square top) */}
+          <div style={{ position: 'relative', height: 240, flexShrink: 0, background: '#000', borderBottom: '1px solid rgba(72,224,122,.18)' }}>
+            <AvatarBull ref={avatarRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+            {/* header overlaid on the avatar: title + collapse */}
+            <div style={{
+              position: 'absolute', top: 0, left: 0, right: 0, display: 'flex', alignItems: 'flex-start',
+              justifyContent: 'space-between', padding: '11px 12px', pointerEvents: 'none',
+            }}>
+              <div style={{ textShadow: '0 0 16px #000' }}>
+                <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: '.14em', color: '#eafff0' }}>$ANSEM</div>
+                <div style={{ fontSize: 9, letterSpacing: '.16em', textTransform: 'uppercase', color: '#3ddc73', marginTop: 3 }}>
+                  {streaming ? 'speaking' : 'listening'}
+                </div>
+                {/* tiny affordance: this is a synthetic, AI-generated voice */}
+                <div style={{ fontSize: 8.5, letterSpacing: '.1em', color: 'rgba(147,232,178,.55)', marginTop: 4 }}>
+                  {muted ? '🔇 voice muted' : '🔊 AI-generated voice'}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  onClick={toggleMute}
+                  aria-label={muted ? 'Unmute voice' : 'Mute voice'}
+                  title={muted ? 'Unmute the AI voice' : 'Mute the AI voice'}
+                  style={{
+                    pointerEvents: 'auto', width: 26, height: 26, borderRadius: 8, flexShrink: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: 'rgba(2,14,8,.7)', border: '1px solid rgba(72,224,122,.3)',
+                    color: '#9be8b2', fontSize: 13, lineHeight: 1, cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  {muted ? '🔇' : '🔊'}
+                </button>
+                <button
+                  onClick={handleCollapse}
+                  aria-label="Collapse"
+                  style={{
+                    pointerEvents: 'auto', width: 26, height: 26, borderRadius: 8, flexShrink: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: 'rgba(2,14,8,.7)', border: '1px solid rgba(72,224,122,.3)',
+                    color: '#9be8b2', fontSize: 14, lineHeight: 1, cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* (b) the streaming chat transcript */}
+          <div id="ansem-msgs" style={{
+            flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 12px 6px',
+            display: 'flex', flexDirection: 'column', gap: 6,
+          }}>
+            {messages.length === 0 && (
+              <div style={{ margin: 'auto 0', textAlign: 'center', color: 'rgba(147,232,178,.55)', fontSize: 12, lineHeight: 1.6, padding: '0 14px' }}>
+                Ask $ANSEM anything.<br />
+                <span style={{ fontSize: 10.5, color: 'rgba(147,232,178,.4)' }}>His answers light up the constellation behind me.</span>
+              </div>
+            )}
+            {messages.length > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 2 }}>
+                <button
+                  onClick={handleClear}
+                  style={{ background: 'none', border: 'none', color: 'rgba(92,240,138,.55)', fontSize: 9, cursor: 'pointer', letterSpacing: 0.5, fontFamily: 'inherit' }}
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+            {messages.map((msg) => (
+              <div key={msg.id} style={{ alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '90%' }}>
+                <div style={{
+                  padding: '7px 11px',
+                  borderRadius: msg.role === 'user' ? '10px 10px 2px 10px' : '10px 10px 10px 2px',
+                  background: msg.role === 'user' ? 'rgba(60,224,120,.14)' : 'rgba(255,255,255,.04)',
+                  border: `1px solid ${msg.role === 'user' ? 'rgba(72,224,122,.32)' : 'rgba(255,255,255,.08)'}`,
+                  fontSize: 12, lineHeight: 1.55, color: '#eafff0', whiteSpace: 'pre-wrap',
+                }}>
+                  {msg.content}
+                  {msg.streaming && !msg.content && (
+                    <span style={{ color: 'rgba(147,232,178,.7)', letterSpacing: 2, fontSize: 14 }}>
+                      <span style={{ animation: 'ansemDotPulse 1.4s infinite', animationDelay: '0s' }}>.</span>
+                      <span style={{ animation: 'ansemDotPulse 1.4s infinite', animationDelay: '0.2s' }}>.</span>
+                      <span style={{ animation: 'ansemDotPulse 1.4s infinite', animationDelay: '0.4s' }}>.</span>
+                    </span>
+                  )}
+                  {msg.streaming && msg.content && <span style={{ opacity: 0.35 }}>|</span>}
+                </div>
+              </div>
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* (c) the input */}
+          <div style={{
+            flexShrink: 0, display: 'flex', gap: 0, margin: '0 10px 10px',
+            background: 'rgba(2,14,8,.92)', borderRadius: 12, border: '1px solid rgba(72,224,122,.32)',
+            overflow: 'hidden',
+          }}>
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Speak to Ansem…"
+              disabled={streaming}
+              autoFocus
+              style={{
+                flex: 1, padding: '12px 15px', fontSize: 13,
+                fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
+                background: 'transparent', border: 'none', color: '#eafff0', outline: 'none', minWidth: 0,
+              }}
+            />
+            <button
+              onClick={streaming ? () => { abortRef.current?.abort(); stopAudio(); } : handleSend}
+              disabled={!streaming && !input.trim()}
+              style={{
+                padding: '12px 16px', fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase',
+                fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
+                background: 'transparent',
+                color: streaming ? '#f87171' : !input.trim() ? 'rgba(92,240,138,.4)' : '#5cf08a',
+                border: 'none', borderLeft: '1px solid rgba(72,224,122,.22)',
+                cursor: !streaming && !input.trim() ? 'default' : 'pointer', flexShrink: 0,
+              }}
+            >
+              {streaming ? 'Stop' : 'Send'}
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -618,11 +1025,14 @@ export function AnsemExplore() {
         position: 'absolute', left: 'clamp(16px,3vw,34px)', top: 'clamp(14px,3vh,26px)',
         pointerEvents: 'none', zIndex: 3, textShadow: '0 0 20px rgba(0,0,0,.95)',
       }}>
-        <div style={{ fontWeight: 800, fontSize: 'clamp(28px,4.6vw,44px)', letterSpacing: '.24em', color: '#eafff0', lineHeight: 1 }}>
-          ANSEM
+        <div style={{ fontWeight: 800, fontSize: 'clamp(28px,4.6vw,44px)', letterSpacing: '.16em', color: '#eafff0', lineHeight: 1 }}>
+          $ANSEM
         </div>
-        <div style={{ fontSize: 'clamp(10px,1.3vw,12.5px)', letterSpacing: '.44em', color: '#3ddc73', marginTop: 7, textTransform: 'uppercase' }}>
+        <div style={{ fontSize: 'clamp(10px,1.3vw,12.5px)', letterSpacing: '.36em', color: '#3ddc73', marginTop: 7, textTransform: 'uppercase' }}>
           the memory constellation
+        </div>
+        <div style={{ fontSize: 'clamp(9.5px,1.1vw,11px)', letterSpacing: '.16em', color: '#7fd8a0', marginTop: 5, textTransform: 'uppercase' }}>
+          what the timeline is saying
         </div>
         <div style={{ fontSize: 'clamp(10.5px,1.2vw,12px)', color: '#7fd8a0', marginTop: 13, letterSpacing: '.02em' }}>
           <span style={{ color: '#5cf08a', fontVariantNumeric: 'tabular-nums' }}>{countLabel}</span> memories
@@ -637,7 +1047,10 @@ export function AnsemExplore() {
         position: 'absolute', left: 'clamp(16px,3vw,34px)', bottom: 'clamp(14px,3vh,22px)', zIndex: 3,
         fontSize: 'clamp(10px,1.1vw,11.5px)', letterSpacing: '.05em', color: '#5aa877', pointerEvents: 'none', maxWidth: '80vw',
       }}>
-        hover any star to read the tweet · brightest = most-liked · speak to ansem below
+        hover any star to read the tweet · brightest = most-liked · tap “Speak to Ansem” to talk
+        <div style={{ marginTop: 4, color: '#3c6b52', fontSize: 'clamp(9.5px,1vw,11px)' }}>
+          scroll to zoom · drag to pan · double-click to reset
+        </div>
       </div>
 
       {loading && (
