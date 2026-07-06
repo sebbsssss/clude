@@ -24,6 +24,19 @@ export interface AnsemLink {
   strength: number;
 }
 
+export interface AnsemFeedPost {
+  id: string;
+  name: string;
+  handle: string;
+  avatar: string;
+  text: string;
+  likes: number;
+  retweets: number;
+  replies: number;
+  created_at: string;
+  url: string;
+}
+
 export const ansemApi = {
   async getMemoryGraph(): Promise<{
     nodes: AnsemNode[];
@@ -31,6 +44,19 @@ export const ansemApi = {
     total: number;
   }> {
     const res = await fetch(`${API_BASE}/api/ansem/graph`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
+  /**
+   * "$ANSEM LIVE" ranked social feed. Returns { enabled:false } when the server
+   * has no X_SEARCH_BEARER configured — the caller hides the panel in that case.
+   */
+  async getFeed(signal?: AbortSignal): Promise<{
+    enabled: boolean;
+    posts: AnsemFeedPost[];
+  }> {
+    const res = await fetch(`${API_BASE}/api/ansem/feed`, { signal });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
   },

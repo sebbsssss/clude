@@ -222,6 +222,295 @@ MEMORY_IDS: [123, 456, 789]
 This line will be parsed by the UI to highlight nodes in the graph. Always include it.`;
 }
 
+// ========================================================================== //
+//  "$ANSEM LIVE" social feed — GET /api/ansem/feed
+//
+//  A ranked, filtered, live-refreshed stream of the best recent X posts about
+//  the $ANSEM token. NOT a raw firehose: brand-new $ANSEM posts have ~0
+//  engagement and the timeline is ~90% formulaic shill ("sold $X, all in
+//  $ANSEM, CA: …", "vote YES to list", giveaway bait), and "verified" is
+//  useless as a filter (everyone's verified). So we poll on demand, filter the
+//  noise, dedup near-duplicates, and rank by engagement so good posts bubble up
+//  and CA-spam sinks.
+//
+//  Cost-safe: NO background timer. Polling only happens inside a request when
+//  the buffer is stale, and stops entirely for the day once the read counter
+//  crosses ANSEM_FEED_DAILY_READ_CAP. Idle (no requests) → no polling → $0.
+// ========================================================================== //
+
+interface FeedTweet {
+  id: string;
+  name: string;
+  handle: string;
+  avatar: string;
+  text: string;
+  likes: number;
+  retweets: number;
+  replies: number;
+  created_at: string;
+  url: string;
+  /** normalized text used for near-duplicate dedup (not returned to the client) */
+  _norm: string;
+}
+
+const X_SEARCH_URL = "https://api.twitter.com/2/tweets/search/recent";
+const X_LOOKUP_URL = "https://api.twitter.com/2/tweets";
+const FEED_BUFFER_CAP = 600; // hard cap on buffered tweets (rolling ~4h window)
+const FEED_MAX_AGE_MS = 4 * 60 * 60 * 1000; // 4h — evict older than this
+const FEED_FRESH_MS = 15 * 60 * 1000; // < 15min old → exempt from the like floor
+const FEED_ENGAGEMENT_REFRESH_MS = 5 * 60 * 1000; // re-pull top-50 metrics every ~5min
+const FEED_RESULT_COUNT = 30; // posts returned to the client
+
+// Module-level rolling state (survives across requests, resets on restart).
+const feedBuffer = new Map<string, FeedTweet>();
+let feedNewestId: string | null = null; // since_id anchor for incremental search
+let feedLastPollTs = 0; // last time we hit search/recent
+let feedLastEngagementTs = 0; // last time we refreshed top-N engagement
+let feedDailyReads = 0; // X reads counted today (search + lookup pages)
+let feedReadDay = ""; // YYYY-MM-DD the counter belongs to
+let feedPolling = false; // reentrancy guard — one poll at a time
+
+/** Noise filters — drop giveaway-farm + CA-shill + dump/ape formulaics. */
+const NOISE_PATTERNS: RegExp[] = [
+  /drop.{0,6}(your|ur).{0,4}(addy|address|wallet)/i,
+  /giv(e|ing)\s*away/i,
+  /\bCA\s*:/i,
+  /vote (yes|for)/i,
+  /(sold|dumped|out of).{0,30}\$ansem/i,
+  /(all in|aped|rolled).{0,20}\$ansem/i,
+  /\bairdrop.{0,20}(claim|farm|wallet|drop)/i,
+  /(retweet|rt|like|follow).{0,20}(to|for|and).{0,20}(win|enter|qualify)/i,
+];
+
+function isNoise(text: string): boolean {
+  return NOISE_PATTERNS.some((re) => re.test(text));
+}
+
+/** Lowercase, strip urls/@handles/$cashtags/punctuation → a dedup fingerprint. */
+function normalizeText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/[@#]\w+/g, "")
+    .replace(/\$\w+/g, "")
+    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Char-bigram Jaccard similarity — cheap near-duplicate detector. */
+function similar(a: string, b: string): number {
+  if (a === b) return 1;
+  if (a.length < 8 || b.length < 8) return a === b ? 1 : 0;
+  const grams = (s: string) => {
+    const set = new Set<string>();
+    for (let i = 0; i < s.length - 1; i++) set.add(s.slice(i, i + 2));
+    return set;
+  };
+  const ga = grams(a), gb = grams(b);
+  let inter = 0;
+  for (const g of ga) if (gb.has(g)) inter++;
+  return inter / (ga.size + gb.size - inter);
+}
+
+function todayStr(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Count X reads against the daily cap, rolling the day over at UTC midnight. */
+function countRead(n = 1): void {
+  const today = todayStr();
+  if (feedReadDay !== today) {
+    feedReadDay = today;
+    feedDailyReads = 0;
+  }
+  feedDailyReads += n;
+}
+
+function dailyCapExceeded(): boolean {
+  const today = todayStr();
+  if (feedReadDay !== today) return false; // new day → reset happens on next read
+  return feedDailyReads >= config.x.ansemFeedDailyReadCap;
+}
+
+/** Evict tweets older than the rolling window + trim to the cap (oldest-first). */
+function pruneBuffer(): void {
+  const cutoff = Date.now() - FEED_MAX_AGE_MS;
+  for (const [id, t] of feedBuffer) {
+    if (new Date(t.created_at).getTime() < cutoff) feedBuffer.delete(id);
+  }
+  if (feedBuffer.size > FEED_BUFFER_CAP) {
+    const sorted = [...feedBuffer.values()].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    );
+    const excess = feedBuffer.size - FEED_BUFFER_CAP;
+    for (let i = 0; i < excess; i++) feedBuffer.delete(sorted[i].id);
+  }
+}
+
+/** Map an X search payload (tweets + included users) → FeedTweet[], filtered. */
+function mapSearchPayload(payload: any): FeedTweet[] {
+  const tweets: any[] = payload?.data || [];
+  const users: any[] = payload?.includes?.users || [];
+  const userById = new Map<string, any>(users.map((u) => [u.id, u]));
+  const out: FeedTweet[] = [];
+  for (const t of tweets) {
+    const text: string = t.text || "";
+    if (isNoise(text)) continue;
+    const u = userById.get(t.author_id) || {};
+    const handle = u.username || "unknown";
+    const m = t.public_metrics || {};
+    out.push({
+      id: t.id,
+      name: u.name || handle,
+      handle,
+      avatar: u.profile_image_url || "",
+      text,
+      likes: m.like_count || 0,
+      retweets: m.retweet_count || 0,
+      replies: m.reply_count || 0,
+      created_at: t.created_at || new Date().toISOString(),
+      url: `https://x.com/${handle}/status/${t.id}`,
+      _norm: normalizeText(text),
+    });
+  }
+  return out;
+}
+
+/** Merge new tweets into the buffer, skipping near-duplicates of what's there. */
+function mergeIntoBuffer(fresh: FeedTweet[]): void {
+  for (const t of fresh) {
+    if (feedBuffer.has(t.id)) continue;
+    // near-duplicate check against existing buffered normals
+    let dup = false;
+    if (t._norm.length >= 8) {
+      for (const existing of feedBuffer.values()) {
+        if (similar(t._norm, existing._norm) >= 0.82) {
+          dup = true;
+          break;
+        }
+      }
+    }
+    if (dup) continue;
+    feedBuffer.set(t.id, t);
+  }
+}
+
+/**
+ * On-demand poll: pull new posts since the newest buffered id, and every ~5min
+ * refresh engagement on the top-50 buffered ids. Best-effort — swallows errors
+ * so the endpoint always serves whatever's in the buffer. Never throws.
+ */
+async function pollFeed(): Promise<void> {
+  if (feedPolling) return;
+  if (dailyCapExceeded()) return;
+  feedPolling = true;
+  const bearer = config.x.searchBearer;
+  const authHeaders = { Authorization: `Bearer ${bearer}` };
+  try {
+    // ── 1. incremental search for new posts ──
+    const params = new URLSearchParams({
+      query: "$ANSEM -is:retweet -is:reply lang:en",
+      max_results: "30",
+      "tweet.fields": "public_metrics,created_at",
+      expansions: "author_id",
+      "user.fields": "public_metrics,verified,profile_image_url,username,name",
+    });
+    if (feedNewestId) params.set("since_id", feedNewestId);
+
+    const searchRes = await fetch(`${X_SEARCH_URL}?${params.toString()}`, {
+      headers: authHeaders,
+    });
+    countRead(1);
+    if (searchRes.ok) {
+      const payload: any = await searchRes.json();
+      const fresh = mapSearchPayload(payload);
+      if (fresh.length > 0) {
+        mergeIntoBuffer(fresh);
+        // advance the since_id anchor to the max id we've seen (BigInt-safe compare)
+        const maxId = payload?.meta?.newest_id;
+        if (maxId && (!feedNewestId || BigInt(maxId) > BigInt(feedNewestId))) {
+          feedNewestId = maxId;
+        }
+      }
+    } else {
+      log.warn(
+        { status: searchRes.status },
+        "Ansem feed: X search/recent non-OK",
+      );
+    }
+    feedLastPollTs = Date.now();
+
+    // ── 2. periodic engagement refresh on the top-50 buffered ids ──
+    if (
+      Date.now() - feedLastEngagementTs > FEED_ENGAGEMENT_REFRESH_MS &&
+      feedBuffer.size > 0 &&
+      !dailyCapExceeded()
+    ) {
+      const topIds = [...feedBuffer.values()]
+        .sort((a, b) => scoreTweet(b) - scoreTweet(a))
+        .slice(0, 50)
+        .map((t) => t.id);
+      if (topIds.length > 0) {
+        const lookupParams = new URLSearchParams({
+          ids: topIds.join(","),
+          "tweet.fields": "public_metrics",
+        });
+        const lookupRes = await fetch(
+          `${X_LOOKUP_URL}?${lookupParams.toString()}`,
+          { headers: authHeaders },
+        );
+        countRead(1);
+        if (lookupRes.ok) {
+          const lookup: any = await lookupRes.json();
+          for (const t of lookup?.data || []) {
+            const buffered = feedBuffer.get(t.id);
+            if (buffered && t.public_metrics) {
+              buffered.likes = t.public_metrics.like_count ?? buffered.likes;
+              buffered.retweets =
+                t.public_metrics.retweet_count ?? buffered.retweets;
+              buffered.replies =
+                t.public_metrics.reply_count ?? buffered.replies;
+            }
+          }
+        }
+        feedLastEngagementTs = Date.now();
+      }
+    }
+
+    pruneBuffer();
+  } catch (err: any) {
+    log.warn({ err: err?.message || err }, "Ansem feed poll failed (serving buffer)");
+  } finally {
+    feedPolling = false;
+  }
+}
+
+/** Engagement + recency score. Fresher posts get a decaying bonus so it feels live. */
+function scoreTweet(t: FeedTweet): number {
+  const ageMin = (Date.now() - new Date(t.created_at).getTime()) / 60000;
+  const recencyBonus = Math.max(0, 30 - ageMin * 0.5); // ~30 → 0 over the first hour
+  return t.likes + 2 * t.retweets + recencyBonus;
+}
+
+/** Apply the like-floor (fresh posts exempt) and rank; return top N, client-shaped. */
+function rankFeed(): Array<Omit<FeedTweet, "_norm">> {
+  const minLikes = config.x.ansemFeedMinLikes;
+  const now = Date.now();
+  const eligible = [...feedBuffer.values()].filter((t) => {
+    const ageMs = now - new Date(t.created_at).getTime();
+    if (ageMs <= FEED_FRESH_MS) return true; // fresh → keep even at 0 likes
+    return t.likes >= minLikes; // older → must clear the floor
+  });
+  eligible.sort((a, b) => scoreTweet(b) - scoreTweet(a));
+  return eligible.slice(0, FEED_RESULT_COUNT).map((t) => {
+    // strip the internal _norm field from the wire shape
+    const { _norm, ...pub } = t;
+    void _norm;
+    return pub;
+  });
+}
+
 // ---- Route factory ---- //
 
 export function ansemRoutes(): Router {
@@ -386,6 +675,40 @@ export function ansemRoutes(): Router {
       log.error({ err: err?.message || err }, "Ansem speak (TTS) failed");
       // Upstream/voice failure → 502 so the frontend falls back gracefully (not a 500).
       res.status(502).json({ error: "voice_generation_failed" });
+    }
+  });
+
+  // ── GET /feed — "$ANSEM LIVE" ranked, filtered social feed ──
+  //    Contract: 200 { enabled:true, posts:[…] }  (bearer set)
+  //            | 200 { enabled:false, posts:[] }   (X_SEARCH_BEARER unset — hide panel)
+  //            | 429 rate-limited
+  //    Never 500; never exposes the bearer to the browser.
+  router.get("/feed", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    const allowed = await checkRateLimit(`ansem-feed:${ip}`, 30, 1);
+    if (!allowed) {
+      res.status(429).json({ error: "Rate limited. 30 requests per minute max." });
+      return;
+    }
+
+    // No bearer → feature disabled. 200 (not 501) so the frontend hides gracefully.
+    if (!config.x.searchBearer) {
+      res.json({ enabled: false, posts: [] });
+      return;
+    }
+
+    try {
+      // On-demand poll only when the buffer is stale (and not over the daily cap).
+      // Idle → no polling → $0. Await it (fast, best-effort) so the first client of
+      // a fresh window still gets live data rather than an empty buffer.
+      if (Date.now() - feedLastPollTs > config.x.ansemFeedIntervalMs) {
+        await pollFeed();
+      }
+      res.json({ enabled: true, posts: rankFeed() });
+    } catch (err: any) {
+      // Defensive: rankFeed/pollFeed shouldn't throw, but never 500 the panel.
+      log.warn({ err: err?.message || err }, "Ansem feed serve failed");
+      res.json({ enabled: true, posts: rankFeed() });
     }
   });
 
