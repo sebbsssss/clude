@@ -104,6 +104,16 @@ export function staticRoutes(): Router {
     res.sendFile(path.join(dashboardDir, 'index.html'));
   });
 
+  // Ansem experience — public "Speak to Ansem" page; serve dashboard SPA at /ansem
+  router.get('/ansem', (_req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.sendFile(path.join(dashboardDir, 'index.html'));
+  });
+  router.get('/dashboard/ansem', (_req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.sendFile(path.join(dashboardDir, 'index.html'));
+  });
+
   // Chat SPA at /chat
   const chatDir = path.join(monorepoRoot, 'apps', 'chat', 'dist');
   const serveChatIndex = (_req: Request, res: Response) => {

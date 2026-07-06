@@ -12,6 +12,7 @@ import { chatRoutes } from './chat.routes.js';
 import { uploadRoutes } from './upload.routes.js';
 import { exploreRoutes } from './explore.routes.js';
 import { lotrRoutes } from './lotr.routes.js';
+import { ansemRoutes } from './ansem.routes.js';
 import { topupWebhookRoutes, topupApiRoutes } from './topup.routes.js';
 import { dashboardRoutes } from './dashboard.routes.js';
 import { compoundRoutes } from './compound.routes.js';
@@ -158,6 +159,7 @@ export function mountApiRoutes(app: express.Application): void {
 
   // LOTR Guest Brain (campaign — temporary, no auth required)
   app.use('/api/lotr', lotrRoutes());
+  app.use('/api/ansem', ansemRoutes());
 
   // Chat API (memory-augmented chat with OpenRouter inference)
   app.use('/api/chat', chatRoutes());
