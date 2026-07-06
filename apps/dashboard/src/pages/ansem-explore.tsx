@@ -14,6 +14,7 @@ import { ansemApi } from '../lib/ansem-api';
 import type { AnsemNode } from '../lib/ansem-api';
 import { AvatarBull } from '../components/AvatarBull';
 import type { AvatarBullHandle } from '../components/AvatarBull';
+import { AnsemFeed } from '../components/AnsemFeed';
 
 // ── Data fetching ───────────────────────────────────────────────────────────
 
@@ -1064,6 +1065,11 @@ export function AnsemExplore() {
           {error}
         </div>
       )}
+
+      {/* "$ANSEM LIVE" ranked social feed — top-left collapsible rail. Self-hides
+          when the server has no X_SEARCH_BEARER. Docked away from the bottom-right
+          "Speak to Ansem" orb + the center constellation. */}
+      {!loading && !error && <AnsemFeed />}
 
       {!loading && !error && <AnsemChat onHighlight={setHighlightIds} />}
     </div>

@@ -40,6 +40,19 @@ export const config = {
     accessSecret: requiredUnlessSiteOnly("X_ACCESS_SECRET"),
     botUserId: requiredUnlessSiteOnly("X_BOT_USER_ID"),
     creatorUserId: optional("CREATOR_USER_ID", ""),
+    /**
+     * Bearer token for the public "$ANSEM LIVE" feed (GET /api/ansem/feed).
+     * Reads-only X app bearer — used server-side for GET /2/tweets/search/recent.
+     * Empty → the feed endpoint returns { enabled:false } and the frontend panel hides.
+     * NEVER sent to the browser.
+     */
+    searchBearer: optional("X_SEARCH_BEARER", ""),
+    /** Min poll gap for the on-demand $ANSEM feed (ms). Idle → no polling → $0. */
+    ansemFeedIntervalMs: parseInt(optional("ANSEM_FEED_INTERVAL_MS", "90000"), 10),
+    /** Posts older than ~15min must clear this like floor (fresh posts are exempt). */
+    ansemFeedMinLikes: parseInt(optional("ANSEM_FEED_MIN_LIKES", "3"), 10),
+    /** Hard daily read-cap: once exceeded, serve the stale buffer (cost stop-loss). */
+    ansemFeedDailyReadCap: parseInt(optional("ANSEM_FEED_DAILY_READ_CAP", "40000"), 10),
   },
   supabase: {
     url: requiredUnlessSiteOnly("SUPABASE_URL"),
