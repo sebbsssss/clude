@@ -102,6 +102,20 @@ describe('initDatabase (boot blob frozen)', () => {
     expect(getSchemaDriftReport()?.brokenRpcs).toEqual(['bm25_search_memories']);
   });
 
+  it('reports DRIFT when the primary vector lane match_memories is missing', async () => {
+    const db = fakeDb({ rpcErrors: { match_memories: MISSING('match_memories') } });
+    await initDatabase(db);
+    expect(db._state.execSqlCalls).toBe(0);
+    expect(getSchemaDriftReport()?.brokenRpcs).toEqual(['match_memories']);
+  });
+
+  it('reports DRIFT when the fragment vector lane match_memory_fragments is missing', async () => {
+    const db = fakeDb({ rpcErrors: { match_memory_fragments: MISSING('match_memory_fragments') } });
+    await initDatabase(db);
+    expect(db._state.execSqlCalls).toBe(0);
+    expect(getSchemaDriftReport()?.brokenRpcs).toEqual(['match_memory_fragments']);
+  });
+
   it('bootstraps a FRESH database (memories table absent) exactly once', async () => {
     const db = fakeDb({
       tableErrors: { memories: MISSING('memories'), memory_links: MISSING('memory_links') },
