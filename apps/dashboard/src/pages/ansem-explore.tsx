@@ -74,6 +74,10 @@ function BullConstellation({
   highlightRef.current = highlightIds;
   const nodesRef = useRef<AnsemNode[]>(nodes);
   nodesRef.current = nodes;
+  // View transform (zoom + pan). Mutated by wheel/drag handlers, read in the rAF
+  // loop AND in the hit-test so tooltips stay correct under zoom. Kept in a ref
+  // (not state) so panning/zooming never re-runs the build effect.
+  const viewRef = useRef({ scale: 1, ox: 0, oy: 0 });
 
   useEffect(() => {
     const wrap = wrapRef.current;
@@ -252,6 +256,8 @@ function BullConstellation({
       cv!.width = Math.round(W * DPR); cv!.height = Math.round(H * DPR); cv!.style.width = W + 'px'; cv!.style.height = H + 'px';
       ctx!.setTransform(DPR, 0, 0, DPR, 0, 0);
       S = Math.min(W, H) * 0.92; OX = (W - S) / 2; OY = (H - S) / 2 + H * 0.012;
+      // A viewport resize re-fits the constellation → reset zoom/pan to identity.
+      viewRef.current = { scale: 1, ox: 0, oy: 0 };
       build();
     }
 
@@ -266,19 +272,28 @@ function BullConstellation({
       if (!reduce) { pxp += (txp - pxp) * 0.045; pyp += (typ - pyp) * 0.045; }
       const hl = highlightRef.current;
       const hasHl = hl.size > 0;
+      const vw = viewRef.current;                          // {scale, ox, oy} zoom+pan
+      const vs = vw.scale, vox = vw.ox, voy = vw.oy;
       ctx!.clearRect(0, 0, W, H);
       ctx!.globalCompositeOperation = 'lighter';           // additive light — the glow look
-      for (let b = 0; b < 3; b++) { const [ox, oy] = bucketOff(b); ctx!.drawImage(edgeLayers[b].cv, ox, oy, W, H); }
+      // Edge layers are full-canvas images; scale+offset them with the view transform.
+      for (let b = 0; b < 3; b++) { const [ox, oy] = bucketOff(b); ctx!.drawImage(edgeLayers[b].cv, ox * vs + vox, oy * vs + voy, W * vs, H * vs); }
       for (const n of nodes) {
         const [ox, oy] = bucketOff(zBucket(n.z));
-        const x = n.x + ox, y = n.y + oy;
+        // world position (parallax) → screen position (zoom+pan)
+        const x = (n.x + ox) * vs + vox, y = (n.y + oy) * vs + voy;
         // chat→highlight: recalled memories pulse + enlarge + brighten; rest dim.
         const isHl = hasHl && n.id !== undefined && hl.has(n.id);
         const dim = hasHl && !isHl ? 0.22 : 1;
         const pulse = isHl ? 1.35 + 0.35 * Math.sin(t * 3.4 + n.ph) : 1;
+        // Zoom scales the drawn radii so nodes grow as you dive in. The diffuse
+        // glow halos grow more gently (sqrt) than the crisp cores so they don't
+        // blow out and wash the field white at high zoom.
+        const rScale = vs;
+        const glowScale = Math.sqrt(vs);
         if (n.bright) {
           const tw = 0.74 + 0.26 * Math.sin(t * 1.1 + n.ph);
-          const R = n.r * 4.6 * tw * pulse;
+          const R = n.r * 4.6 * tw * pulse * glowScale;
           ctx!.globalAlpha = 0.85 * tw * dim;
           ctx!.drawImage(SPR_STAR, x - R, y - R, R * 2, R * 2);
         } else {
@@ -286,22 +301,39 @@ function BullConstellation({
           const depth = 0.5 + 0.5 * n.z;
           ctx!.globalAlpha = Math.min(1, (n.a || 0.4) * tw * depth * 1.5) * dim;
           const spr = n.glow ? SPR_STAR : (n.g ? SPR_GLOW : SPR_DOT);
-          const R = n.r * (n.glow ? 4 : 2.6) * pulse;
+          const R = n.r * (n.glow ? 4 : 2.6) * pulse * glowScale;
           ctx!.drawImage(spr, x - R, y - R, R * 2, R * 2);
         }
         // recalled-star ring — the "graph responds to the conversation" moment
         if (isHl) {
           ctx!.globalAlpha = 0.6 + 0.4 * Math.sin(t * 3.4 + n.ph);
           ctx!.strokeStyle = 'rgba(140,255,180,0.9)'; ctx!.lineWidth = 1.2;
-          ctx!.beginPath(); ctx!.arc(x, y, (n.bright ? n.r * 2.2 : 6) + 5 * pulse, 0, 6.2832); ctx!.stroke();
+          ctx!.beginPath(); ctx!.arc(x, y, ((n.bright ? n.r * 2.2 : 6) + 5 * pulse) * rScale, 0, 6.2832); ctx!.stroke();
+        }
+        // At high zoom, label the brightest (most-liked) data nodes with a snippet
+        // of their tweet so the constellation becomes readable up close.
+        if (vs > 3.2 && n.bright && n.t && dim > 0.5) {
+          const txt = n.t.replace(/\s+/g, ' ').trim().slice(0, 48);
+          if (txt) {
+            ctx!.globalCompositeOperation = 'source-over';
+            ctx!.globalAlpha = Math.min(1, (vs - 3.2) / 1.6) * dim;
+            ctx!.font = '11px ui-monospace,Menlo,monospace';
+            ctx!.fillStyle = 'rgba(234,255,240,0.92)';
+            ctx!.textAlign = 'center';
+            const R = n.r * 4.6 * glowScale;
+            ctx!.fillText(txt, x, y + R + 12);
+            ctx!.textAlign = 'left';
+            ctx!.globalCompositeOperation = 'lighter';
+          }
         }
       }
       ctx!.globalAlpha = 1;
       if (hover) {
         const [ox, oy] = bucketOff(zBucket(hover.z));
+        const hx = (hover.x + ox) * vs + vox, hy = (hover.y + oy) * vs + voy;
         ctx!.globalCompositeOperation = 'source-over';
         ctx!.strokeStyle = 'rgba(234,255,240,.92)'; ctx!.lineWidth = 1.4;
-        ctx!.beginPath(); ctx!.arc(hover.x + ox, hover.y + oy, (hover.bright ? hover.r * 2.2 : 5) + 3, 0, 6.2832); ctx!.stroke();
+        ctx!.beginPath(); ctx!.arc(hx, hy, ((hover.bright ? hover.r * 2.2 : 5) + 3) * vs, 0, 6.2832); ctx!.stroke();
       }
       ctx!.globalCompositeOperation = 'source-over';
       raf = requestAnimationFrame(frame);
@@ -309,11 +341,16 @@ function BullConstellation({
 
     let hover: StarNode | null = null;
     function pick(mx: number, my: number): StarNode | null {
+      // Same view transform as the render loop: node world pos → screen pos, so
+      // the hit-test stays aligned with what's drawn when zoomed/panned.
+      const vw = viewRef.current, vs = vw.scale, vox = vw.ox, voy = vw.oy;
       let best: StarNode | null = null, bd = 1e9;
       for (const n of dataNodes) {
         const [ox, oy] = bucketOff(zBucket(n.z));
-        const d = (n.x + ox - mx) ** 2 + (n.y + oy - my) ** 2;
-        const hit = n.bright ? Math.max(16, n.r * 2.6) : 9;
+        const sx = (n.x + ox) * vs + vox, sy = (n.y + oy) * vs + voy;
+        const d = (sx - mx) ** 2 + (sy - my) ** 2;
+        // hit radius grows with zoom (nodes are bigger) but keeps a sane floor.
+        const hit = (n.bright ? Math.max(16, n.r * 2.6) : 9) * Math.max(1, vs * 0.85);
         if (d < hit * hit && d < bd) { bd = d; best = n; }
       }
       return best;
@@ -326,20 +363,112 @@ function BullConstellation({
       if (ty > H - 96) ty = my - 14 - (tip!.offsetHeight || 80);
       tip!.style.left = tx + 'px'; tip!.style.top = ty + 'px';
     }
+    // ── zoom + pan interaction ───────────────────────────────────────────────
+    const MIN_SCALE = 0.6, MAX_SCALE = 7;
+    const clampScale = (s: number) => Math.max(MIN_SCALE, Math.min(MAX_SCALE, s));
+    // Keep the pan within a generous bound so the constellation can't be lost.
+    function clampPan() {
+      const v = viewRef.current;
+      const margin = Math.max(W, H) * (v.scale - 0.5);
+      v.ox = Math.max(-W * v.scale - margin, Math.min(W * v.scale + margin, v.ox));
+      v.oy = Math.max(-H * v.scale - margin, Math.min(H * v.scale + margin, v.oy));
+    }
+    // Zoom toward a screen point (sx,sy): keep the world point under it fixed.
+    function zoomAt(sx: number, sy: number, factor: number) {
+      const v = viewRef.current;
+      const next = clampScale(v.scale * factor);
+      if (next === v.scale) return;
+      const worldX = (sx - v.ox) / v.scale, worldY = (sy - v.oy) / v.scale;
+      v.scale = next;
+      v.ox = sx - worldX * next;
+      v.oy = sy - worldY * next;
+      clampPan();
+    }
+    function resetView() { viewRef.current = { scale: 1, ox: 0, oy: 0 }; }
+
+    let dragging = false, dragX = 0, dragY = 0;
+
     const onMove = (e: MouseEvent) => {
       const rc = wrap!.getBoundingClientRect(), mx = e.clientX - rc.left, my = e.clientY - rc.top;
+      if (dragging) {
+        const dx = mx - dragX, dy = my - dragY;
+        const v = viewRef.current;
+        v.ox += dx; v.oy += dy;
+        dragX = mx; dragY = my;
+        clampPan();
+        if (hover) { hover = null; tip!.classList.remove('on'); }
+        return;
+      }
       txp = (mx / W - 0.5) * 2; typ = (my / H - 0.5) * 2;
       const n = pick(mx, my);
       if (n) { hover = n; moveTip(mx, my, n); } else if (hover) { hover = null; tip!.classList.remove('on'); }
     };
     const onLeave = () => { hover = null; tip!.classList.remove('on'); txp = 0; typ = 0; };
-    const onTouch = (e: TouchEvent) => {
-      const rc = wrap!.getBoundingClientRect(), tch = e.touches[0], mx = tch.clientX - rc.left, my = tch.clientY - rc.top;
-      const n = pick(mx, my); if (n) { hover = n; moveTip(mx, my, n); } else { hover = null; tip!.classList.remove('on'); }
+    const onDown = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      const rc = wrap!.getBoundingClientRect();
+      dragging = true;
+      dragX = e.clientX - rc.left; dragY = e.clientY - rc.top;
+      hover = null; tip!.classList.remove('on');
+      wrap!.style.cursor = 'grabbing';
     };
+    const onUp = () => { dragging = false; wrap!.style.cursor = ''; };
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rc = wrap!.getBoundingClientRect(), mx = e.clientX - rc.left, my = e.clientY - rc.top;
+      // trackpad + wheel: exponential zoom for a smooth feel
+      const factor = Math.exp(-e.deltaY * 0.0015);
+      zoomAt(mx, my, factor);
+    };
+    const onDblClick = (e: MouseEvent) => { e.preventDefault(); resetView(); hover = null; tip!.classList.remove('on'); };
+
+    // ── touch: one-finger pan (+ tap-to-read), two-finger pinch-zoom ──
+    let touchMode: 'none' | 'pan' | 'pinch' = 'none';
+    let tPrevX = 0, tPrevY = 0, tPrevDist = 0;
+    const touchDist = (a: Touch, b: Touch) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    const onTouchStart = (e: TouchEvent) => {
+      const rc = wrap!.getBoundingClientRect();
+      if (e.touches.length === 1) {
+        touchMode = 'pan';
+        tPrevX = e.touches[0].clientX - rc.left; tPrevY = e.touches[0].clientY - rc.top;
+        // provisional hover on tap
+        const n = pick(tPrevX, tPrevY);
+        if (n) { hover = n; moveTip(tPrevX, tPrevY, n); } else { hover = null; tip!.classList.remove('on'); }
+      } else if (e.touches.length === 2) {
+        touchMode = 'pinch';
+        tPrevDist = touchDist(e.touches[0], e.touches[1]);
+      }
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      const rc = wrap!.getBoundingClientRect();
+      if (touchMode === 'pan' && e.touches.length === 1) {
+        const mx = e.touches[0].clientX - rc.left, my = e.touches[0].clientY - rc.top;
+        const dx = mx - tPrevX, dy = my - tPrevY;
+        if (Math.abs(dx) + Math.abs(dy) > 3) {
+          const v = viewRef.current; v.ox += dx; v.oy += dy; clampPan();
+          hover = null; tip!.classList.remove('on');
+        }
+        tPrevX = mx; tPrevY = my;
+      } else if (touchMode === 'pinch' && e.touches.length === 2) {
+        const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rc.left;
+        const my = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rc.top;
+        const dist = touchDist(e.touches[0], e.touches[1]);
+        if (tPrevDist > 0) zoomAt(mx, my, dist / tPrevDist);
+        tPrevDist = dist;
+      }
+    };
+    const onTouchEnd = () => { touchMode = 'none'; };
+
     wrap.addEventListener('mousemove', onMove);
     wrap.addEventListener('mouseleave', onLeave);
-    wrap.addEventListener('touchstart', onTouch, { passive: true });
+    wrap.addEventListener('mousedown', onDown);
+    window.addEventListener('mouseup', onUp);
+    wrap.addEventListener('wheel', onWheel, { passive: false });
+    wrap.addEventListener('dblclick', onDblClick);
+    wrap.addEventListener('touchstart', onTouchStart, { passive: true });
+    wrap.addEventListener('touchmove', onTouchMove, { passive: true });
+    wrap.addEventListener('touchend', onTouchEnd, { passive: true });
+    wrap.style.cursor = 'grab';
 
     let rt = 0;
     const onResize = () => { clearTimeout(rt); rt = window.setTimeout(resize, 140); };
@@ -355,7 +484,13 @@ function BullConstellation({
       clearTimeout(rt);
       wrap.removeEventListener('mousemove', onMove);
       wrap.removeEventListener('mouseleave', onLeave);
-      wrap.removeEventListener('touchstart', onTouch);
+      wrap.removeEventListener('mousedown', onDown);
+      window.removeEventListener('mouseup', onUp);
+      wrap.removeEventListener('wheel', onWheel);
+      wrap.removeEventListener('dblclick', onDblClick);
+      wrap.removeEventListener('touchstart', onTouchStart);
+      wrap.removeEventListener('touchmove', onTouchMove);
+      wrap.removeEventListener('touchend', onTouchEnd);
       window.removeEventListener('resize', onResize);
     };
     // Rebuild only when the node set changes (highlight is read via ref, no rebuild).
@@ -913,6 +1048,9 @@ export function AnsemExplore() {
         fontSize: 'clamp(10px,1.1vw,11.5px)', letterSpacing: '.05em', color: '#5aa877', pointerEvents: 'none', maxWidth: '80vw',
       }}>
         hover any star to read the tweet · brightest = most-liked · tap “Speak to Ansem” to talk
+        <div style={{ marginTop: 4, color: '#3c6b52', fontSize: 'clamp(9.5px,1vw,11px)' }}>
+          scroll to zoom · drag to pan · double-click to reset
+        </div>
       </div>
 
       {loading && (

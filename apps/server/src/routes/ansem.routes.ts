@@ -22,9 +22,20 @@ import {
 const log = createChildLogger("ansem-routes");
 
 // ansem@clude.io — the dedicated persona account. ~38k tweets seeded
-// (source='ansem-seed') + spoken transcripts (source='ansem-yt').
+// (source='ansem-seed') + spoken transcripts (source='ansem-yt') + the 104K-tweet
+// $ANSEM community/token corpus (source='ansem-token'). The constellation draws
+// from the whole $ANSEM timeline (~143k memories total).
 const ANSEM_WALLET = "HYmsqdcpHRvWcrBfACzYWvPbF2XMg5hKFy38kEt7Ppjt";
-const ANSEM_SOURCES = ["ansem-seed", "ansem-yt"];
+const ANSEM_SOURCES = ["ansem-token", "ansem-seed", "ansem-yt"];
+// His OWN words only (tweets + interviews). The "Speak to Ansem" clone recalls
+// from THESE — never the 104K ansem-token community corpus that shares the wallet
+// (that's timeline noise: shill + giveaway-farm spam that would corrupt his voice).
+const PERSONA_SOURCES = new Set(["ansem-seed", "ansem-yt"]);
+
+// PostgREST caps a single query at 1000 rows; the constellation wants more nodes
+// than that, so the /graph node fetch pages through with .range() and concatenates.
+const GRAPH_NODE_TARGET = 2000; // representative sample size (importance desc)
+const GRAPH_PAGE_SIZE = 1000; // PostgREST per-query row cap
 
 function getClientIp(req: Request): string {
   return (req.ip || req.socket.remoteAddress || "unknown").replace(/^::ffff:/, "");
@@ -187,7 +198,7 @@ Speak in his EXACT voice, grounded ONLY in the real memories provided:
 - markets: conditional + number-anchored ("coins do well if solana recovers"), strong-opinions-loosely-held, name the invalidation.
 - he is NOT markets-only: mindset/manifestation, humor, curiosity, generosity are core.
 - occasional ALL-CAPS for hype ("LETS RIDE", "JOB NOT FINISHED").
-Ground every take in the retrieved memories below — do NOT invent positions he doesn't hold. If the memories don't cover it, stay in-character but general.`;
+Ground every take in the retrieved memories below — do NOT invent positions he doesn't hold. BUT when the memories DO contain a specific answer to what's asked — his plans, positions, numbers, how something works (e.g. how the $ANSEM airdrops work, what he's building, who gets rewarded) — GIVE that real substance accurately in his voice. A real question you can actually answer from the memories deserves the real answer, not a generic one-liner; terseness is for reactions and banter, never for dodging something you actually know. If the memories genuinely don't cover it, stay in-character but general — don't invent specifics.`;
 
 function buildExplorePrompt(memories: any[], totalCount: number): string {
   const memoryContext = memories
@@ -228,23 +239,66 @@ export function ansemRoutes(): Router {
     try {
       const db = getDb();
 
-      const { data: memories, error: memErr } = await db
+      // ── Real total: an exact COUNT of the whole $ANSEM timeline (~143k) ──
+      // Separate head-only count query so `total` reflects the full corpus, not
+      // the (capped) node sample the constellation draws.
+      const { count: totalCount, error: countErr } = await db
         .from("memories")
-        .select(
-          "id, memory_type, summary, content, tags, importance, decay_factor, emotional_valence, source, source_id, created_at, metadata",
-        )
+        .select("id", { count: "exact", head: true })
         .eq("owner_wallet", ANSEM_WALLET)
-        .in("source", ANSEM_SOURCES)
-        .order("importance", { ascending: false })
-        .limit(1800);
+        .in("source", ANSEM_SOURCES);
 
-      if (memErr) {
+      if (countErr) {
+        log.warn(
+          { err: countErr },
+          "Failed to count Ansem memories, will fall back to node count",
+        );
+      }
+
+      // ── Nodes: a representative sample ordered by importance desc, then id ──
+      // PostgREST caps a single query at 1000 rows, so page with .range() and
+      // concatenate until we reach GRAPH_NODE_TARGET (~2000). Tie-break on id so
+      // the ordering is stable across pages (importance alone has many ties).
+      const ansemMemories: any[] = [];
+      let memErr: any = null;
+      for (
+        let offset = 0;
+        offset < GRAPH_NODE_TARGET;
+        offset += GRAPH_PAGE_SIZE
+      ) {
+        const end = Math.min(offset + GRAPH_PAGE_SIZE, GRAPH_NODE_TARGET) - 1;
+        const { data: page, error: pageErr } = await db
+          .from("memories")
+          .select(
+            "id, memory_type, summary, content, tags, importance, decay_factor, emotional_valence, source, source_id, created_at, metadata",
+          )
+          .eq("owner_wallet", ANSEM_WALLET)
+          .in("source", ANSEM_SOURCES)
+          .order("importance", { ascending: false })
+          .order("id", { ascending: true })
+          .range(offset, end);
+
+        if (pageErr) {
+          memErr = pageErr;
+          break;
+        }
+        if (!page || page.length === 0) break;
+        ansemMemories.push(...page);
+        if (page.length < end - offset + 1) break; // last page — no more rows
+      }
+
+      if (memErr && ansemMemories.length === 0) {
         log.error({ err: memErr }, "Failed to fetch Ansem memories for graph");
         res.status(500).json({ error: "Failed to fetch memories" });
         return;
       }
+      if (memErr) {
+        log.warn(
+          { err: memErr },
+          "Partial Ansem node fetch; serving what we have",
+        );
+      }
 
-      const ansemMemories = memories || [];
       const memoryIds = ansemMemories.map((m) => m.id);
 
       // Fetch links between these memories
@@ -272,7 +326,9 @@ export function ansemRoutes(): Router {
           createdAt: m.created_at,
         })),
         links,
-        total: ansemMemories.length,
+        // Real exact count of the whole $ANSEM timeline (~143k); fall back to the
+        // node-sample length only if the count query itself failed.
+        total: totalCount ?? ansemMemories.length,
       });
     } catch (err) {
       log.error({ err }, "Ansem graph endpoint error");
@@ -383,20 +439,23 @@ export function ansemRoutes(): Router {
         log.warn({ err }, "Ansem interpret phase failed, using raw query");
       }
 
-      // ── Phase 2: Recall memories, scoped to Ansem's wallet ──
-      // Wallet isolation handles source scoping; no post-filter needed.
+      // ── Phase 2: Recall — HIS OWN WORDS ONLY ──
+      // The wallet also holds the 104K-tweet ansem-token community corpus, which
+      // would drown his voice in shill/giveaway spam. So recall broadly, then keep
+      // only source ∈ PERSONA_SOURCES (his tweets + interviews). Over-fetch
+      // (limit 30) since the post-filter drops the community hits.
       const allMemories = new Map<number, any>();
 
       await withOwnerWallet(ANSEM_WALLET, async () => {
         const recallPromises = queries.map((q) =>
-          recallMemories({ query: q, limit: 15, skipExpansion: true }).catch(
+          recallMemories({ query: q, limit: 30, skipExpansion: true }).catch(
             () => [],
           ),
         );
         const results = await Promise.all(recallPromises);
         for (const memories of results) {
           for (const m of memories) {
-            if (!allMemories.has(m.id)) {
+            if (!allMemories.has(m.id) && PERSONA_SOURCES.has(m.source)) {
               allMemories.set(m.id, m);
             }
           }
