@@ -1099,6 +1099,7 @@ export function AnsemExplore() {
   const { nodes, total, loading, error } = useAnsemData();
   const [highlightIds, setHighlightIds] = useState<Set<number>>(new Set());
   const [bullTip, setBullTip] = useState<{ text: string; x: number; y: number } | null>(null);
+  const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setHighlightIds(new Set()); };
@@ -1120,8 +1121,8 @@ export function AnsemExplore() {
       {bullTip && (
         <div style={{
           position: 'fixed',
-          left: Math.min(bullTip.x + 16, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 320),
-          top: bullTip.y + 14, zIndex: 50, maxWidth: 300, padding: '9px 12px', borderRadius: 10,
+          left: Math.max(8, Math.min(bullTip.x + 16, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 316)),
+          top: bullTip.y + 14, zIndex: 50, maxWidth: 'min(300px, calc(100vw - 24px))', padding: '9px 12px', borderRadius: 10,
           background: 'rgba(2,12,7,.92)', border: '1px solid rgba(72,224,122,.35)', backdropFilter: 'blur(8px)',
           fontFamily: "ui-monospace,'SF Mono',Menlo,monospace", fontSize: 12, lineHeight: 1.5, color: '#dff5e6',
           pointerEvents: 'none', boxShadow: '0 10px 30px rgba(0,0,0,.6)',
@@ -1157,9 +1158,9 @@ export function AnsemExplore() {
         position: 'absolute', left: 'clamp(16px,3vw,34px)', bottom: 'clamp(14px,3vh,22px)', zIndex: 3,
         fontSize: 'clamp(10px,1.1vw,11.5px)', letterSpacing: '.05em', color: '#5aa877', pointerEvents: 'none', maxWidth: '80vw',
       }}>
-        hover any star to read the tweet · brightest = most-liked · tap “Speak to Ansem” to talk
+        {isTouch ? 'tap any star to read the tweet' : 'hover any star to read the tweet'} · brightest = most-liked · tap “Speak to Ansem” to talk
         <div style={{ marginTop: 4, color: '#3c6b52', fontSize: 'clamp(9.5px,1vw,11px)' }}>
-          drag to orbit · scroll to fly through · double-click to reset
+          {isTouch ? 'drag to orbit · pinch to fly through' : 'drag to orbit · scroll to fly through · double-click to reset'}
         </div>
       </div>
 

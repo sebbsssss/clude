@@ -52,14 +52,32 @@ export function BullSwarm3D({ nodes, highlightIds, onHover }: Props) {
     const w = container.clientWidth, h = container.clientHeight;
     if (w < 2 || h < 2) return;
 
+    // Mobile: fewer particles + lower DPR cap — phone GPUs choke on 14k instances
+    // + full-res bloom. The bull silhouette still reads clearly at 7k.
+    const isSmall = Math.min(w, h) < 700;
+    const count = isSmall ? 7000 : PARTICLE_COUNT;
+
     // ── Scene / camera / renderer ──
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x000000, 0.0022);
+    scene.fog = new THREE.FogExp2(0x000000, 0.0008); // light — portrait fit needs a farther camera
     const camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 3000);
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', alpha: true });
-    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.setPixelRatio(Math.min(isSmall ? 1.5 : 2, window.devicePixelRatio || 1));
     renderer.setSize(w, h);
     container.appendChild(renderer.domElement);
+
+    // Aspect-aware fit: pick the camera distance where the whole bull (half-width ~82,
+    // half-height ~64 world units) fits the frustum — portrait phones need a much
+    // farther camera or the horns crop out of frame.
+    const VFOV_RAD = (60 * Math.PI) / 180;
+    const fitDist = (aspect: number) => {
+      const tanV = Math.tan(VFOV_RAD / 2);
+      const tanH = tanV * Math.max(0.2, aspect);
+      // width-fit the horns (the crop-critical extent); vertical stays loose — the jaw
+      // intentionally runs off the bottom edge. Desktop (aspect ≳1.5) resolves to 96,
+      // the approved framing; portrait phones resolve to ~300+ so the full bull fits.
+      return Math.max(96, (82 / tanH) * 1.04);
+    };
 
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
@@ -70,7 +88,7 @@ export function BullSwarm3D({ nodes, highlightIds, onHover }: Props) {
     const mesh = new THREE.InstancedMesh(
       new THREE.TetrahedronGeometry(0.42),
       new THREE.MeshBasicMaterial({ color: 0xffffff }),
-      PARTICLE_COUNT,
+      count,
     );
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     scene.add(mesh);
@@ -90,15 +108,15 @@ export function BullSwarm3D({ nodes, highlightIds, onHover }: Props) {
 
     const EYES: Array<[number, number]> = [[420, 534], [580, 534]];
     const home: THREE.Vector3[] = [];         // pinned bull position per particle
-    const driftAmp = new Float32Array(PARTICLE_COUNT);
-    const driftPhase = new Float32Array(PARTICLE_COUNT);
-    const driftSpeed = new Float32Array(PARTICLE_COUNT);
-    const baseBright = new Float32Array(PARTICLE_COUNT);
+    const driftAmp = new Float32Array(count);
+    const driftPhase = new Float32Array(count);
+    const driftSpeed = new Float32Array(count);
+    const baseBright = new Float32Array(count);
 
     let rndS = 20240707;
     const rnd = () => ((rndS = (rndS * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
 
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
+    for (let i = 0; i < count; i++) {
       let wx: number, wy: number;
       if (i < 2) {                            // eyes — the two brightest anchors
         [wx, wy] = EYES[i];
@@ -129,17 +147,41 @@ export function BullSwarm3D({ nodes, highlightIds, onHover }: Props) {
     raycaster.params.Mesh = { threshold: 0 } as any;
     const mouse = new THREE.Vector2();
     let hoverId: number | null = null;
-    const onMove = (e: MouseEvent) => {
+    const pickAt = (cx: number, cy: number): BullNode | null => {
       const rect = container.getBoundingClientRect();
-      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      mouse.x = ((cx - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((cy - rect.top) / rect.height) * 2 + 1;
       raycaster.setFromCamera(mouse, camera);
       const hits = raycaster.intersectObject(mesh);
       const nlen = nodesRef.current.length;
-      let node: BullNode | null = null;
       if (hits.length && hits[0].instanceId !== undefined && hits[0].instanceId < nlen) {
-        node = nodesRef.current[hits[0].instanceId];
+        return nodesRef.current[hits[0].instanceId];
       }
+      return null;
+    };
+    // Finger-friendly pick: exact raycast first, else nearest data node within ~32px
+    // on screen (tetrahedra are far too small to tap precisely).
+    const pickNear = (cx: number, cy: number, maxPx = 32): BullNode | null => {
+      const direct = pickAt(cx, cy);
+      if (direct) return direct;
+      const rect = container.getBoundingClientRect();
+      const v = new THREE.Vector3();
+      const nlen = Math.min(nodesRef.current.length, count);
+      let best: BullNode | null = null, bd = maxPx * maxPx;
+      for (let i = 0; i < nlen; i++) {
+        v.copy(positions[i]).project(camera);
+        if (v.z > 1) continue;
+        const sx = rect.left + ((v.x + 1) / 2) * rect.width;
+        const sy = rect.top + ((1 - v.y) / 2) * rect.height;
+        const d = (sx - cx) ** 2 + (sy - cy) ** 2;
+        if (d < bd) { bd = d; best = nodesRef.current[i]; }
+      }
+      return best;
+    };
+    let lastTouchT = 0;   // browsers fire synthetic mouse events after touch — don't let them clear a tapped tooltip
+    const onMove = (e: MouseEvent) => {
+      if (performance.now() - lastTouchT < 700) return;
+      const node = pickAt(e.clientX, e.clientY);
       hoverId = node ? node.id : null;
       container.style.cursor = node ? 'pointer' : 'grab';
       onHover?.(node, e.clientX, e.clientY);
@@ -147,7 +189,9 @@ export function BullSwarm3D({ nodes, highlightIds, onHover }: Props) {
     container.addEventListener('mousemove', onMove);
 
     // ── Orbit (drag) + fly (wheel) — the swim-through ──
-    let dragging = false, px = 0, py = 0, rotX = 0, rotY = 0.06, dist = 96;
+    let baseDist = fitDist(w / h);
+    const maxDist = () => Math.max(360, baseDist * 1.35);
+    let dragging = false, px = 0, py = 0, rotX = 0, rotY = 0.06, dist = baseDist;
     const down = (e: MouseEvent) => { dragging = true; px = e.clientX; py = e.clientY; container.style.cursor = 'grabbing'; };
     const up = () => { dragging = false; };
     const drag = (e: MouseEvent) => {
@@ -159,10 +203,52 @@ export function BullSwarm3D({ nodes, highlightIds, onHover }: Props) {
     container.addEventListener('mousedown', down);
     window.addEventListener('mouseup', up);
     window.addEventListener('mousemove', drag);
-    const wheel = (e: WheelEvent) => { e.preventDefault(); dist = Math.max(22, Math.min(360, dist + e.deltaY * 0.06)); };
+    const wheel = (e: WheelEvent) => { e.preventDefault(); dist = Math.max(22, Math.min(maxDist(), dist + e.deltaY * 0.06)); };
     container.addEventListener('wheel', wheel, { passive: false });
-    const onDbl = () => { rotX = 0; rotY = 0.06; dist = 96; };   // reset to head-on
+    const onDbl = () => { rotX = 0; rotY = 0.06; dist = baseDist; };   // reset to head-on
     container.addEventListener('dblclick', onDbl);
+
+    // ── Touch: 1-finger orbit · pinch to fly · tap a star to read ──
+    let touchMode = 0;                                  // 0 none · 1 orbit · 2 pinch
+    let tX = 0, tY = 0, pinchD = 0;
+    let tapX = 0, tapY = 0, tapT = 0, tapMoved = false;
+    const onTS = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        touchMode = 1; tX = e.touches[0].clientX; tY = e.touches[0].clientY;
+        tapX = tX; tapY = tY; tapT = performance.now(); tapMoved = false;
+      } else if (e.touches.length >= 2) {
+        touchMode = 2; tapMoved = true;
+        pinchD = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      }
+    };
+    const onTM = (e: TouchEvent) => {
+      e.preventDefault();                               // the canvas owns the gesture — no page scroll/zoom
+      if (touchMode === 1 && e.touches.length === 1) {
+        const nx = e.touches[0].clientX, ny = e.touches[0].clientY;
+        rotX += (nx - tX) * 0.006; rotY += (ny - tY) * 0.006;
+        rotY = Math.max(-1.3, Math.min(1.3, rotY));
+        if (Math.abs(nx - tapX) + Math.abs(ny - tapY) > 12) tapMoved = true;
+        tX = nx; tY = ny;
+      } else if (touchMode === 2 && e.touches.length >= 2) {
+        const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+        if (pinchD > 0 && d > 0) dist = Math.max(22, Math.min(maxDist(), dist * (pinchD / d)));
+        pinchD = d;
+      }
+    };
+    const onTE = (e: TouchEvent) => {
+      lastTouchT = performance.now();
+      // a quick, still touch = a TAP → read the node (or clear the tooltip on empty space)
+      if (touchMode === 1 && !tapMoved && performance.now() - tapT < 650) {
+        const node = pickNear(tapX, tapY);
+        hoverId = node ? node.id : null;                // pauses the auto-rotate while reading
+        onHover?.(node, tapX, tapY);
+      }
+      if (e.touches.length === 0) touchMode = 0;
+      else if (e.touches.length === 1) { touchMode = 1; tX = e.touches[0].clientX; tY = e.touches[0].clientY; tapMoved = true; }
+    };
+    container.addEventListener('touchstart', onTS, { passive: true });
+    container.addEventListener('touchmove', onTM, { passive: false });
+    container.addEventListener('touchend', onTE);
 
     const lookAt = new THREE.Vector3(0, 6, 0);    // centre on the bull's real centroid
     let raf = 0;
@@ -174,7 +260,7 @@ export function BullSwarm3D({ nodes, highlightIds, onHover }: Props) {
       const hasHl = hl.size > 0;
       const auto = (dragging || hoverId !== null) ? 0 : 0.012;   // pause the drift while dragging or reading a node
 
-      for (let i = 0; i < PARTICLE_COUNT; i++) {
+      for (let i = 0; i < count; i++) {
         const hm = home[i];
         const a = driftAmp[i], ph = driftPhase[i], sp = driftSpeed[i];
         // float around the pinned bull position — small, so the shape holds
@@ -225,6 +311,9 @@ export function BullSwarm3D({ nodes, highlightIds, onHover }: Props) {
       if (cw < 2 || ch < 2) return;
       camera.aspect = cw / ch; camera.updateProjectionMatrix();
       renderer.setSize(cw, ch); composer.setSize(cw, ch);
+      // re-fit: keep the user's relative zoom but anchor it to the new aspect's base
+      const nb = fitDist(cw / ch);
+      if (nb !== baseDist) { dist = Math.max(22, Math.min(maxDist(), dist * (nb / baseDist))); baseDist = nb; }
     };
     window.addEventListener('resize', onResize);
     // ResizeObserver + deferred re-fits catch the post-mount layout settle — the canvas
@@ -245,6 +334,9 @@ export function BullSwarm3D({ nodes, highlightIds, onHover }: Props) {
         window.removeEventListener('mousemove', drag);
         container.removeEventListener('wheel', wheel as any);
         container.removeEventListener('dblclick', onDbl);
+        container.removeEventListener('touchstart', onTS);
+        container.removeEventListener('touchmove', onTM as any);
+        container.removeEventListener('touchend', onTE);
         mesh.geometry.dispose(); (mesh.material as THREE.Material).dispose();
         renderer.dispose();
         if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
@@ -253,5 +345,5 @@ export function BullSwarm3D({ nodes, highlightIds, onHover }: Props) {
     return () => { engineRef.current?.cleanup(); engineRef.current = null; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return <div ref={containerRef} style={{ position: 'absolute', inset: 0, cursor: 'grab' }} />;
+  return <div ref={containerRef} style={{ position: 'absolute', inset: 0, cursor: 'grab', touchAction: 'none' }} />;
 }
