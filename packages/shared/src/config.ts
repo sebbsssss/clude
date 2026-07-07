@@ -115,6 +115,69 @@ export const config = {
     freePromoCreditUsdc: parseFloat(optional("FREE_PROMO_CREDIT_USDC", "1")),
     freePromoExpiry: optional("FREE_PROMO_EXPIRY", ""),
   },
+  memory: {
+    /**
+     * Memory 3.0 C2: route storeMemory enrichment (embed/link/extract) through the durable
+     * memory_write_jobs outbox instead of fire-and-forget. Default OFF — fire-and-forget stays
+     * the default until the worker is proven. Requires migrations 044 + 045; degrades gracefully
+     * (falls back to fire-and-forget) if unapplied.
+     */
+    outboxEnabled: optional("MEMORY_OUTBOX", "false") === "true",
+    /**
+     * Memory 3.0 C1: write-time reconciliation, SHADOW slice (LLM-free). When on, each write records
+     * a PROPOSED reconcile op (add / needs_router / skip) into memory_reconciliation_log WITHOUT
+     * applying it — the labeled sample the enforce path must earn its turn-on from. Default OFF;
+     * runs fully detached after embedMemory (zero write latency); degrades gracefully if migration
+     * 046 is unapplied. Disabled under BENCH_MODE. The router is a later slice; only the cosine gate
+     * runs here.
+     */
+    reconcileEnabled: optional("MEMORY_RECONCILE", "false") === "true",
+    /** Screen floor passed to match_memories_temporal — LOW so max_cosine is captured for below-LO
+     * writes (LO is tuned from the shadow data, not fixed up-front). */
+    reconcileFloor: Number(optional("MEMORY_RECONCILE_FLOOR", "0.5")),
+    /** "similar enough to reconcile" boundary → needs_router (vs add). A starting probe, not gospel. */
+    reconcileLo: Number(optional("MEMORY_RECONCILE_LO", "0.85")),
+    /** hi/mid band LABEL boundary for analysis (not a decision boundary). */
+    reconcileHi: Number(optional("MEMORY_RECONCILE_HI", "0.95")),
+    /**
+     * C1 slice 1.5: the LLM router. Its own sub-flag (default OFF, independent of reconcileEnabled)
+     * so gate-only instrumentation runs first and LO is calibrated from that data before any LLM
+     * spend. When on, a >= LO write is classified add/update/noop by reconcileModel (still SHADOW —
+     * the op is logged, never applied). Requires OpenRouter configured.
+     */
+    reconcileRouter: optional("MEMORY_RECONCILE_ROUTER", "false") === "true",
+    /** Router model — an explicit id (NEVER a cognitiveFunction, which would silently override it
+     * with the fast llama slot). Haiku-class default: capable enough for dup-vs-update, cheap. */
+    reconcileModel: optional("MEMORY_RECONCILE_MODEL", "anthropic/claude-haiku-4.5"),
+    /** Per-owner soft daily cap on router calls (approximate, per-process) — bounds LLM spend. */
+    reconcileBudget: Number(optional("MEMORY_RECONCILE_BUDGET", "200")),
+  },
+  oauth: {
+    /** HMAC secret for signing OAuth access-token JWTs. Empty disables the OAuth AS — bearer API-key auth still works. */
+    signingSecret: optional("OAUTH_SIGNING_SECRET", ""),
+    /** Issuer/audience identifier baked into tokens. Falls back to the request origin when empty. */
+    issuer: optional("OAUTH_ISSUER", ""),
+    /** Access-token lifetime in seconds (default 1h). */
+    accessTtlSec: parseInt(optional("OAUTH_ACCESS_TTL_SEC", "3600"), 10),
+    /** Refresh-token lifetime in seconds (default 30d). */
+    refreshTtlSec: parseInt(optional("OAUTH_REFRESH_TTL_SEC", "2592000"), 10),
+    /** Authorization-code lifetime in seconds (default 60s). */
+    codeTtlSec: parseInt(optional("OAUTH_CODE_TTL_SEC", "60"), 10),
+  },
+  stripe: {
+    /**
+     * Stripe secret API key (sk_live_… / sk_test_…). Empty disables the
+     * marketplace Stripe rail — the orchestrator/webhook fail closed without it.
+     * SDK/MCP consumers never need this, so it stays optional() (not required()).
+     */
+    secretKey: optional("STRIPE_SECRET_KEY", ""),
+    /**
+     * Stripe webhook signing secret (whsec_…) used by stripe.webhooks.constructEvent
+     * to verify the raw body BEFORE any DB write (Risk R6). Empty ⇒ every webhook is
+     * rejected, so a misconfigured deploy can never process an unverified event.
+     */
+    webhookSecret: optional("STRIPE_WEBHOOK_SECRET", ""),
+  },
   campaign: {
     startDate: optional("CAMPAIGN_START", ""),
   },
