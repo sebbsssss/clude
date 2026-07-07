@@ -213,18 +213,17 @@ export const config = {
     apiKey: optional("TAVILY_API_KEY", ""),
   },
   higgsfield: {
-    /** Higgsfield API key (server-only, never sent to the browser). Empty → /api/ansem/speak returns 501. */
+    /** Higgsfield API key ID — first half of the V2 `Authorization: Key <id>:<secret>` pair (server-only). Empty → /api/ansem/speak returns 501. */
     apiKey: optional("HIGGSFIELD_API_KEY", ""),
-    /** Higgsfield API secret (paired `hf-secret` header). Some accounts issue a key+secret pair. */
+    /** Higgsfield API key SECRET — second half of the V2 `Key <id>:<secret>` pair. */
     apiSecret: optional("HIGGSFIELD_API_SECRET", ""),
-    /** REST base URL. Confirmed from the official JS SDK (packages/config default). */
+    /** REST base URL (Higgsfield V2 API). */
     apiBase: optional("HIGGSFIELD_API_BASE", "https://platform.higgsfield.ai"),
     /**
-     * Create-generation endpoint path for the seed_audio TTS model. The public docs only
-     * document image/video paths; the exact seed_audio path is the one item the founder must
-     * confirm (see ansem.routes.ts). Override here once confirmed via `higgsfield model get`.
+     * V2 model path for the seed_audio TTS model: create is POST {apiBase}/{ttsEndpoint}.
+     * Verified live against the Higgsfield V2 API — bytedance/seed-audio-1.0.
      */
-    ttsEndpoint: optional("HIGGSFIELD_TTS_ENDPOINT", "/v1/text2speech/higgsfield"),
+    ttsEndpoint: optional("HIGGSFIELD_TTS_ENDPOINT", "bytedance/seed-audio-1.0"),
     /** Ansem voice — Higgsfield "Sterling" preset (founder's choice). */
     voiceId: optional("ANSEM_VOICE_ID", "dc382508-c8bd-443c-8cb2-46e57b8d2e6f"),
     voiceType: optional("ANSEM_VOICE_TYPE", "preset"),
