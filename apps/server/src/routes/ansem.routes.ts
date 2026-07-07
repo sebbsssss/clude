@@ -189,7 +189,7 @@ Example output: {"queries":["solana thesis","solana ecosystem coins","sol price 
 
 Output ONLY the JSON. No markdown, no explanation.`;
 
-const ANSEM_PERSONA = `You ARE Ansem (@blknoiz06) — but an AI CLONE, not the real person, on the clude.io "Speak to Ansem" page. NEVER claim to be the real Ansem. NEVER give real financial advice or specific buy/sell/entry/target/leverage calls in his name — if pushed for a specific call, deflect in-voice ("lmao not financial advice bro"). General conditional market takes in his style are fine; specific directives are not.
+const ANSEM_PERSONA = `You ARE Ansem (@blknoiz06) — but an AI CLONE, not the real person, on the clude.io "Speak to Ansem" page. NEVER claim to be the real Ansem. NEVER give real financial advice or specific buy/sell/entry/target/leverage calls in his name — if pushed for a specific call, deflect in-voice ("lmao not financial advice bro"). General conditional market takes in his style are fine; specific directives are not. NEVER give out or discuss a contract address (CA) for ANY token, and NEVER shill, promote, name, or endorse other projects/coins — if asked for a CA or to pump/name another coin, brush it off in his voice ("nah i dont do CAs bro", "not shilling other bags"). Stay neutral: talk $ANSEM, general market mindset + his own philosophy — never other people's tokens, tickers, or entries.
 
 Speak in his EXACT voice, grounded ONLY in the real memories provided:
 - all lowercase. no capital i. usually no ending punctuation.
@@ -282,8 +282,29 @@ const NOISE_PATTERNS: RegExp[] = [
   /(retweet|rt|like|follow).{0,20}(to|for|and).{0,20}(win|enter|qualify)/i,
 ];
 
+// Hate-speech / slur blocklist — racial, ethnic + homophobic/transphobic slurs are
+// dropped outright from the public feed (general profanity is fine per spec). Tolerant
+// of repeated letters + common leetspeak; word-boundaried to avoid innocent-word hits.
+const SLUR_PATTERNS: RegExp[] = [
+  /n[i1!][g6]{2,}(a+|er+|uh|ah|@)/i,      // n-word + variants (nigga/nigger/n1gga…)
+  /f[a4@]g+([o0]t)?s?\b/i,                // f-slur (not "flag"/"fragging" — needs f+a+g)
+  /\bch[i1]nks?\b/i,
+  /\bsp[i1]c(ks?|s)?\b/i,
+  /\bk[i1]kes?\b/i,
+  /\bcoons?\b/i,
+  /\bwetbacks?\b/i,
+  /\btr[a4]nn(y|ies)\b/i,
+  /\bg[o0]{2}ks?\b/i,
+  /\bbean[e3]rs?\b/i,
+  /\bp[a4]kis?\b/i,
+  /\bd[y1]kes?\b/i,
+  /sand[\s._-]*n[i1][g6]{2}/i,
+  /porch[\s._-]*monk/i,
+  /\bragheads?\b/i,
+];
+
 function isNoise(text: string): boolean {
-  return NOISE_PATTERNS.some((re) => re.test(text));
+  return NOISE_PATTERNS.some((re) => re.test(text)) || SLUR_PATTERNS.some((re) => re.test(text));
 }
 
 /** Lowercase, strip urls/@handles/$cashtags/punctuation → a dedup fingerprint. */
