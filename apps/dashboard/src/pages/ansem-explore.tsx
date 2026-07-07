@@ -15,6 +15,7 @@ import type { AnsemNode } from '../lib/ansem-api';
 import { AvatarBull } from '../components/AvatarBull';
 import type { AvatarBullHandle } from '../components/AvatarBull';
 import { AnsemFeed } from '../components/AnsemFeed';
+import { BullSwarm3D } from '../components/BullSwarm3D';
 
 // ── Data fetching ───────────────────────────────────────────────────────────
 
@@ -1097,6 +1098,7 @@ export function AnsemExplore() {
 
   const { nodes, total, loading, error } = useAnsemData();
   const [highlightIds, setHighlightIds] = useState<Set<number>>(new Set());
+  const [bullTip, setBullTip] = useState<{ text: string; x: number; y: number } | null>(null);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setHighlightIds(new Set()); };
@@ -1108,7 +1110,25 @@ export function AnsemExplore() {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#000', overflow: 'hidden', fontFamily: "ui-monospace,'SF Mono',Menlo,monospace" }}>
-      {!loading && !error && <BullConstellation nodes={nodes} highlightIds={highlightIds} />}
+      {!loading && !error && (
+        <BullSwarm3D
+          nodes={nodes}
+          highlightIds={highlightIds}
+          onHover={(n, x, y) => setBullTip(n && n.content ? { text: n.content, x, y } : null)}
+        />
+      )}
+      {bullTip && (
+        <div style={{
+          position: 'fixed',
+          left: Math.min(bullTip.x + 16, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 320),
+          top: bullTip.y + 14, zIndex: 50, maxWidth: 300, padding: '9px 12px', borderRadius: 10,
+          background: 'rgba(2,12,7,.92)', border: '1px solid rgba(72,224,122,.35)', backdropFilter: 'blur(8px)',
+          fontFamily: "ui-monospace,'SF Mono',Menlo,monospace", fontSize: 12, lineHeight: 1.5, color: '#dff5e6',
+          pointerEvents: 'none', boxShadow: '0 10px 30px rgba(0,0,0,.6)',
+        }}>
+          {bullTip.text.slice(0, 240)}
+        </div>
+      )}
 
       {/* HUD — title, subtitle, count, disclaimer */}
       <div id="ansem-hud" style={{
@@ -1139,7 +1159,7 @@ export function AnsemExplore() {
       }}>
         hover any star to read the tweet · brightest = most-liked · tap “Speak to Ansem” to talk
         <div style={{ marginTop: 4, color: '#3c6b52', fontSize: 'clamp(9.5px,1vw,11px)' }}>
-          scroll to zoom · drag to pan · double-click to reset
+          drag to orbit · scroll to fly through · double-click to reset
         </div>
       </div>
 
