@@ -41,33 +41,25 @@ function getClientIp(req: Request): string {
   return (req.ip || req.socket.remoteAddress || "unknown").replace(/^::ffff:/, "");
 }
 
-// ---- Higgsfield seed_audio TTS (server-side; key never reaches the browser) ---- //
+// ---- Higgsfield seed_audio TTS (server-side; creds never reach the browser) ---- //
 //
 // Turns a reply into a spoken audio URL in Ansem's "Sterling" preset voice (very deep:
-// pitch_rate -9, speech_rate -12). Higgsfield's TTS is async: POST a generation → the
-// response is a job-set → poll the job-set until a job reaches `completed` → read the
-// audio URL from `results.raw.url`.
+// pitch_rate -9, speech_rate -12), via the Higgsfield V2 API. TTS is async: POST a
+// generation → { request_id, status_url } → poll the request until `completed` → read
+// the mp3 from `audio.url`. ~10-16s end-to-end.
 //
-// CONFIRMED (from the official Higgsfield JS SDK — github.com/higgsfield-ai/higgsfield-js
-// src/{client,config,models/JobSet,types}.ts — and the CLI schema
-// github.com/higgsfield-ai/cli MODELS.md → `seed_audio`):
-//   • Base URL:        https://platform.higgsfield.ai   (Config.baseURL default)
-//   • Auth headers:    hf-api-key / hf-secret            (NOT Bearer — see client.ts)
-//   • Request body:    { params: {...} }                 (client.generate wraps in `params`)
-//   • Poll endpoint:   GET /v1/job-sets/{jobSetId}       (JobSet.pollingUrl)
-//   • Job statuses:    queued | in_progress | completed | failed | nsfw | canceled
-//   • Result shape:    jobs[].results.raw.url            (Results = { raw:{url,type}, min:{url,type} })
-//   • seed_audio params: prompt (text), voice_type ('preset'), voice_id, pitch_rate (int,
-//                        default 0), speech_rate (int, default 0), format (wav|mp3|pcm|ogg_opus)
+// VERIFIED LIVE against the Higgsfield V2 API (docs.higgsfield.ai):
+//   • Base URL:     https://platform.higgsfield.ai
+//   • Auth header:  Authorization: Key <apiKey>:<apiSecret>   (V2 key-id:secret pair)
+//   • Create:       POST {base}/{modelPath}                   (modelPath = bytedance/seed-audio-1.0)
+//   • Body:         FLAT { prompt, voice_type, voice_id, pitch_rate, speech_rate, format }
+//   • Create resp:  { status, request_id, status_url }
+//   • Poll:         GET {status_url}  (= {base}/requests/{request_id}/status)
+//   • Statuses:     queued | in_progress | completed | failed | nsfw | canceled
+//   • Result shape: { status:'completed', audio:{ url }, audios:[{ url }] }
 //
-// ASSUMED — the ONE item the founder must confirm (public docs only document image/video
-// create paths; seed_audio's exact create path is not published):
-//   • The create-generation endpoint PATH for seed_audio. Default guess below is
-//     `/v1/text2speech/higgsfield` (mirrors the SDK's `/v1/speak/higgsfield` naming).
-//     Confirm via `higgsfield model get seed_audio` (or the network tab of the Higgsfield
-//     app) and set HIGGSFIELD_TTS_ENDPOINT. If the account uses a single Bearer key instead
-//     of a key+secret pair, set HIGGSFIELD_API_SECRET="" and the Bearer header still goes out
-//     via hf-api-key — adjust here if their auth differs.
+// Set HIGGSFIELD_API_KEY + HIGGSFIELD_API_SECRET to enable (either empty → /speak 501).
+// Override the model path via HIGGSFIELD_TTS_ENDPOINT if it ever changes.
 
 interface HiggsfieldTtsResult {
   audioUrl: string;
@@ -75,53 +67,52 @@ interface HiggsfieldTtsResult {
 
 const TERMINAL_STATUSES = new Set(["completed", "failed", "nsfw", "canceled"]);
 
-/** Extract the audio URL from a completed Higgsfield job-set, tolerant of shape variants. */
-function extractAudioUrl(jobSet: any): string | null {
-  const jobs: any[] = jobSet?.jobs || [];
-  const done = jobs.find((j) => j?.status === "completed") || jobs[0];
-  const r = done?.results;
-  // Confirmed shape: results.raw.url. Fallbacks cover the MCP's `rawUrl` alias + min.
-  return r?.raw?.url || r?.rawUrl || r?.min?.url || r?.url || null;
+/** Extract the audio URL from a completed Higgsfield V2 request. */
+function extractAudioUrl(req: any): string | null {
+  return req?.audio?.url || req?.audios?.[0]?.url || null;
 }
 
 /**
- * Submit a seed_audio TTS generation and poll until the audio URL is ready.
- * Throws on failure/timeout/non-configured; caller maps errors to HTTP responses.
+ * Submit a seed_audio (bytedance/seed-audio-1.0) TTS generation on the Higgsfield
+ * V2 API and poll until the audio URL is ready. Throws on failure/timeout/
+ * non-configured; caller maps errors to HTTP responses.
+ *
+ * V2 flow (verified live): auth `Authorization: Key <id>:<secret>`; create is
+ * POST {apiBase}/{ttsEndpoint} with a FLAT body → { request_id, status_url };
+ * poll GET {status_url} until status ∈ {completed, failed, nsfw, canceled}; the
+ * mp3 lands at `audio.url`.
  */
 async function higgsfieldTts(
   text: string,
   signal: AbortSignal,
-  deadlineMs = 30000,
+  deadlineMs = 45000,
 ): Promise<HiggsfieldTtsResult> {
   const hf = config.higgsfield;
-  if (!hf.apiKey) {
+  if (!hf.apiKey || !hf.apiSecret) {
     // Guarded by the route before we get here, but keep the invariant local too.
     throw new Error("voice_not_configured");
   }
 
   const authHeaders: Record<string, string> = {
     "Content-Type": "application/json",
-    "hf-api-key": hf.apiKey,
+    Authorization: `Key ${hf.apiKey}:${hf.apiSecret}`,
   };
-  // Only send the secret header when a secret is configured (some accounts are key-only).
-  if (hf.apiSecret) authHeaders["hf-secret"] = hf.apiSecret;
 
   const base = hf.apiBase.replace(/\/$/, "");
+  const modelPath = hf.ttsEndpoint.replace(/^\//, ""); // e.g. bytedance/seed-audio-1.0
   const started = Date.now();
 
-  // ── 1. Create the generation (body wrapped in `params`, per the SDK) ──
-  const createRes = await fetch(`${base}${hf.ttsEndpoint}`, {
+  // ── 1. Create the generation (flat body, per the V2 API) ──
+  const createRes = await fetch(`${base}/${modelPath}`, {
     method: "POST",
     headers: authHeaders,
     body: JSON.stringify({
-      params: {
-        prompt: text,
-        voice_type: hf.voiceType,
-        voice_id: hf.voiceId,
-        pitch_rate: hf.voicePitch,
-        speech_rate: hf.voiceSpeechRate,
-        format: hf.audioFormat,
-      },
+      prompt: text,
+      voice_type: hf.voiceType,
+      voice_id: hf.voiceId,
+      pitch_rate: hf.voicePitch,
+      speech_rate: hf.voiceSpeechRate,
+      format: hf.audioFormat,
     }),
     signal,
   });
@@ -133,20 +124,22 @@ async function higgsfieldTts(
     );
   }
 
-  const jobSet: any = await createRes.json();
-  const jobSetId: string | undefined = jobSet?.id;
+  const created: any = await createRes.json();
+  const requestId: string | undefined = created?.request_id;
+  const statusUrl: string =
+    created?.status_url || `${base}/requests/${requestId}/status`;
 
-  // Some responses may already be terminal; otherwise poll by id.
-  let current = jobSet;
-  if (!TERMINAL_STATUSES.has(current?.jobs?.[0]?.status) && jobSetId) {
-    // ── 2. Poll GET /v1/job-sets/{id} every 2s until terminal or deadline ──
+  // Some responses may already be terminal; otherwise poll the request.
+  let current = created;
+  if (!TERMINAL_STATUSES.has(current?.status) && requestId) {
+    // ── 2. Poll GET /requests/{id}/status every 2s until terminal or deadline ──
     while (true) {
       if (signal.aborted) throw new Error("client_disconnected");
       if (Date.now() - started > deadlineMs) throw new Error("higgsfield_timeout");
 
       await new Promise((r) => setTimeout(r, 2000));
 
-      const pollRes = await fetch(`${base}/v1/job-sets/${jobSetId}`, {
+      const pollRes = await fetch(statusUrl, {
         method: "GET",
         headers: authHeaders,
         signal,
@@ -161,14 +154,12 @@ async function higgsfieldTts(
       }
 
       current = await pollRes.json();
-      const status = current?.jobs?.[0]?.status;
-      if (status && TERMINAL_STATUSES.has(status)) break;
+      if (current?.status && TERMINAL_STATUSES.has(current.status)) break;
     }
   }
 
-  const status = current?.jobs?.[0]?.status;
-  if (status && status !== "completed") {
-    throw new Error(`higgsfield_${status}`);
+  if (current?.status && current.status !== "completed") {
+    throw new Error(`higgsfield_${current.status}`);
   }
 
   const audioUrl = extractAudioUrl(current);
