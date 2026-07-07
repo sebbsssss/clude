@@ -713,6 +713,7 @@ function AnsemChat({
     if (!ctx || !el || !analyser) return false;
 
     let audioUrl = '';
+    let isBlobUrl = false;
     try {
       const res = await fetch(`${API_BASE}/api/ansem/speak`, {
         method: 'POST',
@@ -721,8 +722,16 @@ function AnsemChat({
       });
       // 501 voice_not_configured (or any non-OK) → graceful fallback to synthetic
       if (!res.ok) return false;
-      const data = (await res.json()) as { audio_url?: string };
-      audioUrl = data.audio_url || '';
+      const ctype = res.headers.get('content-type') || '';
+      if (ctype.includes('audio')) {
+        // ElevenLabs (primary): raw mp3 bytes → play via an object URL (near-instant)
+        audioUrl = URL.createObjectURL(await res.blob());
+        isBlobUrl = true;
+      } else {
+        // Higgsfield (fallback): { audio_url } CDN link
+        const data = (await res.json()) as { audio_url?: string };
+        audioUrl = data.audio_url || '';
+      }
       if (!audioUrl) return false;
     } catch {
       return false;   // network/parse error → fallback
@@ -749,6 +758,7 @@ function AnsemChat({
         if (audioRafRef.current) { cancelAnimationFrame(audioRafRef.current); audioRafRef.current = 0; }
         speakingRef.current = false;
         avatarRef.current?.setAmp(0);   // audio end → mouth closes
+        if (isBlobUrl && audioUrl) URL.revokeObjectURL(audioUrl);   // free the blob
       };
       el.onended = () => { cleanup(); resolve(true); };
       el.onerror = () => { cleanup(); resolve(false); };

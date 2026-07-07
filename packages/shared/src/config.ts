@@ -233,6 +233,14 @@ export const config = {
     /** Output audio format (seed_audio supports wav|mp3|pcm|ogg_opus). */
     audioFormat: optional("ANSEM_VOICE_FORMAT", "mp3"),
   },
+  elevenlabs: {
+    /** ElevenLabs API key (server-only). Set → PRIMARY TTS (~1-3s, no lag); empty → falls back to Higgsfield. */
+    apiKey: optional("ELEVENLABS_API_KEY", ""),
+    /** Voice id — default "Brian" (deep, resonant, american). Swap via ELEVENLABS_VOICE_ID. */
+    voiceId: optional("ELEVENLABS_VOICE_ID", "nPczCjzI2devNBz1zQrb"),
+    /** Model — turbo for lowest latency. */
+    model: optional("ELEVENLABS_MODEL", "eleven_turbo_v2_5"),
+  },
   privy: {
     appId: optional("PRIVY_APP_ID", ""),
     appSecret: optional("PRIVY_APP_SECRET", ""),
