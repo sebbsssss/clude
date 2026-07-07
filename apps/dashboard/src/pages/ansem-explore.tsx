@@ -58,6 +58,8 @@ interface StarNode {
   r: number; ph: number;
   glow?: boolean; g?: boolean; a?: number; sp?: number;
   id?: number; t?: string; l?: number;
+  // live-stream nodes carry their 1000-space anchor (to re-place on resize) + birth time
+  qx?: number; qy?: number; born?: number;
 }
 
 function BullConstellation({
@@ -79,6 +81,30 @@ function BullConstellation({
   // loop AND in the hit-test so tooltips stay correct under zoom. Kept in a ref
   // (not state) so panning/zooming never re-runs the build effect.
   const viewRef = useRef({ scale: 1, ox: 0, oy: 0 });
+
+  // Live X posts streamed into the constellation as new igniting stars. The render
+  // effect publishes an "add" fn here; this poll (server-cached — shares AnsemFeed's
+  // data, so no extra X cost) feeds it new posts every 90s. animate=false on the first
+  // batch (they seed the field), true after (genuinely-new posts ignite in).
+  const addLiveRef = useRef<((posts: Array<{ id: string; text: string; likes: number }>, animate: boolean) => void) | null>(null);
+  useEffect(() => {
+    let stop = false;
+    const seen = new Set<string>();
+    let first = true;
+    const poll = async () => {
+      try {
+        const data = await ansemApi.getFeed();
+        if (stop || !data.enabled || !Array.isArray(data.posts)) return;
+        const fresh = data.posts.filter((p) => !seen.has(p.id));
+        fresh.forEach((p) => seen.add(p.id));
+        if (fresh.length) addLiveRef.current?.(fresh.map((p) => ({ id: p.id, text: p.text, likes: p.likes })), !first);
+        first = false;
+      } catch { /* transient — retry next tick */ }
+    };
+    poll();
+    const iv = window.setInterval(poll, 90_000);
+    return () => { stop = true; window.clearInterval(iv); };
+  }, []);
 
   useEffect(() => {
     const wrap = wrapRef.current;
@@ -150,6 +176,36 @@ function BullConstellation({
     let nodes: StarNode[] = [];
     let dataNodes: StarNode[] = [];
     let edgeLayers: Array<{ cv: HTMLCanvasElement }> = [];
+    // live X posts streamed in as new stars — kept across rebuilds, re-anchored on resize
+    const live: StarNode[] = [];
+    const seenLive = new Set<string>();
+    let liveIdSeq = -1;
+    const LIVE_CAP = 22;
+
+    // Place each new post at a random point inside the bull; it ignites (bloom + ring)
+    // for ~2s then settles into a faint, hoverable field star. Oldest evicted past cap.
+    function addLivePosts(posts: Array<{ id: string; text: string; likes: number }>, animate: boolean) {
+      if (S <= 0) return;                       // not laid out yet; next poll will catch it
+      for (const p of posts) {
+        if (seenLive.has(p.id)) continue;
+        seenLive.add(p.id);
+        let qx = 500, qy = 550, g = 0;
+        do { qx = Math.random() * 1000; qy = Math.random() * 1000; g++; } while (!inside(qx, qy) && g < 80);
+        const [cx, cy] = toCanvas(qx, qy);
+        const n: StarNode = {
+          x: cx, y: cy, qx, qy, z: 0.86, out: false, bright: false,
+          r: 1.6 + Math.min(3.4, (p.likes || 0) * 0.5), ph: Math.random() * 6.28, sp: 0.7 + Math.random() * 1.1,
+          id: liveIdSeq--, t: p.text, l: p.likes,
+          born: animate ? performance.now() : performance.now() - 6000, // past → no birth flash on seed
+        };
+        live.push(n); dataNodes.push(n);
+      }
+      while (live.length > LIVE_CAP) {
+        const old = live.shift();
+        if (old) { const di = dataNodes.indexOf(old); if (di >= 0) dataNodes.splice(di, 1); }
+      }
+    }
+    addLiveRef.current = addLivePosts;
 
     function build() {
       const rnd = mkRnd(); nodes = []; dataNodes = [];
@@ -260,6 +316,8 @@ function BullConstellation({
       // A viewport resize re-fits the constellation → reset zoom/pan to identity.
       viewRef.current = { scale: 1, ox: 0, oy: 0 };
       build();
+      // re-anchor streamed-in live nodes (build() cleared dataNodes; coords depend on S/OX/OY)
+      for (const n of live) { const [cx, cy] = toCanvas(n.qx as number, n.qy as number); n.x = cx; n.y = cy; dataNodes.push(n); }
     }
 
     // parallax (smoothed) — nearer layers drift more: real depth
@@ -326,6 +384,27 @@ function BullConstellation({
             ctx!.textAlign = 'left';
             ctx!.globalCompositeOperation = 'lighter';
           }
+        }
+      }
+      // ── live X posts: persistent faint field stars + a birth ignite (bloom + ring) ──
+      for (const n of live) {
+        const [ox, oy] = bucketOff(zBucket(n.z));
+        const x = (n.x + ox) * vs + vox, y = (n.y + oy) * vs + voy;
+        const age = (now - (n.born || now)) / 1000;
+        const birth = age < 2.4 ? (1 - age / 2.4) : 0;  // birth ignite fades over ~2.4s
+        const gS = Math.sqrt(vs);
+        const tw = 0.55 + 0.45 * Math.sin(t * (n.sp || 1) + n.ph);
+        // persistent faint dot — it has joined the field, hoverable like a memory star
+        ctx!.globalAlpha = Math.min(1, 0.44 * tw * 1.5);
+        { const R = n.r * 2.7 * gS; ctx!.drawImage(SPR_GLOW, x - R, y - R, R * 2, R * 2); }
+        // birth flash: extra bloom + an expanding ring the moment it streams in
+        if (birth > 0) {
+          ctx!.globalAlpha = 0.9 * birth;
+          const R = n.r * 5.2 * (0.6 + birth) * gS;
+          ctx!.drawImage(SPR_STAR, x - R, y - R, R * 2, R * 2);
+          ctx!.globalAlpha = birth * 0.7;
+          ctx!.strokeStyle = 'rgba(150,255,190,0.9)'; ctx!.lineWidth = 1.3;
+          ctx!.beginPath(); ctx!.arc(x, y, (n.r * 2 + (1 - birth) * 26) * vs, 0, 6.2832); ctx!.stroke();
         }
       }
       ctx!.globalAlpha = 1;
@@ -1022,7 +1101,7 @@ export function AnsemExplore() {
       {!loading && !error && <BullConstellation nodes={nodes} highlightIds={highlightIds} />}
 
       {/* HUD — title, subtitle, count, disclaimer */}
-      <div style={{
+      <div id="ansem-hud" style={{
         position: 'absolute', left: 'clamp(16px,3vw,34px)', top: 'clamp(14px,3vh,26px)',
         pointerEvents: 'none', zIndex: 3, textShadow: '0 0 20px rgba(0,0,0,.95)',
       }}>
