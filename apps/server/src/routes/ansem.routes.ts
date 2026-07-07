@@ -167,6 +167,34 @@ async function higgsfieldTts(
   return { audioUrl };
 }
 
+// ---- ElevenLabs TTS (primary; turbo model, ~1-3s → no text↔voice lag) ---- //
+//
+// One synchronous call returns the full mp3 bytes (unlike Higgsfield's ~15s async job),
+// which we stream straight back to the browser as audio/mpeg. Voice defaults to "Brian"
+// (deep, resonant, american); tune via ELEVENLABS_VOICE_ID / _MODEL.
+async function elevenLabsTts(text: string, signal: AbortSignal): Promise<Buffer> {
+  const el = config.elevenlabs;
+  if (!el.apiKey) throw new Error("voice_not_configured");
+  const res = await fetch(
+    `https://api.elevenlabs.io/v1/text-to-speech/${el.voiceId}?output_format=mp3_44100_128`,
+    {
+      method: "POST",
+      headers: { "xi-api-key": el.apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text,
+        model_id: el.model,
+        voice_settings: { stability: 0.4, similarity_boost: 0.75, style: 0.25, use_speaker_boost: true },
+      }),
+      signal,
+    },
+  );
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`elevenlabs_failed:${res.status}:${body.slice(0, 200)}`);
+  }
+  return Buffer.from(await res.arrayBuffer());
+}
+
 // ---- System prompts ---- //
 
 const INTERPRET_PROMPT = `You extract search queries from a user's question directed at Ansem (@blknoiz06), a crypto trader.
@@ -648,9 +676,11 @@ export function ansemRoutes(): Router {
       return;
     }
 
-    // Fail cleanly + cheaply when the voice key isn't set — the frontend falls back to a
-    // synthetic mouth animation, so this must be a fast 501, never a 500.
-    if (!config.higgsfield.apiKey) {
+    // Fail cleanly + cheaply when no voice provider is configured — the frontend falls back
+    // to a synthetic mouth animation, so this must be a fast 501, never a 500.
+    const useEleven = !!config.elevenlabs.apiKey;                                   // primary: ~1-3s, streamed bytes
+    const useHiggs = !!config.higgsfield.apiKey && !!config.higgsfield.apiSecret;   // fallback: ~15s, returns a URL
+    if (!useEleven && !useHiggs) {
       res.status(501).json({ error: "voice_not_configured" });
       return;
     }
@@ -670,9 +700,19 @@ export function ansemRoutes(): Router {
     const timeout = setTimeout(() => abortController.abort(), 30000);
 
     try {
-      const { audioUrl } = await higgsfieldTts(clean, abortController.signal, 30000);
-      clearTimeout(timeout);
-      res.json({ audio_url: audioUrl });
+      if (useEleven) {
+        // ElevenLabs → mp3 bytes streamed straight back (no CDN hop, no ~15s wait).
+        const audio = await elevenLabsTts(clean, abortController.signal);
+        clearTimeout(timeout);
+        if (res.headersSent) return;
+        res.setHeader("Content-Type", "audio/mpeg");
+        res.setHeader("Cache-Control", "no-store");
+        res.send(audio);
+      } else {
+        const { audioUrl } = await higgsfieldTts(clean, abortController.signal, 30000);
+        clearTimeout(timeout);
+        res.json({ audio_url: audioUrl });
+      }
     } catch (err: any) {
       clearTimeout(timeout);
       if (abortController.signal.aborted || err?.message === "client_disconnected") {
