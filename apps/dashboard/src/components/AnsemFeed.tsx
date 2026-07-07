@@ -44,6 +44,19 @@ export function AnsemFeed() {
   const [freshIds, setFreshIds] = useState<Set<string>>(new Set());
   // how many new posts the latest poll surfaced — drives the header "+N new" burst + dot ping
   const [burst, setBurst] = useState(0);
+  // Dock just below the HUD's REAL bottom — the "not financial advice" disclaimer wraps to
+  // two lines on narrow viewports, so a fixed top would overlap it. Measured, resize-aware.
+  const [topPx, setTopPx] = useState<number | null>(null);
+  useEffect(() => {
+    const measure = () => {
+      const hud = document.getElementById('ansem-hud');
+      setTopPx(hud ? Math.round(hud.getBoundingClientRect().bottom + 20) : null);
+    };
+    measure();
+    const t = window.setTimeout(measure, 350); // re-measure once fonts/layout settle
+    window.addEventListener('resize', measure);
+    return () => { window.removeEventListener('resize', measure); window.clearTimeout(t); };
+  }, []);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -91,7 +104,7 @@ export function AnsemFeed() {
     return (
       <div
         style={{
-          position: 'fixed', left: 'clamp(16px,3vw,34px)', top: 'clamp(182px,25vh,206px)', zIndex: 30,
+          position: 'fixed', left: 'clamp(16px,3vw,34px)', top: topPx != null ? topPx : 'clamp(182px,25vh,206px)', zIndex: 30,
           padding: '7px 12px', borderRadius: 999,
           background: 'rgba(2,12,7,.7)', border: '1px solid rgba(72,224,122,.18)',
           fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
@@ -123,7 +136,7 @@ export function AnsemFeed() {
 
       <div
         style={{
-          position: 'fixed', left: 'clamp(16px,3vw,34px)', top: 'clamp(182px,25vh,206px)', zIndex: 30,
+          position: 'fixed', left: 'clamp(16px,3vw,34px)', top: topPx != null ? topPx : 'clamp(182px,25vh,206px)', zIndex: 30,
           width: open ? 'min(320px, calc(100vw - 32px))' : 'auto',
           maxHeight: 'min(52vh, 500px)',
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
