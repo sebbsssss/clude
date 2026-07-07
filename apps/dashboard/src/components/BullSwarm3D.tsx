@@ -147,44 +147,55 @@ export function BullSwarm3D({ nodes, highlightIds, onHover }: Props) {
     raycaster.params.Mesh = { threshold: 0 } as any;
     const mouse = new THREE.Vector2();
     let hoverId: number | null = null;
-    const pickAt = (cx: number, cy: number): BullNode | null => {
+    let hoverIdx = -1;                        // instance index of the hovered node (for sticky re-projection)
+    const projV = new THREE.Vector3();
+    // Screen position of a particle (null if behind the camera).
+    const screenPos = (i: number): { x: number; y: number } | null => {
+      projV.copy(positions[i]).project(camera);
+      if (projV.z > 1) return null;
+      const rect = container.getBoundingClientRect();
+      return { x: rect.left + ((projV.x + 1) / 2) * rect.width, y: rect.top + ((1 - projV.y) / 2) * rect.height };
+    };
+    // MAGNET pick: exact raycast first, else the nearest DATA node within maxPx on
+    // screen. The tetrahedra are ~2px — nobody should need pixel-perfect aim, and
+    // filler particles (no tweet) are never eligible, so aiming at the swarm always
+    // lands on something readable when a real node is nearby.
+    const pickNearIdx = (cx: number, cy: number, maxPx: number): number => {
       const rect = container.getBoundingClientRect();
       mouse.x = ((cx - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((cy - rect.top) / rect.height) * 2 + 1;
       raycaster.setFromCamera(mouse, camera);
       const hits = raycaster.intersectObject(mesh);
-      const nlen = nodesRef.current.length;
-      if (hits.length && hits[0].instanceId !== undefined && hits[0].instanceId < nlen) {
-        return nodesRef.current[hits[0].instanceId];
-      }
-      return null;
-    };
-    // Finger-friendly pick: exact raycast first, else nearest data node within ~32px
-    // on screen (tetrahedra are far too small to tap precisely).
-    const pickNear = (cx: number, cy: number, maxPx = 32): BullNode | null => {
-      const direct = pickAt(cx, cy);
-      if (direct) return direct;
-      const rect = container.getBoundingClientRect();
-      const v = new THREE.Vector3();
       const nlen = Math.min(nodesRef.current.length, count);
-      let best: BullNode | null = null, bd = maxPx * maxPx;
+      if (hits.length && hits[0].instanceId !== undefined && hits[0].instanceId < nlen) {
+        return hits[0].instanceId;
+      }
+      let best = -1, bd = maxPx * maxPx;
       for (let i = 0; i < nlen; i++) {
-        v.copy(positions[i]).project(camera);
-        if (v.z > 1) continue;
-        const sx = rect.left + ((v.x + 1) / 2) * rect.width;
-        const sy = rect.top + ((1 - v.y) / 2) * rect.height;
-        const d = (sx - cx) ** 2 + (sy - cy) ** 2;
-        if (d < bd) { bd = d; best = nodesRef.current[i]; }
+        const p = screenPos(i);
+        if (!p) continue;
+        const d = (p.x - cx) ** 2 + (p.y - cy) ** 2;
+        if (d < bd) { bd = d; best = i; }
       }
       return best;
     };
     let lastTouchT = 0;   // browsers fire synthetic mouse events after touch — don't let them clear a tapped tooltip
     const onMove = (e: MouseEvent) => {
       if (performance.now() - lastTouchT < 700) return;
-      const node = pickAt(e.clientX, e.clientY);
-      hoverId = node ? node.id : null;
-      container.style.cursor = node ? 'pointer' : 'grab';
-      onHover?.(node, e.clientX, e.clientY);
+      // STICKY hover: nodes drift — once caught, keep the node while the pointer
+      // stays within ~48px of it, instead of re-picking (and flickering) every move.
+      if (hoverIdx >= 0 && hoverIdx < Math.min(nodesRef.current.length, count)) {
+        const p = screenPos(hoverIdx);
+        if (p && (p.x - e.clientX) ** 2 + (p.y - e.clientY) ** 2 < 48 * 48) {
+          onHover?.(nodesRef.current[hoverIdx], e.clientX, e.clientY);
+          return;
+        }
+      }
+      const idx = pickNearIdx(e.clientX, e.clientY, 28);
+      hoverIdx = idx;
+      hoverId = idx >= 0 ? nodesRef.current[idx].id : null;
+      container.style.cursor = idx >= 0 ? 'pointer' : 'grab';
+      onHover?.(idx >= 0 ? nodesRef.current[idx] : null, e.clientX, e.clientY);
     };
     container.addEventListener('mousemove', onMove);
 
@@ -239,9 +250,10 @@ export function BullSwarm3D({ nodes, highlightIds, onHover }: Props) {
       lastTouchT = performance.now();
       // a quick, still touch = a TAP → read the node (or clear the tooltip on empty space)
       if (touchMode === 1 && !tapMoved && performance.now() - tapT < 650) {
-        const node = pickNear(tapX, tapY);
-        hoverId = node ? node.id : null;                // pauses the auto-rotate while reading
-        onHover?.(node, tapX, tapY);
+        const idx = pickNearIdx(tapX, tapY, 44);        // finger-sized magnet radius
+        hoverIdx = idx;
+        hoverId = idx >= 0 ? nodesRef.current[idx].id : null;   // pauses the auto-rotate while reading
+        onHover?.(idx >= 0 ? nodesRef.current[idx] : null, tapX, tapY);
       }
       if (e.touches.length === 0) touchMode = 0;
       else if (e.touches.length === 1) { touchMode = 1; tX = e.touches[0].clientX; tY = e.touches[0].clientY; tapMoved = true; }
@@ -274,7 +286,8 @@ export function BullSwarm3D({ nodes, highlightIds, onHover }: Props) {
         const node = i < nlen ? nodesRef.current[i] : null;
         const isHl = node ? (hasHl && hl.has(node.id)) : false;
         const isHover = node ? node.id === hoverId : false;
-        const s = (i < 2 ? 2.4 : 1) * (isHl ? 2.6 : isHover ? 2.2 : 1);
+        // data nodes render bigger than filler so what you aim at IS a readable tweet
+        const s = (i < 2 ? 2.4 : node ? 1.35 : 0.85) * (isHl ? 2.6 : isHover ? 2.2 : 1);
         dummy.scale.setScalar(s);
         dummy.updateMatrix();
         mesh.setMatrixAt(i, dummy.matrix);
