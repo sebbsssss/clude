@@ -48,6 +48,22 @@ export const ansemApi = {
     return res.json();
   },
 
+  /** On-chain live-stream log: sha256 hashes of ingested posts + their Solana memo txs. */
+  async getAttestations(): Promise<{
+    enabled: boolean;
+    wallet: string | null;
+    pending: number;
+    attestations: Array<{
+      sig: string;
+      ts: number;
+      hashes: Array<{ hash: string; tweetId: string; handle: string; ts: string }>;
+    }>;
+  }> {
+    const res = await fetch(`${API_BASE}/api/ansem/attestations`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
   /**
    * "$ANSEM LIVE" ranked social feed. Returns { enabled:false } when the server
    * has no X_SEARCH_BEARER configured — the caller hides the panel in that case.

@@ -1101,6 +1101,28 @@ export function AnsemExplore() {
   const [highlightIds, setHighlightIds] = useState<Set<number>>(new Set());
   const [bullTip, setBullTip] = useState<{ text: string; x: number; y: number } | null>(null);
   const [nodePopup, setNodePopup] = useState<BullNode | null>(null);
+  // live-stream affordances: joined-count + transient toasts + the on-chain log modal
+  const [liveJoined, setLiveJoined] = useState(0);
+  const [toasts, setToasts] = useState<Array<{ id: number; text: string }>>([]);
+  const toastSeq = useRef(0);
+  const [chainOpen, setChainOpen] = useState(false);
+  const [chain, setChain] = useState<Awaited<ReturnType<typeof ansemApi.getAttestations>> | null>(null);
+  useEffect(() => {
+    if (!chainOpen) return;
+    let stop = false;
+    ansemApi.getAttestations().then((d) => { if (!stop) setChain(d); }).catch(() => { if (!stop) setChain(null); });
+    return () => { stop = true; };
+  }, [chainOpen]);
+  const handleLiveJoin = useCallback((posts: BullNode[]) => {
+    setLiveJoined((c) => c + posts.length);
+    posts.slice(0, 3).forEach((p, i) => {
+      const id = ++toastSeq.current;
+      window.setTimeout(() => {
+        setToasts((ts) => [...ts, { id, text: `@${p.handle || 'anon'} joined the constellation` }]);
+        window.setTimeout(() => setToasts((ts) => ts.filter((x) => x.id !== id)), 4600);
+      }, i * 900);
+    });
+  }, []);
   const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
 
   useEffect(() => {
@@ -1119,7 +1141,96 @@ export function AnsemExplore() {
           highlightIds={highlightIds}
           onHover={(n, x, y) => setBullTip(n && n.content ? { text: n.content, x, y } : null)}
           onSelect={(n) => { setBullTip(null); setNodePopup(n); }}
+          onLiveJoin={handleLiveJoin}
         />
+      )}
+
+      {/* ── Fly-in toasts: a new post just joined the constellation ──────────── */}
+      {toasts.length > 0 && (
+        <div style={{ position: 'fixed', bottom: 96, left: '50%', transform: 'translateX(-50%)', zIndex: 45, display: 'flex', flexDirection: 'column', gap: 7, alignItems: 'center', pointerEvents: 'none' }}>
+          <style>{`@keyframes ansemToastIn { from { opacity:0; transform:translateY(12px) scale(.92); } to { opacity:1; transform:translateY(0) scale(1); } }`}</style>
+          {toasts.map((t) => (
+            <div key={t.id} style={{
+              padding: '8px 16px', borderRadius: 999, whiteSpace: 'nowrap',
+              background: 'rgba(3,18,10,.9)', border: '1px solid rgba(92,240,138,.4)', backdropFilter: 'blur(8px)',
+              color: '#c9f5d8', fontSize: 11.5, letterSpacing: '.05em',
+              fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
+              boxShadow: '0 8px 30px rgba(0,0,0,.5), 0 0 18px rgba(60,224,120,.15)',
+              animation: 'ansemToastIn .45s cubic-bezier(.2,.9,.3,1.2)',
+            }}>
+              ✦ {t.text}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── On-chain live-stream log — sha256 hashes committed via Solana memo ── */}
+      {chainOpen && (
+        <div
+          onClick={() => setChainOpen(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 70,
+            background: 'rgba(0,0,0,.62)', backdropFilter: 'blur(7px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: 'min(560px, 100%)', maxHeight: '76vh', overflowY: 'auto',
+              borderRadius: 18, padding: '18px 20px 16px',
+              border: '1px solid rgba(72,224,122,.42)',
+              background: 'linear-gradient(180deg, rgba(4,22,13,.97), rgba(2,12,7,.97))',
+              boxShadow: '0 30px 90px rgba(0,0,0,.75), 0 0 44px rgba(34,197,94,.14)',
+              fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
+              animation: 'ansemPopIn .26s cubic-bezier(.2,.9,.3,1.15)',
+            }}
+          >
+            <style>{`@keyframes ansemPopIn { from { opacity:0; transform:scale(.88) translateY(14px); } to { opacity:1; transform:scale(1) translateY(0); } }`}</style>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+              <span style={{ fontSize: 13, fontWeight: 800, letterSpacing: '.12em', color: '#eafff0' }}>⛓ ON-CHAIN LIVE-STREAM LOG</span>
+              <span style={{ flex: 1 }} />
+              <button onClick={() => setChainOpen(false)} aria-label="Close" style={{ width: 26, height: 26, borderRadius: 8, cursor: 'pointer', background: 'rgba(60,224,120,.08)', border: '1px solid rgba(72,224,122,.3)', color: '#93e8b2', fontSize: 13, fontFamily: 'inherit' }}>✕</button>
+            </div>
+            <div style={{ fontSize: 11, lineHeight: 1.6, color: '#5aa877', marginBottom: 14 }}>
+              every post streamed into the constellation is hashed (sha-256 of id:text) and the hashes are committed to
+              Solana as memo transactions{chain?.wallet ? <> from <span style={{ color: '#93e8b2' }}>{chain.wallet.slice(0, 4)}…{chain.wallet.slice(-4)}</span></> : null} — a public, verifiable record of what the bull has seen.
+            </div>
+            {!chain && <div style={{ fontSize: 11.5, color: 'rgba(147,232,178,.5)', padding: '10px 0' }}>loading…</div>}
+            {chain && !chain.enabled && (
+              <div style={{ fontSize: 11.5, color: 'rgba(147,232,178,.55)', padding: '10px 0' }}>
+                on-chain attestation is warming up — hashes will start committing as new posts stream in.
+              </div>
+            )}
+            {chain && chain.enabled && chain.attestations.length === 0 && (
+              <div style={{ fontSize: 11.5, color: 'rgba(147,232,178,.55)', padding: '10px 0' }}>
+                no commits yet this session — the next new posts to stream in will be hashed + committed.
+                {chain.pending > 0 ? ` (${chain.pending} pending)` : ''}
+              </div>
+            )}
+            {chain && chain.attestations.map((a) => (
+              <div key={a.sig} style={{ borderTop: '1px solid rgba(72,224,122,.14)', padding: '10px 0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 11 }}>
+                  <span style={{ color: 'rgba(147,232,178,.5)', fontVariantNumeric: 'tabular-nums' }}>{new Date(a.ts).toLocaleTimeString()}</span>
+                  <span style={{ color: '#5aa877' }}>{a.hashes.length} hash{a.hashes.length !== 1 ? 'es' : ''}</span>
+                  <span style={{ flex: 1 }} />
+                  <a href={`https://solscan.io/tx/${a.sig}`} target="_blank" rel="noopener noreferrer" style={{ color: '#5cf08a', textDecoration: 'none', letterSpacing: '.04em' }}>
+                    {a.sig.slice(0, 8)}…{a.sig.slice(-6)} ↗
+                  </a>
+                </div>
+                {a.hashes.map((h) => (
+                  <div key={h.hash} style={{ display: 'flex', gap: 10, marginTop: 5, fontSize: 10.5, color: 'rgba(147,232,178,.65)' }}>
+                    <span style={{ color: '#7fd8a0', flexShrink: 0 }}>@{h.handle}</span>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{h.hash}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+            <div style={{ marginTop: 12, fontSize: 9.5, color: 'rgba(147,232,178,.4)', letterSpacing: '.05em' }}>
+              log lists this server session · the chain record itself is permanent
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Node detail popup — click/tap a star ─────────────────────────────── */}
@@ -1221,6 +1332,23 @@ export function AnsemExplore() {
         </div>
         <div style={{ fontSize: 'clamp(10px,1.1vw,11.5px)', color: '#5aa877', marginTop: 6, letterSpacing: '.02em', maxWidth: 340 }}>
           AI clone — not the real person · <span style={{ color: '#3c6b52' }}>not financial advice</span>
+        </div>
+        {/* live-stream status — how content flows in + the on-chain proof */}
+        <style>{`@keyframes ansemHudPulse { 0%,100% { opacity:1; } 50% { opacity:.45; } }`}</style>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 10, pointerEvents: 'auto' }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#5cf08a', boxShadow: '0 0 8px #3ddc73', animation: 'ansemHudPulse 2s ease-in-out infinite', flexShrink: 0 }} />
+          <span style={{ fontSize: 'clamp(9.5px,1vw,11px)', letterSpacing: '.06em', color: '#5aa877' }}>
+            streaming the $ANSEM timeline{liveJoined > 0 ? ` · ${liveJoined} joined` : ''} ·
+          </span>
+          <button
+            onClick={() => setChainOpen(true)}
+            style={{
+              padding: '3px 9px', borderRadius: 999, cursor: 'pointer',
+              background: 'rgba(60,224,120,.08)', border: '1px solid rgba(72,224,122,.35)',
+              color: '#93e8b2', fontSize: 'clamp(9px,.95vw,10.5px)', letterSpacing: '.08em',
+              fontFamily: 'inherit', whiteSpace: 'nowrap',
+            }}
+          >⛓ hashes on solana</button>
         </div>
       </div>
 

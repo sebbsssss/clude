@@ -8,7 +8,9 @@
  *   POST /api/ansem/speak   — turn a reply's text into spoken audio (Higgsfield seed_audio TTS)
  */
 import { Router, Request, Response } from "express";
+import { createHash } from "crypto";
 import { withOwnerWallet } from "@clude/shared/core/owner-context";
+import { writeMemo, getBotWallet } from "@clude/shared/core/solana-client";
 import { recallMemories } from "@clude/brain/memory";
 import { checkRateLimit } from "@clude/shared/utils/rate-limit";
 import { getDb } from "@clude/shared/core/database";
@@ -417,8 +419,10 @@ function mapSearchPayload(payload: any): FeedTweet[] {
   return out;
 }
 
-/** Merge new tweets into the buffer, skipping near-duplicates of what's there. */
-function mergeIntoBuffer(fresh: FeedTweet[]): void {
+/** Merge new tweets into the buffer, skipping near-duplicates of what's there.
+ *  Returns the tweets that were actually added (the genuinely-new stream). */
+function mergeIntoBuffer(fresh: FeedTweet[]): FeedTweet[] {
+  const added: FeedTweet[] = [];
   for (const t of fresh) {
     if (feedBuffer.has(t.id)) continue;
     // near-duplicate check against existing buffered normals
@@ -433,6 +437,50 @@ function mergeIntoBuffer(fresh: FeedTweet[]): void {
     }
     if (dup) continue;
     feedBuffer.set(t.id, t);
+    added.push(t);
+  }
+  return added;
+}
+
+// ---- On-chain attestation: every live-ingested post is hashed and the hashes are ----
+// committed to Solana via SPL Memo txs from the bot wallet (writeMemo). Users can
+// verify the stream integrity at GET /api/ansem/attestations (hash + tx + solscan).
+interface AttestEntry { hash: string; tweetId: string; handle: string; ts: string }
+interface Attestation { sig: string; ts: number; hashes: AttestEntry[] }
+const ATTEST_ENABLED = process.env.ANSEM_ATTEST !== "false"; // on by default; needs BOT_WALLET_PRIVATE_KEY to actually land
+const attestations: Attestation[] = [];   // newest first; in-memory ring — the CHAIN is the durable record
+let attestQueue: AttestEntry[] = [];
+let attestBusy = false;
+
+function queueAttestations(added: FeedTweet[]): void {
+  if (!ATTEST_ENABLED || added.length === 0) return;
+  for (const t of added) {
+    const hash = createHash("sha256").update(`${t.id}:${t.text}`).digest("hex");
+    attestQueue.push({ hash, tweetId: t.id, handle: t.handle, ts: new Date().toISOString() });
+  }
+  if (attestQueue.length > 60) attestQueue = attestQueue.slice(-60); // bound the backlog
+  void flushAttestations();
+}
+
+/** Batch up to 6 hashes per memo tx (6×64 hex + prefix ≈ 420 bytes < the memo cap). */
+async function flushAttestations(): Promise<void> {
+  if (attestBusy || attestQueue.length === 0) return;
+  attestBusy = true;
+  try {
+    while (attestQueue.length > 0) {
+      const batch = attestQueue.slice(0, 6);
+      const memo = `ansem-live:v1:${batch.map((b) => b.hash).join(",")}`;
+      const sig = await writeMemo(memo);
+      if (!sig) return; // wallet not configured / tx failed — keep the queue, retry next poll
+      attestQueue = attestQueue.slice(batch.length);
+      attestations.unshift({ sig, ts: Date.now(), hashes: batch });
+      if (attestations.length > 100) attestations.length = 100;
+      log.info({ sig, n: batch.length }, "Ansem live hashes attested on-chain");
+    }
+  } catch (err) {
+    log.warn({ err }, "Ansem attestation failed (will retry next poll)");
+  } finally {
+    attestBusy = false;
   }
 }
 
@@ -466,7 +514,8 @@ async function pollFeed(): Promise<void> {
       const payload: any = await searchRes.json();
       const fresh = mapSearchPayload(payload);
       if (fresh.length > 0) {
-        mergeIntoBuffer(fresh);
+        const added = mergeIntoBuffer(fresh);
+        queueAttestations(added);   // hash the genuinely-new stream + commit to Solana (async)
         // advance the since_id anchor to the max id we've seen (BigInt-safe compare)
         const maxId = payload?.meta?.newest_id;
         if (maxId && (!feedNewestId || BigInt(maxId) > BigInt(feedNewestId))) {
@@ -735,6 +784,29 @@ export function ansemRoutes(): Router {
   //            | 200 { enabled:false, posts:[] }   (X_SEARCH_BEARER unset — hide panel)
   //            | 429 rate-limited
   //    Never 500; never exposes the bearer to the browser.
+  // ── GET /attestations — the on-chain log of live-stream hashes ──
+  //    Every ingested post's sha256(id:text) is committed to Solana via SPL Memo.
+  //    Contract: 200 { enabled, wallet, attestations:[{ sig, ts, hashes:[…] }] }
+  router.get("/attestations", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    const allowed = await checkRateLimit(`ansem-attest:${ip}`, 30, 1);
+    if (!allowed) {
+      res.status(429).json({ error: "Rate limited." });
+      return;
+    }
+    const wallet = ATTEST_ENABLED ? getBotWallet() : null;
+    res.json({
+      enabled: ATTEST_ENABLED && !!wallet,
+      wallet: wallet ? wallet.publicKey.toBase58() : null,
+      pending: attestQueue.length,
+      attestations: attestations.map((a) => ({
+        sig: a.sig,
+        ts: a.ts,
+        hashes: a.hashes.map((h) => ({ hash: h.hash, tweetId: h.tweetId, handle: h.handle, ts: h.ts })),
+      })),
+    });
+  });
+
   router.get("/feed", async (req: Request, res: Response) => {
     const ip = getClientIp(req);
     const allowed = await checkRateLimit(`ansem-feed:${ip}`, 30, 1);
