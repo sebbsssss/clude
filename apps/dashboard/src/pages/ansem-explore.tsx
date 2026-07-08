@@ -16,6 +16,7 @@ import { AvatarBull } from '../components/AvatarBull';
 import type { AvatarBullHandle } from '../components/AvatarBull';
 import { AnsemFeed } from '../components/AnsemFeed';
 import { BullSwarm3D } from '../components/BullSwarm3D';
+import type { BullNode } from '../components/BullSwarm3D';
 
 // ── Data fetching ───────────────────────────────────────────────────────────
 
@@ -1099,10 +1100,11 @@ export function AnsemExplore() {
   const { nodes, total, loading, error } = useAnsemData();
   const [highlightIds, setHighlightIds] = useState<Set<number>>(new Set());
   const [bullTip, setBullTip] = useState<{ text: string; x: number; y: number } | null>(null);
+  const [nodePopup, setNodePopup] = useState<BullNode | null>(null);
   const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
 
   useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setHighlightIds(new Set()); };
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setHighlightIds(new Set()); setNodePopup(null); } };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, []);
@@ -1116,7 +1118,76 @@ export function AnsemExplore() {
           nodes={nodes}
           highlightIds={highlightIds}
           onHover={(n, x, y) => setBullTip(n && n.content ? { text: n.content, x, y } : null)}
+          onSelect={(n) => { setBullTip(null); setNodePopup(n); }}
         />
+      )}
+
+      {/* ── Node detail popup — click/tap a star ─────────────────────────────── */}
+      {nodePopup && (
+        <div
+          onClick={() => setNodePopup(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 70,
+            background: 'rgba(0,0,0,.62)', backdropFilter: 'blur(7px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+          }}
+        >
+          <style>{`
+            @keyframes ansemPopIn { from { opacity:0; transform:scale(.88) translateY(14px); } to { opacity:1; transform:scale(1) translateY(0); } }
+            @keyframes ansemLivePulse { 0%,100% { opacity:1; box-shadow:0 0 0 0 rgba(92,240,138,.5); } 50% { opacity:.65; box-shadow:0 0 0 6px rgba(92,240,138,0); } }
+          `}</style>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: 'min(460px, 100%)', maxHeight: '72vh', overflowY: 'auto',
+              borderRadius: 18, padding: '18px 20px 16px',
+              border: '1px solid rgba(72,224,122,.42)',
+              background: 'linear-gradient(180deg, rgba(4,22,13,.97), rgba(2,12,7,.97))',
+              boxShadow: '0 30px 90px rgba(0,0,0,.75), 0 0 44px rgba(34,197,94,.14)',
+              fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
+              animation: 'ansemPopIn .26s cubic-bezier(.2,.9,.3,1.15)',
+            }}
+          >
+            {/* header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <span style={{
+                width: 9, height: 9, borderRadius: '50%', flexShrink: 0,
+                background: nodePopup.live ? '#5cf08a' : '#3ddc73',
+                boxShadow: nodePopup.live ? '0 0 12px #5cf08a' : 'none',
+                animation: nodePopup.live ? 'ansemLivePulse 2s ease-in-out infinite' : undefined,
+              }} />
+              <span style={{ flex: 1, fontSize: 10.5, letterSpacing: '.18em', textTransform: 'uppercase', color: '#7fd8a0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {nodePopup.live
+                  ? <>{nodePopup.name || 'live post'} <span style={{ color: 'rgba(147,232,178,.55)' }}>@{nodePopup.handle}</span> · <span style={{ color: '#5cf08a' }}>LIVE</span></>
+                  : <>memory node <span style={{ color: 'rgba(147,232,178,.45)' }}>· {(nodePopup.createdAt || '').slice(0, 10) || 'the $ANSEM archive'}</span></>}
+              </span>
+              <button
+                onClick={() => setNodePopup(null)}
+                aria-label="Close"
+                style={{
+                  flexShrink: 0, width: 26, height: 26, borderRadius: 8, cursor: 'pointer',
+                  background: 'rgba(60,224,120,.08)', border: '1px solid rgba(72,224,122,.3)',
+                  color: '#93e8b2', fontSize: 13, lineHeight: 1, fontFamily: 'inherit',
+                }}
+              >✕</button>
+            </div>
+            {/* tweet text */}
+            <div style={{ fontSize: 14.5, lineHeight: 1.65, color: '#eafff0', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+              {nodePopup.content}
+            </div>
+            {/* footer */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(72,224,122,.16)', fontSize: 11.5, color: '#7fd8a0' }}>
+              <span style={{ fontVariantNumeric: 'tabular-nums' }}>♥ {(nodePopup.likes || 0).toLocaleString()}</span>
+              {!nodePopup.live && nodePopup.type && <span style={{ color: 'rgba(147,232,178,.5)', textTransform: 'uppercase', letterSpacing: '.1em', fontSize: 9.5 }}>{nodePopup.type}</span>}
+              <span style={{ flex: 1 }} />
+              {nodePopup.live && nodePopup.url && (
+                <a href={nodePopup.url} target="_blank" rel="noopener noreferrer" style={{ color: '#5cf08a', textDecoration: 'none', letterSpacing: '.06em' }}>
+                  view on X ↗
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
       )}
       {bullTip && (
         <div style={{
