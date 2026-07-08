@@ -958,9 +958,20 @@ export function ansemRoutes(): Router {
     try {
       if (useXai || useEleven) {
         // xAI (primary when configured) or ElevenLabs → mp3 bytes straight back.
-        const audio = useXai
-          ? await xaiTts(clean, abortController.signal)
-          : await elevenLabsTts(clean, abortController.signal);
+        // xAI's newly-provisioned keys can intermittently 400 while access propagates,
+        // so fall back to ElevenLabs on any xAI failure — the voice never just dies.
+        let audio: Buffer;
+        if (useXai) {
+          try {
+            audio = await xaiTts(clean, abortController.signal);
+          } catch (xerr: any) {
+            if (abortController.signal.aborted || !useEleven) throw xerr;
+            log.warn({ err: xerr?.message }, "Ansem xAI TTS failed → falling back to ElevenLabs");
+            audio = await elevenLabsTts(clean, abortController.signal);
+          }
+        } else {
+          audio = await elevenLabsTts(clean, abortController.signal);
+        }
         clearTimeout(timeout);
         if (res.headersSent) return;
         res.setHeader("Content-Type", "audio/mpeg");
