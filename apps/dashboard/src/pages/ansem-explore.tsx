@@ -1509,11 +1509,12 @@ export function AnsemExplore() {
         position: 'absolute', left: 'clamp(16px,3vw,34px)', top: 'clamp(14px,3vh,26px)',
         pointerEvents: 'none', zIndex: 3, textShadow: '0 0 20px rgba(0,0,0,.95)',
       }}>
-        <div style={{ fontWeight: 800, fontSize: 'clamp(28px,4.6vw,44px)', letterSpacing: '.16em', color: '#eafff0', lineHeight: 1 }}>
-          $ANSEM
+        <div style={{ fontWeight: 800, fontSize: 'clamp(22px,3.5vw,38px)', letterSpacing: '.06em', color: '#eafff0', lineHeight: 1.05 }}>
+          $ANSEM <span style={{ color: 'rgba(226,250,235,.6)' }}>— The Black Bull</span>
         </div>
-        <div style={{ fontSize: 'clamp(11px,1.45vw,13.5px)', color: '#9fe0b8', marginTop: 11, letterSpacing: '.01em', lineHeight: 1.45 }}>
-          <span style={{ color: '#5cf08a', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{countLabel}</span> memories and growing. One community mind.
+        {/* the memory count is the biggest flex — 2x the rest of the HUD */}
+        <div style={{ fontSize: 'clamp(20px,2.8vw,27px)', color: '#c9efd8', marginTop: 14, letterSpacing: '.005em', lineHeight: 1.28, maxWidth: 480 }}>
+          <span style={{ color: '#5cf08a', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{countLabel}</span> memories and growing. <span style={{ color: '#9fe0b8' }}>One community mind.</span>
         </div>
         <div style={{ fontSize: 'clamp(10.5px,1.3vw,13px)', color: '#d3f2df', marginTop: 13, lineHeight: 1.55, letterSpacing: '.01em', maxWidth: 384 }}>
           The <span style={{ color: '#eafff0', fontWeight: 700 }}>$ANSEM</span> Black Bull movement made tangible.
