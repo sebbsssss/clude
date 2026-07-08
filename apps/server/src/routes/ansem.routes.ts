@@ -197,6 +197,31 @@ async function elevenLabsTts(text: string, signal: AbortSignal): Promise<Buffer>
   return Buffer.from(await res.arrayBuffer());
 }
 
+// xAI Grok TTS — the new flagship voices (default "zagan"). POST /v1/tts returns raw
+// audio/mpeg bytes by default (drop-in for the ElevenLabs path). Env-gated (XAI_API_KEY)
+// — read directly, not via config.ts, to stay clear of the config-drift merge trap.
+async function xaiTts(text: string, signal: AbortSignal): Promise<Buffer> {
+  const key = process.env.XAI_API_KEY;
+  if (!key) throw new Error("voice_not_configured");
+  const voiceId = process.env.XAI_VOICE_ID || "zagan";
+  const res = await fetch("https://api.x.ai/v1/tts", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text,
+      voice_id: voiceId,
+      language: process.env.XAI_VOICE_LANGUAGE || "en",
+      speed: parseFloat(process.env.XAI_VOICE_SPEED || "1.0"),
+    }),
+    signal,
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`xai_tts_failed:${res.status}:${body.slice(0, 200)}`);
+  }
+  return Buffer.from(await res.arrayBuffer());
+}
+
 // ---- System prompts ---- //
 
 const INTERPRET_PROMPT = `You extract search intent from a user's question directed at Ansem (@blknoiz06), a crypto trader.
@@ -908,9 +933,10 @@ export function ansemRoutes(): Router {
 
     // Fail cleanly + cheaply when no voice provider is configured — the frontend falls back
     // to a synthetic mouth animation, so this must be a fast 501, never a 500.
-    const useEleven = !!config.elevenlabs.apiKey;                                   // primary: ~1-3s, streamed bytes
-    const useHiggs = !!config.higgsfield.apiKey && !!config.higgsfield.apiSecret;   // fallback: ~15s, returns a URL
-    if (!useEleven && !useHiggs) {
+    const useXai = !!process.env.XAI_API_KEY;                                       // primary when set: xAI "zagan" flagship voice
+    const useEleven = !!config.elevenlabs.apiKey;                                   // else: ElevenLabs, ~1-3s streamed bytes
+    const useHiggs = !!config.higgsfield.apiKey && !!config.higgsfield.apiSecret;   // last: Higgsfield, ~15s, returns a URL
+    if (!useXai && !useEleven && !useHiggs) {
       res.status(501).json({ error: "voice_not_configured" });
       return;
     }
@@ -930,9 +956,11 @@ export function ansemRoutes(): Router {
     const timeout = setTimeout(() => abortController.abort(), 30000);
 
     try {
-      if (useEleven) {
-        // ElevenLabs → mp3 bytes streamed straight back (no CDN hop, no ~15s wait).
-        const audio = await elevenLabsTts(clean, abortController.signal);
+      if (useXai || useEleven) {
+        // xAI (primary when configured) or ElevenLabs → mp3 bytes straight back.
+        const audio = useXai
+          ? await xaiTts(clean, abortController.signal)
+          : await elevenLabsTts(clean, abortController.signal);
         clearTimeout(timeout);
         if (res.headersSent) return;
         res.setHeader("Content-Type", "audio/mpeg");
