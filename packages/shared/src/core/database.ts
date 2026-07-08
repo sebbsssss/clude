@@ -583,6 +583,40 @@ async function runBootDdl(db: SupabaseClient): Promise<void> {
           END IF;
         END $do$;
 
+        -- Semantic search across memory-level embeddings with metadata filtering (the always-on
+        -- recall vector lane). MIRROR of migration 028 / supabase-schema.sql — 8-arg filter_tags form.
+        CREATE OR REPLACE FUNCTION match_memories(
+          query_embedding vector(1024),
+          match_threshold float DEFAULT 0.3,
+          match_count int DEFAULT 10,
+          filter_types text[] DEFAULT NULL,
+          filter_user text DEFAULT NULL,
+          min_decay float DEFAULT 0.1,
+          filter_owner text DEFAULT NULL,
+          filter_tags text[] DEFAULT NULL
+        )
+        RETURNS TABLE (id bigint, similarity float)
+        LANGUAGE plpgsql AS $$
+        BEGIN
+          RETURN QUERY
+          SELECT m.id, (1 - (m.embedding <=> query_embedding))::float AS similarity
+          FROM memories m
+          WHERE m.embedding IS NOT NULL
+            AND m.decay_factor >= min_decay
+            AND (filter_types IS NULL OR m.memory_type = ANY(filter_types))
+            AND (filter_user IS NULL OR m.related_user = filter_user)
+            AND (
+      filter_owner IS NULL
+      OR (filter_owner = '__BOT_OWN__' AND m.owner_wallet IS NULL)
+      OR m.owner_wallet = filter_owner
+    )
+            AND (filter_tags IS NULL OR m.tags && filter_tags)
+            AND (1 - (m.embedding <=> query_embedding)) > match_threshold
+          ORDER BY m.embedding <=> query_embedding
+          LIMIT match_count;
+        END;
+        $$;
+
         -- Temporal-aware semantic search RPC (Exp 9)
         CREATE OR REPLACE FUNCTION match_memories_temporal(
           query_embedding vector(1024),
@@ -616,6 +650,41 @@ async function runBootDdl(db: SupabaseClient): Promise<void> {
             AND (start_date IS NULL OR COALESCE(m.event_date, m.created_at) >= start_date)
             AND (end_date IS NULL OR COALESCE(m.event_date, m.created_at) <= end_date)
           ORDER BY m.embedding <=> query_embedding
+          LIMIT match_count;
+        END;
+        $$;
+
+        -- Fragment-level semantic search with deduplication to parent memory. Returns the highest
+        -- similarity fragment per memory (the non-skipExpansion recall lane). MIRROR of
+        -- supabase-schema.sql — 6-arg migration-043 form; the 4-arg (migration 009) call still
+        -- resolves against it via parameter defaults, so a boot-provisioned box is never left on a
+        -- stale fragment signature.
+        CREATE OR REPLACE FUNCTION match_memory_fragments(
+          query_embedding vector(1024),
+          match_threshold float DEFAULT 0.3,
+          match_count int DEFAULT 10,
+          filter_owner text DEFAULT NULL,
+          min_decay float DEFAULT 0.0,
+          filter_types text[] DEFAULT NULL
+        )
+        RETURNS TABLE (memory_id bigint, max_similarity float)
+        LANGUAGE plpgsql AS $$
+        BEGIN
+          RETURN QUERY
+          SELECT f.memory_id, MAX((1 - (f.embedding <=> query_embedding))::float) AS max_similarity
+          FROM memory_fragments f
+          JOIN memories m ON m.id = f.memory_id
+          WHERE f.embedding IS NOT NULL
+            AND (1 - (f.embedding <=> query_embedding)) > match_threshold
+            AND m.decay_factor >= min_decay
+            AND (filter_types IS NULL OR m.memory_type = ANY(filter_types))
+            AND (
+      filter_owner IS NULL
+      OR (filter_owner = '__BOT_OWN__' AND m.owner_wallet IS NULL)
+      OR m.owner_wallet = filter_owner
+    )
+          GROUP BY f.memory_id
+          ORDER BY max_similarity DESC
           LIMIT match_count;
         END;
         $$;
@@ -912,6 +981,16 @@ const CORE_TABLES = [
 const CORE_RPC_PROBES: Array<{ name: string; args: Record<string, unknown> }> = [
   { name: 'get_linked_memories', args: { seed_ids: [], min_strength: 0.1, max_results: 1, filter_owner: null } },
   { name: 'bm25_search_memories', args: { search_query: '', match_count: 1, min_decay: 0.1, filter_owner: null } },
+  // Vector recall lanes (memory.ts recall). match_memories is the always-on memory-level lane;
+  // match_memory_fragments is the fragment lane (non-skipExpansion path). Both are silently absent
+  // from a stale boot blob, so probe them so the gap surfaces as drift instead of a dead lane.
+  // Vector-safe args (null embedding + match_count 0) make each a no-op read. filter_tags pins the
+  // migration-028 8-arg match_memories overload recall calls unconditionally (catches a pre-028 box
+  // where recall would break); the fragment probe stays the 4/6-arg common subset (min_decay +
+  // filter_types are opt-in via MEMORY_FRAGMENT_FILTERS) so it never false-drifts a pre-043 box
+  // still serving the migration-009 4-arg form.
+  { name: 'match_memories', args: { query_embedding: null, match_count: 0, filter_owner: null, filter_tags: null } },
+  { name: 'match_memory_fragments', args: { query_embedding: null, match_count: 0, filter_owner: null } },
   // Memory 3.0 C2: probe the outbox claim RPC so a table-without-RPC state (the §6 hazard) is
   // caught at boot as drift rather than silently never draining.
   { name: 'claim_memory_write_jobs', args: { p_limit: 0 } },
