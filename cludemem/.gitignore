@@ -1,0 +1,10 @@
+# Model binaries and training outputs — never commit these.
+# Corpora (*.jsonl) are handled by data/.gitignore (sample.jsonl whitelisted).
+*.gguf
+*.safetensors
+*.pt
+*.bin
+*-lora/
+checkpoints/
+runs/
+__pycache__/
