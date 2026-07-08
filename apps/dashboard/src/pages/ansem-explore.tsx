@@ -1514,8 +1514,8 @@ export function AnsemExplore() {
           $ANSEM{isNarrow ? <br /> : ' '}<span style={{ color: 'rgba(226,250,235,.6)' }}>{isNarrow ? 'The Black Bull' : '— The Black Bull'}</span>
         </div>
         {/* the memory count is the biggest flex — 2x the rest of the HUD */}
-        <div style={{ fontSize: 'clamp(20px,2.8vw,27px)', color: '#c9efd8', marginTop: 14, letterSpacing: '.005em', lineHeight: 1.28, maxWidth: 480 }}>
-          <span style={{ color: '#5cf08a', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{countLabel}</span> memories and growing. <span style={{ color: '#9fe0b8' }}>One community mind.</span>
+        <div style={{ fontSize: 'clamp(20px,2.8vw,27px)', color: '#c9efd8', marginTop: 14, letterSpacing: '.005em', lineHeight: 1.28, maxWidth: 540 }}>
+          <span style={{ color: '#5cf08a', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{countLabel}</span> memories and growing.<br /><span style={{ color: '#9fe0b8' }}>One community mind.</span>
         </div>
         <div style={{ fontSize: 'clamp(10.5px,1.3vw,13px)', color: '#d3f2df', marginTop: 13, lineHeight: 1.55, letterSpacing: '.01em', maxWidth: 384 }}>
           The <span style={{ color: '#eafff0', fontWeight: 700 }}>$ANSEM</span> Black Bull movement made tangible.
