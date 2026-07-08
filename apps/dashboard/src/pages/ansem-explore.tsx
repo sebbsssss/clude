@@ -837,8 +837,9 @@ function AnsemChat({
         userMsg.content,
         history,
         (chunk) => {
-          // first chunk → the clone is "speaking": animate the avatar
-          startTalking();
+          // NOTE: the avatar only animates when the real VOICE is playing (driven by the
+          // audio analyser in speak()) — NOT while the text is being generated. So we do
+          // NOT start the mouth here; the bull stays still until the voice actually speaks.
           contentRef.current += chunk;
           const now = performance.now();
           if (now - lastUpdateRef.current < 66) return;
@@ -1190,7 +1191,7 @@ export function AnsemExplore() {
     posts.slice(0, 3).forEach((p, i) => {
       const id = ++toastSeq.current;
       window.setTimeout(() => {
-        setToasts((ts) => [...ts, { id, text: `@${p.handle || 'anon'} joined the constellation` }]);
+        setToasts((ts) => [...ts, { id, text: `@${p.handle || 'anon'}'s memory added to the Black Bull brain` }]);
         window.setTimeout(() => setToasts((ts) => ts.filter((x) => x.id !== id)), 4600);
       }, i * 900);
     });
