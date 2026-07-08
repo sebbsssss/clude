@@ -484,6 +484,113 @@ async function flushAttestations(): Promise<void> {
   }
 }
 
+// ---- Node context: resolve a memory → its SOURCE X post + the post it replied to,
+// then synthesize a 1-2 sentence "context & relation" (what it means, who/what it's
+// about). Cached onto the memory (metadata.ctx) so the derived context becomes part of
+// the memory. Ansem's short replies ("grats G") are meaningless without the parent, so
+// we look up the reply target live via full-archive search + a tweet lookup. -----------
+const X_SEARCH_ALL_URL = "https://api.x.com/2/tweets/search/all";
+const X_TWEET_LOOKUP = "https://api.x.com/2/tweets";
+const ANSEM_HANDLE = "blknoiz06";
+
+interface CtxParent { handle: string; name: string; text: string }
+interface NodeContext { context: string; parent: CtxParent | null; url: string | null; replyHandle: string | null }
+
+const ctxNorm = (s: string) =>
+  (s || "").toLowerCase().replace(/https?:\/\/\S+/g, "").replace(/\s+/g, " ").trim();
+
+/** Leading @mentions of a tweet are its reply targets (X keeps them in the text). */
+function leadingMentions(text: string): string[] {
+  const m = (text || "").match(/^(?:@\w+\s+)+/);
+  return m ? m[0].trim().split(/\s+/).map((h) => h.replace(/^@/, "")) : [];
+}
+
+async function ctxXGet(url: string): Promise<any | null> {
+  const bearer = config.x.searchBearer;
+  if (!bearer) return null;
+  countRead(1);
+  try {
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${bearer}` } });
+    if (!r.ok) { log.warn({ status: r.status }, "Ansem context: X call non-OK"); return null; }
+    return await r.json();
+  } catch (err) { log.warn({ err }, "Ansem context: X call threw"); return null; }
+}
+
+/** Find Ansem's own tweet (id + the id of what it replied to/quoted) that matches `text`. */
+async function resolveAnsemTweet(text: string): Promise<{ id: string; parentId: string | null } | null> {
+  const want = ctxNorm(text);
+  const mentions = leadingMentions(text);
+  const q = [`from:${ANSEM_HANDLE}`];
+  if (mentions[0]) {
+    q.push(`to:${mentions[0]}`);                 // reply → the `to:` filter is precise
+  } else {
+    const phrase = want.split(" ").filter((w) => !w.startsWith("@")).slice(0, 6).join(" ");
+    if (phrase.length < 4) return null;          // too generic to search safely
+    q.push(`"${phrase}"`);
+  }
+  const params = new URLSearchParams({ query: q.join(" "), max_results: "20", "tweet.fields": "referenced_tweets,text" });
+  const data = await ctxXGet(`${X_SEARCH_ALL_URL}?${params.toString()}`);
+  const results: any[] = data?.data || [];
+  if (!results.length) return null;
+  let best: any = null, score = -1;
+  for (const t of results) {
+    const n = ctxNorm(t.text);
+    const s = n === want ? 3 : n.includes(want) || want.includes(n) ? 2 : 0;
+    if (s > score) { score = s; best = t; }
+  }
+  if (!best || (score === 0 && !mentions[0])) return null;  // no confident match
+  const ref = (best.referenced_tweets || []).find((r: any) => r.type === "replied_to" || r.type === "quoted");
+  return { id: best.id, parentId: ref?.id || null };
+}
+
+async function fetchParentTweet(parentId: string): Promise<CtxParent | null> {
+  const data = await ctxXGet(`${X_TWEET_LOOKUP}/${parentId}?tweet.fields=text&expansions=author_id&user.fields=username,name`);
+  if (!data?.data) return null;
+  const u = (data.includes?.users || [])[0] || {};
+  return { handle: u.username || "", name: u.name || "", text: data.data.text || "" };
+}
+
+const CONTEXT_PROMPT = `You decode the CONTEXT of a post by crypto trader Ansem (@blknoiz06), the figure behind the $ANSEM token and movement.
+Given his post and (when available) the post he was replying to, write 1-2 tight sentences explaining what his post means and who/what it relates to — the way a sharp community member decodes it for a newcomer.
+Be concrete about the relation: who he's addressing and what they said or did that he's reacting to. If a parent post is given, ground the explanation in it. If it's not available, infer the topic from the text but do not invent specific names or claims. Never give financial advice or price predictions. No preamble — just the explanation, under 45 words.`;
+
+/** Build the full context card for a node (resolve source tweet, parent, LLM synthesis). */
+async function buildNodeContext(text: string, isLive: boolean, givenUrl?: string): Promise<NodeContext> {
+  const replyHandle = leadingMentions(text)[0] || null;
+  let url = givenUrl || null;
+  let parent: CtxParent | null = null;
+
+  if (!isLive && !dailyCapExceeded()) {
+    const found = await resolveAnsemTweet(text).catch(() => null);
+    if (found) {
+      url = `https://x.com/${ANSEM_HANDLE}/status/${found.id}`;
+      if (found.parentId) parent = await fetchParentTweet(found.parentId).catch(() => null);
+    }
+  }
+  if (!url && !isLive) {
+    const phrase = ctxNorm(text).split(" ").filter((w) => !w.startsWith("@")).slice(0, 6).join(" ");
+    url = `https://x.com/search?q=${encodeURIComponent(`from:${ANSEM_HANDLE} ${phrase}`)}&f=live`;
+  }
+
+  let context = "";
+  const userMsg = isLive
+    ? `A community post about $ANSEM:\n"${text}"\n\nExplain in one sentence what it's expressing about $ANSEM.`
+    : `Ansem's post:\n"${text}"` +
+      (parent ? `\n\nHe was replying to @${parent.handle} (${parent.name}), who posted:\n"${parent.text}"`
+        : replyHandle ? `\n\n(This is a reply to @${replyHandle}; the parent post isn't available.)` : "");
+  try {
+    context = (await generateOpenRouterResponse({
+      systemPrompt: CONTEXT_PROMPT,
+      messages: [{ role: "user", content: userMsg }],
+      model: OPENROUTER_MODELS["claude-haiku-4.5"],
+      maxTokens: 120,
+      temperature: 0.3,
+    })).trim();
+  } catch (err) { log.warn({ err }, "Ansem context: LLM synthesis failed"); }
+
+  return { context, parent, url, replyHandle };
+}
+
 /**
  * On-demand poll: pull new posts since the newest buffered id, and every ~5min
  * refresh engagement on the top-50 buffered ids. Best-effort — swallows errors
@@ -805,6 +912,51 @@ export function ansemRoutes(): Router {
         hashes: a.hashes.map((h) => ({ hash: h.hash, tweetId: h.tweetId, handle: h.handle, ts: h.ts })),
       })),
     });
+  });
+
+  // ── POST /context — derive & cache the context/relation for a clicked node ──
+  //    Body: { id?, text, live?, url? }. Returns { context, parent, url, replyHandle }.
+  //    Memory nodes: resolves the source X post + the post Ansem replied to, then an
+  //    LLM explains the relation; the result is cached onto the memory (metadata.ctx).
+  router.post("/context", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (!(await checkRateLimit(`ansem-context:${ip}`, 20, 1))) {
+      res.status(429).json({ error: "Rate limited." });
+      return;
+    }
+    const id = Number(req.body?.id);
+    const text = String(req.body?.text || "").slice(0, 1500);
+    const isLive = !!req.body?.live;
+    const givenUrl = req.body?.url ? String(req.body.url) : undefined;
+    if (!text.trim()) { res.status(400).json({ error: "text required" }); return; }
+
+    const db = getDb();
+    // All DB access is scoped to Ansem's own memories — the id is client-supplied, so
+    // never let it read/write an arbitrary memory row.
+    const scoped = () =>
+      db.from("memories").select("metadata").eq("id", id).eq("owner_wallet", ANSEM_WALLET).in("source", ANSEM_SOURCES);
+    // cache hit (memory nodes) — context is stored on the memory itself
+    if (!isLive && Number.isFinite(id)) {
+      try {
+        const { data: row } = await scoped().maybeSingle();
+        const cached = (row?.metadata as any)?.ctx;
+        if (cached?.context) { res.json(cached); return; }
+      } catch { /* fall through to compute */ }
+    }
+
+    const payload = await buildNodeContext(text, isLive, givenUrl);
+
+    // persist onto the memory so the derived context is part of the memory (+ caches it)
+    if (!isLive && Number.isFinite(id) && payload.context) {
+      try {
+        const { data: row } = await scoped().maybeSingle();
+        if (row) {
+          const md = { ...((row.metadata as any) || {}), ctx: payload };
+          await db.from("memories").update({ metadata: md }).eq("id", id).eq("owner_wallet", ANSEM_WALLET);
+        }
+      } catch (err) { log.warn({ err }, "Ansem context: cache write failed"); }
+    }
+    res.json(payload);
   });
 
   router.get("/feed", async (req: Request, res: Response) => {

@@ -1101,6 +1101,22 @@ export function AnsemExplore() {
   const [highlightIds, setHighlightIds] = useState<Set<number>>(new Set());
   const [bullTip, setBullTip] = useState<{ text: string; x: number; y: number } | null>(null);
   const [nodePopup, setNodePopup] = useState<BullNode | null>(null);
+  // derived context/relation for the open node (its source X post + what it replied to)
+  const [nodeCtx, setNodeCtx] = useState<{ loading: boolean; context: string; parent: { handle: string; name: string; text: string } | null; url: string | null; replyHandle: string | null } | null>(null);
+  useEffect(() => {
+    if (!nodePopup) { setNodeCtx(null); return; }
+    let stop = false;
+    setNodeCtx({ loading: true, context: '', parent: null, url: nodePopup.url || null, replyHandle: null });
+    ansemApi.getNodeContext({
+      id: nodePopup.id > 0 ? nodePopup.id : undefined,   // live nodes have synthetic negative ids
+      text: nodePopup.content || '',
+      live: !!nodePopup.live,
+      url: nodePopup.url,
+    })
+      .then((d) => { if (!stop) setNodeCtx({ loading: false, context: d.context, parent: d.parent, url: d.url, replyHandle: d.replyHandle }); })
+      .catch(() => { if (!stop) setNodeCtx((c) => (c ? { ...c, loading: false } : null)); });
+    return () => { stop = true; };
+  }, [nodePopup]);
   // live-stream affordances: joined-count + transient toasts + the on-chain log modal
   const [liveJoined, setLiveJoined] = useState(0);
   const [toasts, setToasts] = useState<Array<{ id: number; text: string }>>([]);
@@ -1294,17 +1310,48 @@ export function AnsemExplore() {
                 }}
               >✕</button>
             </div>
+            {/* replying-to line (shows immediately from the leading @mention) */}
+            {(() => {
+              const rh = nodeCtx?.replyHandle || (nodePopup.content?.match(/^@(\w+)/)?.[1] ?? null);
+              return rh ? (
+                <div style={{ fontSize: 11, color: '#7fd8a0', marginBottom: 8, letterSpacing: '.02em' }}>
+                  ↩ replying to <span style={{ color: '#5cf08a' }}>@{rh}</span>
+                </div>
+              ) : null;
+            })()}
             {/* tweet text */}
             <div style={{ fontSize: 14.5, lineHeight: 1.65, color: '#eafff0', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
               {nodePopup.content}
+            </div>
+            {/* derived context & relation */}
+            <div style={{ marginTop: 14, padding: '11px 13px', borderRadius: 12, background: 'rgba(60,224,120,.06)', border: '1px solid rgba(72,224,122,.18)' }}>
+              <div style={{ fontSize: 9.5, letterSpacing: '.18em', textTransform: 'uppercase', color: '#5aa877', marginBottom: 7 }}>
+                ✦ context &amp; relation
+              </div>
+              {(!nodeCtx || nodeCtx.loading) ? (
+                <div style={{ fontSize: 12, color: 'rgba(147,232,178,.5)', animation: 'ansemHudPulse 1.4s ease-in-out infinite' }}>
+                  drawing context…
+                </div>
+              ) : (nodeCtx.context || nodeCtx.parent) ? (
+                <>
+                  {nodeCtx.context && <div style={{ fontSize: 12.5, lineHeight: 1.55, color: '#cdeed8' }}>{nodeCtx.context}</div>}
+                  {nodeCtx.parent && (
+                    <div style={{ marginTop: nodeCtx.context ? 9 : 0, paddingLeft: 9, borderLeft: '2px solid rgba(72,224,122,.3)', fontSize: 11, lineHeight: 1.5, color: 'rgba(147,232,178,.75)' }}>
+                      <span style={{ color: '#7fd8a0' }}>↳ @{nodeCtx.parent.handle}</span>{nodeCtx.parent.name ? ` (${nodeCtx.parent.name})` : ''}: “{nodeCtx.parent.text.slice(0, 200)}{nodeCtx.parent.text.length > 200 ? '…' : ''}”
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={{ fontSize: 12, color: 'rgba(147,232,178,.45)' }}>context couldn’t be resolved for this post.</div>
+              )}
             </div>
             {/* footer */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(72,224,122,.16)', fontSize: 11.5, color: '#7fd8a0' }}>
               <span style={{ fontVariantNumeric: 'tabular-nums' }}>♥ {(nodePopup.likes || 0).toLocaleString()}</span>
               {!nodePopup.live && nodePopup.type && <span style={{ color: 'rgba(147,232,178,.5)', textTransform: 'uppercase', letterSpacing: '.1em', fontSize: 9.5 }}>{nodePopup.type}</span>}
               <span style={{ flex: 1 }} />
-              {nodePopup.live && nodePopup.url && (
-                <a href={nodePopup.url} target="_blank" rel="noopener noreferrer" style={{ color: '#5cf08a', textDecoration: 'none', letterSpacing: '.06em' }}>
+              {(nodeCtx?.url || nodePopup.url) && (
+                <a href={nodeCtx?.url || nodePopup.url} target="_blank" rel="noopener noreferrer" style={{ color: '#5cf08a', textDecoration: 'none', letterSpacing: '.06em' }}>
                   view on X ↗
                 </a>
               )}
