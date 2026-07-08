@@ -1509,8 +1509,9 @@ export function AnsemExplore() {
         position: 'absolute', left: 'clamp(16px,3vw,34px)', top: 'clamp(14px,3vh,26px)',
         pointerEvents: 'none', zIndex: 3, textShadow: '0 0 20px rgba(0,0,0,.95)',
       }}>
-        <div style={{ fontWeight: 800, fontSize: 'clamp(22px,3.5vw,38px)', letterSpacing: '.06em', color: '#eafff0', lineHeight: 1.05 }}>
-          $ANSEM <span style={{ color: 'rgba(226,250,235,.6)' }}>— The Black Bull</span>
+        {/* on mobile the bigger title stacks so its top line clears the top-right Clude logo */}
+        <div style={{ fontWeight: 800, fontSize: 'clamp(22px,3.5vw,38px)', letterSpacing: '.06em', color: '#eafff0', lineHeight: 1.12, maxWidth: isNarrow ? 'calc(100vw - 150px)' : undefined }}>
+          $ANSEM{isNarrow ? <br /> : ' '}<span style={{ color: 'rgba(226,250,235,.6)' }}>{isNarrow ? 'The Black Bull' : '— The Black Bull'}</span>
         </div>
         {/* the memory count is the biggest flex — 2x the rest of the HUD */}
         <div style={{ fontSize: 'clamp(20px,2.8vw,27px)', color: '#c9efd8', marginTop: 14, letterSpacing: '.005em', lineHeight: 1.28, maxWidth: 480 }}>
