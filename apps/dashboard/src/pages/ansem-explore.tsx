@@ -1438,27 +1438,25 @@ export function AnsemExplore() {
         <div style={{ fontWeight: 800, fontSize: 'clamp(28px,4.6vw,44px)', letterSpacing: '.16em', color: '#eafff0', lineHeight: 1 }}>
           $ANSEM
         </div>
-        <div style={{ fontSize: 'clamp(10px,1.3vw,12.5px)', letterSpacing: '.2em', color: '#3ddc73', marginTop: 7, textTransform: 'uppercase' }}>
-          the black bull community clone
+        <div style={{ fontSize: 'clamp(11px,1.45vw,13.5px)', color: '#9fe0b8', marginTop: 11, letterSpacing: '.01em', lineHeight: 1.45 }}>
+          <span style={{ color: '#5cf08a', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{countLabel}</span> memories and growing. One community mind.
         </div>
-        <div style={{ fontSize: 'clamp(9.5px,1.1vw,11px)', letterSpacing: '.22em', color: '#7fd8a0', marginTop: 5, textTransform: 'uppercase' }}>
-          the movement · made tangible
+        <div style={{ fontSize: 'clamp(10.5px,1.3vw,13px)', color: '#d3f2df', marginTop: 13, lineHeight: 1.55, letterSpacing: '.01em', maxWidth: 384 }}>
+          The <span style={{ color: '#eafff0', fontWeight: 700 }}>$ANSEM</span> Black Bull movement made tangible.
         </div>
-        <div style={{ fontSize: 'clamp(10.5px,1.2vw,12px)', color: '#7fd8a0', marginTop: 13, letterSpacing: '.02em' }}>
-          <span style={{ color: '#5cf08a', fontVariantNumeric: 'tabular-nums' }}>{countLabel}</span> memories, one mind
+        <div style={{ fontSize: 'clamp(10px,1.2vw,12px)', color: '#8fd9ab', marginTop: 3, lineHeight: 1.55, letterSpacing: '.01em', maxWidth: 384 }}>
+          A living entity shaped by the posts, the believers, and the live timeline.
         </div>
-        <div style={{ fontSize: 'clamp(10px,1.15vw,12px)', color: '#8fd9ab', marginTop: 9, lineHeight: 1.5, letterSpacing: '.01em', maxWidth: 360 }}>
-          his posts, the believers, the live timeline — the $ANSEM movement distilled into one living entity you can speak to.
-        </div>
-        <div style={{ fontSize: 'clamp(9.5px,1.05vw,11px)', color: '#5aa877', marginTop: 8, letterSpacing: '.02em', maxWidth: 360 }}>
-          community-built AI clone · not the real Ansem · <span style={{ color: '#3c6b52' }}>not financial advice</span>
+        <div style={{ fontSize: 'clamp(9.5px,1.05vw,11.5px)', color: '#5aa877', marginTop: 12, lineHeight: 1.55, letterSpacing: '.02em', maxWidth: 384 }}>
+          Community built AI clone.<br />
+          Not the real Ansem. <span style={{ color: '#3c6b52' }}>Not financial advice.</span>
         </div>
         {/* live-stream status — how content flows in + the on-chain proof */}
         <style>{`@keyframes ansemHudPulse { 0%,100% { opacity:1; } 50% { opacity:.45; } }`}</style>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 10 }}>
           <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#5cf08a', boxShadow: '0 0 8px #3ddc73', animation: 'ansemHudPulse 2s ease-in-out infinite', flexShrink: 0 }} />
           <span style={{ fontSize: 'clamp(9.5px,1vw,11px)', letterSpacing: '.06em', color: '#5aa877' }}>
-            streaming the $ANSEM timeline live{liveJoined > 0 ? ` · ${liveJoined} joined` : ''}
+            Streaming the $ANSEM timeline live{liveJoined > 0 ? ` · ${liveJoined} joined` : ''}
           </span>
         </div>
       </div>
