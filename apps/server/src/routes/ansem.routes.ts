@@ -199,14 +199,16 @@ async function elevenLabsTts(text: string, signal: AbortSignal): Promise<Buffer>
 
 // ---- System prompts ---- //
 
-const INTERPRET_PROMPT = `You extract search queries from a user's question directed at Ansem (@blknoiz06), a crypto trader.
+const INTERPRET_PROMPT = `You extract search intent from a user's question directed at Ansem (@blknoiz06), a crypto trader.
 
-Given a question, output ONLY a raw JSON object with:
-- queries: array of 1-3 short search phrases to find relevant memories (focus on key topics, coins, market themes, concepts)
+Output ONLY a raw JSON object with:
+- queries: array of 1-3 short search phrases to find relevant memories (key topics, coins, market themes, concepts)
 - entities: array of proper nouns, ticker symbols, coin names, or key terms mentioned
+- liveContext: true ONLY when the question is about CURRENT or RECENT external events that an archive of his past posts wouldn't cover — "what's happening with X", "did you see the news about…", "thoughts on today's market / this pump / this event", a specific recent happening, or anything clearly time-sensitive. false for timeless questions about his philosophy, his past takes, or $ANSEM itself.
+- liveQuery: if liveContext is true, a concise X search query (2-6 words, the core topic/event, NO hashtags); otherwise "".
 
-Example input: "what do you think about solana?"
-Example output: {"queries":["solana thesis","solana ecosystem coins","sol price outlook"],"entities":["solana","SOL"]}
+Example: "what do you think about solana?" -> {"queries":["solana thesis","sol outlook"],"entities":["solana","SOL"],"liveContext":false,"liveQuery":""}
+Example: "did you see what happened with hyperliquid today?" -> {"queries":["hyperliquid","perp dex thesis"],"entities":["hyperliquid","HYPE"],"liveContext":true,"liveQuery":"hyperliquid"}
 
 Output ONLY the JSON. No markdown, no explanation.`;
 
@@ -221,13 +223,62 @@ Speak in his EXACT voice, grounded ONLY in the real memories provided:
 - occasional ALL-CAPS for hype ("LETS RIDE", "JOB NOT FINISHED").
 Ground every take in the retrieved memories below — do NOT invent positions he doesn't hold. BUT when the memories DO contain a specific answer to what's asked — his plans, positions, numbers, how something works (e.g. how the $ANSEM airdrops work, what he's building, who gets rewarded) — GIVE that real substance accurately in his voice. A real question you can actually answer from the memories deserves the real answer, not a generic one-liner; terseness is for reactions and banter, never for dodging something you actually know. If the memories genuinely don't cover it, stay in-character but general — don't invent specifics.`;
 
-function buildExplorePrompt(memories: any[], totalCount: number): string {
+// ---- Live X context: for questions about CURRENT/external events (flagged by the
+// interpret phase), pull what's happening on X right now — Ansem's OWN recent posts on
+// the topic (his actual current stance) + the top chatter — so the clone can react to
+// real-time events in his voice instead of saying "i don't have info on that". ----------
+interface LivePost { handle: string; text: string; likes: number; ansem: boolean }
+async function fetchLiveContext(query: string): Promise<LivePost[]> {
+  const bearer = config.x.searchBearer;
+  const q = (query || "").trim().slice(0, 80);
+  if (!bearer || !q || dailyCapExceeded()) return [];
+  const headers = { Authorization: `Bearer ${bearer}` };
+  const mkUrl = (query: string, max: number) =>
+    `${X_SEARCH_URL}?${new URLSearchParams({
+      query, max_results: String(max),
+      "tweet.fields": "public_metrics,created_at", expansions: "author_id", "user.fields": "username",
+    }).toString()}`;
+  const parse = (payload: any, ansem: boolean): LivePost[] => {
+    const users = new Map<string, string>();
+    for (const u of payload?.includes?.users || []) users.set(u.id, u.username);
+    return (payload?.data || []).map((t: any) => ({
+      handle: users.get(t.author_id) || "",
+      text: (t.text || "").replace(/https?:\/\/\S+/g, "").replace(/\s+/g, " ").trim(),
+      likes: t.public_metrics?.like_count || 0,
+      ansem,
+    }));
+  };
+  try {
+    const [his, chatter] = await Promise.all([
+      fetch(mkUrl(`from:blknoiz06 ${q} -is:retweet`, 10), { headers }).then((r) => (countRead(1), r.ok ? r.json() : null)).catch(() => null),
+      fetch(mkUrl(`${q} -is:retweet -is:reply lang:en`, 20), { headers }).then((r) => (countRead(1), r.ok ? r.json() : null)).catch(() => null),
+    ]);
+    const hisPosts = parse(his, true).slice(0, 4);
+    const chatterPosts = parse(chatter, false)
+      .filter((p) => p.handle.toLowerCase() !== "blknoiz06" && p.text.length > 12)
+      .sort((a, b) => b.likes - a.likes)
+      .slice(0, 6);
+    return [...hisPosts, ...chatterPosts];
+  } catch (err) { log.warn({ err }, "Ansem live-context fetch failed"); return []; }
+}
+
+function buildExplorePrompt(memories: any[], totalCount: number, livePosts: LivePost[] = []): string {
   const memoryContext = memories
     .map(
       (m) =>
         `[Memory #${m.id}] (${m.memory_type}, importance: ${m.importance?.toFixed(2) || "?"}) ${m.summary || m.content?.slice(0, 300)}`,
     )
     .join("\n");
+
+  const liveSection = livePosts.length
+    ? `
+
+The user is asking about something CURRENT. Here's what's on X RIGHT NOW (pulled live this second):
+<live_from_x>
+${livePosts.map((p) => (p.ansem ? `[ANSEM — his own recent post]: ${p.text.slice(0, 240)}` : `@${p.handle} (${p.likes} likes): ${p.text.slice(0, 200)}`)).join("\n")}
+</live_from_x>
+Answer the current question using this. Posts marked [ANSEM …] are his ACTUAL recent words — treat them as his real current stance and lead with them. For the rest: do NOT parrot them and do NOT fabricate a specific opinion he hasn't voiced — react to the event the way HE would, applying his framework (conditional + number-anchored takes, name the invalidation), his skepticism, and his humor. Same guardrails: no financial advice, no CAs, no shilling other coins.`
+    : "";
 
   return `${ANSEM_PERSONA}
 
@@ -236,6 +287,7 @@ You have access to ${memories.length} recalled memories (out of ${totalCount} to
 <recalled_memories>
 ${memoryContext}
 </recalled_memories>
+${liveSection}
 
 IMPORTANT: At the very end of your response, on a new line, output a JSON line starting with MEMORY_IDS: followed by an array of the memory IDs you referenced or found most relevant. Example:
 MEMORY_IDS: [123, 456, 789]
@@ -1018,6 +1070,8 @@ export function ansemRoutes(): Router {
     try {
       // ── Phase 1: Interpret the question ──
       let queries: string[] = [content];
+      let liveContext = false;
+      let liveQuery = "";
       try {
         const interpretResult = await generateOpenRouterResponse({
           systemPrompt: INTERPRET_PROMPT,
@@ -1033,10 +1087,17 @@ export function ansemRoutes(): Router {
           if (Array.isArray(parsed.queries) && parsed.queries.length > 0) {
             queries = parsed.queries;
           }
+          liveContext = parsed.liveContext === true;
+          liveQuery = typeof parsed.liveQuery === "string" ? parsed.liveQuery : "";
         }
       } catch (err) {
         log.warn({ err }, "Ansem interpret phase failed, using raw query");
       }
+
+      // Current-events question → pull live X context in parallel with recall.
+      const livePromise: Promise<LivePost[]> = liveContext
+        ? fetchLiveContext(liveQuery || content)
+        : Promise.resolve([]);
 
       // ── Phase 2: Recall — HIS OWN WORDS ONLY ──
       // The wallet also holds the 104K-tweet ansem-token community corpus, which
@@ -1073,13 +1134,15 @@ export function ansemRoutes(): Router {
         .eq("owner_wallet", ANSEM_WALLET)
         .in("source", ANSEM_SOURCES);
 
+      const livePosts = await livePromise;
+
       log.info(
-        { queries, recalled: memories.length, total: totalCount },
+        { queries, recalled: memories.length, total: totalCount, liveContext, livePosts: livePosts.length },
         "Ansem explore recall complete",
       );
 
       // ── Phase 3: Stream LLM response ──
-      const systemPrompt = buildExplorePrompt(memories, totalCount || 0);
+      const systemPrompt = buildExplorePrompt(memories, totalCount || 0, livePosts);
       const messages: Array<{ role: string; content: string }> = [
         { role: "system", content: systemPrompt },
       ];
