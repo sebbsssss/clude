@@ -428,7 +428,8 @@ export function BullSwarm3D({ nodes, highlightIds, onHover, onSelect, onLiveJoin
         if (isHl) { col.setHSL(0.44, 1, Math.min(1, 0.6 + 0.4 * tw)); }
         else if (isHover) { col.setHSL(0.4, 0.8, 0.85); }
         else {
-          if (hasHl) bright *= 0.25;          // dim the field when something's recalled
+          // Lights stay ON — a recall highlights nodes by brightening THEM (the isHl
+          // branch above), never by dimming the rest of the field.
           col.setHSL(0.4 - baseBright[i] * 0.06, 0.95, Math.min(0.94, 0.03 + bright * 0.9));
         }
         mesh.setColorAt(i, col);
