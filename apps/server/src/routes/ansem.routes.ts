@@ -904,10 +904,28 @@ function rankFeed(): Array<Omit<FeedTweet, "_norm">> {
   });
 }
 
+// ---- 24/7 background ingest ----
+// Keep the corpus growing (toward 1M) even with zero page traffic — poll the feed on a
+// server-side timer instead of only on-demand. pollFeed self-guards (concurrency + the
+// daily read cap), so this stays cheap (~2 X reads/poll, well under the cap). Kill with
+// ANSEM_FEED_TIMER=false; a no-op when there's no X_SEARCH_BEARER.
+let feedTimerStarted = false;
+function startFeedTimer(): void {
+  if (feedTimerStarted) return;
+  if (process.env.ANSEM_FEED_TIMER === "false") return;
+  if (!config.x.searchBearer) return;
+  feedTimerStarted = true;
+  const intervalMs = Math.max(30_000, config.x.ansemFeedIntervalMs);
+  setInterval(() => { void pollFeed(); }, intervalMs);
+  setTimeout(() => { void pollFeed(); }, 5_000); // first ingest shortly after boot
+  log.info({ intervalMs }, "Ansem feed timer started — 24/7 corpus ingest");
+}
+
 // ---- Route factory ---- //
 
 export function ansemRoutes(): Router {
   const router = Router();
+  startFeedTimer(); // begin round-the-clock ingest so the memory count climbs 24/7
 
   // ── GET /graph — Ansem memory graph (bull constellation) for 3D viz ──
   router.get("/graph", async (req: Request, res: Response) => {
