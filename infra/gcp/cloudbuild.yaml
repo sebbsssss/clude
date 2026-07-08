@@ -1,0 +1,44 @@
+# Cloud Build: build the root multi-stage Dockerfile and push to Artifact Registry.
+#
+# PRIVY_APP_ID is a BUILD ARG, not a runtime env: it is baked into the chat/dashboard
+# Vite bundles at build time (Dockerfile ARG PRIVY_APP_ID -> ENV VITE_PRIVY_APP_ID).
+# If it is set as a Cloud Run runtime env instead, browser auth silently breaks while
+# /health stays green. So it is passed here as a --substitutions value.
+#
+# Usage:
+#   gcloud builds submit --config infra/gcp/cloudbuild.yaml \
+#     --substitutions=_PRIVY_APP_ID=<privy-app-id>,SHORT_SHA=$(git rev-parse --short HEAD)
+#
+# (Cloud Build sets PROJECT_ID and, on trigger builds, SHORT_SHA automatically.)
+
+substitutions:
+  _REGION: us-central1
+  _REPO: clude          # Artifact Registry docker repo (create once, see runbook)
+  _IMAGE: cluude
+  _PRIVY_APP_ID: ""     # REQUIRED for the frontends to authenticate
+
+options:
+  # Native deps (better-sqlite3, keccak, sharp) compile in the builder stage; a
+  # bigger machine keeps the multi-stage build well under the timeout.
+  machineType: E2_HIGHCPU_8
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 2400s
+
+images:
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_IMAGE}:${SHORT_SHA}"
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_IMAGE}:latest"
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - "--build-arg"
+      - "PRIVY_APP_ID=${_PRIVY_APP_ID}"
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_IMAGE}:${SHORT_SHA}"
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_IMAGE}:latest"
+      - "-f"
+      - "Dockerfile"
+      - "."

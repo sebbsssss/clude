@@ -194,6 +194,51 @@ export const config = {
     queryApiKey: optional("EMBEDDING_QUERY_API_KEY", ""),
     queryModel: optional("EMBEDDING_QUERY_MODEL", ""),
   },
+  migration: {
+    /**
+     * Database backend that getDb() targets during the GCP parallel-run.
+     * 'supabase' (default, current live infra) | 'cloudsql' (PostgREST /
+     * self-hosted Supabase in front of Cloud SQL). Flip per-layer for the
+     * shadow-stack cutover; Supabase stays the source of truth until sunset.
+     */
+    dbTarget: optional("DB_TARGET", "supabase") as "supabase" | "cloudsql",
+    /** PostgREST endpoint for the Cloud SQL backend (used only when DB_TARGET=cloudsql). */
+    cloudsqlUrl: optional("CLOUDSQL_PGREST_URL", ""),
+    /** Service key for the Cloud SQL PostgREST backend (used only when DB_TARGET=cloudsql). */
+    cloudsqlServiceKey: optional("CLOUDSQL_SERVICE_KEY", ""),
+    /**
+     * Active embedding vector space for ingest + recall. 'voyage' (default,
+     * current corpus) | 'vertex' (shadow column, only after the LongMemEval gate
+     * passes). Separate from EMBEDDING_PROVIDER so the swap is A/B, not one-way.
+     */
+    embeddingActive: optional("EMBEDDING_ACTIVE", "voyage") as "voyage" | "vertex",
+    /**
+     * Whether THIS process runs the in-server singleton timers (recall canary,
+     * marketplace delivery poller, title-mint reconciliation). Default true =
+     * current Railway behavior. Set false on the Cloud Run server so exactly one
+     * owner (the worker) runs them and autoscaling never duplicates them.
+     */
+    runInProcessTimers: optional("RUN_INPROCESS_TIMERS", "true") === "true",
+  },
+  vertex: {
+    /**
+     * Vertex AI embedding backend (the GCP replacement for Voyage), used only when
+     * ingest/backfill/recall target the 'vertex' space (EMBEDDING_ACTIVE=vertex or an
+     * explicit generateEmbeddingForSpace('vertex') call). Separate from config.embedding
+     * so the Vertex space can be backfilled + A/B-gated while Voyage stays live.
+     */
+    project: optional("VERTEX_PROJECT", optional("GCP_PROJECT", "")),
+    location: optional("VERTEX_LOCATION", "us-central1"),
+    model: optional("VERTEX_EMBEDDING_MODEL", "gemini-embedding-001"),
+    /** Output dims — MRL-truncated to 1024 so vector(1024) columns + HNSW + match_* RPCs are unchanged. */
+    dimensions: parseInt(optional("VERTEX_EMBEDDING_DIMENSIONS", "1024"), 10),
+    /**
+     * Optional static OAuth token override (from `gcloud auth print-access-token`) for
+     * local dev / smoke tests. Empty in prod: Cloud Run mints a token from the attached
+     * service account via the metadata server (SDK-free), no static key stored.
+     */
+    accessToken: optional("VERTEX_ACCESS_TOKEN", ""),
+  },
   openrouter: {
     apiKey: optional("OPENROUTER_API_KEY", ""),
     model: optional("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct"),
