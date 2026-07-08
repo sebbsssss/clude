@@ -1,10 +1,35 @@
+import { createServer, Server } from 'http';
 import { config } from '@clude/shared/config';
 import { createChildLogger } from '@clude/shared/core/logger';
 
 const log = createChildLogger('workers');
 
+/**
+ * Minimal health server so the worker can run as a normal Cloud Run service.
+ * The worker is a loop process with no HTTP of its own, but Cloud Run requires the
+ * container to listen on $PORT to pass the startup/liveness probe. Uses the built-in
+ * http module (no dependency) and is harmless on Railway. Started FIRST in main() so
+ * the port opens before the slower init, letting the startup probe pass immediately.
+ */
+function startHealthServer(): Server {
+  const port = parseInt(process.env.PORT ?? '8080', 10);
+  const server = createServer((req, res) => {
+    if (req.url === '/health' || req.url === '/') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end('{"status":"ok"}');
+      return;
+    }
+    res.writeHead(404);
+    res.end();
+  });
+  server.listen(port, () => log.info({ port }, 'Worker health server listening'));
+  return server;
+}
+
 async function main(): Promise<void> {
   log.info('=== CLUDE WORKERS ===');
+
+  const healthServer = startHealthServer();
 
   // Initialize OpenRouter (required for inference in workers)
   if (config.openrouter.apiKey) {
@@ -76,6 +101,7 @@ async function main(): Promise<void> {
   const shutdown = () => {
     log.info('Shutting down workers...');
     stopAllWorkers();
+    healthServer.close();
     process.exit(0);
   };
 

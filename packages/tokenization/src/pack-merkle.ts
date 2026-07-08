@@ -139,3 +139,148 @@ export function verifyInclusion(root: string, proof: MerkleProof): boolean {
 
   return current === root;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// sha256-merkle-v2 (Memory 3.0 Track B1): CT-style domain separation.
+//
+// Two structural fixes over v1:
+//   1. Domain separation (RFC 6962): leaf node = sha256(0x00 || leafBytes),
+//      inner node = sha256(0x01 || left || right). An inner-node hash can
+//      never be replayed as a leaf (or vice versa) by construction, instead
+//      of by the statistical argument v1 relies on.
+//   2. Odd-count layers PROMOTE the last node unchanged instead of pairing it
+//      with a duplicate of itself. v1's duplication makes [A,B] and [A,B,B]
+//      commit to the SAME root (a pack could gain a duplicated record without
+//      changing its on-chain commitment); promotion makes tree size part of
+//      the structure, so those roots differ.
+//
+// v1 stays exported and frozen forever: packs that recorded
+// 'sha256-merkle-v1' verify under v1 rules for the lifetime of the format.
+// Verifiers dispatch on the recorded algorithm string.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const MERKLE_ALGORITHM_V2 = 'sha256-merkle-v2' as const;
+
+const LEAF_PREFIX = Buffer.from([0x00]);
+const INNER_PREFIX = Buffer.from([0x01]);
+
+function leafHashV2(leafHex: string): string {
+  return createHash('sha256')
+    .update(Buffer.concat([LEAF_PREFIX, Buffer.from(leafHex, 'hex')]))
+    .digest('hex');
+}
+
+function innerHashV2(left: string, right: string): string {
+  return createHash('sha256')
+    .update(Buffer.concat([INNER_PREFIX, Buffer.from(left, 'hex'), Buffer.from(right, 'hex')]))
+    .digest('hex');
+}
+
+export interface PackTreeV2 {
+  root: string;
+  /** Original caller-provided leaf hashes (content hashes), NOT the prefixed leaf nodes. */
+  leaves: string[];
+  depth: number;
+  algorithm: typeof MERKLE_ALGORITHM_V2;
+  /** Internal: level 0 = prefixed leaf nodes, top level = [root]. */
+  levels: string[][];
+}
+
+export interface MerkleProofV2 {
+  /** Original content hash; verification re-derives the prefixed leaf node. */
+  leaf: string;
+  leafIndex: number;
+  /** Total leaf count — lets verifiers cross-check against the on-chain memory_count. */
+  treeSize: number;
+  /**
+   * Sibling chain bottom-up. `side` is the SIBLING's position. Levels where
+   * the current node was promoted (odd tail) contribute no entry.
+   */
+  path: Array<{ hash: string; side: 'left' | 'right' }>;
+  algorithm: typeof MERKLE_ALGORITHM_V2;
+}
+
+/**
+ * Build a domain-separated Pack Merkle tree (sha256-merkle-v2).
+ *
+ * @throws if `leafHashes` is empty.
+ */
+export function buildPackTreeV2(leafHashes: string[]): PackTreeV2 {
+  if (leafHashes.length === 0) {
+    throw new Error('buildPackTreeV2: at least one leaf required');
+  }
+
+  const leafNodes = leafHashes.map(leafHashV2);
+  const levels: string[][] = [leafNodes];
+  let current = leafNodes;
+
+  while (current.length > 1) {
+    const next: string[] = [];
+    for (let i = 0; i < current.length; i += 2) {
+      if (i + 1 < current.length) {
+        next.push(innerHashV2(current[i]!, current[i + 1]!));
+      } else {
+        next.push(current[i]!); // odd tail: promote unchanged (no duplication)
+      }
+    }
+    levels.push(next);
+    current = next;
+  }
+
+  return {
+    root: current[0]!,
+    leaves: [...leafHashes],
+    depth: levels.length - 1,
+    algorithm: MERKLE_ALGORITHM_V2,
+    levels,
+  };
+}
+
+/**
+ * Produce a v2 inclusion proof for the leaf at `leafIndex`.
+ *
+ * @throws if `leafIndex` is out of range.
+ */
+export function inclusionProofV2(tree: PackTreeV2, leafIndex: number): MerkleProofV2 {
+  if (leafIndex < 0 || leafIndex >= tree.leaves.length) {
+    throw new Error(
+      `inclusionProofV2: leafIndex ${leafIndex} out of range (0..${tree.leaves.length - 1})`,
+    );
+  }
+
+  const path: Array<{ hash: string; side: 'left' | 'right' }> = [];
+  let index = leafIndex;
+
+  for (let level = 0; level < tree.depth; level++) {
+    const layer = tree.levels[level]!;
+    const isRightChild = index % 2 === 1;
+    const siblingIndex = isRightChild ? index - 1 : index + 1;
+    if (siblingIndex < layer.length) {
+      path.push({ hash: layer[siblingIndex]!, side: isRightChild ? 'left' : 'right' });
+    }
+    // else: promoted node — no hashing happened at this level, no path entry.
+    index = Math.floor(index / 2);
+  }
+
+  return {
+    leaf: tree.leaves[leafIndex]!,
+    leafIndex,
+    treeSize: tree.leaves.length,
+    path,
+    algorithm: MERKLE_ALGORITHM_V2,
+  };
+}
+
+/**
+ * Verify a v2 inclusion proof against a claimed root.
+ *
+ * Re-derives the prefixed leaf node from the original content hash, then
+ * folds the explicit-sided path with inner-node hashing.
+ */
+export function verifyInclusionV2(root: string, proof: MerkleProofV2): boolean {
+  let current = leafHashV2(proof.leaf);
+  for (const step of proof.path) {
+    current = step.side === 'left' ? innerHashV2(step.hash, current) : innerHashV2(current, step.hash);
+  }
+  return current === root;
+}

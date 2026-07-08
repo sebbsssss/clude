@@ -29,6 +29,13 @@ export {
   verifyInclusion,
   type PackTree,
   type MerkleProof,
+  // v2 (Memory 3.0 B1): CT-style domain separation + promotion (no duplicate-last).
+  MERKLE_ALGORITHM_V2,
+  buildPackTreeV2,
+  inclusionProofV2,
+  verifyInclusionV2,
+  type PackTreeV2,
+  type MerkleProofV2,
 } from './pack-merkle';
 
 export {

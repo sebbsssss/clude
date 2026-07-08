@@ -5,7 +5,9 @@ import { PrivyProvider } from "@privy-io/react-auth";
 import { toSolanaWalletConnectors } from "@privy-io/react-auth/solana";
 import App from "./App";
 import { LotrExplore } from "./pages/lotr-explore";
+import { AnsemExplore } from "./pages/ansem-explore";
 import "./index.css";
+import "./revamp.css";
 
 const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID;
 
@@ -25,6 +27,15 @@ if (
   root.render(
     <React.StrictMode>
       <LotrExplore />
+    </React.StrictMode>,
+  );
+} else if (
+  window.location.pathname === "/ansem" ||
+  window.location.pathname === "/dashboard/ansem"
+) {
+  root.render(
+    <React.StrictMode>
+      <AnsemExplore />
     </React.StrictMode>,
   );
 } else {

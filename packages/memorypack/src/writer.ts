@@ -1,8 +1,11 @@
 import {
+  closeSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readFileSync,
+  readSync,
   readdirSync,
   renameSync,
   rmSync,
@@ -21,6 +24,7 @@ import {
   MemoryPackRevocation,
   MemoryPackRevocationAnchor,
   MemoryPackSignature,
+  OwnerEncryptionHeader,
 } from './types.js';
 import {
   encryptBuffer,
@@ -73,8 +77,27 @@ export interface WriterOptions {
 
   /** `directory` (default) emits a folder; `tarball` emits `.tar.zst`. */
   format?: 'directory' | 'tarball';
-  /** Pack-level encryption envelope. */
+  /**
+   * Symmetric pack-level encryption. The writer holds the 32-byte key and
+   * encrypts `record.content` (and, under `records+blobs`, blob bytes) itself.
+   * Produces `key_derivation: 'none'` (keys shipped out of band).
+   *
+   * Mutually exclusive with `ownerEncryption` — that path takes records that
+   * are ALREADY ciphertext and the writer never sees a key.
+   */
   encryption?: WriterEncryption;
+  /**
+   * Owner-sealed encryption header (`manifest.encryption.owner`). Supply this
+   * when `records` are ALREADY ciphertext (`encrypted: true`, base64 `content`,
+   * nonce embedded) and the pack DEK has been sealed to a single holder out of
+   * band (e.g. `encryptRecordsForHolder`). The writer does NOT re-encrypt — it
+   * persists records verbatim and writes the owner-sealed envelope so a holder
+   * can recover the DEK from the file alone.
+   *
+   * Mutually exclusive with `encryption`. When absent, the manifest carries no
+   * encryption block (byte-identical to a plaintext pack).
+   */
+  ownerEncryption?: OwnerEncryptionHeader;
   /** Map of blob hash (`sha256:hex` of plaintext) → blob payload. */
   blobs?: Map<string, WriterBlob>;
   /** Caller-supplied chain anchor entries (written to anchors.jsonl). */
@@ -84,6 +107,13 @@ export interface WriterOptions {
    * Default: `() => new Date().toISOString()`.
    */
   clock?: () => string;
+  /**
+   * Optional PMP-artifact identity block, written verbatim to the manifest's
+   * `pmp` field. The artifact layer uses this to embed `merkle_root` (and
+   * title/license/etc.) so the `.pmp` is self-verifiable — a reader recomputes
+   * the pack root and compares it to `pmp.merkle_root` with no server trust.
+   */
+  pmp?: Record<string, unknown>;
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -145,13 +175,15 @@ export function writeMemoryPack(
   targetPath: string,
   records: MemoryPackRecord[],
   opts: WriterOptions,
-): void {
+): MemoryPackManifest {
+  // Returns the manifest AS WRITTEN (Memory 3.0 B1.2): callers that record a
+  // manifest hash must hash what actually landed in the pack, not a synthetic
+  // reconstruction that silently drifts when the writer adds fields.
   const format = opts.format ?? 'directory';
   if (format === 'tarball') {
-    writeTarball(targetPath, records, opts);
-    return;
+    return writeTarball(targetPath, records, opts);
   }
-  writeDirectory(targetPath, records, opts);
+  return writeDirectory(targetPath, records, opts);
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -162,7 +194,7 @@ function writeDirectory(
   dir: string,
   records: MemoryPackRecord[],
   opts: WriterOptions,
-): void {
+): MemoryPackManifest {
   // Clear known prior outputs so a re-export over an existing pack
   // directory doesn't leak stale signatures/anchors/blobs into the new
   // pack. Only removes our own well-known files; foreign files in the
@@ -186,6 +218,16 @@ function writeDirectory(
 
   const clock = opts.clock ?? (() => new Date().toISOString());
 
+  // The two encryption paths are mutually exclusive: `encryption` has the
+  // writer hold the key and encrypt in place; `ownerEncryption` takes records
+  // that are already ciphertext and only writes the sealed envelope. Mixing
+  // them would double-encrypt and produce a manifest that lies about its DEK.
+  if (opts.encryption && opts.ownerEncryption) {
+    throw new Error(
+      'writeMemoryPack: `encryption` and `ownerEncryption` are mutually exclusive',
+    );
+  }
+
   // Encryption normalization: default scope based on whether blobs are present.
   const encryption = opts.encryption
     ? {
@@ -198,7 +240,9 @@ function writeDirectory(
   }
   const encryptBlobs = encryption?.scope === 'records+blobs';
 
-  // ── records (with optional encryption) ──
+  // ── records (with optional symmetric encryption) ──
+  // Owner-sealed packs are written verbatim: the records are ALREADY ciphertext
+  // (Task 2 sealed them), so we never re-encrypt and never stamp a nonce here.
   const recordsToWrite: MemoryPackRecord[] = records.map((r) => {
     if (!encryption) return r;
     const { ciphertext, nonce } = encryptString(r.content, encryption.key);
@@ -216,14 +260,25 @@ function writeDirectory(
     anchor_chain: opts.anchor_chain,
     pack_format: 'directory',
     blobs_count: opts.blobs && opts.blobs.size > 0 ? opts.blobs.size : undefined,
-    encryption: encryption
+    encryption: opts.ownerEncryption
       ? {
+          // Owner-sealed: records are pre-encrypted ciphertext; the pack DEK is
+          // sealed once to the holder in `owner`. Scope is always `records`.
           algorithm: 'xsalsa20-poly1305',
           nonce_strategy: 'per-record-random',
-          key_derivation: 'none',
-          scope: encryption.scope!,
+          key_derivation: 'owner-sealed',
+          scope: 'records',
+          owner: opts.ownerEncryption,
         }
-      : undefined,
+      : encryption
+        ? {
+            algorithm: 'xsalsa20-poly1305',
+            nonce_strategy: 'per-record-random',
+            key_derivation: 'none',
+            scope: encryption.scope!,
+          }
+        : undefined,
+    pmp: opts.pmp,
   };
   writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2));
 
@@ -306,6 +361,8 @@ function writeDirectory(
       indexEntries.map((e) => JSON.stringify(e)).join('\n') + '\n',
     );
   }
+
+  return manifest;
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -316,7 +373,7 @@ function writeTarball(
   targetPath: string,
   records: MemoryPackRecord[],
   opts: WriterOptions,
-): void {
+): MemoryPackManifest {
   const targetAbs = resolve(targetPath);
   const parent = dirname(targetAbs);
   // Stable inner-dir name: derived from the target filename so the
@@ -330,7 +387,8 @@ function writeTarball(
     // Stage as a directory pack, then tar the inner directory.
     writeDirectory(stagingDir, records, opts);
 
-    // Patch manifest to reflect the actual on-disk packaging.
+    // Patch manifest to reflect the actual on-disk packaging. This re-read
+    // copy IS the manifest inside the tarball — it is what gets returned.
     const manifestPath = join(stagingDir, 'manifest.json');
     const manifest = JSON.parse(
       require('fs').readFileSync(manifestPath, 'utf-8'),
@@ -360,6 +418,8 @@ function writeTarball(
     if (!existsSync(targetAbs) || statSync(targetAbs).size === 0) {
       throw new Error('MemoryPack: tar produced an empty archive');
     }
+
+    return manifest;
   } finally {
     rmSync(tmpRoot, { recursive: true, force: true });
   }
@@ -570,16 +630,31 @@ function appendRevocationAnchorsToDirectory(
 // locking. Documented in CHANGELOG.
 // ────────────────────────────────────────────────────────────────────
 
-function isTarballPath(path: string): boolean {
+const ZSTD_MAGIC = Buffer.from([0x28, 0xb5, 0x2f, 0xfd]);
+
+/** @internal exported for tests only. */
+export function isTarballPath(path: string): boolean {
   if (/\.tar\.zst$/i.test(path)) return true;
-  // Some callers may pass a tarball without the canonical extension.
-  // Stat-then-isFile so directory packs (which we want to handle in
-  // directory-mode) don't get routed through the tarball path.
+  // Extensionless callers (Memory 3.0 B1 fix): only route existing FILES that
+  // actually carry the zstd magic through tarball extraction. Previously ANY
+  // existing file was routed blindly, so a non-tarball died downstream with an
+  // opaque 'tar failed (exit)'. Directories and nonexistent paths stay in
+  // directory-mode; a non-zstd file now fails loudly here instead.
   try {
-    return statSync(path).isFile();
+    if (!statSync(path).isFile()) return false;
   } catch {
     return false;
   }
+  const fd = openSync(path, 'r');
+  try {
+    const head = Buffer.alloc(4);
+    if (readSync(fd, head, 0, 4, 0) === 4 && head.equals(ZSTD_MAGIC)) return true;
+  } finally {
+    closeSync(fd);
+  }
+  throw new Error(
+    `memorypack: '${path}' is an existing file but not a .tar.zst (bad magic); refusing tarball extraction`,
+  );
 }
 
 function withExtractedTarball<T>(

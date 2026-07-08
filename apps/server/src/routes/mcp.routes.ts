@@ -21,6 +21,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
 import { authenticateAgent, recordAgentInteraction } from '@clude/brain/features/agent-tier';
+import { verifyAccessToken as verifyOAuthAccessToken } from '../oauth/core.js';
 import { getDb } from '@clude/shared/core/database';
 import { withOwnerWallet } from '@clude/shared/core/owner-context';
 import {
@@ -41,7 +42,7 @@ const SERVER_INFO = {
   version: '1.0.0',
 };
 
-function buildServerForOwner(ownerWallet: string, agentId: string): McpServer {
+function buildServerForOwner(ownerWallet: string, agentId: string, scope: string): McpServer {
   const server = new McpServer(SERVER_INFO);
 
   server.tool(
@@ -106,7 +107,7 @@ function buildServerForOwner(ownerWallet: string, agentId: string): McpServer {
     'Save a new memory to the user\'s persistent store. Use this when you learn something durable about the user — preferences, decisions, project state, key facts — that should survive across conversations.',
     {
       type: z.enum(MEMORY_TYPES).describe('episodic (events), semantic (facts), procedural (how-to), self_model (about-the-user), introspective (reflection)'),
-      content: z.string().max(5000).describe('Full memory text'),
+      content: z.string().trim().min(1, 'content cannot be empty').max(5000).describe('Full memory text'),
       summary: z.string().max(500).describe('Short summary used for recall matching'),
       tags: z.array(z.string()).optional().describe('Tags for filtering'),
       importance: z.number().min(0).max(1).optional().describe('Importance 0-1 (auto-scored if omitted)'),
@@ -115,12 +116,21 @@ function buildServerForOwner(ownerWallet: string, agentId: string): McpServer {
     {
       title: 'Store memory',
       readOnlyHint: false,
-      destructiveHint: false,
+      // Anthropic directory review expects write tools to set destructiveHint so
+      // Claude prompts before persisting. store_memory creates durable records;
+      // a missing/false write annotation is the single most common rejection cause.
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
     },
     async (args) => {
       try {
+        if (!scope.split(' ').includes('memory:write')) {
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify({ error: 'insufficient_scope: memory:write required' }) }],
+            isError: true,
+          };
+        }
         const stripHtml = (s: string) => s.replace(/<[^>]*>/g, '').trim();
         const memoryId = await withOwnerWallet(ownerWallet, async () =>
           storeMemory({
@@ -180,11 +190,26 @@ function buildServerForOwner(ownerWallet: string, agentId: string): McpServer {
   return server;
 }
 
-async function authFromBearer(authHeader: string | undefined): Promise<{ ownerWallet: string; agentId: string } | null> {
+interface McpAuth {
+  ownerWallet: string;
+  agentId: string;
+  scope: string;
+}
+
+async function authFromBearer(authHeader: string | undefined): Promise<McpAuth | null> {
   if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
-  const apiKey = authHeader.slice(7).trim();
-  if (!apiKey) return null;
-  const agent = await authenticateAgent(apiKey);
+  const token = authHeader.slice(7).trim();
+  if (!token) return null;
+
+  // 1) OAuth 2.1 access token (JWT). verifyOAuthAccessToken returns null when OAuth is
+  //    disabled or the token isn't ours, so we transparently fall through to API keys.
+  const claims = await verifyOAuthAccessToken(token);
+  if (claims) {
+    return { ownerWallet: claims.sub, agentId: `oauth:${claims.clientId || 'client'}`, scope: claims.scope };
+  }
+
+  // 2) Legacy Clude API key (clk_…) — kept working for existing SDK users.
+  const agent = await authenticateAgent(token);
   if (!agent) return null;
   let ownerWallet = agent.owner_wallet;
   if (!ownerWallet) {
@@ -194,7 +219,39 @@ async function authFromBearer(authHeader: string | undefined): Promise<{ ownerWa
     await db.from('agent_keys').update({ owner_wallet: ownerWallet }).eq('id', agent.id);
     log.info({ agentId: agent.agent_id }, 'Auto-assigned owner_wallet for MCP user');
   }
-  return { ownerWallet, agentId: agent.agent_id };
+  return { ownerWallet, agentId: agent.agent_id, scope: 'memory:read memory:write' };
+}
+
+// TEMPORARY debug capture — records what Claude's MCP request carries (token claims + verify
+// result) so we can see it on prod. Remove after diagnosing the connector. Never throws.
+async function logMcpDebug(req: Request, auth: McpAuth | null): Promise<void> {
+  try {
+    const authHeader = req.headers['authorization'] as string | undefined;
+    let iss: string | null = null, aud: string | null = null, sub: string | null = null, exp: number | null = null;
+    if (authHeader?.startsWith('Bearer ')) {
+      const parts = authHeader.slice(7).trim().split('.');
+      if (parts.length === 3) {
+        try {
+          const p = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+          iss = p.iss ?? null;
+          aud = Array.isArray(p.aud) ? p.aud.join(',') : (p.aud ?? null);
+          sub = p.sub ?? null;
+          exp = typeof p.exp === 'number' ? p.exp : null;
+        } catch { /* not a JWT */ }
+      }
+    }
+    const isOauth = !!auth && auth.agentId.startsWith('oauth:');
+    await getDb().from('mcp_auth_debug').insert({
+      has_auth: !!authHeader,
+      ua: ((req.headers['user-agent'] as string | undefined) ?? '').slice(0, 160) || null,
+      token_iss: iss,
+      token_aud: aud,
+      token_sub: sub,
+      token_exp: exp,
+      oauth_ok: isOauth,
+      result: `${req.method} ${auth ? (isOauth ? 'oauth' : 'legacy') : 'unauthorized'}`,
+    });
+  } catch { /* debug logging must never break the request */ }
 }
 
 function sendUnauthorized(res: Response, resourceMetadataUrl: string): void {
@@ -215,24 +272,29 @@ export function mcpRoutes(): Router {
   // staging vs prod without hardcoding the domain.
   const resourceMetadataPath = '/.well-known/oauth-protected-resource';
 
-  // POST /api/mcp — primary JSON-RPC endpoint
-  router.post('/', async (req: Request, res: Response) => {
+  // All HTTP methods on the MCP endpoint go through auth + the Streamable HTTP transport.
+  // Unauthenticated requests of ANY method return 401 + WWW-Authenticate, so the Claude
+  // connector can discover OAuth no matter which method it probes with (a bare 405 on the
+  // GET stream was being read as "not a valid MCP server", before the token was ever used).
+  // Authenticated GET is handed to the transport for the server->client SSE stream.
+  const handle = async (req: Request, res: Response): Promise<void> => {
     const resourceMetadataUrl = `${req.protocol}://${req.get('host')}${resourceMetadataPath}`;
     const auth = await authFromBearer(req.headers['authorization'] as string | undefined);
+    await logMcpDebug(req, auth);
     if (!auth) {
       sendUnauthorized(res, resourceMetadataUrl);
       return;
     }
 
     try {
-      const server = buildServerForOwner(auth.ownerWallet, auth.agentId);
+      const server = buildServerForOwner(auth.ownerWallet, auth.agentId, auth.scope);
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
       res.on('close', () => {
         transport.close().catch(() => {});
         server.close().catch(() => {});
       });
       await server.connect(transport);
-      await transport.handleRequest(req, res, req.body);
+      await transport.handleRequest(req, res, req.method === 'POST' ? req.body : undefined);
     } catch (err: any) {
       log.error({ err }, 'MCP request failed');
       if (!res.headersSent) {
@@ -243,21 +305,11 @@ export function mcpRoutes(): Router {
         });
       }
     }
-  });
+  };
 
-  // GET /api/mcp — server-initiated stream (not used in stateless mode)
-  router.get('/', (_req: Request, res: Response) => {
-    res.status(405).json({
-      jsonrpc: '2.0',
-      error: { code: -32000, message: 'Method not allowed in stateless mode' },
-      id: null,
-    });
-  });
-
-  // DELETE /api/mcp — session termination (no-op in stateless mode)
-  router.delete('/', (_req: Request, res: Response) => {
-    res.status(204).end();
-  });
+  router.post('/', handle);
+  router.get('/', handle);
+  router.delete('/', handle);
 
   return router;
 }

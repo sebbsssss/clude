@@ -42,6 +42,21 @@ vi.mock('@clude/brain/auth/privy-auth', () => ({
   },
 }));
 
+// ── requireOwnership: CONTRIBUTE (POST /v1/memories) is now guarded by it so the write uses the
+//    proven wallet, never a client ?owner=. Mock = passthrough once a wallet is authed.
+//    callerOwnsWallet backs the owner fence: the caller owns exactly the authed wallet. ──
+vi.mock('@clude/brain/auth/require-ownership', () => ({
+  requireOwnership: (req: Request, res: Response, next: NextFunction) => {
+    if (!authedWallet) {
+      res.status(401).json({ error: 'No wallet' });
+      return;
+    }
+    (req as Request & { verifiedWallet?: string }).verifiedWallet = authedWallet;
+    next();
+  },
+  callerOwnsWallet: async (_req: Request, wallet: string) => authedWallet === wallet,
+}));
+
 // ── Brain memory ──
 const storeMemoryMock = vi.fn();
 const recallMemoriesMock = vi.fn();
@@ -130,6 +145,7 @@ beforeEach(() => {
   authedWallet = null;
   queryQueue = [];
   updateCalls = [];
+  delete process.env.OWNER_FENCE; // default = log-only rollout mode
   storeMemoryMock.mockReset();
   recallMemoriesMock.mockReset();
   decryptOneContentMock.mockReset();
@@ -277,6 +293,107 @@ describe('RETRIEVE — GET /v1/memories/:id', () => {
     expect(res.status).toBe(410);
     expect(res.body.error).toBe('revoked');
     expect(res.body.hint).toBe('superseded_by:mem-new');
+  });
+});
+
+// ─────────── OWNER FENCE (Memory 3.0 C0) ───────────
+//
+// The PR #290 impersonation class, read variant: DISCOVER honored a bare
+// unauthenticated ?owner= as a recall scope, and RETRIEVE returned any
+// memory by hash_id cross-tenant. OWNER_FENCE=log observes (legacy behavior
+// preserved for one deploy); OWNER_FENCE=enforce blocks.
+
+describe('Owner fence (Memory 3.0 C0)', () => {
+  const tenantMemory = (owner: string | null) => ({
+    id: 9,
+    hash_id: 'mem-fence',
+    memory_type: 'semantic',
+    content: 'tenant secret',
+    owner_wallet: owner,
+    created_at: '2026-07-01T12:00:00.000Z',
+    tags: [],
+    source: 'chat',
+    related_user: null,
+    related_wallet: null,
+    content_hash: 'h',
+    cnft_address: null,
+    cnft_tree: null,
+    cnft_leaf_index: null,
+    cnft_tx_sig: null,
+    tokenization_status: null,
+    summary: '',
+    concepts: [],
+    emotional_valence: 0,
+    importance: 0.5,
+    access_count: 0,
+    last_accessed: '2026-07-01T12:00:00.000Z',
+    decay_factor: 1,
+    evidence_ids: [],
+    solana_signature: null,
+    compacted: false,
+    compacted_into: null,
+    encrypted: false,
+    encryption_pubkey: null,
+    metadata: {},
+    source_id: null,
+  });
+
+  describe('DISCOVER ?owner=', () => {
+    it('403s an unproven ?owner= under enforce, without running recall', async () => {
+      process.env.OWNER_FENCE = 'enforce';
+      const res = await request(buildApp()).get('/v1/memories?owner=victim-wallet');
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('owner_not_verified');
+      expect(recallMemoriesMock).not.toHaveBeenCalled();
+    });
+
+    it('serves an unproven ?owner= under default log-only mode (one-deploy observation window)', async () => {
+      recallMemoriesMock.mockResolvedValue([]);
+      const res = await request(buildApp()).get('/v1/memories?owner=victim-wallet');
+      expect(res.status).toBe(200);
+      expect(recallMemoriesMock).toHaveBeenCalled();
+    });
+
+    it('serves a PROVEN ?owner= under enforce (caller owns the wallet)', async () => {
+      process.env.OWNER_FENCE = 'enforce';
+      authedWallet = 'wallet-mine';
+      recallMemoriesMock.mockResolvedValue([]);
+      const res = await request(buildApp()).get('/v1/memories?owner=wallet-mine');
+      expect(res.status).toBe(200);
+    });
+  });
+
+  describe('RETRIEVE cross-tenant', () => {
+    it("404s another tenant's memory under enforce (no existence leak)", async () => {
+      process.env.OWNER_FENCE = 'enforce';
+      queryQueue.push({ data: tenantMemory('victim-wallet'), error: null });
+      const res = await request(buildApp()).get('/v1/memories/mem-fence');
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('not_found');
+    });
+
+    it("serves another tenant's memory under default log-only mode", async () => {
+      queryQueue.push({ data: tenantMemory('victim-wallet'), error: null });
+      const res = await request(buildApp()).get('/v1/memories/mem-fence');
+      expect(res.status).toBe(200);
+    });
+
+    it('serves a bot-public memory (owner_wallet null) under enforce', async () => {
+      process.env.OWNER_FENCE = 'enforce';
+      queryQueue.push({ data: tenantMemory(null), error: null });
+      const res = await request(buildApp()).get('/v1/memories/mem-fence');
+      expect(res.status).toBe(200);
+      expect(res.body.id).toBe('mem-fence');
+    });
+
+    it("serves the caller's OWN memory under enforce", async () => {
+      process.env.OWNER_FENCE = 'enforce';
+      authedWallet = 'wallet-mine';
+      queryQueue.push({ data: tenantMemory('wallet-mine'), error: null });
+      const res = await request(buildApp()).get('/v1/memories/mem-fence');
+      expect(res.status).toBe(200);
+      expect(res.body.id).toBe('mem-fence');
+    });
   });
 });
 

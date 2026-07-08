@@ -2,7 +2,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
 import http from 'http';
 
-vi.mock('../../core/logger', () => ({
+// compound.routes now imports @clude/shared/config (for OWNER_WALLET) + real withOwnerWallet to
+// scope its recalls (Memory 3.0 C0). SITE_ONLY short-circuits config validation; OWNER_WALLET is the
+// scope those recalls run under and the value the scope test asserts.
+vi.hoisted(() => {
+  process.env.SITE_ONLY = 'true';
+  process.env.OWNER_WALLET = 'BOT_OWNER_WALLET';
+});
+
+// Post brain-refactor, compound.routes.ts imports from @clude/shared/* and
+// @clude/brain/* — NOT the old relative paths. The mocks must target the exact
+// specifiers the route imports, or the real modules load and hit the live DB.
+vi.mock('@clude/shared/core/logger', () => ({
   createChildLogger: () => ({
     info: vi.fn(),
     warn: vi.fn(),
@@ -14,12 +25,12 @@ vi.mock('../../core/logger', () => ({
 const mockRecallMemories = vi.fn();
 const mockHydrateMemories = vi.fn();
 
-vi.mock('../../memory', () => ({
+vi.mock('@clude/brain/memory', () => ({
   recallMemories: (...args: any[]) => mockRecallMemories(...args),
   hydrateMemories: (...args: any[]) => mockHydrateMemories(...args),
 }));
 
-vi.mock('../../features/compound', () => ({
+vi.mock('@clude/brain/features/compound', () => ({
   getAccuracyStats: vi.fn().mockResolvedValue({
     totalPredictions: 0,
     totalResolved: 0,
@@ -31,11 +42,23 @@ vi.mock('../../features/compound', () => ({
   isCompoundRunning: vi.fn().mockReturnValue(false),
 }));
 
-vi.mock('../../features/compound/market-adapters', () => ({
+vi.mock('@clude/brain/features/compound/market-adapters', () => ({
   createAdapters: vi.fn().mockReturnValue([]),
   fetchAllMarkets: vi.fn().mockResolvedValue([]),
 }));
 
+// The route also imports getDb (used by GET /markets?source=memory). None of the
+// tests below exercise that branch, but mock it anyway so module load never
+// initializes a real Supabase client or touches the network.
+vi.mock('@clude/shared/core/database', () => ({
+  getDb: vi.fn(() => {
+    throw new Error('getDb() is not stubbed for this test — no DB branch should be exercised here');
+  }),
+}));
+
+// Real owner-context (shared AsyncLocalStorage) so we can read the ambient scope compound.routes'
+// withOwnerWallet establishes around its recalls.
+import { getContextOwnerWallet } from '@clude/shared/core/owner-context';
 import { compoundRoutes } from '../compound.routes.js';
 
 // Simple HTTP test helper (no supertest needed)
@@ -185,6 +208,16 @@ describe('GET /api/compound/markets/:id', () => {
     const res = await get(app, '/api/compound/markets/1');
     expect(res.status).toBe(404);
     expect(res.body.error).toMatch(/not a Compound prediction/);
+  });
+
+  it('recalls under the bot OWNER_WALLET scope, not the unscoped fail-open (Memory 3.0 C0)', async () => {
+    let recallScope: string | null | undefined = 'UNSET';
+    mockHydrateMemories.mockResolvedValueOnce([makePredictionMemory()]);
+    // Capture the ambient owner scope the recall runs under. It must be OWNER_WALLET — else, under
+    // OWNER_SCOPE_FAILCLOSED=true, the recall would scope to bot-own and drop worker-written rows.
+    mockRecallMemories.mockImplementationOnce(() => { recallScope = getContextOwnerWallet(); return Promise.resolve([]); });
+    await get(app, '/api/compound/markets/42');
+    expect(recallScope).toBe('BOT_OWNER_WALLET');
   });
 
   it('returns full market detail with reasoning and evidence', async () => {

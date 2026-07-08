@@ -4,6 +4,7 @@ import { createChildLogger } from './logger';
 import { checkOutput } from './guardrails';
 import { isOpenRouterEnabled, generateOpenRouterResponse, type CognitiveFunction } from './openrouter-client';
 import { TWEET_MAX_LENGTH } from '../utils/constants';
+import { modelRejectsSamplingParams } from './model-capabilities';
 
 const log = createChildLogger('claude-client');
 
@@ -117,10 +118,12 @@ export async function generateResponse(options: GenerateOptions): Promise<string
     });
   } else {
     // Direct Anthropic API
+    const directModel = getModel();
     const response = await getClient().messages.create({
-      model: getModel(),
+      model: directModel,
       max_tokens: options.maxTokens || 1024,
-      temperature: 0.9,
+      // Opus 4.7+ rejects temperature/top_p (HTTP 400) — strip for those models.
+      ...(modelRejectsSamplingParams(directModel) ? {} : { temperature: 0.9 }),
       system: systemPrompt,
       messages: [{ role: 'user', content: userContent }],
     });
@@ -170,10 +173,11 @@ export async function generateImportanceScore(description: string): Promise<stri
     'Respond with ONLY a single integer from 1 to 10. ' +
     '1 = purely mundane. 5 = moderately important. 10 = extremely significant.';
 
+  const scoreModel = getModel();
   const response = await getClient().messages.create({
-    model: getModel(),
+    model: scoreModel,
     max_tokens: 10,
-    temperature: 0,
+    ...(modelRejectsSamplingParams(scoreModel) ? {} : { temperature: 0 }),
     system: importancePrompt,
     messages: [{
       role: 'user',

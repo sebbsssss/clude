@@ -1,230 +1,172 @@
 import { useState, useEffect } from 'react';
-import { NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { useAuthContext } from '../hooks/AuthContext';
 import { AgentSelector } from './AgentSelector';
 import { useTheme } from '../hooks/useTheme';
-import { useIsMobile } from '../hooks/useIsMobile';
-import { api } from '../lib/api';
-import styles from './Layout.module.css';
+import { CommandPalette } from './CommandPalette';
 
-const NAV_ITEMS = [
-  { path: '/wiki', label: 'Brain Wiki', icon: '▥' },
-  { path: '/wiki-packs', label: 'Wiki Packs', icon: '▦' },
-  { path: '/', label: 'Stats', icon: '◉' },
-  { path: '/timeline', label: 'Timeline', icon: '▤' },
-  { path: '/entities', label: 'Entities', icon: '◎' },
-  { path: '/brain', label: 'Brain Map', icon: '◈' },
-  { path: '/decay', label: 'Decay', icon: '◇' },
-  { path: '/packs', label: 'Memory Packs', icon: '▩' },
-  { path: '/settings', label: 'Settings', icon: '⚙' },
+/* ── Nav glyphs (Lucide-style line icons, 1.8px stroke via .navi svg) ── */
+const OverviewIcon = (
+  <svg width="19" height="19" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></svg>
+);
+const ExploreIcon = (
+  <svg width="19" height="19" viewBox="0 0 24 24"><circle cx="5" cy="6" r="2.2" /><circle cx="19" cy="8" r="2.2" /><circle cx="11" cy="18" r="2.2" /><line x1="7" y1="6.6" x2="17" y2="7.6" /><line x1="6.2" y1="7.9" x2="10" y2="16" /><line x1="17.4" y1="9.4" x2="12.2" y2="16.6" /></svg>
+);
+const WikiIcon = (
+  <svg width="19" height="19" viewBox="0 0 24 24"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 0 4 21.5z" /><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 1 1.5 1.5z" /></svg>
+);
+const ExportIcon = (
+  <svg width="19" height="19" viewBox="0 0 24 24"><path d="M12 3v11" /><path d="M8 11l4 4 4-4" /><path d="M5 20h14" /></svg>
+);
+const SettingsIcon = (
+  <svg width="19" height="19" viewBox="0 0 24 24"><line x1="4" y1="8" x2="20" y2="8" /><circle cx="9" cy="8" r="2.3" style={{ fill: 'var(--sidebar)' }} /><line x1="4" y1="16" x2="20" y2="16" /><circle cx="15" cy="16" r="2.3" style={{ fill: 'var(--sidebar)' }} /></svg>
+);
+
+const NAV: Array<{ path: string; label: string; icon: React.ReactNode }> = [
+  { path: '/', label: 'Overview', icon: OverviewIcon },
+  { path: '/explore', label: 'Explore', icon: ExploreIcon },
+  { path: '/wiki', label: 'Wiki', icon: WikiIcon },
+  { path: '/export', label: 'Export', icon: ExportIcon },
+  { path: '/settings', label: 'Settings', icon: SettingsIcon },
 ];
+
+/* Constellation — a private nav entry shown ONLY to the ansem@clude.io account
+ * (his 38k-memory bull constellation; the route itself is gated too). */
+const ANSEM_EMAIL = 'ansem@clude.io';
+const ConstellationIcon = (
+  <svg width="19" height="19" viewBox="0 0 24 24"><circle cx="6" cy="5" r="1.6" /><circle cx="18" cy="5" r="1.6" /><circle cx="12" cy="11" r="2.2" /><circle cx="8" cy="19" r="1.6" /><circle cx="16" cy="19" r="1.6" /><line x1="7" y1="6.2" x2="10.6" y2="9.6" /><line x1="17" y1="6.2" x2="13.4" y2="9.6" /><line x1="10.8" y1="12.8" x2="8.6" y2="17.6" /><line x1="13.2" y1="12.8" x2="15.4" y2="17.6" /></svg>
+);
+
+function ThemeButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        flex: 1, padding: '6px 0', fontSize: 12, fontWeight: 600, borderRadius: 7, border: 'none', cursor: 'pointer',
+        fontFamily: 'var(--font-sans)',
+        background: active ? 'var(--surface-2)' : 'transparent',
+        color: active ? 'var(--fg)' : 'var(--fg-3)',
+        transition: 'background .12s, color .12s',
+      }}
+    >
+      {label}
+    </button>
+  );
+}
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { walletAddress, email, logout } = useAuthContext();
-  const navigate = useNavigate();
-  const location = useLocation();
   const { isDark, toggle } = useTheme();
-  const isMobile = useIsMobile();
-  const [chatOpen, setChatOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [hasUploadAccess, setHasUploadAccess] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
-  // Close sidebar on route change (mobile)
+  // ⌘K / Esc — global command palette
   useEffect(() => {
-    setSidebarOpen(false);
-  }, [location.pathname]);
-
-  // Check if wallet has access to file upload feature
-  useEffect(() => {
-    if (walletAddress) {
-      api.checkUploadAccess().then(setHasUploadAccess).catch(() => setHasUploadAccess(false));
-    }
-  }, [walletAddress]);
-
-  const hideChatWidget = ['/brain', '/explore', '/wiki'].includes(location.pathname);
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      } else if (e.key === 'Escape') {
+        setPaletteOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const displayName = email
     ? email
     : walletAddress
-      ? `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`
-      : '';
+      ? `${walletAddress.slice(0, 4)}…${walletAddress.slice(-4)}`
+      : 'Account';
 
   return (
-    <div className={styles.layout}>
-      {/* Mobile header with hamburger */}
-      <div className={styles.mobileHeader}>
-        <button
-          className={styles.hamburger}
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          aria-label="Toggle menu"
-        >
-          {sidebarOpen ? '✕' : '☰'}
-        </button>
-        <span className={styles.mobileHeaderLogo}>CLUDE</span>
-        <div style={{ width: 44 }} />
-      </div>
-
-      {/* Overlay when sidebar is open on mobile */}
-      {isMobile && sidebarOpen && (
-        <div className={styles.overlay} onClick={() => setSidebarOpen(false)} />
-      )}
-
-      <aside className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : ''}`}>
-        <div className={styles.logo}>
-          <a href="https://clude.io" target="_blank" rel="noopener">CLUDE</a>
-          <span className={styles.badge}>Dashboard</span>
+    <div style={{ display: 'flex', minHeight: '100vh', width: '100%', background: 'var(--bg)', color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>
+      <aside
+        style={{
+          width: 240, flex: 'none', background: 'var(--sidebar)', borderRight: '1px solid var(--border)',
+          display: 'flex', flexDirection: 'column', padding: '18px 14px', position: 'sticky', top: 0, height: '100vh',
+        }}
+      >
+        {/* Wordmark */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px 18px' }}>
+          <img src="/dashboard/Clude-Icon-Blue.svg" style={{ width: 22, height: 22, display: 'block' }} alt="Clude" />
+          <span style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--fg)' }}>Clude</span>
+          <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent-text)', background: 'var(--accent-soft)', padding: '3px 7px', borderRadius: 5 }}>Brain</span>
         </div>
 
-        <div style={{ padding: '0 8px', marginBottom: 12 }}>
-          <button
-            onClick={() => navigate('/setup')}
-            style={{
-              fontFamily: 'var(--mono)',
-              fontSize: 10,
-              letterSpacing: 2,
-              textTransform: 'uppercase',
-              padding: '10px 14px',
-              background: 'var(--blue)',
-              color: '#fff',
-              border: 'none',
-              cursor: 'pointer',
-              width: '100%',
-              fontWeight: 700,
-              transition: 'opacity 0.15s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.opacity = '0.85'; }}
-            onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
-          >
-            + New Agent
-          </button>
-        </div>
-
+        {/* Agent switcher (preserves existing switching logic) */}
         <AgentSelector />
 
-        <nav className={styles.nav}>
-          {NAV_ITEMS.map((item) => (
+        {/* Primary nav */}
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 8 }}>
+          {NAV.map((n) => (
             <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) =>
-                `${styles.navItem} ${isActive ? styles.navItemActive : ''}`
-              }
-              end={item.path === '/'}
+              key={n.path}
+              to={n.path}
+              end={n.path === '/'}
+              className="navi"
+              style={({ isActive }) => ({
+                display: 'flex', alignItems: 'center', gap: 12, padding: '9px 11px', borderRadius: 9,
+                fontSize: 13.5, textDecoration: 'none', fontFamily: 'var(--font-sans)',
+                fontWeight: isActive ? 600 : 500,
+                color: isActive ? 'var(--fg)' : 'var(--fg-2)',
+                background: isActive ? 'var(--surface-2)' : 'transparent',
+                transition: 'background .12s, color .12s',
+              })}
             >
-              <span className={styles.navIcon}>{item.icon}</span>
-              {item.label}
+              {n.icon}{n.label}
             </NavLink>
           ))}
-          {hasUploadAccess && (
+          {(email || '').toLowerCase() === ANSEM_EMAIL && (
             <NavLink
-              to="/file-memory"
-              className={({ isActive }) =>
-                `${styles.navItem} ${isActive ? styles.navItemActive : ''}`
-              }
+              to="/constellation"
+              className="navi"
+              style={({ isActive }) => ({
+                display: 'flex', alignItems: 'center', gap: 12, padding: '9px 11px', borderRadius: 9,
+                fontSize: 13.5, textDecoration: 'none', fontFamily: 'var(--font-sans)',
+                fontWeight: isActive ? 600 : 500,
+                color: isActive ? '#3ddc73' : 'var(--fg-2)',
+                background: isActive ? 'rgba(61,220,115,0.09)' : 'transparent',
+                transition: 'background .12s, color .12s',
+              })}
             >
-              <span className={styles.navIcon}>▧</span>
-              File Memory
+              {ConstellationIcon}Constellation
             </NavLink>
           )}
         </nav>
 
-        <div className={styles.sidebarFooter}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <div className={styles.wallet} style={{ marginBottom: 0 }}>
-              <span className={styles.walletDot} />
-              {displayName}
-            </div>
-            <button
-              onClick={toggle}
-              title={isDark ? 'Light mode' : 'Dark mode'}
-              style={{
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: 14,
-                padding: '2px 4px',
-                color: 'var(--text-faint)',
-                transition: 'color 0.15s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; }}
-              onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-faint)'; }}
-            >
-              {isDark ? '☀' : '◑'}
+        {/* Search / palette */}
+        <button
+          className="gbtn"
+          onClick={() => setPaletteOpen(true)}
+          style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 14, background: 'transparent', border: '1px solid var(--border)', borderRadius: 9, padding: '8px 11px', cursor: 'pointer', color: 'var(--fg-3)', fontFamily: 'var(--mono)', fontSize: 11.5, transition: 'background .12s' }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" style={{ stroke: 'currentColor', fill: 'none', strokeWidth: 1.8 }}><circle cx="11" cy="11" r="7" /><line x1="16" y1="16" x2="21" y2="21" /></svg>
+          Search
+          <span style={{ marginLeft: 'auto', border: '1px solid var(--border-2)', borderRadius: 4, padding: '1px 5px', fontSize: 10 }}>⌘K</span>
+        </button>
+
+        {/* Footer: theme toggle + account */}
+        <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 14 }}>
+          <div style={{ display: 'flex', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 9, padding: 3 }}>
+            <ThemeButton label="Dark" active={isDark} onClick={() => { if (!isDark) toggle(); }} />
+            <ThemeButton label="Light" active={!isDark} onClick={() => { if (isDark) toggle(); }} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+            <span style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg,#10b981,#4466ff)', flex: 'none' }} />
+            <span style={{ minWidth: 0, flex: 1 }}>
+              <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</span>
+            </span>
+            <button onClick={logout} title="Sign out" style={{ background: 'none', border: 'none', cursor: 'pointer', flex: 'none', display: 'flex', padding: 0 }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" style={{ stroke: 'var(--fg-3)', fill: 'none', strokeWidth: 1.8 }}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
             </button>
           </div>
-          <button onClick={logout} className={styles.logoutBtn}>
-            Sign Out
-          </button>
         </div>
       </aside>
 
-      <main className={styles.main}>
-        {children}
-      </main>
+      <main style={{ flex: 1, minWidth: 0, background: 'var(--bg)' }}>{children}</main>
 
-      {/* Floating chat button — hidden on brain/explore (has its own chat) */}
-      {!hideChatWidget && <button
-        onClick={() => setChatOpen(!chatOpen)}
-        style={{
-          position: 'fixed',
-          bottom: 24,
-          right: 24,
-          width: 48,
-          height: 48,
-          borderRadius: '50%',
-          background: chatOpen ? 'var(--text-faint)' : 'var(--blue)',
-          color: '#fff',
-          border: 'none',
-          cursor: 'pointer',
-          fontSize: 20,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-          zIndex: 1001,
-          transition: 'background 0.2s, transform 0.2s',
-          transform: chatOpen ? 'rotate(45deg)' : 'none',
-        }}
-        title={chatOpen ? 'Close chat' : 'Chat with Clude'}
-      >
-        {chatOpen ? '✕' : '💬'}
-      </button>}
-
-      {/* Chat slide-out panel */}
-      {!hideChatWidget && chatOpen && (
-        <div
-          style={isMobile ? {
-            position: 'fixed',
-            inset: 0,
-            top: 0,
-            overflow: 'hidden',
-            zIndex: 1000,
-          } : {
-            position: 'fixed',
-            bottom: 84,
-            right: 24,
-            width: 400,
-            height: 'calc(100vh - 120px)',
-            maxHeight: 700,
-            borderRadius: 16,
-            overflow: 'hidden',
-            boxShadow: '0 8px 40px rgba(0,0,0,0.4)',
-            zIndex: 1000,
-            border: '1px solid rgba(255,255,255,0.1)',
-          }}
-        >
-          <iframe
-            src="/chat/"
-            style={{
-              width: '100%',
-              height: '100%',
-              border: 'none',
-              background: '#000',
-            }}
-            title="Clude Chat"
-          />
-        </div>
-      )}
+      {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
     </div>
   );
 }

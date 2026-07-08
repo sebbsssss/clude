@@ -53,8 +53,14 @@ export interface CanonicalMemoryInput {
   related_wallet: string | null;
 }
 
-/** Recursive JSON serialiser with alphabetically-sorted object keys. */
-function stableStringify(value: unknown): string {
+/**
+ * Recursive JSON serialiser with alphabetically-sorted object keys.
+ *
+ * THE cross-implementation parity surface (Memory 3.0 B1): the browser twin
+ * (packages/ui decrypt-pmp.ts) and the dashboard parity fixture mirror this
+ * byte-for-byte. Exported so parity is testable instead of assumed.
+ */
+export function stableStringify(value: unknown): string {
   if (value === null) return 'null';
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
     return JSON.stringify(value);
@@ -64,7 +70,15 @@ function stableStringify(value: unknown): string {
   }
   if (typeof value === 'object') {
     const obj = value as Record<string, unknown>;
-    const keys = Object.keys(obj).sort();
+    // Skip undefined-valued keys (JSON.stringify semantics). The browser twin
+    // (packages/ui decrypt-pmp.ts stableStringify) already filters them; before
+    // this fix the server THREW on undefined where the browser hashed happily —
+    // a server/browser integrity split for in-process objects. Filtering only
+    // changes behavior for inputs that previously threw, so no existing hash
+    // changes. (JSON-parsed records can never contain undefined.)
+    const keys = Object.keys(obj)
+      .filter((k) => obj[k] !== undefined)
+      .sort();
     const pairs = keys.map((k) => JSON.stringify(k) + ':' + stableStringify(obj[k]));
     return '{' + pairs.join(',') + '}';
   }

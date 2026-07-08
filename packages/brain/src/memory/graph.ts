@@ -284,39 +284,20 @@ export async function createEntityRelation(
   if (sourceEntityId === targetEntityId) return;
   const db = getDb();
 
-  // Check if relation exists
-  const { data: existing } = await db
-    .from('entity_relations')
-    .select('id, strength, evidence_memory_ids')
-    .eq('source_entity_id', sourceEntityId)
-    .eq('target_entity_id', targetEntityId)
-    .eq('relation_type', relationType)
-    .single();
-
-  if (existing) {
-    // Update strength and add evidence
-    const newEvidence = evidenceMemoryId && !existing.evidence_memory_ids.includes(evidenceMemoryId)
-      ? [...existing.evidence_memory_ids, evidenceMemoryId]
-      : existing.evidence_memory_ids;
-
-    await db
-      .from('entity_relations')
-      .update({
-        strength: Math.min(1, existing.strength + 0.1),
-        evidence_memory_ids: newEvidence,
-      })
-      .eq('id', existing.id);
-  } else {
-    // Create new relation
-    await db
-      .from('entity_relations')
-      .insert({
-        source_entity_id: sourceEntityId,
-        target_entity_id: targetEntityId,
-        relation_type: relationType,
-        strength,
-        evidence_memory_ids: evidenceMemoryId ? [evidenceMemoryId] : [],
-      });
+  // Memory 3.0 C2: single atomic upsert (migration 045 upsert_entity_relation) instead of a
+  // read-modify-write. IDEMPOTENT — strength accumulates +0.1 only when evidenceMemoryId is NEW to
+  // the relation's evidence set, so a retried enrich job (same evidence) does not double-count,
+  // while a genuinely new co-occurrence still strengthens the edge. Evidence is set-unioned; the
+  // single statement is race-safe on idx_entity_relations_unique.
+  const { error } = await db.rpc('upsert_entity_relation', {
+    p_src: sourceEntityId,
+    p_tgt: targetEntityId,
+    p_type: relationType,
+    p_evidence: evidenceMemoryId ?? null,
+    p_strength: strength,
+  });
+  if (error) {
+    log.warn({ err: error.message, sourceEntityId, targetEntityId, relationType }, 'upsert_entity_relation failed');
   }
 }
 

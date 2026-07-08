@@ -104,6 +104,16 @@ export function staticRoutes(): Router {
     res.sendFile(path.join(dashboardDir, 'index.html'));
   });
 
+  // Ansem experience — public "Speak to Ansem" page; serve dashboard SPA at /ansem
+  router.get('/ansem', (_req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.sendFile(path.join(dashboardDir, 'index.html'));
+  });
+  router.get('/dashboard/ansem', (_req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.sendFile(path.join(dashboardDir, 'index.html'));
+  });
+
   // Chat SPA at /chat
   const chatDir = path.join(monorepoRoot, 'apps', 'chat', 'dist');
   const serveChatIndex = (_req: Request, res: Response) => {
@@ -132,8 +142,10 @@ export function staticRoutes(): Router {
   const samplesDir = path.join(webPublicDir, 'samples');
   router.use('/samples', express.static(samplesDir));
 
-  // Serve static files from apps/web/public/
-  router.use(express.static(webPublicDir));
+  // Serve static files from apps/web/public/. extensions:['html'] gives every
+  // page a clean extensionless URL (e.g. /verify serves verify.html), while the
+  // existing /page.html URLs keep working.
+  router.use(express.static(webPublicDir, { extensions: ['html'] }));
 
   return router;
 }

@@ -6,6 +6,7 @@ import { staticRoutes } from './routes/static.routes';
 import { optionalPrivyAuth } from '@clude/brain/auth/privy-auth';
 import { createChildLogger } from '@clude/shared/core/logger';
 import { initOpenRouter, isOpenRouterEnabled } from '@clude/shared/core/openrouter-client';
+import { packMarketplaceStripeWebhookRoutes } from './routes/marketplace-payments.routes';
 
 const log = createChildLogger('server');
 
@@ -22,6 +23,11 @@ export function createServer(): express.Application {
   if (!isOpenRouterEnabled() && config.openrouter.apiKey) {
     initOpenRouter({ apiKey: config.openrouter.apiKey });
   }
+
+  // Stripe marketplace webhook — MUST be mounted BEFORE express.json(): Stripe signature
+  // verification needs the EXACT raw bytes Stripe signed, which the json parser would consume.
+  // This router applies its own express.raw() to that one path; all other routes still get JSON.
+  app.use(packMarketplaceStripeWebhookRoutes());
 
   app.use(express.json());
   app.use(createCompression());
@@ -40,20 +46,21 @@ export function createServer(): express.Application {
       authorization_servers: [origin],
       scopes_supported: ['memory:read', 'memory:write'],
       bearer_methods_supported: ['header'],
-      resource_documentation: 'https://clude.io/docs/connector',
+      resource_documentation: 'https://clude.io',
     });
   });
   app.get('/.well-known/oauth-authorization-server', (req: Request, res: Response) => {
     const origin = `${req.protocol}://${req.get('host')}`;
-    // Stub metadata — v1 has no /authorize or /token. Clients fall back to
-    // the bearer-token flow advertised in WWW-Authenticate.
     res.json({
       issuer: origin,
+      authorization_endpoint: `${origin}/api/oauth/authorize`,
+      token_endpoint: `${origin}/api/oauth/token`,
+      registration_endpoint: `${origin}/api/oauth/register`,
+      scopes_supported: ['memory:read', 'memory:write'],
       response_types_supported: ['code'],
-      grant_types_supported: ['authorization_code'],
+      grant_types_supported: ['authorization_code', 'refresh_token'],
       code_challenge_methods_supported: ['S256'],
       token_endpoint_auth_methods_supported: ['none'],
-      registration_endpoint: `${origin}/api/mcp/register`,
     });
   });
 

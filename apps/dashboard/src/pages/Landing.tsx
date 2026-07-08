@@ -1,191 +1,236 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
+import { useLoginWithEmail } from '@privy-io/react-auth';
 import { useAuthContext } from '../hooks/AuthContext';
+import './Landing.css';
 
+/**
+ * Logged-out dashboard screen, aligned with the /chat CcAuth login.
+ *
+ * Two-column hero + Privy card. The email path uses Privy's headless
+ * `useLoginWithEmail()` (the dashboard is on the same Privy 3.18 as chat and the
+ * provider enables the `email` login method with an embedded Solana wallet), so
+ * the user enters one email, gets a 6-digit OTP, and verifies inline. Wallet
+ * sign-in falls back to the Privy modal via `login()`.
+ *
+ * The dashboard-only API-key login (`loginWithApiKey`, `clk_…` + optional custom
+ * endpoint) is preserved as a secondary "Advanced" option so nothing regresses.
+ * On success Privy authenticates, useAuth() auto-registers a `clk_` key, and
+ * App.tsx swaps this screen for the signed-in dashboard.
+ */
 export function Landing() {
   const { login, loginWithApiKey } = useAuthContext();
+  const { sendCode, loginWithCode, state } = useLoginWithEmail();
+
+  const [step, setStep] = useState<'email' | 'code'>('email');
+  const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState('');
+
+  // Dashboard-only API-key login (secondary).
   const [apiKey, setApiKey] = useState('');
   const [endpoint, setEndpoint] = useState('');
-  const [error, setError] = useState('');
   const [connecting, setConnecting] = useState(false);
 
+  const statusName: string = (state as { status?: string } | undefined)?.status ?? 'initial';
+  const sendingCode = statusName === 'sending-code' || pending;
+  const submittingCode = statusName === 'submitting-code';
+
+  async function handleSendCode(e: FormEvent) {
+    e.preventDefault();
+    const trimmed = email.trim();
+    if (!trimmed || sendingCode) return;
+    setError('');
+    setPending(true);
+    try {
+      await sendCode({ email: trimmed });
+      setStep('code');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send code. Try again.');
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function handleVerifyCode(e: FormEvent) {
+    e.preventDefault();
+    const trimmed = code.trim();
+    if (trimmed.length < 4 || submittingCode || pending) return;
+    setError('');
+    setPending(true);
+    try {
+      await loginWithCode({ code: trimmed });
+      // Privy authenticates -> useAuth() auto-registers clk_ -> App swaps to the dashboard.
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid code. Check your inbox and try again.');
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function handleResend() {
+    if (!email.trim() || sendingCode) return;
+    setCode('');
+    setError('');
+    try {
+      await sendCode({ email: email.trim() });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not resend code.');
+    }
+  }
+
   async function handleApiKeyLogin() {
-    if (!apiKey.trim()) return;
+    if (!apiKey.trim() || connecting) return;
     setError('');
     setConnecting(true);
     const valid = await loginWithApiKey(apiKey.trim(), endpoint.trim() || undefined);
-    if (!valid) {
-      setError('Invalid API key or endpoint unreachable');
-    }
+    if (!valid) setError('Invalid API key or endpoint unreachable.');
     setConnecting(false);
   }
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '40px',
-    }}>
-      <div style={{ maxWidth: 480, textAlign: 'center' }}>
-        <div style={{
-          fontSize: 13,
-          fontWeight: 800,
-          letterSpacing: 5,
-          textTransform: 'uppercase' as const,
-          marginBottom: 32,
-        }}>
-          CLUDE
-        </div>
-
-        <h1 style={{
-          fontSize: 'clamp(28px, 4vw, 40px)',
-          fontWeight: 800,
-          lineHeight: 1.1,
-          letterSpacing: -1,
-          marginBottom: 20,
-        }}>
-          See what your<br />
-          agent <span style={{
-            background: 'linear-gradient(135deg, #2244ff, #5566ff)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-          }}>remembers.</span>
-        </h1>
-
-        <p style={{
-          fontSize: 14,
-          color: 'var(--text-muted)',
-          lineHeight: 1.8,
-          marginBottom: 40,
-          maxWidth: 380,
-          margin: '0 auto 40px',
-        }}>
-          Sign in to explore your agent's memory.
-          Visualize, search, export, and share knowledge
-          across agents.
-        </p>
-
-        {/* Auth options */}
-        <div style={{
-          display: 'flex',
-          gap: 12,
-          maxWidth: 320,
-          margin: '0 auto 24px',
-        }}>
-          <button
-            onClick={login}
-            style={{
-              fontFamily: 'var(--mono)',
-              fontSize: 10,
-              letterSpacing: 1,
-              textTransform: 'uppercase' as const,
-              padding: '12px 16px',
-              background: 'transparent',
-              color: 'var(--text)',
-              border: '1px solid var(--border-strong)',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              flex: 1,
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = 'var(--text)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = 'var(--border-strong)';
-            }}
-          >
-            Wallet
-          </button>
-          <div style={{ flex: 2 }}>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="clk_... (API key)"
-              onKeyDown={(e) => e.key === 'Enter' && handleApiKeyLogin()}
-              style={{
-                fontFamily: 'var(--mono)',
-                fontSize: 11,
-                padding: '12px 12px',
-                border: '1px solid var(--border-strong)',
-                background: 'transparent',
-                width: '100%',
-                outline: 'none',
-              }}
-            />
+    <div className="dlogin">
+      {/* ── hero ── */}
+      <section className="dlogin__hero">
+        <div className="dlogin__top">
+          <div className="dlogin__wordmark">
+            <span className="dlogin__mark">CLUDE</span>
+            <span className="dlogin__badge">Dashboard</span>
           </div>
-          <button
-            onClick={handleApiKeyLogin}
-            disabled={!apiKey.trim() || connecting}
-            style={{
-              fontFamily: 'var(--mono)',
-              fontSize: 10,
-              letterSpacing: 1,
-              textTransform: 'uppercase',
-              padding: '12px 14px',
-              background: apiKey.trim() ? 'var(--text)' : 'var(--border-strong)',
-              color: apiKey.trim() ? 'var(--bg)' : 'var(--text-faint)',
-              border: 'none',
-              cursor: apiKey.trim() ? 'pointer' : 'not-allowed',
-            }}
-          >
-            {connecting ? '...' : 'Go'}
-          </button>
         </div>
 
-        {/* Endpoint (collapsed) */}
-        <details style={{ maxWidth: 320, margin: '0 auto', textAlign: 'left' }}>
-          <summary style={{
-            fontSize: 10,
-            letterSpacing: 1,
-            textTransform: 'uppercase',
-            color: 'var(--text-faint)',
-            cursor: 'pointer',
-            marginBottom: 8,
-          }}>
-            Custom endpoint
-          </summary>
-          <input
-            type="text"
-            value={endpoint}
-            onChange={(e) => setEndpoint(e.target.value)}
-            placeholder="https://clude.io (default)"
-            onKeyDown={(e) => e.key === 'Enter' && handleApiKeyLogin()}
-            style={{
-              fontFamily: 'var(--mono)',
-              fontSize: 11,
-              padding: '8px 12px',
-              border: '1px solid var(--border-strong)',
-              background: 'transparent',
-              width: '100%',
-              outline: 'none',
-            }}
-          />
-        </details>
+        <div className="dlogin__lede">
+          <div className="dlogin__eyebrow">◈ Cognitive memory, visualized</div>
+          <h1 className="dlogin__h1">
+            See what your agent <span className="dlogin__h1-em">remembers.</span>
+          </h1>
+          <p>
+            Sign in to explore your agent's memory: walk the timeline and entity graph,
+            search and export packs, and carry knowledge across agents. Typed, decay-aware,
+            and portable.
+          </p>
+        </div>
 
-        {error && (
-          <div style={{ fontSize: 11, color: '#ef4444', marginTop: 12, maxWidth: 320, margin: '12px auto 0' }}>
-            {error}
+        <span className="dlogin__tag dlogin__status"><span className="dlogin__dot" />◎ Memory online</span>
+      </section>
+
+      {/* ── form ── */}
+      <section className="dlogin__form">
+        <div className="dlogin__formhead">
+          <span className="dlogin__privy">◉ auth by <strong>PRIVY</strong></span>
+          <span className="dlogin__tag">◎ non-custodial</span>
+        </div>
+
+        <div className="dlogin__card">
+          <div>
+            <h2 className="dlogin__title">{step === 'code' ? 'Check your inbox.' : 'Welcome back.'}</h2>
+            <p className="dlogin__desc">
+              {step === 'code'
+                ? `We sent a 6-digit code to ${email}. Enter it below to continue.`
+                : 'Sign in with a one-time code or your wallet. Your memories are waiting, typed and ready to recall.'}
+            </p>
           </div>
-        )}
 
-        <div style={{
-          marginTop: 48,
-          display: 'flex',
-          justifyContent: 'center',
-          gap: 32,
-          fontSize: 10,
-          letterSpacing: 2,
-          textTransform: 'uppercase' as const,
-          color: 'var(--text-faint)',
-        }}>
-          <span>Memory Timeline</span>
-          <span>Entity Graph</span>
-          <span>Brain View</span>
-          <span>Memory Packs</span>
+          {step === 'email' ? (
+            <form onSubmit={handleSendCode} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div className="dlogin__field">
+                <label className="dlogin__label">Email</label>
+                <input
+                  className="dlogin__input"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@domain.dev"
+                  autoFocus
+                  required
+                />
+              </div>
+              <button className="dlogin__primary" type="submit" disabled={sendingCode || !email.trim()}>
+                {sendingCode ? (
+                  <><span className="dlogin__spinner" /> sending code…</>
+                ) : (
+                  <>Send one-time code <span>→</span></>
+                )}
+              </button>
+              <div className="dlogin__divider">or</div>
+              <button type="button" className="dlogin__primary dlogin__ghost" onClick={() => login()}>
+                Sign in with wallet <span>→</span>
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleVerifyCode} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div className="dlogin__field">
+                <label className="dlogin__label">6-digit code</label>
+                <input
+                  className="dlogin__input dlogin__input--code"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="[0-9]*"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+                  placeholder="123456"
+                  autoFocus
+                  required
+                />
+              </div>
+              <button className="dlogin__primary" type="submit" disabled={pending || submittingCode || code.length < 4}>
+                {pending || submittingCode ? (
+                  <><span className="dlogin__spinner" /> verifying…</>
+                ) : (
+                  <>Continue <span>→</span></>
+                )}
+              </button>
+              <div className="dlogin__inlinebtns">
+                <button
+                  type="button"
+                  className="dlogin__link"
+                  onClick={() => { setCode(''); setError(''); setStep('email'); }}
+                >
+                  ← Change email
+                </button>
+                <button type="button" className="dlogin__link" onClick={handleResend}>↺ Resend code</button>
+              </div>
+            </form>
+          )}
+
+          {error && <div className="dlogin__err">{error}</div>}
+
+          {/* API-key login — dashboard-only, kept as a secondary option. */}
+          <details className="dlogin__adv">
+            <summary>Use an API key (clk_…)</summary>
+            <div className="dlogin__advbody">
+              <div className="dlogin__row">
+                <input
+                  className="dlogin__input"
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="clk_…"
+                  onKeyDown={(e) => e.key === 'Enter' && handleApiKeyLogin()}
+                />
+                <button className="dlogin__go" onClick={handleApiKeyLogin} disabled={!apiKey.trim() || connecting}>
+                  {connecting ? '…' : 'Go'}
+                </button>
+              </div>
+              <input
+                className="dlogin__input"
+                type="text"
+                value={endpoint}
+                onChange={(e) => setEndpoint(e.target.value)}
+                placeholder="https://clude.io (custom endpoint, optional)"
+                onKeyDown={(e) => e.key === 'Enter' && handleApiKeyLogin()}
+                style={{ fontSize: 12 }}
+              />
+            </div>
+          </details>
+
+          <div className="dlogin__legal">
+            By continuing you agree to the <a href="https://clude.io" target="_blank" rel="noreferrer">Terms</a> and{' '}
+            <a href="https://clude.io" target="_blank" rel="noreferrer">Privacy Policy</a>. Memory is portable, export anytime.
+          </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

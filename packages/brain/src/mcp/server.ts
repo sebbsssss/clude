@@ -280,7 +280,7 @@ server.tool(
   {
     type: z.enum(MEMORY_TYPES)
       .describe('Memory type: episodic (events), semantic (knowledge), procedural (behaviors), self_model (self-awareness), introspective (journal entries)'),
-    content: z.string().max(5000, 'Content cannot exceed 5000 characters')
+    content: z.string().trim().min(1, 'content cannot be empty').max(5000, 'Content cannot exceed 5000 characters')
       .describe('Full memory content'),
     summary: z.string().max(500, 'Summary cannot exceed 500 characters')
       .describe('Short summary for recall matching'),
@@ -704,7 +704,7 @@ server.tool(
   {
     memories: z.array(z.object({
       type: z.enum(MEMORY_TYPES).describe('Memory type'),
-      content: z.string().max(5000).describe('Full memory content'),
+      content: z.string().trim().min(1, 'content cannot be empty').max(5000).describe('Full memory content'),
       summary: z.string().max(500).describe('Short summary'),
       tags: z.array(z.string()).optional(),
       concepts: z.array(z.string()).optional(),

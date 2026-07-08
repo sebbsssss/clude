@@ -32,6 +32,7 @@ import {
   optionalPrivyAuth,
   requirePrivyAuth,
 } from '@clude/brain/auth/privy-auth';
+import { requireOwnership, callerOwnsWallet } from '@clude/brain/auth/require-ownership';
 import { withOwnerWallet } from '@clude/shared/core/owner-context';
 import { createChildLogger } from '@clude/shared/core/logger';
 import {
@@ -131,15 +132,43 @@ function publicBaseUrl(req: Request): string {
   return `${proto}://${host}`;
 }
 
-function ownerFromReq(req: Request): string | null {
+/**
+ * Owner fence (Memory 3.0 C0). This router used to honor a bare ?owner= from
+ * anyone — the PR #290 impersonation class (read variant): any caller could
+ * scope DISCOVER recall to an arbitrary victim wallet. Now an ?owner= claim is
+ * honored only when the caller provably owns it (Privy linked wallet or clk_
+ * agent owner). Rollout per the design: OWNER_FENCE=log (default) observes and
+ * serves legacy behavior for one deploy; OWNER_FENCE=enforce blocks.
+ */
+class OwnerFenceError extends Error {
+  constructor() {
+    super('owner_not_verified');
+  }
+}
+
+function ownerFenceEnforced(): boolean {
+  return process.env.OWNER_FENCE === 'enforce';
+}
+
+async function ownerFromReq(req: Request): Promise<string | null> {
   if (req.verifiedWallet) return req.verifiedWallet;
   const q = req.query.owner;
-  if (typeof q === 'string' && q.length > 0) return q;
+  if (typeof q === 'string' && q.length > 0) {
+    if (await callerOwnsWallet(req, q)) return q;
+    if (ownerFenceEnforced()) throw new OwnerFenceError();
+    // Log-only deploy: keep serving, but make the would-block visible. No
+    // wallet addresses in logs — route + auth shape only.
+    log.warn(
+      { route: req.path, authed: Boolean(req.privyUser), hasApiKey: Boolean(req.headers.authorization?.startsWith('Bearer clk_')) },
+      'OWNER FENCE (log-only): unproven ?owner= would be blocked under enforce',
+    );
+    return q;
+  }
   return null;
 }
 
 async function withOptionalOwner<T>(req: Request, fn: () => Promise<T>): Promise<T> {
-  const owner = ownerFromReq(req);
+  const owner = await ownerFromReq(req);
   if (!owner) return fn();
   return withOwnerWallet(owner, fn);
 }
@@ -190,6 +219,10 @@ export function pmpRoutes(): Router {
         memories: memories.map((m) => memoryToPmp(m, baseUrl)),
       });
     } catch (err) {
+      if (err instanceof OwnerFenceError) {
+        res.status(403).json({ error: 'owner_not_verified' } satisfies PmpError);
+        return;
+      }
       log.error({ err }, 'DISCOVER failed');
       res.status(500).json({ error: 'discover_failed' } satisfies PmpError);
     }
@@ -225,6 +258,22 @@ export function pmpRoutes(): Router {
         res.status(404).json({ error: 'not_found' } satisfies PmpError);
         return;
       }
+      // Owner fence (Memory 3.0 C0): RETRIEVE returned ANY memory by hash_id —
+      // full content, unauthenticated, cross-tenant. A memory is now visible
+      // only if it is bot-public (owner_wallet null) or the caller provably
+      // owns it. Enforce answers 404, not 403: existence itself is tenant data.
+      const memoryOwner = (data.owner_wallet as string | null) ?? null;
+      if (memoryOwner && !(await callerOwnsWallet(req, memoryOwner))) {
+        if (ownerFenceEnforced()) {
+          res.status(404).json({ error: 'not_found' } satisfies PmpError);
+          return;
+        }
+        log.warn(
+          { id, authed: Boolean(req.privyUser), hasApiKey: Boolean(req.headers.authorization?.startsWith('Bearer clk_')) },
+          'OWNER FENCE (log-only): RETRIEVE of another tenant\'s memory would be blocked under enforce',
+        );
+      }
+
       // 410: compacted memories return their successor's id as a hint.
       if ((data.compacted as boolean) && data.compacted_into) {
         res.status(410).json({
@@ -378,8 +427,11 @@ export function pmpRoutes(): Router {
    * Body: { content, type, tags?, summary?, importance?, source? }
    * Auth required.
    */
-  router.post('/v1/memories', requirePrivyAuth, async (req: Request, res: Response) => {
-    const owner = ownerFromReq(req);
+  router.post('/v1/memories', requirePrivyAuth, requireOwnership, async (req: Request, res: Response) => {
+    // CONTRIBUTE writes into the AUTHENTICATED owner's namespace — use the wallet requireOwnership
+    // proved, NEVER a client ?owner= (the spoof: contributing memories as a victim). The public
+    // DISCOVER read keeps its own ?owner= browse filter (withOptionalOwner); this is the write path.
+    const owner = req.verifiedWallet ?? null;
     if (!owner) {
       res.status(401).json({ error: 'unauthenticated' } satisfies PmpError);
       return;

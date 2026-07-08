@@ -1,6 +1,7 @@
 import {
   existsSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
@@ -100,6 +101,17 @@ export interface ReaderOptions {
 // ────────────────────────────────────────────────────────────────────
 // Public API
 // ────────────────────────────────────────────────────────────────────
+
+/**
+ * True when the pack's manifest declares owner-sealed encryption — i.e. the
+ * pack DEK is sealed to a single holder and carried in
+ * `manifest.encryption.owner`. Consumers (e.g. the browser decrypt) use this
+ * to decide whether to attempt DEK recovery from the header. Returns false for
+ * plaintext packs and for symmetric (`key_derivation: 'none'`) packs.
+ */
+export function isOwnerSealed(manifest: MemoryPackManifest): boolean {
+  return manifest.encryption?.key_derivation === 'owner-sealed';
+}
 
 /**
  * Read a MemoryPack from disk. Accepts either a directory or a
@@ -441,6 +453,31 @@ function readDirectory(dir: string, opts: ReaderOptions): ReaderResult {
 const SAFE_MEMBER_RE = /^[A-Za-z0-9._/-]+$/;
 
 /**
+ * Decompression-bomb guard. A `.tar.zst` can expand thousands-fold, so an unauthenticated
+ * `/v1/pmp/verify` caller could ship ~75KB that explodes to gigabytes and OOM the worker. We cap the
+ * UNCOMPRESSED size two ways: (1) sum the sizes the `tar -tvf` listing declares BEFORE extracting
+ * (stops the disk write on GNU tar), and (2) a statSync backstop on the extracted tree BEFORE any
+ * reader slurps a file (stops the OOM even if the listing was forged/unparseable). Override via
+ * MEMORYPACK_MAX_UNCOMPRESSED_BYTES (bytes) for tests/ops.
+ */
+function maxUncompressedBytes(): number {
+  const n = Number(process.env.MEMORYPACK_MAX_UNCOMPRESSED_BYTES);
+  return Number.isFinite(n) && n > 0 ? n : 64 * 1024 * 1024; // 64 MB default — far above any real .pmp
+}
+
+/** Sum file sizes under `dir` (metadata only, recursive), short-circuiting once past `cap`. */
+function dirSizeBytes(dir: string, cap: number): number {
+  let total = 0;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, entry.name);
+    if (entry.isDirectory()) total += dirSizeBytes(p, cap);
+    else if (entry.isFile()) total += statSync(p).size;
+    if (total > cap) return total;
+  }
+  return total;
+}
+
+/**
  * Extract a `.tar.zst` archive into a fresh temp directory. Returns the
  * path to the directory inside the temp dir that contains
  * `manifest.json` (which may be the tmp dir itself if the producer
@@ -458,6 +495,7 @@ function extractTarball(path: string): string {
   if (!existsSync(path)) {
     throw new Error(`MemoryPack: tarball not found: ${path}`);
   }
+  const cap = maxUncompressedBytes();
 
   // 1. List members and verify each is safe before extracting.
   const list = spawnSync('tar', ['--zstd', '-tvf', path], {
@@ -476,6 +514,7 @@ function extractTarball(path: string): string {
   }
 
   const lines = list.stdout.toString().split('\n').filter((l) => l.length > 0);
+  let declaredBytes = 0;
   for (const line of lines) {
     // tar -tvf format: `drwxr-xr-x  user/group   size  date time  name`
     // The first character indicates the type: '-' file, 'd' dir, 'l' symlink, 'h' hardlink, etc.
@@ -485,8 +524,20 @@ function extractTarball(path: string): string {
         `MemoryPack: tarball contains symlink/hardlink — refusing to extract (${line.slice(0, 80)})`,
       );
     }
+    const fields = line.split(/\s+/);
+    // Decompression-bomb guard: GNU tar puts the byte size at field index 2. Sum the declared sizes
+    // and refuse BEFORE extracting if the archive would blow past the cap (stops the disk write).
+    const declared = Number(fields[2]);
+    if (Number.isFinite(declared) && declared > 0) {
+      declaredBytes += declared;
+      if (declaredBytes > cap) {
+        throw new Error(
+          `MemoryPack: archive declares > ${cap} bytes uncompressed — refusing (decompression-bomb guard)`,
+        );
+      }
+    }
     // Member name is the last whitespace-separated field on the line.
-    const name = line.split(/\s+/).pop() ?? '';
+    const name = fields[fields.length - 1] ?? '';
     if (!name) continue;
     if (name.startsWith('/')) {
       throw new Error(`MemoryPack: tarball contains absolute path — refusing (${name})`);
@@ -519,6 +570,15 @@ function extractTarball(path: string): string {
     const stderr = extract.stderr ? extract.stderr.toString() : '';
     throw new Error(
       `MemoryPack: tar --zstd -xf failed (exit ${extract.status}): ${stderr.trim() || 'no stderr'}`,
+    );
+  }
+
+  // Backstop: cap the ACTUAL extracted size before any reader slurps a file into memory. Catches a
+  // bomb whose `tar -tvf` sizes were unparseable or forged (the pre-extract sum above can miss them).
+  if (dirSizeBytes(tmp, cap) > cap) {
+    rmSync(tmp, { recursive: true, force: true });
+    throw new Error(
+      `MemoryPack: extracted archive exceeds ${cap} bytes — refusing (decompression-bomb guard)`,
     );
   }
 

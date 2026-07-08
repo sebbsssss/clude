@@ -20,10 +20,10 @@ import dotenv from 'dotenv';
 dotenv.config();
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
-import { Cortex } from '../src/sdk';
+import { Cortex } from '@clude/brain/sdk';
 import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { runIRCoT, type LLMCallFn } from '../src/experimental/ircot';
+import { runIRCoT, type LLMCallFn } from '@clude/brain/experimental/ircot';
 
 // Suppress uncaught rejections from fire-and-forget operations
 process.on('unhandledRejection', (err: any) => {

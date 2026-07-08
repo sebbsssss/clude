@@ -1,5 +1,7 @@
 import { getDb } from '@clude/shared/core/database';
+import { config } from '@clude/shared/config';
 import { createChildLogger } from '@clude/shared/core/logger';
+import { renderGroundedLine, byMemoryDateAsc } from '@clude/shared/core/memory-grounding';
 import {
   clamp,
   timeAgo,
@@ -22,14 +24,14 @@ import {
   MAX_AUTO_LINKS,
   LINK_CO_RETRIEVAL_BOOST,
   INTERNAL_MEMORY_SOURCES,
-  INTERNAL_IMPORTANCE_BOOST,
   BOND_TYPE_WEIGHTS,
 } from '@clude/shared/utils';
 import type { MemoryLinkType } from '@clude/shared/utils/constants';
 import { generateImportanceScore } from '@clude/shared/core/claude-client';
 import { writeMemo, isRegistryEnabled, registerMemoryOnChain } from '@clude/shared/core/solana-client';
 import { memoryContentHash } from '@clude/tokenization';
-import { generateEmbedding, generateQueryEmbedding, generateEmbeddings, isEmbeddingEnabled } from '@clude/shared/core/embeddings';
+import { generateEmbedding, generateQueryEmbedding, generateEmbeddings, isEmbeddingEnabled, generateVertexEmbeddings, generateQueryEmbeddingForSpace, isVertexConfigured } from '@clude/shared/core/embeddings';
+import { activeEmbeddingSpace, vectorRpcName } from '@clude/shared/core/migration-profile';
 import {
   autoCategorizeTags,
   DEFAULT_PACK_ID,
@@ -39,6 +41,7 @@ import {
 import { getExperimentalConfig } from '../experimental/config';
 import { bm25SearchMemories } from '../experimental/bm25-search';
 import { setContentTokens } from './content-tokens';
+import { runReconcileShadow } from './reconcile-shadow';
 import { encryptForStorage, delegationStateForWrite } from './memory-encryption';
 import { isOpenRouterEnabled } from '@clude/shared/core/openrouter-client';
 import { generateMemoryOp } from '@clude/shared/core/memory-ops';
@@ -95,15 +98,107 @@ export function getOwnerWallet(): string | null {
 /** Sentinel value: scope to memories where owner_wallet IS NULL (bot's own). */
 export const SCOPE_BOT_OWN = '__BOT_OWN__';
 
-export function scopeToOwner<T>(query: T): T {
+/**
+ * Owner-scope fail-closed flag (Memory 3.0 C0). Read live so benchmarks and
+ * staged rollouts can flip it without a rebuild. When ON, "no owner in scope"
+ * resolves to SCOPE_BOT_OWN (the bot's own memories) instead of null (no
+ * filter = every tenant's memories, the fail-open half of the PR #290 class).
+ */
+export function isOwnerScopeFailClosed(): boolean {
+  return process.env.OWNER_SCOPE_FAILCLOSED === 'true';
+}
+
+/**
+ * Effective owner scope for READ paths: a tenant wallet, SCOPE_BOT_OWN, or null.
+ * Null (legacy fail-open) survives only while the flag is off. Migration 019
+ * teaches the recall RPCs the sentinel; against an older RPC the sentinel
+ * matches zero rows, so an early flip fails CLOSED, never cross-tenant.
+ *
+ * WRITE paths must keep using getOwnerWallet() (the sentinel is a filter,
+ * never a value to store — bot rows stay owner_wallet NULL).
+ */
+export function getOwnerScope(): string | null {
   const wallet = getOwnerWallet();
-  if (wallet === SCOPE_BOT_OWN) {
+  if (wallet) return wallet;
+  return isOwnerScopeFailClosed() ? SCOPE_BOT_OWN : null;
+}
+
+export function scopeToOwner<T>(query: T): T {
+  const scope = getOwnerScope();
+  if (scope === SCOPE_BOT_OWN) {
     return (query as any).is('owner_wallet', null);
   }
-  if (wallet) {
-    return (query as any).eq('owner_wallet', wallet);
+  if (scope) {
+    return (query as any).eq('owner_wallet', scope);
   }
   return query;
+}
+
+/**
+ * Owner post-guard (defense-in-depth, Memory 3.0 C0): strips rows that escaped
+ * RPC-level scoping via the entity / graph / fragment expansion paths. Pure so
+ * it is directly testable; recallMemories applies it after every phase merged.
+ */
+export function applyOwnerPostGuard<T extends { owner_wallet?: string | null }>(
+  results: T[],
+  scope: string | null,
+): { kept: T[]; stripped: number } {
+  if (!scope) return { kept: results, stripped: 0 };
+  const kept =
+    scope === SCOPE_BOT_OWN
+      ? results.filter((m) => m.owner_wallet == null)
+      : results.filter((m) => m.owner_wallet === scope);
+  return { kept, stripped: results.length - kept.length };
+}
+
+/**
+ * BENCH_MODE (Memory 3.0 C0): read-only recall. Benchmarks must observe the
+ * corpus, not mutate it — access boosts (access_count / last_accessed /
+ * decay_factor bumps) and Hebbian link reinforcement change retrieval state on
+ * every read, which is why a reused seeded wallet drifts (+2.6pp measured from
+ * data freshness alone). The harness preflight asserts this is set; prod never
+ * sets it.
+ */
+export function isBenchMode(): boolean {
+  return process.env.BENCH_MODE === 'true';
+}
+
+/**
+ * Should this recall mutate read-state? Callers pass RecallOptions; BENCH_MODE
+ * overrides everything. Pure, exported for tests.
+ */
+export function shouldTrackAccess(opts: { trackAccess?: boolean }): boolean {
+  if (isBenchMode()) return false;
+  return opts.trackAccess !== false;
+}
+
+/**
+ * Fragment-lane RPC args (Memory 3.0 C0 / P0.3 fragment parity). The extended
+ * filters (min_decay, filter_types) exist only in the migration-043 signature
+ * of match_memory_fragments; PostgREST matches RPCs by named args, so sending
+ * them to the old 4-arg function finds no match and the lane dies. Flip
+ * MEMORY_FRAGMENT_FILTERS=true only AFTER 043 is applied. The reverse is safe:
+ * old-style 4-arg calls keep working against the new function via parameter
+ * defaults, so the flip is one-way and the flag can be retired later.
+ */
+export function buildFragmentRpcArgs(opts: {
+  embeddingJson: string;
+  matchThreshold: number;
+  matchCount: number;
+  minDecay: number;
+  memoryTypes?: string[] | null;
+}): Record<string, unknown> {
+  const args: Record<string, unknown> = {
+    query_embedding: opts.embeddingJson,
+    match_threshold: opts.matchThreshold,
+    match_count: opts.matchCount,
+    filter_owner: getOwnerScope(),
+  };
+  if (process.env.MEMORY_FRAGMENT_FILTERS === 'true') {
+    args.min_decay = opts.minDecay;
+    args.filter_types = opts.memoryTypes && opts.memoryTypes.length > 0 ? opts.memoryTypes : null;
+  }
+  return args;
 }
 
 // ============================================================
@@ -281,6 +376,22 @@ export function inferConcepts(summary: string, source: string, tags: string[]): 
   return [...new Set(concepts)];
 }
 
+// Heuristic importance when caller omits it. Replaces the old flat-0.5 default
+// (41% of all rows were exactly 0.5). Tunable; explicit importance always wins.
+export function scoreImportanceOnWrite(opts: StoreMemoryOptions): number {
+  const base: Record<string, number> = {
+    self_model: 0.75, semantic: 0.70, procedural: 0.65, introspective: 0.60, episodic: 0.45,
+  };
+  let score = base[opts.type] ?? 0.5;
+  const len = (opts.content ?? '').trim().length;
+  score += Math.min(len / 1000, 0.15);            // longer = a bit more important (cap +0.15)
+  if (opts.tags && opts.tags.length) score += 0.05;
+  const concepts = opts.concepts ?? inferConcepts(opts.summary, opts.source, opts.tags || []);
+  if (concepts.length) score += 0.05;
+  if (INTERNAL_MEMORY_SOURCES.has(opts.source)) score -= 0.05;  // dream/reflection slightly lower
+  return Math.max(0, Math.min(1, score));
+}
+
 // ---- STORE DEDUP ---- //
 //
 // Prevents high-frequency external agents (e.g. Shiro trading cycles) from
@@ -425,6 +536,11 @@ async function ensureTopicEmbeddings(installedPackIds: string[]): Promise<Map<st
 // ---- STORE ---- //
 
 export async function storeMemory(opts: StoreMemoryOptions): Promise<number | null> {
+  // Reject empty-content memories outright — they skip embedding yet still surface in
+  // recall, wasting compute on nothing (see migration 022). The DB CHECK is defense-in-depth.
+  const trimmedContent = (opts.content ?? '').trim();
+  if (!trimmedContent) { log.warn({ source: opts.source }, 'Rejected empty-content memory'); return null; }
+
   // Skip duplicate writes from high-frequency external agent sources.
   // Applies to any source whose writes are repetitive by nature (shiro_* trading cycles, etc.)
   if (opts.source.startsWith('shiro_') && isDuplicateWrite(opts.source, opts.summary)) {
@@ -434,6 +550,9 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
 
   const db = getDb();
   const ownerWallet = getOwnerWallet();
+
+  // Heuristic auto-score when caller omits importance; explicit value always wins.
+  const importance = clamp(opts.importance ?? scoreImportanceOnWrite(opts), 0, 1);
 
   // Auto-classify concepts if not explicitly provided
   const concepts = opts.concepts || inferConcepts(opts.summary, opts.source, opts.tags || []);
@@ -456,7 +575,8 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
   try {
     // Encrypt content (content only — summary/tags/metadata stay plaintext). Precedence:
     // envelope (PMP §5) → legacy SDK scheme (configureEncryption, cortex.ts) → plaintext.
-    const plaintextContent = opts.content.slice(0, MEMORY_MAX_CONTENT_LENGTH);
+    // Store the trimmed text (see empty-content guard above).
+    const plaintextContent = trimmedContent.slice(0, MEMORY_MAX_CONTENT_LENGTH);
     const envelope = await encryptForStorage(plaintextContent, ownerWallet || null);
     const legacyEncrypt = !envelope && isEncryptionEnabled();
     const storedContent = envelope
@@ -475,7 +595,7 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
         tags: taggedTags,
         concepts,
         emotional_valence: clamp(opts.emotionalValence ?? 0, -1, 1),
-        importance: clamp(opts.importance ?? 0.5, 0, 1),
+        importance,
         source: opts.source,
         source_id: opts.sourceId || null,
         related_user: opts.relatedUser || null,
@@ -501,7 +621,7 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
       hashId: data.hash_id,
       type: opts.type,
       summary: opts.summary.slice(0, 60),
-      importance: opts.importance,
+      importance,
       concepts,
     }, 'Memory stored');
 
@@ -528,27 +648,43 @@ export async function storeMemory(opts: StoreMemoryOptions): Promise<number | nu
 
     // Notify reflection trigger system (Park et al. 2023 — event-driven reflection)
     eventBus.emit('memory:stored', {
-      importance: clamp(opts.importance ?? 0.5, 0, 1),
+      importance,
       memoryType: opts.type,
       source: opts.source,
     });
 
-    // Commit memory to Solana (fire-and-forget). v0.1: dual-writes the legacy
-    // solana_signature AND the new PMP tokenisation columns (content_hash,
-    // cnft_address, cnft_tx_sig, tokenization_status). v0.2 will drop the legacy
-    // path once verifiers are on PMP exclusively.
+    // Commit memory to Solana (fire-and-forget). ALWAYS runs, independent of the outbox flag —
+    // it has its own durability story (tokenization_status) and is NOT an outbox job. v0.1:
+    // dual-writes the legacy solana_signature AND the PMP tokenisation columns. v0.2 will drop
+    // the legacy path once verifiers are on PMP exclusively.
     commitMemoryToChain(data.id, opts, data as MemoryRowForTokenisation, plaintextContent, envelope !== null || legacyEncrypt).catch(err =>
       log.warn({ err }, 'On-chain memory commit failed'),
     );
 
-    // Generate embeddings and store fragments (fire-and-forget)
-    embedMemory(data.id, opts).catch(err => log.warn({ err }, 'Embedding generation failed'));
-
-    // Auto-link to related memories (fire-and-forget, runs after embedding is available)
-    autoLinkMemory(data.id, opts).catch(err => log.warn({ err }, 'Auto-linking failed'));
-
-    // Extract entities and build knowledge graph (fire-and-forget)
-    extractAndLinkEntitiesForMemory(data.id, opts).catch(err => log.debug({ err }, 'Entity extraction failed'));
+    // Enrichment (embed → link → extract). Memory 3.0 C2: when MEMORY_OUTBOX is on AND the
+    // enqueue lands, a single durable 'enrich' job replaces the fire-and-forget triad (whose
+    // errors were swallowed with no retry — 429s at scale silently dropped enrichment). If the
+    // flag is off, or the enqueue degrades (migration 044 unapplied), fall back to fire-and-forget
+    // so behavior is never worse than today.
+    let enqueued = false;
+    if (config.memory.outboxEnabled) {
+      enqueued = await enqueueEnrichJob(db, data.id);
+    }
+    if (!enqueued) {
+      const embedP = embedMemory(data.id, opts);
+      embedP.catch(err => log.warn({ err }, 'Embedding generation failed'));
+      autoLinkMemory(data.id, opts).catch(err => log.warn({ err }, 'Auto-linking failed'));
+      extractAndLinkEntitiesForMemory(data.id, opts).catch(err => log.debug({ err }, 'Entity extraction failed'));
+      // Memory 3.0 C1 SHADOW: record a proposed reconcile op AFTER the embedding is persisted (it
+      // reads memories.embedding — no re-embed). Scope captured eagerly (getOwnerScope() can be
+      // null / fail-open when the C0 fence flag is off, so pass the write's own resolved owner).
+      // Fully detached — chained on embedP but never awaited before return; runReconcileShadow
+      // never throws, so the .catch only swallows an embed rejection.
+      if (config.memory.reconcileEnabled) {
+        const reconcileScope = ownerWallet || SCOPE_BOT_OWN;
+        embedP.then(() => runReconcileShadow(data.id, reconcileScope)).catch(() => {});
+      }
+    }
 
     return data.id;
   } catch (err) {
@@ -672,7 +808,87 @@ async function commitMemoryToChain(
 /**
  * Generate vector embedding for a memory's summary and store it.
  */
-async function embedMemory(memoryId: number, opts: StoreMemoryOptions): Promise<void> {
+// ── Memory 3.0 C2: durable enrichment outbox enqueue ────────────────────────
+// storeMemory enqueues ONE 'enrich' job (embed → link → extract run in order by the worker)
+// when MEMORY_OUTBOX is on. Never throws: any error (e.g. relation-missing 42P01 when migration
+// 044 is unapplied) returns false so the caller falls back to fire-and-forget — behavior is never
+// worse than today. The degrade is logged exactly once to avoid log spam.
+let outboxDegradeLogged = false;
+function logOutboxDegradeOnce(err: unknown, memoryId: number): void {
+  if (outboxDegradeLogged) return;
+  outboxDegradeLogged = true;
+  const e = err as { code?: string; message?: string };
+  log.warn(
+    { code: e?.code, message: e?.message, memoryId },
+    'Outbox enqueue degraded — falling back to fire-and-forget (migration 044 unapplied?)',
+  );
+}
+
+async function enqueueEnrichJob(db: ReturnType<typeof getDb>, memoryId: number): Promise<boolean> {
+  try {
+    const { error } = await db.from('memory_write_jobs').insert({ memory_id: memoryId, job_type: 'enrich' });
+    if (error) {
+      logOutboxDegradeOnce(error, memoryId);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    logOutboxDegradeOnce(err, memoryId);
+    return false;
+  }
+}
+
+/** @internal test-only reset for the once-guard. */
+export function _resetOutboxDegradeLog(): void {
+  outboxDegradeLogged = false;
+}
+
+/**
+ * Memory 3.0 C2: the enrichment pipeline the outbox worker runs for an 'enrich' job, in
+ * dependency order (autoLinkMemory reads the memory's own embedding, written by embedMemory).
+ * Sequential + awaited (unlike the fire-and-forget triad) so a whole-job retry re-runs all three;
+ * each step is idempotent (embed delete-before-insert, link unique-index upsert, extract
+ * upsert-RPC). The caller (outbox-worker) wraps this in withOwnerWallet(job owner) so the
+ * ambient owner scope is correct off the poller tick.
+ */
+export async function runEnrichPipeline(memoryId: number, opts: StoreMemoryOptions): Promise<void> {
+  await embedMemory(memoryId, opts, { replaceFragments: true });
+  await autoLinkMemory(memoryId, opts);
+  await extractAndLinkEntitiesForMemory(memoryId, opts);
+  // Memory 3.0 C1 SHADOW: the outbox path's reconcile home — after embedMemory persisted the
+  // vector this reads. The worker wraps this in withOwnerWallet(job owner), so getOwnerWallet() is
+  // the job's owner; fall back to the bot-own sentinel (never null → always owner-fenced). Never
+  // throws; never mutates a memory row.
+  if (config.memory.reconcileEnabled) {
+    await runReconcileShadow(memoryId, getOwnerWallet() || SCOPE_BOT_OWN);
+  }
+}
+
+/**
+ * storeMemory + outbox status, for callers that want the {hash_id, jobs_queued} shape (the design
+ * contract). storeMemory itself keeps its number|null signature (zero call-site churn); this thin
+ * wrapper reads the ground truth back: jobs_queued counts the memory's outbox rows (1 when the
+ * enrich job enqueued, 0 when the flag is off or the enqueue degraded to fire-and-forget).
+ */
+export async function storeMemoryWithOutbox(
+  opts: StoreMemoryOptions,
+): Promise<{ id: number; hash_id: string; jobs_queued: number } | null> {
+  const id = await storeMemory(opts);
+  if (id === null) return null;
+  const db = getDb();
+  const { data: row } = await db.from('memories').select('hash_id').eq('id', id).maybeSingle();
+  const { count } = await db
+    .from('memory_write_jobs')
+    .select('id', { count: 'exact', head: true })
+    .eq('memory_id', id);
+  return { id, hash_id: (row?.hash_id as string) ?? '', jobs_queued: count ?? 0 };
+}
+
+async function embedMemory(
+  memoryId: number,
+  opts: StoreMemoryOptions,
+  embedOpts: { replaceFragments?: boolean } = {},
+): Promise<void> {
   if (!isEmbeddingEnabled()) return;
 
   const db = getDb();
@@ -724,10 +940,25 @@ async function embedMemory(memoryId: number, opts: StoreMemoryOptions): Promise<
     return;
   }
 
+  // Shadow-space dual-write (GCP migration Slice 3b): when Vertex is configured
+  // (VERTEX_PROJECT set), embed the SAME fragment texts into the Vertex space and
+  // store them in the embedding_vertex column alongside the Voyage vectors. Keeping
+  // both spaces current is what lets recall flip via EMBEDDING_ACTIVE and roll back
+  // instantly. Non-fatal and never blocks the Voyage write; a no-op (zero cost) when
+  // VERTEX_PROJECT is unset. Only writes the column when a vector exists, so it is
+  // safe on a DB where migration 040 has not yet added embedding_vertex.
+  const vertexEmbeddings = isVertexConfigured()
+    ? await generateVertexEmbeddings(fragments.map(f => f.text))
+    : [];
+  const vertexSummary = vertexEmbeddings[0];
+
   // Persist the summary embedding on the memory row first — primary recall depends on it.
   await db
     .from('memories')
-    .update({ embedding: JSON.stringify(summaryEmbedding) })
+    .update({
+      embedding: JSON.stringify(summaryEmbedding),
+      ...(vertexSummary ? { embedding_vertex: JSON.stringify(vertexSummary) } : {}),
+    })
     .eq('id', memoryId);
 
   // Persist all fragments with their own embeddings. Failures here are
@@ -739,10 +970,18 @@ async function embedMemory(memoryId: number, opts: StoreMemoryOptions): Promise<
       fragment_type: f.type,
       content: f.text.slice(0, EMBEDDING_FRAGMENT_MAX_LENGTH),
       embedding: embeddings[i] ? JSON.stringify(embeddings[i]) : null,
+      ...(vertexEmbeddings[i] ? { embedding_vertex: JSON.stringify(vertexEmbeddings[i]) } : {}),
     }))
     .filter(r => r.embedding !== null);
 
   if (fragmentRows.length > 0) {
+    // Memory 3.0 C2: the outbox worker re-runs enrichment on retry, so it passes
+    // replaceFragments to make this idempotent (delete-before-insert). Embeddings are already
+    // computed above, so the destructive gap is the ms between delete and insert — no network
+    // call sits inside it. The fire-and-forget path (flag off) keeps the plain insert.
+    if (embedOpts.replaceFragments) {
+      await db.from('memory_fragments').delete().eq('memory_id', memoryId);
+    }
     const { error } = await db.from('memory_fragments').insert(fragmentRows);
     if (error) {
       log.warn({ err: error.message, memoryId }, 'Failed to store memory fragments (summary embedding intact)');
@@ -870,11 +1109,16 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
     const vectorSearchPromise = (queries.length > 0 && isEmbeddingEnabled() && !opts._vectorScores) 
       ? (async () => {
         // Embed all query variants (with cache)
+        // Embed the query in the ACTIVE space (Voyage by default, Vertex when flipped)
+        // so the query vector matches the column the (base or _vertex) match RPC reads.
+        // activeEmbeddingSpace() is fixed per process (env-frozen), so the text-keyed
+        // cache never mixes spaces within a deployment.
+        const space = activeEmbeddingSpace();
         const queryEmbeddings = await Promise.all(
           queries.map(async q => {
             const cached = getCachedEmbedding(q);
             if (cached) return cached;
-            const emb = await generateQueryEmbedding(q);
+            const emb = await generateQueryEmbeddingForSpace(space, q);
             if (emb) setCachedEmbedding(q, emb);
             return emb;
           })
@@ -895,25 +1139,26 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
           // Fragments find facts buried in long memory bodies that the summary embedding misses.
           const allSearches = validEmbeddings.flatMap(emb => {
             const searches: Promise<any[]>[] = [
-              Promise.resolve(db.rpc('match_memories', {
+              Promise.resolve(db.rpc(vectorRpcName('match_memories'), {
                 query_embedding: JSON.stringify(emb),
                 match_threshold: VECTOR_MATCH_THRESHOLD,
                 match_count: limit * (opts.skipExpansion ? 12 : 4),
                 filter_types: opts.memoryTypes || null,
                 filter_user: opts.relatedUser || null,
                 min_decay: minDecay,
-                filter_owner: getOwnerWallet() || null,
+                filter_owner: getOwnerScope(),
                 filter_tags: opts.tags && opts.tags.length > 0 ? opts.tags : null,
               })).then(r => r.data || []),
             ];
             if (!opts.skipExpansion) {
               searches.push(
-                Promise.resolve(db.rpc('match_memory_fragments', {
-                  query_embedding: JSON.stringify(emb),
-                  match_threshold: VECTOR_MATCH_THRESHOLD,
-                  match_count: limit * 2,
-                  filter_owner: getOwnerWallet() || null,
-                })).then(r => r.data || []),
+                Promise.resolve(db.rpc(vectorRpcName('match_memory_fragments'), buildFragmentRpcArgs({
+                  embeddingJson: JSON.stringify(emb),
+                  matchThreshold: VECTOR_MATCH_THRESHOLD,
+                  matchCount: limit * 2,
+                  minDecay,
+                  memoryTypes: opts.memoryTypes,
+                }))).then(r => r.data || []),
               );
             }
             return searches;
@@ -1001,7 +1246,7 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
           // so the bare var is null under hosted/wrapped calls and BM25 would search the
           // ENTIRE table unscoped — burying the owner's exact-match facts. This is why
           // BM25 silently never surfaced bench facts even after the RPC was fixed.
-          filterOwner: getOwnerWallet() || undefined,
+          filterOwner: getOwnerScope() || undefined,
           filterTypes: opts.memoryTypes || undefined,
           filterTags: opts.tags || undefined,
         });
@@ -1103,7 +1348,17 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
         let vectorQuery = db
           .from('memories')
           .select('*')
-          .in('id', missingIds);
+          .in('id', missingIds)
+          // P0.3: the backfill used to trust upstream filtering. The memory-level
+          // lane does filter by decay, but the FRAGMENT lane (pre-migration-043)
+          // does not — so decayed parents could re-enter here. Filter explicitly.
+          .gte('decay_factor', minDecay)
+          // Revoked-memory resurrection guard: every missing ID came from vector
+          // similarity, and fragments are only written after the parent summary
+          // embedding is stored — so a parent with a NULL embedding here means it
+          // was revoked (revoke clears the embedding but pre-043 left fragments
+          // live). Never resurrect it through the fragment lane.
+          .not('embedding', 'is', null);
         vectorQuery = scopeToOwner(vectorQuery);
         // Respect memoryTypes filter even for vector-matched results
         if (opts.memoryTypes && opts.memoryTypes.length > 0) {
@@ -1217,7 +1472,7 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
           seed_ids: seedIds,
           min_strength: 0.2,
           max_results: limit,
-          filter_owner: getOwnerWallet() || null,
+          filter_owner: getOwnerScope(),
         });
 
         if (linked && linked.length > 0) {
@@ -1298,20 +1553,25 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
       }
     }
 
-    // Final owner_wallet guard: strip any memories that don't belong to the current owner
-    // This catches leaks from entity/graph/fragment paths that may not filter by owner
-    const finalOwner = getOwnerWallet();
-    if (finalOwner) {
-      const beforeCount = results.length;
-      results = results.filter((m: Memory) => m.owner_wallet === finalOwner);
-      if (results.length < beforeCount) {
-        log.warn({ stripped: beforeCount - results.length, owner: finalOwner }, 'Owner guard stripped foreign memories from recall results');
+    // Final owner_wallet guard: strip any memories that don't belong to the current
+    // scope. Catches leaks from entity/graph/fragment paths that may not filter by
+    // owner. Sentinel-aware (Memory 3.0 C0): under SCOPE_BOT_OWN only null-owner
+    // rows survive; under the fail-closed flag an unscoped context resolves to the
+    // sentinel, so this guard now also runs for bot-context recalls.
+    const finalScope = getOwnerScope();
+    {
+      const { kept, stripped } = applyOwnerPostGuard(results, finalScope);
+      if (stripped > 0) {
+        // No wallet addresses in logs — scope shape only.
+        log.warn({ stripped, botOwn: finalScope === SCOPE_BOT_OWN }, 'Owner guard stripped foreign memories from recall results');
       }
+      results = kept;
     }
 
-    // Update access counts in parallel (skip for internal processing like dream cycles)
-    // Source-aware reinforcement: internal signals get gated boost to prevent confabulation
-    if (opts.trackAccess !== false) {
+    // Update access counts in parallel (skip for internal processing like dream cycles).
+    // Access tracking only — importance is no longer boosted on read (see migration 019).
+    // BENCH_MODE forces this off: reads must not mutate retrieval state under measurement.
+    if (shouldTrackAccess(opts)) {
       const ids = results.map((m: Memory) => m.id);
       const sources = results.map((m: Memory) => m.source || '');
       updateMemoryAccess(ids, sources).catch(err => log.warn({ err }, 'Memory access tracking failed'));
@@ -1580,22 +1840,16 @@ export async function hydrateMemories(ids: number[]): Promise<Memory[]> {
 
 // ---- ACCESS TRACKING ---- //
 
-async function updateMemoryAccess(ids: number[], sources: string[] = []): Promise<void> {
+// `sources` is retained for call-site signature stability (recall passes it positionally);
+// it is no longer read here now that importance is not boosted on read.
+async function updateMemoryAccess(ids: number[], _sources: string[] = []): Promise<void> {
   if (ids.length === 0) return;
   const db = getDb();
 
-  // Source-aware importance boosts: external sources get full reinforcement,
-  // internal sources (dreams, reflections) get gated boost to prevent confabulation spirals.
-  // Based on Source Monitoring Framework (Johnson et al.) and validation-gated Hebbian learning.
-  const importanceBoosts = ids.map((_, i) => {
-    const source = sources[i] || '';
-    return INTERNAL_MEMORY_SOURCES.has(source) ? INTERNAL_IMPORTANCE_BOOST : 0.02;
-  });
-
-  // Single RPC: increment access_count, refresh last_accessed, boost decay + importance
+  // Single RPC: increment access_count, refresh last_accessed, reactivate decay.
+  // Importance is NOT boosted on read — see migration 019 (read->rank->read feedback loop).
   const { error } = await db.rpc('batch_boost_memory_access', {
     memory_ids: ids,
-    importance_boosts: importanceBoosts,
   });
   if (error) {
     log.warn({ error: error.message, ids }, 'Batch memory access update failed');
@@ -1699,7 +1953,7 @@ async function autoLinkMemory(memoryId: number, opts: StoreMemoryOptions): Promi
         query_embedding: JSON.stringify(embedding),
         match_threshold: LINK_SIMILARITY_THRESHOLD,
         match_count: MAX_AUTO_LINKS * 2,
-        filter_owner: getOwnerWallet() || null,
+        filter_owner: getOwnerScope(),
       });
 
       if (similar) {
@@ -2028,7 +2282,7 @@ export async function getMemoryStats(): Promise<MemoryStats> {
     for (let page = 0; page < MAX_PAGES; page++) {
       let pageQuery = db
         .from('memories')
-        .select('importance, decay_factor, created_at, related_user, tags, concepts')
+        .select('importance, decay_factor, created_at, related_user, owner_wallet, tags, concepts')
         .order('id', { ascending: true })
         .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
       pageQuery = scopeToOwner(pageQuery);
@@ -2051,6 +2305,9 @@ export async function getMemoryStats(): Promise<MemoryStats> {
         impSum += m.importance;
         decaySum += m.decay_factor;
         if (m.related_user) users.add(m.related_user);
+        // MCP writes leave related_user null; count the owner so a fresh owner with
+        // memories yields uniqueUsers >= 1 instead of 0.
+        if (m.owner_wallet) users.add(m.owner_wallet);
         if (m.tags) {
           for (const tag of m.tags) {
             tagCounts[tag] = (tagCounts[tag] || 0) + 1;
@@ -2082,9 +2339,11 @@ export async function getMemoryStats(): Promise<MemoryStats> {
       stats.newestMemory = sorted[sorted.length - 1] || null;
     }
 
-    const { count, error: dreamError } = await db
-      .from('dream_logs')
-      .select('id', { count: 'exact', head: true });
+    // Scope to the current owner (dream_logs.owner_wallet — migration 021); otherwise a
+    // brand-new owner sees the GLOBAL dream count (thousands of dreams on an empty store).
+    let dreamQuery = db.from('dream_logs').select('id', { count: 'exact', head: true });
+    dreamQuery = scopeToOwner(dreamQuery);
+    const { count, error: dreamError } = await dreamQuery;
     if (dreamError) {
       log.warn({ error: dreamError.message }, 'Failed to count dream logs');
     }
@@ -2172,6 +2431,8 @@ export async function storeDreamLog(
       input_memory_ids: inputMemoryIds,
       output: output.slice(0, MEMORY_MAX_CONTENT_LENGTH),
       new_memories_created: newMemoryIds,
+      // Stamp owner so getMemoryStats can scope the dream count (migration 021).
+      owner_wallet: getOwnerWallet() === SCOPE_BOT_OWN ? null : getOwnerWallet(),
     });
 
   if (error) {
@@ -2181,29 +2442,38 @@ export async function storeDreamLog(
 
 // ---- HELPERS ---- //
 
+/**
+ * Temporal-scoped grounding rules for the recalled-memory block — the read-side
+ * hallucination defense for the bot AND every external clude SDK consumer
+ * (Cortex.formatContext). Mirrors apps/server/src/lib/memory-prompt.ts: the
+ * dominant remaining hallucination class is wrong-date / superseded-fact, so the
+ * conflict rule is scoped to the question's tense (latest-for-now, as-of-for-past)
+ * rather than blunt latest-wins. Disambiguation, not abstention.
+ */
+const CONTEXT_GROUNDING_RULES =
+  "Ground specific claims — facts, preferences, history, dates, numbers, names — in the memories above; if a detail isn't written here, say you don't remember it rather than guessing. Each line is dated: when two memories disagree, read them as a timeline — use the most recent value for a question about now, and the value that was in effect at the time for a question about a specific past date (\"as of …\"); never blend conflicting values. Don't invent memories or details that aren't above. General knowledge is unaffected — answer those normally.";
+
 export function formatMemoryContext(memories: Memory[]): string {
   if (memories.length === 0) return '';
 
   const lines: string[] = ['## Memory Recall'];
 
-  const episodic = memories.filter(m => m.memory_type === 'episodic');
-  const semantic = memories.filter(m => m.memory_type === 'semantic');
-  const procedural = memories.filter(m => m.memory_type === 'procedural');
-  const selfModel = memories.filter(m => m.memory_type === 'self_model');
-  const introspective = memories.filter(m => m.memory_type === 'introspective');
+  // Order each tier oldest→newest so conflicting facts render as a dated timeline.
+  // filter() returns fresh arrays, so sorting them never mutates the caller's input.
+  const episodic = memories.filter(m => m.memory_type === 'episodic').sort(byMemoryDateAsc);
+  const semantic = memories.filter(m => m.memory_type === 'semantic').sort(byMemoryDateAsc);
+  const procedural = memories.filter(m => m.memory_type === 'procedural').sort(byMemoryDateAsc);
+  const selfModel = memories.filter(m => m.memory_type === 'self_model').sort(byMemoryDateAsc);
+  const introspective = memories.filter(m => m.memory_type === 'introspective').sort(byMemoryDateAsc);
 
   if (episodic.length > 0) {
     lines.push('### Past Interactions');
-    for (const m of episodic) {
-      lines.push(`- [${timeAgo(m.created_at)}] ${m.summary}`);
-    }
+    for (const m of episodic) lines.push(renderGroundedLine(m));
   }
 
   if (semantic.length > 0) {
     lines.push('### Things You Know');
-    for (const m of semantic) {
-      lines.push(`- ${m.summary}`);
-    }
+    for (const m of semantic) lines.push(renderGroundedLine(m));
   }
 
   if (procedural.length > 0) {
@@ -2213,26 +2483,22 @@ export function formatMemoryContext(memories: Memory[]): string {
       const confidence = meta?.positiveRate != null
         ? ` [${Math.round(meta.positiveRate * 100)}% success rate, based on ${meta.basedOn || '?'} interactions]`
         : '';
-      lines.push(`- ${m.summary}${confidence}`);
+      lines.push(renderGroundedLine(m, confidence));
     }
   }
 
   if (introspective.length > 0) {
     lines.push('### Your Own Reflections');
-    for (const m of introspective) {
-      lines.push(`- [${timeAgo(m.created_at)}] ${m.summary}`);
-    }
+    for (const m of introspective) lines.push(renderGroundedLine(m));
   }
 
   if (selfModel.length > 0) {
     lines.push('### Self-Observations');
-    for (const m of selfModel) {
-      lines.push(`- ${m.summary}`);
-    }
+    for (const m of selfModel) lines.push(renderGroundedLine(m));
   }
 
   lines.push('');
-  lines.push('You REMEMBER these interactions and facts. Reference them naturally if relevant.');
+  lines.push(CONTEXT_GROUNDING_RULES);
   if (procedural.length > 0) {
     lines.push('');
     lines.push('IMPORTANT: You MUST follow the Learned Strategies above. They are behavioral rules you derived from analyzing your own past successes and failures. Apply them to this response.');
@@ -2349,7 +2615,8 @@ export async function matchByEmbedding(opts: {
     query_embedding: JSON.stringify(opts.embedding),
     match_threshold: opts.threshold,
     match_count: opts.limit,
-    filter_owner: opts.ownerWallet ?? null,
+    // Explicit ownerWallet wins; otherwise the ambient scope (sentinel-aware, C0).
+    filter_owner: opts.ownerWallet ?? getOwnerScope(),
   });
   return (data ?? []).map((r: { id: number; similarity: number }) => ({
     id: r.id,

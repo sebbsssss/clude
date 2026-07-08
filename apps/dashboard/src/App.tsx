@@ -4,16 +4,14 @@ import { AuthContext } from './hooks/AuthContext';
 import { AgentProvider } from './context/AgentContext';
 import { Layout } from './components/Layout';
 import { Landing } from './pages/Landing';
-import { Dashboard } from './pages/Dashboard';
-import { Timeline } from './pages/Timeline';
-import { EntityMap } from './pages/EntityMap';
-import { DecayHeatmap } from './pages/DecayHeatmap';
-import { MemoryPacks } from './pages/MemoryPacks';
+import { Overview } from './pages/Overview';
+import { ExploreScreen } from './pages/ExploreScreen';
+import { WikiScreen } from './pages/WikiScreen';
+import { ExportScreen } from './pages/ExportScreen';
+import { SettingsScreen } from './pages/SettingsScreen';
+import { Constellation } from './pages/Constellation';
+// Kept for the public /showcase routes (separate from the signed-in app).
 import { WikiPacks } from './pages/WikiPacks';
-import { Settings } from './pages/Settings';
-import { Setup } from './pages/Setup';
-import { FileMemory } from './pages/file-memory';
-import { Explore } from './pages/explore';
 import { Wiki } from './pages/Wiki/Wiki';
 import LiveGraph from './pages/showcase/LiveGraph';
 import DashboardPreview from './pages/showcase/DashboardPreview';
@@ -23,18 +21,22 @@ function AuthenticatedApp() {
     <AgentProvider>
       <Layout>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/timeline" element={<Timeline />} />
-          <Route path="/entities" element={<EntityMap />} />
-          <Route path="/brain" element={<Explore />} />
-          <Route path="/wiki" element={<Wiki />} />
-          <Route path="/decay" element={<DecayHeatmap />} />
-          <Route path="/packs" element={<MemoryPacks />} />
-          <Route path="/wiki-packs" element={<WikiPacks />} />
-          <Route path="/file-memory" element={<FileMemory />} />
-          <Route path="/explore" element={<Explore />} />
-          <Route path="/setup" element={<Setup />} />
-          <Route path="/settings" element={<Settings />} />
+          <Route path="/" element={<Overview />} />
+          <Route path="/explore" element={<ExploreScreen />} />
+          <Route path="/wiki" element={<WikiScreen />} />
+          <Route path="/export" element={<ExportScreen />} />
+          <Route path="/settings" element={<SettingsScreen />} />
+          {/* Private per-account view: gated inside the component (ansem@clude.io only). */}
+          <Route path="/constellation" element={<Constellation />} />
+          {/* Legacy paths → their new home, so nothing 404s. */}
+          <Route path="/timeline" element={<Navigate to="/explore" replace />} />
+          <Route path="/entities" element={<Navigate to="/explore" replace />} />
+          <Route path="/brain" element={<Navigate to="/explore" replace />} />
+          <Route path="/decay" element={<Navigate to="/explore" replace />} />
+          <Route path="/packs" element={<Navigate to="/export" replace />} />
+          <Route path="/wiki-packs" element={<Navigate to="/wiki" replace />} />
+          <Route path="/file-memory" element={<Navigate to="/export" replace />} />
+          <Route path="/setup" element={<Navigate to="/settings" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>

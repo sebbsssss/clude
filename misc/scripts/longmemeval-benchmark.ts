@@ -20,6 +20,12 @@
  *   --run-id ID             (isolate run data with unique owner_wallet — avoids cleanup)
  */
 process.env.LOG_LEVEL = 'error';
+// BENCH_MODE preflight (Memory 3.0 C10): the brain runs IN-PROCESS here, so this
+// guarantees recall is read-only under measurement — no access boosts, no Hebbian
+// reinforcement mutating the corpus mid-run (+2.6pp drift measured from data
+// freshness alone). Set by construction rather than asserted so it can't be forgotten.
+process.env.BENCH_MODE = 'true';
+console.log('── BENCH_MODE=true (read-only recall: no access boosts / Hebbian reinforcement) ──');
 import dotenv from 'dotenv';
 dotenv.config();
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -232,6 +238,15 @@ function parseArgs() {
         break;
     }
   }
+
+  // Guardrail (Memory 3.0 C10): --skip-seeding reuses a seeded corpus, but the
+  // end-of-run cleanup runs regardless and would DELETE that corpus — a measured
+  // footgun (it wiped a weight-sweep corpus mid-comparison). Pair them by force.
+  if (opts.skipSeeding && !opts.skipCleanup) {
+    opts.skipCleanup = true;
+    console.warn('── --skip-seeding implies --skip-cleanup (forced): end-of-run cleanup would delete the reused corpus ──');
+  }
+
   return opts;
 }
 
@@ -1006,8 +1021,8 @@ Rules:
 - For ordering: list all events with dates, sort chronologically
 - Match events SEMANTICALLY: "baking class" = "culinary workshop", "subscription" = "weekly delivery", "guitar repair" = "guitar shop"
 - Keep the final answer concise (1-2 sentences) with the specific number or ordering
-- The events ARE in the context. If not in the timeline, check EVERY conversation in the original context.
-- NEVER say "I don't have information" or "not mentioned" — search harder.`,
+- Before concluding anything is missing, search EVERY conversation AND the timeline, and match SEMANTICALLY (different wording is not absence — "baking class" = "culinary workshop").
+- If, after that thorough search, the question names a specific person, item, purchase, or event that genuinely does NOT appear anywhere in the context, do NOT substitute a similar one to force an answer. Begin your answer with "Not enough information:" and state what is and isn't there (e.g. "Not enough information: you mentioned fixing the fence but did not mention buying cows from Peter"). Answering about a different entity than the one asked is a worse error than naming the gap.`,
       messages: [{
         role: 'user',
         content: `Extracted timeline:\n${timeline}\n\nOriginal memory context:\n${context}\n\nQuestion: ${question}\n\nAnswer:`,
@@ -1018,7 +1033,10 @@ Rules:
 
     // If temporal two-stage gives IDK, fall back to single-pass with IDK retry
     const temporalIdkPattern = /i don't (have|see|find)|cannot (find|answer)|no.*(information|record|mention).*(about|of|for)|not.*in the timeline|only (find|identify) (one|no)|does not (include|contain)/i;
-    if (temporalIdkPattern.test(temporalAnswer)) {
+    // A DELIBERATE abstention (a named entity is genuinely absent) is the CORRECT answer
+    // for abstention questions — don't recycle it through the force-an-answer single-pass.
+    const deliberateAbstention = /not enough information|didn't mention|did not mention/i.test(temporalAnswer);
+    if (temporalIdkPattern.test(temporalAnswer) && !deliberateAbstention) {
       // Fall through to standard single-pass approach below (don't return early)
     } else {
       return temporalAnswer;
@@ -1719,15 +1737,24 @@ async function main() {
   // ── Clean previous benchmark data ─────────────────────────────
   if (opts.skipSeeding) {
     console.log('── Skipping cleanup + seeding (--skip-seeding) ──');
-    // Verify data exists
-    const { count } = await db.from('memories').select('id', { count: 'exact', head: true })
-      .eq('owner_wallet', BENCHMARK_OWNER_WALLET);
-    console.log(`  Existing memories: ${count}`);
-    if (!count || count === 0) {
-      console.error('  ERROR: No memories found for this wallet. Remove --skip-seeding to seed.');
-      process.exit(1);
+    if (opts.oracleBypass) {
+      // Oracle-bypass builds the reader context directly from each question's raw
+      // haystack sessions and never calls cortex.recall — so the DB is never read
+      // and an empty wallet is expected. This makes --oracle-bypass --skip-seeding a
+      // valid reader-only measurement mode (no seeding, no DB dependency).
+      console.log('  Oracle-bypass: reader-only, no seeded memories required');
+      console.log();
+    } else {
+      // Verify data exists
+      const { count } = await db.from('memories').select('id', { count: 'exact', head: true })
+        .eq('owner_wallet', BENCHMARK_OWNER_WALLET);
+      console.log(`  Existing memories: ${count}`);
+      if (!count || count === 0) {
+        console.error('  ERROR: No memories found for this wallet. Remove --skip-seeding to seed.');
+        process.exit(1);
+      }
+      console.log();
     }
-    console.log();
   }
 
   if (!opts.skipSeeding) {

@@ -16,6 +16,8 @@
       "@clude/brain/*": ["../../packages/brain/src/*"],
       "@clude/tokenization": ["../../packages/tokenization/src"],
       "@clude/tokenization/*": ["../../packages/tokenization/src/*"],
+      "@clude/memorypack": ["../../packages/memorypack/src"],
+      "@clude/memorypack/*": ["../../packages/memorypack/src/*"],
       "@clude/pmp-sdk": ["../../packages/pmp-sdk/src"],
       "@clude/pmp-sdk/*": ["../../packages/pmp-sdk/src/*"]
     }

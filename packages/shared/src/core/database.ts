@@ -1,6 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { config } from '../config';
 import { createChildLogger } from './logger';
+import { resolveDbConnection } from './migration-profile';
 
 const log = createChildLogger('database');
 
@@ -8,8 +9,12 @@ let supabase: SupabaseClient;
 
 export function getDb(): SupabaseClient {
   if (!supabase) {
-    supabase = createClient(config.supabase.url, config.supabase.serviceKey);
-    log.info('Supabase client initialized');
+    // Switch-layer seam (GCP parallel-run): connect to whatever the migration
+    // profile resolves — Supabase by default, Cloud SQL's PostgREST endpoint when
+    // DB_TARGET=cloudsql. The ~600 .from()/.rpc() call sites are untouched.
+    const conn = resolveDbConnection();
+    supabase = createClient(conn.url, conn.serviceKey);
+    log.info({ dbTarget: config.migration.dbTarget }, 'Database client initialized');
   }
   return supabase;
 }
@@ -19,11 +24,16 @@ export function _setDb(client: SupabaseClient): void {
   supabase = client;
 }
 
-export async function initDatabase(): Promise<void> {
-  const db = getDb();
-
-  // Create tables via SQL (using Supabase's rpc or direct REST)
-  // We'll use the Supabase SQL editor approach — run migrations via rpc
+/**
+ * The boot DDL blob — the full schema for a FRESH database. Since Memory 3.0 C0
+ * (P0.4) this is NOT replayed on every start: replaying hundreds of lines of
+ * CREATE OR REPLACE on boot silently reverts hand-applied migrations whenever
+ * this blob is stale (the migration-028 class: a reverted RPC killed vector
+ * recall for weeks). Migrations are the single schema writer for ESTABLISHED
+ * databases; this blob only bootstraps empty ones (the self-hosted SDK
+ * zero-config path). Keep it in sync with supabase-schema.sql + migrations.
+ */
+async function runBootDdl(db: SupabaseClient): Promise<void> {
   try {
     const { error } = await db.rpc('exec_sql', {
       query: `
@@ -95,6 +105,7 @@ export async function initDatabase(): Promise<void> {
           input_memory_ids BIGINT[] DEFAULT '{}',
           output TEXT NOT NULL,
           new_memories_created BIGINT[] DEFAULT '{}',
+          owner_wallet TEXT,
           created_at TIMESTAMPTZ DEFAULT NOW()
         );
 
@@ -179,7 +190,7 @@ export async function initDatabase(): Promise<void> {
           target_id BIGINT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
           link_type TEXT NOT NULL CHECK (link_type IN (
             'supports', 'contradicts', 'elaborates', 'causes', 'follows', 'relates', 'resolves',
-            'happens_before', 'happens_after', 'concurrent_with'
+            'supersedes', 'happens_before', 'happens_after', 'concurrent_with'
           )),
           strength REAL DEFAULT 0.5,
           created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -214,7 +225,11 @@ export async function initDatabase(): Promise<void> {
           WHERE ml.source_id = ANY(seed_ids)
             AND ml.target_id != ALL(seed_ids)
             AND ml.strength >= min_strength
-            AND (filter_owner IS NULL OR m.owner_wallet = filter_owner)
+            AND (
+      filter_owner IS NULL
+      OR (filter_owner = '__BOT_OWN__' AND m.owner_wallet IS NULL)
+      OR m.owner_wallet = filter_owner
+    )
           UNION
           SELECT DISTINCT ON (ml.source_id, ml.link_type)
             ml.source_id AS memory_id,
@@ -226,7 +241,11 @@ export async function initDatabase(): Promise<void> {
           WHERE ml.target_id = ANY(seed_ids)
             AND ml.source_id != ALL(seed_ids)
             AND ml.strength >= min_strength
-            AND (filter_owner IS NULL OR m.owner_wallet = filter_owner)
+            AND (
+      filter_owner IS NULL
+      OR (filter_owner = '__BOT_OWN__' AND m.owner_wallet IS NULL)
+      OR m.owner_wallet = filter_owner
+    )
           ORDER BY strength DESC
           LIMIT max_results;
         $$;
@@ -253,6 +272,10 @@ export async function initDatabase(): Promise<void> {
         ALTER TABLE dream_logs DROP CONSTRAINT IF EXISTS dream_logs_session_type_check;
         ALTER TABLE dream_logs ADD CONSTRAINT dream_logs_session_type_check
           CHECK (session_type IN ('consolidation', 'reflection', 'emergence', 'compaction', 'decay', 'contradiction_resolution'));
+
+        -- Migration 021: per-owner attribution for dream_logs (fixes totalDreamSessions leak)
+        ALTER TABLE dream_logs ADD COLUMN IF NOT EXISTS owner_wallet TEXT;
+        CREATE INDEX IF NOT EXISTS idx_dream_logs_owner ON dream_logs(owner_wallet);
 
         -- Migration: add 'resolves' + temporal link types
         ALTER TABLE memory_links DROP CONSTRAINT IF EXISTS memory_links_link_type_check;
@@ -443,6 +466,115 @@ export async function initDatabase(): Promise<void> {
         CREATE INDEX IF NOT EXISTS idx_memories_delegated ON memories(provider_delegated) WHERE encrypted = TRUE;
         ALTER TABLE memories ADD COLUMN IF NOT EXISTS summary_ciphertext TEXT;
         ALTER TABLE memories ADD COLUMN IF NOT EXISTS embedding_ciphertext TEXT;
+
+        -- Memory 3.0 Phase 1 (migration 044): bi-temporal validity + provenance (additive/nullable, inert until MEMORY_RECONCILE)
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS valid_from TIMESTAMPTZ;
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS invalid_at TIMESTAMPTZ;
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS superseded_by TEXT;
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS fact_key TEXT;
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS extractor_version TEXT;
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS extraction_confidence REAL;
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS source_turn_ref JSONB;
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS hash_id_v2 TEXT;
+        CREATE INDEX IF NOT EXISTS idx_memories_valid ON memories(id) WHERE invalid_at IS NULL;
+        CREATE INDEX IF NOT EXISTS idx_memories_fact_key ON memories(fact_key) WHERE fact_key IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_memories_hash_id_v2 ON memories(hash_id_v2) WHERE hash_id_v2 IS NOT NULL;
+
+        -- Memory 3.0 Phase 1 (migration 044): the C2 durable write outbox.
+        CREATE TABLE IF NOT EXISTS memory_write_jobs (
+          id BIGSERIAL PRIMARY KEY,
+          memory_id BIGINT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+          job_type TEXT NOT NULL CHECK (job_type IN ('enrich', 'embed', 'link', 'extract', 'reconcile', 'backfill_v2')),
+          status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'done', 'failed')),
+          attempts INT NOT NULL DEFAULT 0,
+          next_retry_at TIMESTAMPTZ DEFAULT NOW(),
+          last_error TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_write_jobs_claim ON memory_write_jobs(status, next_retry_at) WHERE status IN ('pending', 'failed');
+        CREATE INDEX IF NOT EXISTS idx_write_jobs_memory ON memory_write_jobs(memory_id);
+        CREATE INDEX IF NOT EXISTS idx_write_jobs_running ON memory_write_jobs(updated_at) WHERE status = 'running';
+
+        -- Memory 3.0 C2 outbox — MIRROR of migration 045 (byte-equivalent). The table above is in
+        -- the boot blob, so the claim RPC + idempotency objects MUST be too: otherwise a
+        -- boot-provisioned box gets the table but not the RPC and the worker silently never drains
+        -- (the migration-028 class). Keep in sync with 045.
+        DO $do$
+        BEGIN
+          ALTER TABLE memory_write_jobs DROP CONSTRAINT IF EXISTS memory_write_jobs_job_type_check;
+          ALTER TABLE memory_write_jobs ADD CONSTRAINT memory_write_jobs_job_type_check
+            CHECK (job_type IN ('enrich', 'embed', 'link', 'extract', 'reconcile', 'backfill_v2'));
+        EXCEPTION WHEN undefined_table THEN NULL; END $do$;
+
+        CREATE OR REPLACE FUNCTION claim_memory_write_jobs(
+          p_limit INT DEFAULT 20, p_stale_running INTERVAL DEFAULT INTERVAL '15 minutes', p_owner TEXT DEFAULT NULL
+        )
+        RETURNS TABLE (id BIGINT, memory_id BIGINT, job_type TEXT, attempts INT, owner_wallet TEXT)
+        LANGUAGE plpgsql AS $claimfn$
+        BEGIN
+          RETURN QUERY
+          UPDATE memory_write_jobs j
+             SET status = 'running', attempts = j.attempts + 1, updated_at = NOW()
+            FROM (
+              SELECT jj.id FROM memory_write_jobs jj JOIN memories m ON m.id = jj.memory_id
+               WHERE ((jj.status IN ('pending','failed') AND jj.next_retry_at IS NOT NULL AND jj.next_retry_at <= NOW())
+                      OR (jj.status = 'running' AND jj.updated_at < NOW() - p_stale_running))
+                 AND (p_owner IS NULL OR m.owner_wallet = p_owner OR (p_owner = '__BOT_OWN__' AND m.owner_wallet IS NULL))
+               ORDER BY jj.next_retry_at ASC NULLS LAST LIMIT p_limit FOR UPDATE SKIP LOCKED
+            ) claimed
+           WHERE j.id = claimed.id
+          RETURNING j.id, j.memory_id, j.job_type, j.attempts,
+                    (SELECT mm.owner_wallet FROM memories mm WHERE mm.id = j.memory_id);
+        END; $claimfn$;
+
+        DO $do$
+        BEGIN
+          DELETE FROM memory_links a USING memory_links b
+           WHERE a.ctid < b.ctid AND a.source_id = b.source_id AND a.target_id = b.target_id AND a.link_type = b.link_type;
+          ALTER TABLE memory_links DROP CONSTRAINT IF EXISTS memory_links_unique_edge;
+          ALTER TABLE memory_links ADD CONSTRAINT memory_links_unique_edge UNIQUE (source_id, target_id, link_type);
+        EXCEPTION WHEN undefined_table THEN NULL; END $do$;
+
+        CREATE OR REPLACE FUNCTION upsert_entity_relation(
+          p_src BIGINT, p_tgt BIGINT, p_type TEXT, p_evidence BIGINT DEFAULT NULL, p_strength REAL DEFAULT 0.5
+        )
+        RETURNS VOID LANGUAGE sql AS $uerfn$
+          INSERT INTO entity_relations (source_entity_id, target_entity_id, relation_type, strength, evidence_memory_ids)
+          VALUES (p_src, p_tgt, p_type, LEAST(1.0, p_strength),
+                  CASE WHEN p_evidence IS NULL THEN '{}'::bigint[] ELSE ARRAY[p_evidence] END)
+          ON CONFLICT (source_entity_id, target_entity_id, relation_type) DO UPDATE
+            SET strength = LEAST(1.0, entity_relations.strength +
+                  CASE WHEN p_evidence IS NULL OR p_evidence = ANY(entity_relations.evidence_memory_ids) THEN 0.0 ELSE 0.1 END),
+                evidence_memory_ids = (SELECT ARRAY(SELECT DISTINCT e FROM unnest(entity_relations.evidence_memory_ids || EXCLUDED.evidence_memory_ids) AS e));
+        $uerfn$;
+
+        -- Memory 3.0 C1 (migration 046): reconciliation SHADOW decision log. MIRROR — byte-equivalent
+        -- to migration 046. Records a PROPOSED reconcile op per write without applying it, so enforce
+        -- can be greenlit from a labeled sample. Deliberately NOT added to CORE_TABLES (dormant,
+        -- default-off; must not trip SCHEMA DRIFT at boot on an un-migrated prod box — C2 precedent).
+        CREATE TABLE IF NOT EXISTS memory_reconciliation_log (
+          id               BIGSERIAL PRIMARY KEY,
+          memory_id        BIGINT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+          owner_wallet     TEXT,
+          mode             TEXT NOT NULL DEFAULT 'shadow' CHECK (mode IN ('shadow','enforce')),
+          proposed_op      TEXT NOT NULL CHECK (proposed_op IN ('add','update','noop','needs_router','skip')),
+          target_memory_id BIGINT,
+          max_cosine       REAL,
+          band             TEXT CHECK (band IN ('hi','mid','lo','none')),
+          router_used      BOOLEAN NOT NULL DEFAULT false,
+          router_model     TEXT,
+          fact_key         TEXT,
+          reason           TEXT,
+          label            TEXT,
+          labeled_at       TIMESTAMPTZ,
+          gate_version     TEXT,
+          created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_reconcile_log_owner_created ON memory_reconciliation_log(owner_wallet, created_at);
+        CREATE INDEX IF NOT EXISTS idx_reconcile_log_op ON memory_reconciliation_log(proposed_op);
+        CREATE INDEX IF NOT EXISTS idx_reconcile_log_router ON memory_reconciliation_log(mode, router_used);
+
         DO $do$
         BEGIN
           IF NOT EXISTS (
@@ -455,6 +587,40 @@ export async function initDatabase(): Promise<void> {
             CREATE INDEX IF NOT EXISTS idx_memories_ts_summary ON memories USING GIN(ts_summary);
           END IF;
         END $do$;
+
+        -- Semantic search across memory-level embeddings with metadata filtering (the always-on
+        -- recall vector lane). MIRROR of migration 028 / supabase-schema.sql — 8-arg filter_tags form.
+        CREATE OR REPLACE FUNCTION match_memories(
+          query_embedding vector(1024),
+          match_threshold float DEFAULT 0.3,
+          match_count int DEFAULT 10,
+          filter_types text[] DEFAULT NULL,
+          filter_user text DEFAULT NULL,
+          min_decay float DEFAULT 0.1,
+          filter_owner text DEFAULT NULL,
+          filter_tags text[] DEFAULT NULL
+        )
+        RETURNS TABLE (id bigint, similarity float)
+        LANGUAGE plpgsql AS $$
+        BEGIN
+          RETURN QUERY
+          SELECT m.id, (1 - (m.embedding <=> query_embedding))::float AS similarity
+          FROM memories m
+          WHERE m.embedding IS NOT NULL
+            AND m.decay_factor >= min_decay
+            AND (filter_types IS NULL OR m.memory_type = ANY(filter_types))
+            AND (filter_user IS NULL OR m.related_user = filter_user)
+            AND (
+      filter_owner IS NULL
+      OR (filter_owner = '__BOT_OWN__' AND m.owner_wallet IS NULL)
+      OR m.owner_wallet = filter_owner
+    )
+            AND (filter_tags IS NULL OR m.tags && filter_tags)
+            AND (1 - (m.embedding <=> query_embedding)) > match_threshold
+          ORDER BY m.embedding <=> query_embedding
+          LIMIT match_count;
+        END;
+        $$;
 
         -- Temporal-aware semantic search RPC (Exp 9)
         CREATE OR REPLACE FUNCTION match_memories_temporal(
@@ -479,12 +645,51 @@ export async function initDatabase(): Promise<void> {
             AND m.decay_factor >= min_decay
             AND (filter_types IS NULL OR m.memory_type = ANY(filter_types))
             AND (filter_user IS NULL OR m.related_user = filter_user)
-            AND (filter_owner IS NULL OR m.owner_wallet = filter_owner)
+            AND (
+      filter_owner IS NULL
+      OR (filter_owner = '__BOT_OWN__' AND m.owner_wallet IS NULL)
+      OR m.owner_wallet = filter_owner
+    )
             AND (filter_tags IS NULL OR m.tags && filter_tags)
             AND (1 - (m.embedding <=> query_embedding)) > match_threshold
             AND (start_date IS NULL OR COALESCE(m.event_date, m.created_at) >= start_date)
             AND (end_date IS NULL OR COALESCE(m.event_date, m.created_at) <= end_date)
           ORDER BY m.embedding <=> query_embedding
+          LIMIT match_count;
+        END;
+        $$;
+
+        -- Fragment-level semantic search with deduplication to parent memory. Returns the highest
+        -- similarity fragment per memory (the non-skipExpansion recall lane). MIRROR of
+        -- supabase-schema.sql — 6-arg migration-043 form; the 4-arg (migration 009) call still
+        -- resolves against it via parameter defaults, so a boot-provisioned box is never left on a
+        -- stale fragment signature.
+        CREATE OR REPLACE FUNCTION match_memory_fragments(
+          query_embedding vector(1024),
+          match_threshold float DEFAULT 0.3,
+          match_count int DEFAULT 10,
+          filter_owner text DEFAULT NULL,
+          min_decay float DEFAULT 0.0,
+          filter_types text[] DEFAULT NULL
+        )
+        RETURNS TABLE (memory_id bigint, max_similarity float)
+        LANGUAGE plpgsql AS $$
+        BEGIN
+          RETURN QUERY
+          SELECT f.memory_id, MAX((1 - (f.embedding <=> query_embedding))::float) AS max_similarity
+          FROM memory_fragments f
+          JOIN memories m ON m.id = f.memory_id
+          WHERE f.embedding IS NOT NULL
+            AND (1 - (f.embedding <=> query_embedding)) > match_threshold
+            AND m.decay_factor >= min_decay
+            AND (filter_types IS NULL OR m.memory_type = ANY(filter_types))
+            AND (
+      filter_owner IS NULL
+      OR (filter_owner = '__BOT_OWN__' AND m.owner_wallet IS NULL)
+      OR m.owner_wallet = filter_owner
+    )
+          GROUP BY f.memory_id
+          ORDER BY max_similarity DESC
           LIMIT match_count;
         END;
         $$;
@@ -498,13 +703,19 @@ export async function initDatabase(): Promise<void> {
           updated_at    TIMESTAMPTZ DEFAULT NOW()
         );
         CREATE TABLE IF NOT EXISTS memory_dek_wraps (
-          memory_id   BIGINT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
-          recipient   TEXT   NOT NULL,
-          wrapped_dek TEXT   NOT NULL,
-          wrap_pubkey TEXT   NOT NULL,
-          created_at  TIMESTAMPTZ DEFAULT NOW(),
-          PRIMARY KEY (memory_id, recipient)
+          memory_id     BIGINT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+          recipient     TEXT   NOT NULL,
+          wrapped_dek   TEXT   NOT NULL,
+          wrap_pubkey   TEXT   NOT NULL,
+          holder_wallet TEXT,                          -- (034) names the title_holder; NULL for owner/provider
+          created_at    TIMESTAMPTZ DEFAULT NOW(),
+          CONSTRAINT memory_dek_wraps_recipient_chk CHECK (recipient IN ('owner', 'provider', 'title_holder')),
+          CONSTRAINT memory_dek_wraps_holder_chk CHECK ((recipient = 'title_holder') = (holder_wallet IS NOT NULL))
         );
+        -- (036) holder-aware uniqueness: one owner + one provider per memory (NULLS NOT DISTINCT),
+        -- and one title_holder per (memory, holder) so a sale's seller + buyer wraps coexist (RT7).
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_dek_wraps_identity
+          ON memory_dek_wraps (memory_id, recipient, holder_wallet) NULLS NOT DISTINCT;
         CREATE INDEX IF NOT EXISTS idx_dek_wraps_memory ON memory_dek_wraps(memory_id);
 
         -- Populate content_tokens from a transient plaintext arg (PostgREST can't express to_tsvector inline).
@@ -532,6 +743,8 @@ export async function initDatabase(): Promise<void> {
             provider_delegated = false
           WHERE id = p_memory_id;
           DELETE FROM memory_dek_wraps WHERE memory_id = p_memory_id AND recipient = 'provider';
+          -- Fragment parity (migration 043): fragments hold plaintext + live embeddings.
+          DELETE FROM memory_fragments WHERE memory_id = p_memory_id;
         END;
         $rev$;
 
@@ -588,7 +801,11 @@ export async function initDatabase(): Promise<void> {
           FROM memories m
           WHERE (m.ts_summary @@ tsquery_val OR m.content_tokens @@ tsquery_val)
             AND m.decay_factor >= min_decay
-            AND (filter_owner IS NULL OR m.owner_wallet = filter_owner)
+            AND (
+      filter_owner IS NULL
+      OR (filter_owner = '__BOT_OWN__' AND m.owner_wallet IS NULL)
+      OR m.owner_wallet = filter_owner
+    )
             AND (filter_types IS NULL OR m.memory_type = ANY(filter_types))
             AND (filter_tags IS NULL OR m.tags && filter_tags)
           ORDER BY rank DESC
@@ -696,6 +913,50 @@ export async function initDatabase(): Promise<void> {
         );
         CREATE INDEX IF NOT EXISTS idx_wiki_pack_installations_owner
           ON wiki_pack_installations(owner_wallet);
+
+        -- Migration 019: corrected access-boost RPC (no importance mutation on read).
+        -- Re-asserted on every boot so the read->rank->read feedback loop can't return.
+        -- importance_boosts is kept for call-site signature compatibility and ignored.
+        -- Drop the stale single-arg overload (migration 003) so the two-arg version is
+        -- unambiguous and the lockdown below can't be bypassed via an unrevoked overload.
+        DROP FUNCTION IF EXISTS batch_boost_memory_access(bigint[]);
+        CREATE OR REPLACE FUNCTION batch_boost_memory_access(
+          memory_ids BIGINT[],
+          importance_boosts DOUBLE PRECISION[] DEFAULT NULL
+        ) RETURNS void LANGUAGE plpgsql AS $fn$
+        BEGIN
+          UPDATE memories
+          SET access_count = access_count + 1,
+              last_accessed = NOW(),
+              decay_factor = LEAST(1.0, decay_factor + 0.1)
+          WHERE id = ANY(memory_ids);
+        END;
+        $fn$;
+
+        -- Migration 020: lock down dangerous SECURITY DEFINER RPCs to service_role only.
+        -- exec_sql/boost RPCs must never be callable by anon/authenticated (the publishable
+        -- key ships in client apps). Wrapped so a not-yet-created function never aborts boot.
+        DO $do$ BEGIN
+          REVOKE EXECUTE ON FUNCTION exec_sql(text) FROM PUBLIC, anon, authenticated;
+          GRANT EXECUTE ON FUNCTION exec_sql(text) TO service_role;
+        EXCEPTION WHEN undefined_function THEN NULL; END $do$;
+
+        DO $do$ BEGIN
+          REVOKE EXECUTE ON FUNCTION batch_boost_memory_access(bigint[], double precision[]) FROM PUBLIC, anon, authenticated;
+          GRANT EXECUTE ON FUNCTION batch_boost_memory_access(bigint[], double precision[]) TO service_role;
+        EXCEPTION WHEN undefined_function THEN NULL; END $do$;
+
+        DO $do$ BEGIN
+          REVOKE EXECUTE ON FUNCTION boost_memory_importance(bigint, double precision, double precision) FROM PUBLIC, anon, authenticated;
+          GRANT EXECUTE ON FUNCTION boost_memory_importance(bigint, double precision, double precision) TO service_role;
+        EXCEPTION WHEN undefined_function THEN NULL; END $do$;
+
+        -- Migration 022 (guard portion): reject empty content on NEW writes in every env.
+        -- NOT VALID enforces on new INSERT/UPDATE without scanning existing rows; the
+        -- one-time cleanup of legacy blank rows + VALIDATE lives in the manual 022 file.
+        DO $do$ BEGIN
+          ALTER TABLE memories ADD CONSTRAINT memories_content_nonempty CHECK (length(btrim(content)) > 0) NOT VALID;
+        EXCEPTION WHEN duplicate_object THEN NULL; END $do$;
       `
     });
 
@@ -705,8 +966,147 @@ export async function initDatabase(): Promise<void> {
   } catch {
     log.warn('rpc exec_sql not available. Create tables via Supabase SQL editor.');
   }
+}
 
-  log.info('Database initialized');
+// ---- Schema verification (Memory 3.0 C0 / P0.4: the boot-blob freeze) ---- //
+
+/** Core tables every deployment must have; `memories` doubles as the fresh-DB probe. */
+const CORE_TABLES = [
+  'memories',
+  'memory_fragments',
+  'memory_links',
+  'agent_keys',
+  'dream_logs',
+  'rate_limits',
+  'chat_conversations',
+  'chat_messages',
+] as const;
+
+/** Core RPCs whose absence means a stale/partial schema (both live in the blob + migrations). */
+const CORE_RPC_PROBES: Array<{ name: string; args: Record<string, unknown> }> = [
+  { name: 'get_linked_memories', args: { seed_ids: [], min_strength: 0.1, max_results: 1, filter_owner: null } },
+  { name: 'bm25_search_memories', args: { search_query: '', match_count: 1, min_decay: 0.1, filter_owner: null } },
+  // Vector recall lanes (memory.ts recall). match_memories is the always-on memory-level lane;
+  // match_memory_fragments is the fragment lane (non-skipExpansion path). Both are silently absent
+  // from a stale boot blob, so probe them so the gap surfaces as drift instead of a dead lane.
+  // Vector-safe args (null embedding + match_count 0) make each a no-op read. filter_tags pins the
+  // migration-028 8-arg match_memories overload recall calls unconditionally (catches a pre-028 box
+  // where recall would break); the fragment probe stays the 4/6-arg common subset (min_decay +
+  // filter_types are opt-in via MEMORY_FRAGMENT_FILTERS) so it never false-drifts a pre-043 box
+  // still serving the migration-009 4-arg form.
+  { name: 'match_memories', args: { query_embedding: null, match_count: 0, filter_owner: null, filter_tags: null } },
+  { name: 'match_memory_fragments', args: { query_embedding: null, match_count: 0, filter_owner: null } },
+  // Memory 3.0 C2: probe the outbox claim RPC so a table-without-RPC state (the §6 hazard) is
+  // caught at boot as drift rather than silently never draining.
+  { name: 'claim_memory_write_jobs', args: { p_limit: 0 } },
+];
+
+export interface SchemaReport {
+  at: string;
+  status: 'ok' | 'fresh-bootstrapped' | 'drift' | 'unknown' | 'replayed';
+  missingTables: string[];
+  brokenRpcs: string[];
+}
+
+let lastSchemaReport: SchemaReport | null = null;
+
+/** Last schema verification result, for /health or dashboard surfacing. */
+export function getSchemaDriftReport(): SchemaReport | null {
+  return lastSchemaReport;
+}
+
+const MISSING_RE = /does not exist|could not find|schema cache/i;
+
+async function verifyCoreSchema(db: SupabaseClient): Promise<{ missingTables: string[]; brokenRpcs: string[]; probeErrors: string[] }> {
+  const missingTables: string[] = [];
+  const probeErrors: string[] = [];
+
+  for (const table of CORE_TABLES) {
+    try {
+      const { error } = await db.from(table).select('id', { head: true, count: 'exact' }).limit(1);
+      if (error) {
+        if (MISSING_RE.test(error.message ?? '')) missingTables.push(table);
+        else probeErrors.push(`${table}: ${error.message}`);
+      }
+    } catch (err) {
+      probeErrors.push(`${table}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  const brokenRpcs: string[] = [];
+  for (const probe of CORE_RPC_PROBES) {
+    try {
+      const { error } = await db.rpc(probe.name, probe.args);
+      if (error && MISSING_RE.test(error.message ?? '')) brokenRpcs.push(probe.name);
+    } catch (err) {
+      probeErrors.push(`${probe.name}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  return { missingTables, brokenRpcs, probeErrors };
+}
+
+/**
+ * Initialize the database (Memory 3.0 C0 / P0.4 semantics).
+ *
+ * Modes via INIT_DB_MODE:
+ *   'auto' (default) — verify-only drift check. Mutates schema ONLY when the
+ *       database is verifiably FRESH (the `memories` table itself is missing),
+ *       which preserves the self-hosted SDK zero-config bootstrap. Anything
+ *       else missing on an established DB is DRIFT: log.error, never mutate —
+ *       apply the corresponding migration by hand.
+ *   'verify' — never mutates, even on a fresh DB (drift check only).
+ *   'replay' — legacy behavior, unconditional DDL replay (escape hatch).
+ *
+ * @param dbOverride test injection; production callers pass nothing.
+ */
+export async function initDatabase(dbOverride?: SupabaseClient): Promise<void> {
+  const db = dbOverride ?? getDb();
+  const mode = process.env.INIT_DB_MODE ?? 'auto';
+
+  if (mode === 'replay') {
+    await runBootDdl(db);
+    lastSchemaReport = { at: new Date().toISOString(), status: 'replayed', missingTables: [], brokenRpcs: [] };
+    log.info('Database initialized (legacy replay mode)');
+    return;
+  }
+
+  let { missingTables, brokenRpcs, probeErrors } = await verifyCoreSchema(db);
+
+  // Fresh database: the memories table itself is deterministically absent.
+  if (mode === 'auto' && missingTables.includes('memories')) {
+    log.info('Fresh database detected (no memories table) — running boot DDL');
+    await runBootDdl(db);
+    ({ missingTables, brokenRpcs, probeErrors } = await verifyCoreSchema(db));
+    const healthy = missingTables.length === 0 && brokenRpcs.length === 0;
+    lastSchemaReport = {
+      at: new Date().toISOString(),
+      status: healthy ? 'fresh-bootstrapped' : 'drift',
+      missingTables,
+      brokenRpcs,
+    };
+    if (healthy) log.info('Database bootstrapped from boot DDL');
+    else log.error({ missingTables, brokenRpcs }, 'SCHEMA DRIFT after fresh bootstrap — check exec_sql availability');
+    return;
+  }
+
+  if (probeErrors.length > 0 && missingTables.length === 0 && brokenRpcs.length === 0) {
+    // Probes errored for non-schema reasons (network, auth) — health unknown, never mutate.
+    lastSchemaReport = { at: new Date().toISOString(), status: 'unknown', missingTables, brokenRpcs };
+    log.warn({ probeErrors: probeErrors.slice(0, 3) }, 'Schema verification inconclusive (probe errors); skipping');
+    return;
+  }
+
+  const healthy = missingTables.length === 0 && brokenRpcs.length === 0;
+  lastSchemaReport = { at: new Date().toISOString(), status: healthy ? 'ok' : 'drift', missingTables, brokenRpcs };
+  if (healthy) {
+    log.info('Database schema verified (boot blob frozen; migrations are the single schema writer)');
+  } else {
+    log.error(
+      { missingTables, brokenRpcs },
+      'SCHEMA DRIFT — core objects missing on an established database; apply the corresponding migration by hand (the boot blob no longer auto-repairs)',
+    );
+  }
 }
 
 
