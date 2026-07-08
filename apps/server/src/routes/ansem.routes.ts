@@ -546,7 +546,29 @@ const X_TWEET_LOOKUP = "https://api.x.com/2/tweets";
 const ANSEM_HANDLE = "blknoiz06";
 
 interface CtxParent { handle: string; name: string; text: string }
-interface NodeContext { context: string; parent: CtxParent | null; url: string | null; replyHandle: string | null }
+interface NodeContext { context: string; parent: CtxParent | null; url: string | null; replyHandle: string | null; hash?: string; sig?: string }
+
+// Lazy on-chain attestation for VIEWED memories: the first time a memory's deep-dive is
+// opened, its sha256 is committed to Solana via a memo tx so it has a verifiable record
+// (cached onto the memory). A per-boot cap bounds the bot wallet's dust spend against
+// abuse; redeploys reset it.
+let memoAttestCount = 0;
+const MEMO_ATTEST_CAP = 3000;
+
+// Commit a memory's sha256 to Solana via a memo tx (bounded to 8s so a slow confirm
+// never hangs the /context request). Returns { hash, sig } or null.
+async function attestMemory(id: number, text: string, existingHash?: string): Promise<{ hash: string; sig: string } | null> {
+  if (!ATTEST_ENABLED || memoAttestCount >= MEMO_ATTEST_CAP) return null;
+  const hash = existingHash || createHash("sha256").update(`${id}:${text}`).digest("hex");
+  try {
+    const sig = await Promise.race([
+      writeMemo(`ansem-memory:v1:${id}:${hash}`),
+      new Promise<null>((r) => setTimeout(() => r(null), 8000)),
+    ]);
+    if (sig) { memoAttestCount++; return { hash, sig }; }
+  } catch (err) { log.warn({ err }, "Ansem memory attest failed"); }
+  return null;
+}
 
 const ctxNorm = (s: string) =>
   (s || "").toLowerCase().replace(/https?:\/\/\S+/g, "").replace(/\s+/g, " ").trim();
@@ -992,11 +1014,30 @@ export function ansemRoutes(): Router {
       try {
         const { data: row } = await scoped().maybeSingle();
         const cached = (row?.metadata as any)?.ctx;
-        if (cached?.context) { res.json(cached); return; }
+        if (cached?.context) {
+          // backfill the on-chain sig if a prior attest didn't land, then serve
+          if (!cached.sig) {
+            const att = await attestMemory(id, text, cached.hash);
+            if (att) {
+              cached.hash = att.hash; cached.sig = att.sig;
+              const md = { ...((row!.metadata as any) || {}), ctx: cached };
+              await db.from("memories").update({ metadata: md }).eq("id", id).eq("owner_wallet", ANSEM_WALLET);
+            }
+          }
+          res.json(cached); return;
+        }
       } catch { /* fall through to compute */ }
     }
 
     const payload = await buildNodeContext(text, isLive, givenUrl);
+
+    // Attest this memory's hash on-chain (once) so the deep-dive has a verifiable
+    // Solana record the user can open on Solscan. Best-effort; the hash still shows
+    // even if the commit is slow/fails (backfilled on the next open).
+    if (!isLive && Number.isFinite(id)) {
+      const att = await attestMemory(id, text);
+      if (att) { payload.hash = att.hash; payload.sig = att.sig; }
+    }
 
     // persist onto the memory so the derived context is part of the memory (+ caches it)
     if (!isLive && Number.isFinite(id) && payload.context) {

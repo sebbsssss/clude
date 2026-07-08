@@ -1146,7 +1146,7 @@ export function AnsemExplore() {
   const [bullTip, setBullTip] = useState<{ text: string; x: number; y: number } | null>(null);
   const [nodePopup, setNodePopup] = useState<BullNode | null>(null);
   // derived context/relation for the open node (its source X post + what it replied to)
-  const [nodeCtx, setNodeCtx] = useState<{ loading: boolean; context: string; parent: { handle: string; name: string; text: string } | null; url: string | null; replyHandle: string | null } | null>(null);
+  const [nodeCtx, setNodeCtx] = useState<{ loading: boolean; context: string; parent: { handle: string; name: string; text: string } | null; url: string | null; replyHandle: string | null; hash?: string; sig?: string } | null>(null);
   useEffect(() => {
     if (!nodePopup) { setNodeCtx(null); return; }
     let stop = false;
@@ -1157,7 +1157,7 @@ export function AnsemExplore() {
       live: !!nodePopup.live,
       url: nodePopup.url,
     })
-      .then((d) => { if (!stop) setNodeCtx({ loading: false, context: d.context, parent: d.parent, url: d.url, replyHandle: d.replyHandle }); })
+      .then((d) => { if (!stop) setNodeCtx({ loading: false, context: d.context, parent: d.parent, url: d.url, replyHandle: d.replyHandle, hash: d.hash, sig: d.sig }); })
       .catch(() => { if (!stop) setNodeCtx((c) => (c ? { ...c, loading: false } : null)); });
     return () => { stop = true; };
   }, [nodePopup]);
@@ -1184,7 +1184,7 @@ export function AnsemExplore() {
     const iv = window.setInterval(load, 60000);
     return () => { stop = true; window.clearInterval(iv); };
   }, []);
-  useEffect(() => { document.title = '$ANSEM — the movement, made tangible'; }, []);
+  useEffect(() => { document.title = '$ANSEM — The Black Bull Community Clone'; }, []);
   const handleLiveJoin = useCallback((posts: BullNode[]) => {
     setLiveJoined((c) => c + posts.length);
     posts.slice(0, 3).forEach((p, i) => {
@@ -1396,12 +1396,19 @@ export function AnsemExplore() {
               )}
             </div>
             {/* footer */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(72,224,122,.16)', fontSize: 11.5, color: '#7fd8a0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px 14px', marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(72,224,122,.16)', fontSize: 11.5, color: '#7fd8a0' }}>
               <span style={{ fontVariantNumeric: 'tabular-nums' }}>♥ {(nodePopup.likes || 0).toLocaleString()}</span>
               {!nodePopup.live && nodePopup.type && <span style={{ color: 'rgba(147,232,178,.5)', textTransform: 'uppercase', letterSpacing: '.1em', fontSize: 9.5 }}>{nodePopup.type}</span>}
-              <span style={{ flex: 1 }} />
+              <span style={{ flex: 1, minWidth: 8 }} />
+              {nodeCtx?.sig && (
+                <a href={`https://solscan.io/tx/${nodeCtx.sig}`} target="_blank" rel="noopener noreferrer"
+                  title={nodeCtx.hash ? `sha256 ${nodeCtx.hash.slice(0, 16)}… committed on Solana` : 'committed on Solana'}
+                  style={{ color: '#9be8b2', textDecoration: 'none', letterSpacing: '.04em', whiteSpace: 'nowrap' }}>
+                  ⛓ view on Solscan ↗
+                </a>
+              )}
               {(nodeCtx?.url || nodePopup.url) && (
-                <a href={nodeCtx?.url || nodePopup.url} target="_blank" rel="noopener noreferrer" style={{ color: '#5cf08a', textDecoration: 'none', letterSpacing: '.06em' }}>
+                <a href={nodeCtx?.url || nodePopup.url} target="_blank" rel="noopener noreferrer" style={{ color: '#5cf08a', textDecoration: 'none', letterSpacing: '.06em', whiteSpace: 'nowrap' }}>
                   view on X ↗
                 </a>
               )}
@@ -1430,8 +1437,8 @@ export function AnsemExplore() {
         <div style={{ fontWeight: 800, fontSize: 'clamp(28px,4.6vw,44px)', letterSpacing: '.16em', color: '#eafff0', lineHeight: 1 }}>
           $ANSEM
         </div>
-        <div style={{ fontSize: 'clamp(10px,1.3vw,12.5px)', letterSpacing: '.32em', color: '#3ddc73', marginTop: 7, textTransform: 'uppercase' }}>
-          an ansem community clone
+        <div style={{ fontSize: 'clamp(10px,1.3vw,12.5px)', letterSpacing: '.2em', color: '#3ddc73', marginTop: 7, textTransform: 'uppercase' }}>
+          the black bull community clone
         </div>
         <div style={{ fontSize: 'clamp(9.5px,1.1vw,11px)', letterSpacing: '.22em', color: '#7fd8a0', marginTop: 5, textTransform: 'uppercase' }}>
           the movement · made tangible
@@ -1454,6 +1461,27 @@ export function AnsemExplore() {
           </span>
         </div>
       </div>
+
+      {/* Powered-by-Clude logo — top-right, links to the main site */}
+      <a
+        href="https://clude.io"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Powered by Clude — clude.io"
+        style={{
+          position: 'fixed', top: 'clamp(14px,2.6vh,20px)', right: 'clamp(12px,3vw,24px)', zIndex: 6,
+          display: 'flex', alignItems: 'center', gap: 7, textDecoration: 'none',
+          padding: '6px 11px 6px 10px', borderRadius: 999,
+          border: '1px solid rgba(255,255,255,.12)', background: 'rgba(0,0,0,.34)', backdropFilter: 'blur(6px)',
+          fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
+        }}
+      >
+        <span style={{ fontSize: 'clamp(7px,1.5vw,8.5px)', letterSpacing: '.14em', textTransform: 'uppercase', color: 'rgba(255,255,255,.5)', whiteSpace: 'nowrap' }}>powered by</span>
+        <svg viewBox="0 0 1080 1080" width="15" height="15" style={{ display: 'block', flexShrink: 0 }} aria-hidden="true">
+          <path fill="#fff" d="M877.5,295.97V109.03c0-10.51-8.52-19.03-19.03-19.03h-430.97c-10.51,0-19.03,8.52-19.03,19.03v147.53c0,25.23-10.02,49.44-27.87,67.28l-155.81,155.81c-14.28,14.27-22.29,33.64-22.29,53.82v437.5c0,10.51,8.52,19.03,19.03,19.03h636.94c10.51,0,19.03-8.52,19.03-19.03v-186.94c0-10.51-8.52-19.03-19.03-19.03h-421.46c-5.25,0-9.51-4.26-9.51-9.51v-402.43c0-21.02,17.04-38.06,38.06-38.06h392.91c10.51,0,19.03-8.52,19.03-19.03Z"/>
+        </svg>
+        <span style={{ fontSize: 'clamp(11px,2vw,13px)', fontWeight: 800, letterSpacing: '.1em', color: '#fff' }}>CLUDE</span>
+      </a>
 
       {/* Hover / usage hint (bottom-left) — on mobile it sits ABOVE the pill row so
           the pills never cover it */}

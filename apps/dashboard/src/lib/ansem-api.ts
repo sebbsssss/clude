@@ -54,6 +54,8 @@ export const ansemApi = {
     parent: { handle: string; name: string; text: string } | null;
     url: string | null;
     replyHandle: string | null;
+    hash?: string;
+    sig?: string;
   }> {
     const res = await fetch(`${API_BASE}/api/ansem/context`, {
       method: 'POST',
