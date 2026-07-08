@@ -1,5 +1,6 @@
 import { getDb } from '@clude/shared/core/database';
 import { createChildLogger } from '@clude/shared/core/logger';
+import { activeEmbeddingSpace, vectorRpcName } from '@clude/shared/core/migration-profile';
 
 const log = createChildLogger('recall-canary');
 
@@ -13,9 +14,13 @@ const log = createChildLogger('recall-canary');
  *   1. Insert two sentinel memories under a dedicated system owner, carrying a
  *      deterministic unit vector as their embedding (no embedding provider needed —
  *      we query with the SAME vector, so cosine similarity is exactly 1.0 if and
- *      only if the vector lane round-trips).
+ *      only if the vector lane round-trips). The vector is written to whichever
+ *      column the ACTIVE embedding space reads (embedding, or embedding_vertex
+ *      once EMBEDDING_ACTIVE=vertex), so the canary probes the live recall path.
  *   2. Probe every recall RPC lane: match_memories, match_memory_fragments,
- *      match_memories_temporal, get_linked_memories.
+ *      match_memories_temporal (each resolved to its active-space variant via
+ *      vectorRpcName, e.g. match_memories_vertex after cutover), get_linked_memories
+ *      (embedding-agnostic, same RPC in both spaces).
  *   3. A lane that errors OR returns no sentinel hit is BROKEN → log.error (the
  *      Railway alert surface) + the report is exposed for /health integration.
  *   4. Delete the sentinels (fragments + links follow via FK ON DELETE CASCADE).
@@ -93,6 +98,13 @@ export async function runRecallCanary(): Promise<CanaryReport> {
   const now = new Date();
   const lanes: Record<string, LaneStatus> = {};
 
+  // Seed + probe the ACTIVE embedding space. Voyage (default) reads the `embedding`
+  // column via match_memories; after EMBEDDING_ACTIVE=vertex the live recall path is
+  // the `embedding_vertex` column via match_memories_vertex (migration 040). A canary
+  // that stayed pinned to the Voyage lane would go blind exactly during the cutover —
+  // the riskiest window — so both the seed column and the probe RPC follow the config.
+  const embCol = activeEmbeddingSpace() === 'vertex' ? 'embedding_vertex' : 'embedding';
+
   const fail = (error: string): CanaryReport => {
     for (const lane of ['match_memories', 'match_memory_fragments', 'match_memories_temporal', 'get_linked_memories']) {
       lanes[lane] = lanes[lane] ?? { ok: false, rows: 0, error: `seed failed: ${error}` };
@@ -117,7 +129,7 @@ export async function runRecallCanary(): Promise<CanaryReport> {
         owner_wallet: CANARY_OWNER,
         source: 'recall-canary',
         tags: ['system:canary'],
-        embedding: emb,
+        [embCol]: emb,
         event_date: now.toISOString(),
         decay_factor: 1.0,
       },
@@ -129,7 +141,7 @@ export async function runRecallCanary(): Promise<CanaryReport> {
         owner_wallet: CANARY_OWNER,
         source: 'recall-canary',
         tags: ['system:canary'],
-        embedding: emb,
+        [embCol]: emb,
         decay_factor: 1.0,
       },
     ])
@@ -145,7 +157,7 @@ export async function runRecallCanary(): Promise<CanaryReport> {
     memory_id: idA,
     fragment_type: 'fact',
     content: 'Recall canary sentinel fragment',
-    embedding: emb,
+    [embCol]: emb,
   });
   const { error: linkErr } = await db.from('memory_links').insert({
     source_id: idA,
@@ -156,7 +168,7 @@ export async function runRecallCanary(): Promise<CanaryReport> {
 
   lanes.match_memories = await probeLane(
     () =>
-      db.rpc('match_memories', {
+      db.rpc(vectorRpcName('match_memories'), {
         query_embedding: emb,
         match_threshold: CANARY_MATCH_THRESHOLD,
         match_count: 5,
@@ -173,7 +185,7 @@ export async function runRecallCanary(): Promise<CanaryReport> {
     ? { ok: false, rows: 0, error: `fragment seed failed: ${fragErr.message}` }
     : await probeLane(
         () =>
-          db.rpc('match_memory_fragments', {
+          db.rpc(vectorRpcName('match_memory_fragments'), {
             query_embedding: emb,
             match_threshold: CANARY_MATCH_THRESHOLD,
             match_count: 5,
@@ -185,7 +197,7 @@ export async function runRecallCanary(): Promise<CanaryReport> {
   const dayMs = 24 * 60 * 60 * 1000;
   lanes.match_memories_temporal = await probeLane(
     () =>
-      db.rpc('match_memories_temporal', {
+      db.rpc(vectorRpcName('match_memories_temporal'), {
         query_embedding: emb,
         match_threshold: CANARY_MATCH_THRESHOLD,
         match_count: 5,
