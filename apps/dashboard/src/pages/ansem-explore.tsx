@@ -1162,6 +1162,38 @@ export function AnsemExplore() {
       .catch(() => { if (!stop) setNodeCtx((c) => (c ? { ...c, loading: false } : null)); });
     return () => { stop = true; };
   }, [nodePopup]);
+
+  // ── Ambient "memory surfacing" — a random punchy memory pops up over the
+  // constellation every ~3s, one at a time, with a bouncy pop; tap it to deep-dive.
+  const [funPop, setFunPop] = useState<{ node: BullNode; x: number; y: number; id: number; leaving: boolean } | null>(null);
+  useEffect(() => {
+    if (loading || error || nodes.length === 0) return;
+    // his short punchy lines are the memorable/funny ones — bias to those, skip bare
+    // links and anything too long to read in a couple seconds.
+    const pool = nodes.filter((n) => {
+      const c = (n.content || '').trim();
+      return c.length > 14 && c.length < 150 && !/^(?:@\w+\s+)*https?:\/\/\S+$/.test(c);
+    });
+    if (pool.length === 0) return;
+    let alive = true;
+    const timers: number[] = [];
+    let seq = 0;
+    const loop = () => {
+      if (!alive) return;
+      const node = pool[Math.floor(Math.random() * pool.length)];
+      const vw = window.innerWidth, vh = window.innerHeight;
+      // safe band over the constellation — clear of the top-left HUD + bottom controls
+      const x = Math.round(vw * (0.4 + Math.random() * 0.4));
+      const y = Math.round(vh * (0.24 + Math.random() * 0.44));
+      const id = ++seq;
+      setFunPop({ node, x, y, id, leaving: false });
+      timers.push(window.setTimeout(() => { if (alive) setFunPop((p) => (p && p.id === id ? { ...p, leaving: true } : p)); }, 2600));
+      timers.push(window.setTimeout(() => { if (alive) { setFunPop((p) => (p && p.id === id ? null : p)); loop(); } }, 3300));
+    };
+    const start = window.setTimeout(loop, 4600);  // let the cinematic intro land first
+    timers.push(start);
+    return () => { alive = false; timers.forEach(clearTimeout); };
+  }, [loading, error, nodes]);
   // live-stream affordances: joined-count + transient toasts + the on-chain log modal
   const [liveJoined, setLiveJoined] = useState(0);
   const [toasts, setToasts] = useState<Array<{ id: number; text: string }>>([]);
@@ -1428,6 +1460,48 @@ export function AnsemExplore() {
         }}>
           {bullTip.text.slice(0, 240)}
         </div>
+      )}
+
+      {/* ── Ambient memory surfacing — a random memory pops up, tap to deep-dive ── */}
+      <style>{`
+        @keyframes ansemFunIn {
+          0%   { opacity:0; transform: translate(-50%,-50%) scale(.5) rotate(-4deg); }
+          55%  { opacity:1; transform: translate(-50%,-50%) scale(1.09) rotate(2deg); }
+          72%  { transform: translate(-50%,-50%) scale(.96) rotate(0deg); }
+          100% { opacity:1; transform: translate(-50%,-50%) scale(1) rotate(0deg); }
+        }
+        @keyframes ansemFunOut {
+          0%   { opacity:1; transform: translate(-50%,-50%) scale(1); }
+          100% { opacity:0; transform: translate(-50%,-58%) scale(.82); }
+        }
+        .ansem-funpop:hover { border-color: rgba(92,240,138,.75) !important; }
+      `}</style>
+      {funPop && !nodePopup && !loading && !error && (
+        <button
+          key={funPop.id}
+          className="ansem-funpop"
+          onClick={() => { setBullTip(null); setNodePopup(funPop.node); }}
+          aria-label="Explore this memory"
+          style={{
+            position: 'fixed', left: funPop.x, top: funPop.y, zIndex: 8, textAlign: 'left',
+            maxWidth: 'min(264px, 74vw)', padding: '10px 13px 9px', borderRadius: 14, cursor: 'pointer',
+            background: 'linear-gradient(180deg, rgba(5,22,13,.9), rgba(2,12,7,.92))',
+            border: '1px solid rgba(72,224,122,.42)', backdropFilter: 'blur(7px)',
+            boxShadow: '0 14px 44px rgba(0,0,0,.6), 0 0 26px rgba(60,224,120,.14)',
+            fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
+            animation: funPop.leaving ? 'ansemFunOut .42s ease forwards' : 'ansemFunIn .6s cubic-bezier(.16,.9,.28,1.35) both',
+            transition: 'border-color .18s ease',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, fontSize: 8.5, letterSpacing: '.16em', textTransform: 'uppercase', color: '#5aa877' }}>
+            <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#5cf08a', boxShadow: '0 0 6px #3ddc73' }} />
+            surfacing from the brain
+          </div>
+          <div style={{ fontSize: 12.5, lineHeight: 1.5, color: '#eafff0', wordBreak: 'break-word' }}>
+            {(funPop.node.content || '').slice(0, 132)}{(funPop.node.content || '').length > 132 ? '…' : ''}
+          </div>
+          <div style={{ fontSize: 9, letterSpacing: '.04em', color: 'rgba(147,232,178,.5)', marginTop: 7 }}>tap to explore ↗</div>
+        </button>
       )}
 
       {/* HUD — title, subtitle, count, disclaimer */}
