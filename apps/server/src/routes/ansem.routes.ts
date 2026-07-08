@@ -362,6 +362,7 @@ const FEED_RESULT_COUNT = 30; // posts returned to the client
 // Module-level rolling state (survives across requests, resets on restart).
 const feedBuffer = new Map<string, FeedTweet>();
 let feedNewestId: string | null = null; // since_id anchor for incremental search
+let persistNewestId: string | null = null; // since_id anchor for the broad corpus ingest
 let feedLastPollTs = 0; // last time we hit search/recent
 let feedLastEngagementTs = 0; // last time we refreshed top-N engagement
 let feedDailyReads = 0; // X reads counted today (search + lookup pages)
@@ -467,15 +468,19 @@ function pruneBuffer(): void {
   }
 }
 
-/** Map an X search payload (tweets + included users) → FeedTweet[], filtered. */
-function mapSearchPayload(payload: any): FeedTweet[] {
+/** Map an X search payload (tweets + included users) → FeedTweet[], filtered.
+ *  `light` = corpus mode: keep everything except slurs + empties (skips the spam
+ *  filter) so the broad ingest grows the memory count fast. */
+function mapSearchPayload(payload: any, light = false): FeedTweet[] {
   const tweets: any[] = payload?.data || [];
   const users: any[] = payload?.includes?.users || [];
   const userById = new Map<string, any>(users.map((u) => [u.id, u]));
   const out: FeedTweet[] = [];
   for (const t of tweets) {
     const text: string = t.text || "";
-    if (isNoise(text)) continue;
+    if (light) {
+      if (text.trim().length < 8 || SLUR_PATTERNS.some((re) => re.test(text))) continue;
+    } else if (isNoise(text)) continue;
     const u = userById.get(t.author_id) || {};
     const handle = u.username || "unknown";
     const m = t.public_metrics || {};
@@ -775,7 +780,6 @@ async function pollFeed(): Promise<void> {
       if (fresh.length > 0) {
         const added = mergeIntoBuffer(fresh);
         queueAttestations(added);   // hash the genuinely-new stream + commit to Solana (async)
-        void persistLivePosts(added); // persist to the corpus so the memory count grows (async)
         // advance the since_id anchor to the max id we've seen (BigInt-safe compare)
         const maxId = payload?.meta?.newest_id;
         if (maxId && (!feedNewestId || BigInt(maxId) > BigInt(feedNewestId))) {
@@ -789,6 +793,34 @@ async function pollFeed(): Promise<void> {
       );
     }
     feedLastPollTs = Date.now();
+
+    // ── 1b. BROAD corpus ingest (grows the memory count toward 1M) ──
+    // Wider than the curated feed: includes replies + all languages (retweets still
+    // excluded — they're literal copies). Persisted straight to the corpus (NOT the
+    // feed panel, which stays curated); only slurs/empties are dropped. Deduped by the
+    // persist high-water-mark so nothing double-counts. Kill with ANSEM_PERSIST_LIVE=false.
+    if (PERSIST_LIVE && !dailyCapExceeded()) {
+      const broad = new URLSearchParams({
+        query: "$ANSEM -is:retweet",
+        max_results: "100",
+        "tweet.fields": "public_metrics,created_at",
+        expansions: "author_id",
+        "user.fields": "username,name,profile_image_url",
+      });
+      if (persistNewestId) broad.set("since_id", persistNewestId);
+      const broadRes = await fetch(`${X_SEARCH_URL}?${broad.toString()}`, { headers: authHeaders });
+      countRead(1);
+      if (broadRes.ok) {
+        const bp: any = await broadRes.json();
+        void persistLivePosts(mapSearchPayload(bp, true));   // light filter → corpus
+        const bmax = bp?.meta?.newest_id;
+        if (bmax && (!persistNewestId || BigInt(bmax) > BigInt(persistNewestId))) {
+          persistNewestId = bmax;
+        }
+      } else {
+        log.warn({ status: broadRes.status }, "Ansem broad corpus ingest non-OK");
+      }
+    }
 
     // ── 2. periodic engagement refresh on the top-50 buffered ids ──
     if (
