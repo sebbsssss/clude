@@ -88,17 +88,20 @@ export function BullSwarm3D({ nodes, highlightIds, onHover, onSelect, onLiveJoin
     renderer.setSize(w, h);
     container.appendChild(renderer.domElement);
 
-    // Aspect-aware fit: pick the camera distance where the whole bull (half-width ~82,
-    // half-height ~64 world units) fits the frustum — portrait phones need a much
-    // farther camera or the horns crop out of frame.
+    // Aspect-aware fit: pick the camera distance where the WHOLE bull fits the frustum,
+    // fitting BOTH the horn span (half-width ~82) and the jaw-to-horn-tip run
+    // (half-height ~64) and taking whichever needs more room.
+    // On desktop (wide aspect) the vertical extent is the binding constraint — the old
+    // width-only fit clipped the jaw + horn tips off-frame, which read as "too zoomed";
+    // height-fitting pulls the camera back to ~117 so the full bull is in frame. Portrait
+    // phones stay width-bound (~300+). The 1.08 margin keeps the bull off the frame edge.
     const VFOV_RAD = (60 * Math.PI) / 180;
     const fitDist = (aspect: number) => {
       const tanV = Math.tan(VFOV_RAD / 2);
       const tanH = tanV * Math.max(0.2, aspect);
-      // width-fit the horns (the crop-critical extent); vertical stays loose — the jaw
-      // intentionally runs off the bottom edge. Desktop (aspect ≳1.5) resolves to 96,
-      // the approved framing; portrait phones resolve to ~300+ so the full bull fits.
-      return Math.max(96, (82 / tanH) * 1.04);
+      const widthFit = 82 / tanH;
+      const heightFit = 64 / tanV;
+      return Math.max(widthFit, heightFit) * 1.08;
     };
 
     const composer = new EffectComposer(renderer);
