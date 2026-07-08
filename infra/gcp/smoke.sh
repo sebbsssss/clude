@@ -24,6 +24,9 @@ BASE="${1:?usage: smoke.sh <base-url> [worker-health-url]}"
 BASE="${BASE%/}"
 WORKER="${2:-}"
 PRIVY_APP_ID="${PRIVY_APP_ID:-}"
+# For Cloud Run services not yet public (org policy / --no-allow-unauthenticated):
+#   SMOKE_AUTH_TOKEN="$(gcloud auth print-identity-token)" ./infra/gcp/smoke.sh <url>
+SMOKE_AUTH_TOKEN="${SMOKE_AUTH_TOKEN:-}"
 
 pass=0
 fail=0
@@ -35,7 +38,9 @@ bad()  { fail=$((fail+1)); note "  FAIL $*"; }
 # fetch <url> — sets globals BODY and STATUS (no subshell: set -u safe)
 fetch() {
   local url="$1" raw
-  if ! raw=$(curl -sS --max-time 20 -w $'\n%{http_code}' "$url" 2>/dev/null); then
+  local -a auth=()
+  [ -n "$SMOKE_AUTH_TOKEN" ] && auth=(-H "Authorization: Bearer $SMOKE_AUTH_TOKEN")
+  if ! raw=$(curl -sS --max-time 20 -w $'\n%{http_code}' "${auth[@]}" "$url" 2>/dev/null); then
     STATUS=000; BODY=""; return 1
   fi
   STATUS="${raw##*$'\n'}"
