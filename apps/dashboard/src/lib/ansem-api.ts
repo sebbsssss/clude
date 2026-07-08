@@ -48,6 +48,22 @@ export const ansemApi = {
     return res.json();
   },
 
+  /** Derive/relate the context of a clicked node (its source X post + what it replied to). */
+  async getNodeContext(body: { id?: number; text: string; live?: boolean; url?: string }): Promise<{
+    context: string;
+    parent: { handle: string; name: string; text: string } | null;
+    url: string | null;
+    replyHandle: string | null;
+  }> {
+    const res = await fetch(`${API_BASE}/api/ansem/context`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
   /** On-chain live-stream log: sha256 hashes of ingested posts + their Solana memo txs. */
   async getAttestations(): Promise<{
     enabled: boolean;
