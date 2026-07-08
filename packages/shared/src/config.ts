@@ -40,6 +40,19 @@ export const config = {
     accessSecret: requiredUnlessSiteOnly("X_ACCESS_SECRET"),
     botUserId: requiredUnlessSiteOnly("X_BOT_USER_ID"),
     creatorUserId: optional("CREATOR_USER_ID", ""),
+    /**
+     * Bearer token for the public "$ANSEM LIVE" feed (GET /api/ansem/feed).
+     * Reads-only X app bearer — used server-side for GET /2/tweets/search/recent.
+     * Empty → the feed endpoint returns { enabled:false } and the frontend panel hides.
+     * NEVER sent to the browser.
+     */
+    searchBearer: optional("X_SEARCH_BEARER", ""),
+    /** Min poll gap for the on-demand $ANSEM feed (ms). Idle → no polling → $0. */
+    ansemFeedIntervalMs: parseInt(optional("ANSEM_FEED_INTERVAL_MS", "90000"), 10),
+    /** Posts older than ~15min must clear this like floor (fresh posts are exempt). */
+    ansemFeedMinLikes: parseInt(optional("ANSEM_FEED_MIN_LIKES", "3"), 10),
+    /** Hard daily read-cap: once exceeded, serve the stale buffer (cost stop-loss). */
+    ansemFeedDailyReadCap: parseInt(optional("ANSEM_FEED_DAILY_READ_CAP", "40000"), 10),
   },
   supabase: {
     url: requiredUnlessSiteOnly("SUPABASE_URL"),
@@ -62,6 +75,8 @@ export const config = {
     ),
     botWalletPrivateKey: optional("BOT_WALLET_PRIVATE_KEY", ""),
     cludeTokenMint: optional("CLUUDE_TOKEN_MINT", ""),
+    /** Deployed memory-registry Anchor program ID. Empty → on-chain registration disabled. */
+    memoryRegistryProgramId: optional("CLUDE_PROGRAM_ID", ""),
   },
   server: {
     port: parseInt(optional("PORT", "3000"), 10),
@@ -99,6 +114,69 @@ export const config = {
     freePromoEnabled: optional("FREE_PROMO_ENABLED", "false") === "true",
     freePromoCreditUsdc: parseFloat(optional("FREE_PROMO_CREDIT_USDC", "1")),
     freePromoExpiry: optional("FREE_PROMO_EXPIRY", ""),
+  },
+  memory: {
+    /**
+     * Memory 3.0 C2: route storeMemory enrichment (embed/link/extract) through the durable
+     * memory_write_jobs outbox instead of fire-and-forget. Default OFF — fire-and-forget stays
+     * the default until the worker is proven. Requires migrations 044 + 045; degrades gracefully
+     * (falls back to fire-and-forget) if unapplied.
+     */
+    outboxEnabled: optional("MEMORY_OUTBOX", "false") === "true",
+    /**
+     * Memory 3.0 C1: write-time reconciliation, SHADOW slice (LLM-free). When on, each write records
+     * a PROPOSED reconcile op (add / needs_router / skip) into memory_reconciliation_log WITHOUT
+     * applying it — the labeled sample the enforce path must earn its turn-on from. Default OFF;
+     * runs fully detached after embedMemory (zero write latency); degrades gracefully if migration
+     * 046 is unapplied. Disabled under BENCH_MODE. The router is a later slice; only the cosine gate
+     * runs here.
+     */
+    reconcileEnabled: optional("MEMORY_RECONCILE", "false") === "true",
+    /** Screen floor passed to match_memories_temporal — LOW so max_cosine is captured for below-LO
+     * writes (LO is tuned from the shadow data, not fixed up-front). */
+    reconcileFloor: Number(optional("MEMORY_RECONCILE_FLOOR", "0.5")),
+    /** "similar enough to reconcile" boundary → needs_router (vs add). A starting probe, not gospel. */
+    reconcileLo: Number(optional("MEMORY_RECONCILE_LO", "0.85")),
+    /** hi/mid band LABEL boundary for analysis (not a decision boundary). */
+    reconcileHi: Number(optional("MEMORY_RECONCILE_HI", "0.95")),
+    /**
+     * C1 slice 1.5: the LLM router. Its own sub-flag (default OFF, independent of reconcileEnabled)
+     * so gate-only instrumentation runs first and LO is calibrated from that data before any LLM
+     * spend. When on, a >= LO write is classified add/update/noop by reconcileModel (still SHADOW —
+     * the op is logged, never applied). Requires OpenRouter configured.
+     */
+    reconcileRouter: optional("MEMORY_RECONCILE_ROUTER", "false") === "true",
+    /** Router model — an explicit id (NEVER a cognitiveFunction, which would silently override it
+     * with the fast llama slot). Haiku-class default: capable enough for dup-vs-update, cheap. */
+    reconcileModel: optional("MEMORY_RECONCILE_MODEL", "anthropic/claude-haiku-4.5"),
+    /** Per-owner soft daily cap on router calls (approximate, per-process) — bounds LLM spend. */
+    reconcileBudget: Number(optional("MEMORY_RECONCILE_BUDGET", "200")),
+  },
+  oauth: {
+    /** HMAC secret for signing OAuth access-token JWTs. Empty disables the OAuth AS — bearer API-key auth still works. */
+    signingSecret: optional("OAUTH_SIGNING_SECRET", ""),
+    /** Issuer/audience identifier baked into tokens. Falls back to the request origin when empty. */
+    issuer: optional("OAUTH_ISSUER", ""),
+    /** Access-token lifetime in seconds (default 1h). */
+    accessTtlSec: parseInt(optional("OAUTH_ACCESS_TTL_SEC", "3600"), 10),
+    /** Refresh-token lifetime in seconds (default 30d). */
+    refreshTtlSec: parseInt(optional("OAUTH_REFRESH_TTL_SEC", "2592000"), 10),
+    /** Authorization-code lifetime in seconds (default 60s). */
+    codeTtlSec: parseInt(optional("OAUTH_CODE_TTL_SEC", "60"), 10),
+  },
+  stripe: {
+    /**
+     * Stripe secret API key (sk_live_… / sk_test_…). Empty disables the
+     * marketplace Stripe rail — the orchestrator/webhook fail closed without it.
+     * SDK/MCP consumers never need this, so it stays optional() (not required()).
+     */
+    secretKey: optional("STRIPE_SECRET_KEY", ""),
+    /**
+     * Stripe webhook signing secret (whsec_…) used by stripe.webhooks.constructEvent
+     * to verify the raw body BEFORE any DB write (Risk R6). Empty ⇒ every webhook is
+     * rejected, so a misconfigured deploy can never process an unverified event.
+     */
+    webhookSecret: optional("STRIPE_WEBHOOK_SECRET", ""),
   },
   campaign: {
     startDate: optional("CAMPAIGN_START", ""),
@@ -179,22 +257,39 @@ export const config = {
   tavily: {
     apiKey: optional("TAVILY_API_KEY", ""),
   },
+  higgsfield: {
+    /** Higgsfield API key ID — first half of the V2 `Authorization: Key <id>:<secret>` pair (server-only). Empty → /api/ansem/speak returns 501. */
+    apiKey: optional("HIGGSFIELD_API_KEY", ""),
+    /** Higgsfield API key SECRET — second half of the V2 `Key <id>:<secret>` pair. */
+    apiSecret: optional("HIGGSFIELD_API_SECRET", ""),
+    /** REST base URL (Higgsfield V2 API). */
+    apiBase: optional("HIGGSFIELD_API_BASE", "https://platform.higgsfield.ai"),
+    /**
+     * V2 model path for the seed_audio TTS model: create is POST {apiBase}/{ttsEndpoint}.
+     * Verified live against the Higgsfield V2 API — bytedance/seed-audio-1.0.
+     */
+    ttsEndpoint: optional("HIGGSFIELD_TTS_ENDPOINT", "bytedance/seed-audio-1.0"),
+    /** Ansem voice — Higgsfield "Sterling" preset (founder's choice). */
+    voiceId: optional("ANSEM_VOICE_ID", "dc382508-c8bd-443c-8cb2-46e57b8d2e6f"),
+    voiceType: optional("ANSEM_VOICE_TYPE", "preset"),
+    /** Deep-voice tuning: seed_audio pitch_rate / speech_rate (integers, default 0). */
+    voicePitch: parseInt(optional("ANSEM_VOICE_PITCH", "-9"), 10),
+    voiceSpeechRate: parseInt(optional("ANSEM_VOICE_SPEECH_RATE", "-12"), 10),
+    /** Output audio format (seed_audio supports wav|mp3|pcm|ogg_opus). */
+    audioFormat: optional("ANSEM_VOICE_FORMAT", "mp3"),
+  },
+  elevenlabs: {
+    /** ElevenLabs API key (server-only). Set → PRIMARY TTS (~1-3s, no lag); empty → falls back to Higgsfield. */
+    apiKey: optional("ELEVENLABS_API_KEY", ""),
+    /** Voice id — default "Brian" (deep, resonant, american). Swap via ELEVENLABS_VOICE_ID. */
+    voiceId: optional("ELEVENLABS_VOICE_ID", "nPczCjzI2devNBz1zQrb"),
+    /** Model — turbo for lowest latency. */
+    model: optional("ELEVENLABS_MODEL", "eleven_turbo_v2_5"),
+  },
   privy: {
     appId: optional("PRIVY_APP_ID", ""),
     appSecret: optional("PRIVY_APP_SECRET", ""),
     jwksUrl: optional("PRIVY_JWKS_URL", ""),
-  },
-  oauth: {
-    /** HMAC secret for signing OAuth access-token JWTs. Empty disables the OAuth AS — bearer API-key auth still works. */
-    signingSecret: optional("OAUTH_SIGNING_SECRET", ""),
-    /** Issuer/audience identifier baked into tokens. Falls back to the request origin when empty. */
-    issuer: optional("OAUTH_ISSUER", ""),
-    /** Access-token lifetime in seconds (default 1h). */
-    accessTtlSec: parseInt(optional("OAUTH_ACCESS_TTL_SEC", "3600"), 10),
-    /** Refresh-token lifetime in seconds (default 30d). */
-    refreshTtlSec: parseInt(optional("OAUTH_REFRESH_TTL_SEC", "2592000"), 10),
-    /** Authorization-code lifetime in seconds (default 60s). */
-    codeTtlSec: parseInt(optional("OAUTH_CODE_TTL_SEC", "60"), 10),
   },
   executor: {
     pollMs: parseInt(optional("EXECUTOR_POLL_MS", "15000"), 10),
@@ -212,20 +307,6 @@ export const config = {
   },
   helius: {
     webhookSecret: optional("HELIUS_WEBHOOK_SECRET", ""),
-  },
-  stripe: {
-    /**
-     * Stripe secret API key (sk_live_… / sk_test_…). Empty disables the
-     * marketplace Stripe rail — the orchestrator/webhook fail closed without it.
-     * SDK/MCP consumers never need this, so it stays optional() (not required()).
-     */
-    secretKey: optional("STRIPE_SECRET_KEY", ""),
-    /**
-     * Stripe webhook signing secret (whsec_…) used by stripe.webhooks.constructEvent
-     * to verify the raw body BEFORE any DB write (Risk R6). Empty ⇒ every webhook is
-     * rejected, so a misconfigured deploy can never process an unverified event.
-     */
-    webhookSecret: optional("STRIPE_WEBHOOK_SECRET", ""),
   },
   usdc: {
     /** Treasury wallet that receives USDC top-up payments */

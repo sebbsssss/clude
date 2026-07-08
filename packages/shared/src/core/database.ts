@@ -190,7 +190,7 @@ async function runBootDdl(db: SupabaseClient): Promise<void> {
           target_id BIGINT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
           link_type TEXT NOT NULL CHECK (link_type IN (
             'supports', 'contradicts', 'elaborates', 'causes', 'follows', 'relates', 'resolves',
-            'happens_before', 'happens_after', 'concurrent_with'
+            'supersedes', 'happens_before', 'happens_after', 'concurrent_with'
           )),
           strength REAL DEFAULT 0.5,
           created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -466,6 +466,115 @@ async function runBootDdl(db: SupabaseClient): Promise<void> {
         CREATE INDEX IF NOT EXISTS idx_memories_delegated ON memories(provider_delegated) WHERE encrypted = TRUE;
         ALTER TABLE memories ADD COLUMN IF NOT EXISTS summary_ciphertext TEXT;
         ALTER TABLE memories ADD COLUMN IF NOT EXISTS embedding_ciphertext TEXT;
+
+        -- Memory 3.0 Phase 1 (migration 044): bi-temporal validity + provenance (additive/nullable, inert until MEMORY_RECONCILE)
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS valid_from TIMESTAMPTZ;
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS invalid_at TIMESTAMPTZ;
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS superseded_by TEXT;
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS fact_key TEXT;
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS extractor_version TEXT;
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS extraction_confidence REAL;
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS source_turn_ref JSONB;
+        ALTER TABLE memories ADD COLUMN IF NOT EXISTS hash_id_v2 TEXT;
+        CREATE INDEX IF NOT EXISTS idx_memories_valid ON memories(id) WHERE invalid_at IS NULL;
+        CREATE INDEX IF NOT EXISTS idx_memories_fact_key ON memories(fact_key) WHERE fact_key IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_memories_hash_id_v2 ON memories(hash_id_v2) WHERE hash_id_v2 IS NOT NULL;
+
+        -- Memory 3.0 Phase 1 (migration 044): the C2 durable write outbox.
+        CREATE TABLE IF NOT EXISTS memory_write_jobs (
+          id BIGSERIAL PRIMARY KEY,
+          memory_id BIGINT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+          job_type TEXT NOT NULL CHECK (job_type IN ('enrich', 'embed', 'link', 'extract', 'reconcile', 'backfill_v2')),
+          status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'done', 'failed')),
+          attempts INT NOT NULL DEFAULT 0,
+          next_retry_at TIMESTAMPTZ DEFAULT NOW(),
+          last_error TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_write_jobs_claim ON memory_write_jobs(status, next_retry_at) WHERE status IN ('pending', 'failed');
+        CREATE INDEX IF NOT EXISTS idx_write_jobs_memory ON memory_write_jobs(memory_id);
+        CREATE INDEX IF NOT EXISTS idx_write_jobs_running ON memory_write_jobs(updated_at) WHERE status = 'running';
+
+        -- Memory 3.0 C2 outbox — MIRROR of migration 045 (byte-equivalent). The table above is in
+        -- the boot blob, so the claim RPC + idempotency objects MUST be too: otherwise a
+        -- boot-provisioned box gets the table but not the RPC and the worker silently never drains
+        -- (the migration-028 class). Keep in sync with 045.
+        DO $do$
+        BEGIN
+          ALTER TABLE memory_write_jobs DROP CONSTRAINT IF EXISTS memory_write_jobs_job_type_check;
+          ALTER TABLE memory_write_jobs ADD CONSTRAINT memory_write_jobs_job_type_check
+            CHECK (job_type IN ('enrich', 'embed', 'link', 'extract', 'reconcile', 'backfill_v2'));
+        EXCEPTION WHEN undefined_table THEN NULL; END $do$;
+
+        CREATE OR REPLACE FUNCTION claim_memory_write_jobs(
+          p_limit INT DEFAULT 20, p_stale_running INTERVAL DEFAULT INTERVAL '15 minutes', p_owner TEXT DEFAULT NULL
+        )
+        RETURNS TABLE (id BIGINT, memory_id BIGINT, job_type TEXT, attempts INT, owner_wallet TEXT)
+        LANGUAGE plpgsql AS $claimfn$
+        BEGIN
+          RETURN QUERY
+          UPDATE memory_write_jobs j
+             SET status = 'running', attempts = j.attempts + 1, updated_at = NOW()
+            FROM (
+              SELECT jj.id FROM memory_write_jobs jj JOIN memories m ON m.id = jj.memory_id
+               WHERE ((jj.status IN ('pending','failed') AND jj.next_retry_at IS NOT NULL AND jj.next_retry_at <= NOW())
+                      OR (jj.status = 'running' AND jj.updated_at < NOW() - p_stale_running))
+                 AND (p_owner IS NULL OR m.owner_wallet = p_owner OR (p_owner = '__BOT_OWN__' AND m.owner_wallet IS NULL))
+               ORDER BY jj.next_retry_at ASC NULLS LAST LIMIT p_limit FOR UPDATE SKIP LOCKED
+            ) claimed
+           WHERE j.id = claimed.id
+          RETURNING j.id, j.memory_id, j.job_type, j.attempts,
+                    (SELECT mm.owner_wallet FROM memories mm WHERE mm.id = j.memory_id);
+        END; $claimfn$;
+
+        DO $do$
+        BEGIN
+          DELETE FROM memory_links a USING memory_links b
+           WHERE a.ctid < b.ctid AND a.source_id = b.source_id AND a.target_id = b.target_id AND a.link_type = b.link_type;
+          ALTER TABLE memory_links DROP CONSTRAINT IF EXISTS memory_links_unique_edge;
+          ALTER TABLE memory_links ADD CONSTRAINT memory_links_unique_edge UNIQUE (source_id, target_id, link_type);
+        EXCEPTION WHEN undefined_table THEN NULL; END $do$;
+
+        CREATE OR REPLACE FUNCTION upsert_entity_relation(
+          p_src BIGINT, p_tgt BIGINT, p_type TEXT, p_evidence BIGINT DEFAULT NULL, p_strength REAL DEFAULT 0.5
+        )
+        RETURNS VOID LANGUAGE sql AS $uerfn$
+          INSERT INTO entity_relations (source_entity_id, target_entity_id, relation_type, strength, evidence_memory_ids)
+          VALUES (p_src, p_tgt, p_type, LEAST(1.0, p_strength),
+                  CASE WHEN p_evidence IS NULL THEN '{}'::bigint[] ELSE ARRAY[p_evidence] END)
+          ON CONFLICT (source_entity_id, target_entity_id, relation_type) DO UPDATE
+            SET strength = LEAST(1.0, entity_relations.strength +
+                  CASE WHEN p_evidence IS NULL OR p_evidence = ANY(entity_relations.evidence_memory_ids) THEN 0.0 ELSE 0.1 END),
+                evidence_memory_ids = (SELECT ARRAY(SELECT DISTINCT e FROM unnest(entity_relations.evidence_memory_ids || EXCLUDED.evidence_memory_ids) AS e));
+        $uerfn$;
+
+        -- Memory 3.0 C1 (migration 046): reconciliation SHADOW decision log. MIRROR — byte-equivalent
+        -- to migration 046. Records a PROPOSED reconcile op per write without applying it, so enforce
+        -- can be greenlit from a labeled sample. Deliberately NOT added to CORE_TABLES (dormant,
+        -- default-off; must not trip SCHEMA DRIFT at boot on an un-migrated prod box — C2 precedent).
+        CREATE TABLE IF NOT EXISTS memory_reconciliation_log (
+          id               BIGSERIAL PRIMARY KEY,
+          memory_id        BIGINT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+          owner_wallet     TEXT,
+          mode             TEXT NOT NULL DEFAULT 'shadow' CHECK (mode IN ('shadow','enforce')),
+          proposed_op      TEXT NOT NULL CHECK (proposed_op IN ('add','update','noop','needs_router','skip')),
+          target_memory_id BIGINT,
+          max_cosine       REAL,
+          band             TEXT CHECK (band IN ('hi','mid','lo','none')),
+          router_used      BOOLEAN NOT NULL DEFAULT false,
+          router_model     TEXT,
+          fact_key         TEXT,
+          reason           TEXT,
+          label            TEXT,
+          labeled_at       TIMESTAMPTZ,
+          gate_version     TEXT,
+          created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_reconcile_log_owner_created ON memory_reconciliation_log(owner_wallet, created_at);
+        CREATE INDEX IF NOT EXISTS idx_reconcile_log_op ON memory_reconciliation_log(proposed_op);
+        CREATE INDEX IF NOT EXISTS idx_reconcile_log_router ON memory_reconciliation_log(mode, router_used);
+
         DO $do$
         BEGIN
           IF NOT EXISTS (
@@ -478,6 +587,40 @@ async function runBootDdl(db: SupabaseClient): Promise<void> {
             CREATE INDEX IF NOT EXISTS idx_memories_ts_summary ON memories USING GIN(ts_summary);
           END IF;
         END $do$;
+
+        -- Semantic search across memory-level embeddings with metadata filtering (the always-on
+        -- recall vector lane). MIRROR of migration 028 / supabase-schema.sql — 8-arg filter_tags form.
+        CREATE OR REPLACE FUNCTION match_memories(
+          query_embedding vector(1024),
+          match_threshold float DEFAULT 0.3,
+          match_count int DEFAULT 10,
+          filter_types text[] DEFAULT NULL,
+          filter_user text DEFAULT NULL,
+          min_decay float DEFAULT 0.1,
+          filter_owner text DEFAULT NULL,
+          filter_tags text[] DEFAULT NULL
+        )
+        RETURNS TABLE (id bigint, similarity float)
+        LANGUAGE plpgsql AS $$
+        BEGIN
+          RETURN QUERY
+          SELECT m.id, (1 - (m.embedding <=> query_embedding))::float AS similarity
+          FROM memories m
+          WHERE m.embedding IS NOT NULL
+            AND m.decay_factor >= min_decay
+            AND (filter_types IS NULL OR m.memory_type = ANY(filter_types))
+            AND (filter_user IS NULL OR m.related_user = filter_user)
+            AND (
+      filter_owner IS NULL
+      OR (filter_owner = '__BOT_OWN__' AND m.owner_wallet IS NULL)
+      OR m.owner_wallet = filter_owner
+    )
+            AND (filter_tags IS NULL OR m.tags && filter_tags)
+            AND (1 - (m.embedding <=> query_embedding)) > match_threshold
+          ORDER BY m.embedding <=> query_embedding
+          LIMIT match_count;
+        END;
+        $$;
 
         -- Temporal-aware semantic search RPC (Exp 9)
         CREATE OR REPLACE FUNCTION match_memories_temporal(
@@ -512,6 +655,41 @@ async function runBootDdl(db: SupabaseClient): Promise<void> {
             AND (start_date IS NULL OR COALESCE(m.event_date, m.created_at) >= start_date)
             AND (end_date IS NULL OR COALESCE(m.event_date, m.created_at) <= end_date)
           ORDER BY m.embedding <=> query_embedding
+          LIMIT match_count;
+        END;
+        $$;
+
+        -- Fragment-level semantic search with deduplication to parent memory. Returns the highest
+        -- similarity fragment per memory (the non-skipExpansion recall lane). MIRROR of
+        -- supabase-schema.sql — 6-arg migration-043 form; the 4-arg (migration 009) call still
+        -- resolves against it via parameter defaults, so a boot-provisioned box is never left on a
+        -- stale fragment signature.
+        CREATE OR REPLACE FUNCTION match_memory_fragments(
+          query_embedding vector(1024),
+          match_threshold float DEFAULT 0.3,
+          match_count int DEFAULT 10,
+          filter_owner text DEFAULT NULL,
+          min_decay float DEFAULT 0.0,
+          filter_types text[] DEFAULT NULL
+        )
+        RETURNS TABLE (memory_id bigint, max_similarity float)
+        LANGUAGE plpgsql AS $$
+        BEGIN
+          RETURN QUERY
+          SELECT f.memory_id, MAX((1 - (f.embedding <=> query_embedding))::float) AS max_similarity
+          FROM memory_fragments f
+          JOIN memories m ON m.id = f.memory_id
+          WHERE f.embedding IS NOT NULL
+            AND (1 - (f.embedding <=> query_embedding)) > match_threshold
+            AND m.decay_factor >= min_decay
+            AND (filter_types IS NULL OR m.memory_type = ANY(filter_types))
+            AND (
+      filter_owner IS NULL
+      OR (filter_owner = '__BOT_OWN__' AND m.owner_wallet IS NULL)
+      OR m.owner_wallet = filter_owner
+    )
+          GROUP BY f.memory_id
+          ORDER BY max_similarity DESC
           LIMIT match_count;
         END;
         $$;
@@ -808,6 +986,19 @@ const CORE_TABLES = [
 const CORE_RPC_PROBES: Array<{ name: string; args: Record<string, unknown> }> = [
   { name: 'get_linked_memories', args: { seed_ids: [], min_strength: 0.1, max_results: 1, filter_owner: null } },
   { name: 'bm25_search_memories', args: { search_query: '', match_count: 1, min_decay: 0.1, filter_owner: null } },
+  // Vector recall lanes (memory.ts recall). match_memories is the always-on memory-level lane;
+  // match_memory_fragments is the fragment lane (non-skipExpansion path). Both are silently absent
+  // from a stale boot blob, so probe them so the gap surfaces as drift instead of a dead lane.
+  // Vector-safe args (null embedding + match_count 0) make each a no-op read. filter_tags pins the
+  // migration-028 8-arg match_memories overload recall calls unconditionally (catches a pre-028 box
+  // where recall would break); the fragment probe stays the 4/6-arg common subset (min_decay +
+  // filter_types are opt-in via MEMORY_FRAGMENT_FILTERS) so it never false-drifts a pre-043 box
+  // still serving the migration-009 4-arg form.
+  { name: 'match_memories', args: { query_embedding: null, match_count: 0, filter_owner: null, filter_tags: null } },
+  { name: 'match_memory_fragments', args: { query_embedding: null, match_count: 0, filter_owner: null } },
+  // Memory 3.0 C2: probe the outbox claim RPC so a table-without-RPC state (the §6 hazard) is
+  // caught at boot as drift rather than silently never draining.
+  { name: 'claim_memory_write_jobs', args: { p_limit: 0 } },
 ];
 
 export interface SchemaReport {

@@ -20,6 +20,12 @@
  *   --run-id ID             (isolate run data with unique owner_wallet — avoids cleanup)
  */
 process.env.LOG_LEVEL = 'error';
+// BENCH_MODE preflight (Memory 3.0 C10): the brain runs IN-PROCESS here, so this
+// guarantees recall is read-only under measurement — no access boosts, no Hebbian
+// reinforcement mutating the corpus mid-run (+2.6pp drift measured from data
+// freshness alone). Set by construction rather than asserted so it can't be forgotten.
+process.env.BENCH_MODE = 'true';
+console.log('── BENCH_MODE=true (read-only recall: no access boosts / Hebbian reinforcement) ──');
 import dotenv from 'dotenv';
 dotenv.config();
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -232,6 +238,15 @@ function parseArgs() {
         break;
     }
   }
+
+  // Guardrail (Memory 3.0 C10): --skip-seeding reuses a seeded corpus, but the
+  // end-of-run cleanup runs regardless and would DELETE that corpus — a measured
+  // footgun (it wiped a weight-sweep corpus mid-comparison). Pair them by force.
+  if (opts.skipSeeding && !opts.skipCleanup) {
+    opts.skipCleanup = true;
+    console.warn('── --skip-seeding implies --skip-cleanup (forced): end-of-run cleanup would delete the reused corpus ──');
+  }
+
   return opts;
 }
 

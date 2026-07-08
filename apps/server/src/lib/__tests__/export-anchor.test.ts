@@ -25,7 +25,10 @@ vi.mock('@solana/web3.js', async (importActual) => {
   return { ...actual, sendAndConfirmTransaction: (...args: unknown[]) => sendMock(...args) };
 });
 
-vi.mock('@clude/shared/core/solana-client', () => ({ getConnection: () => ({}) }));
+vi.mock('@clude/shared/core/solana-client', () => ({
+  getConnection: () => ({}),
+  solscanTxUrl: (sig: string) => `https://solscan.io/tx/${sig}`,
+}));
 
 const updates = vi.hoisted(() => [] as Array<{ patch: any; where: any }>);
 vi.mock('@clude/shared/core/database', () => ({
@@ -49,6 +52,7 @@ import {
   anchorExportBestEffort,
   attestExport,
   verifyExportAttestation,
+  buildProofBundle,
 } from '../export-anchor';
 
 const anchorKp = Keypair.generate();
@@ -202,5 +206,55 @@ describe('attestExport / verifyExportAttestation (B1.2b, one proof-plane identit
       BOT_WALLET_PRIVATE_KEY: treasuryB58,
     } as NodeJS.ProcessEnv);
     expect(att).toBeNull();
+  });
+});
+
+describe('buildProofBundle (B2.2, the citation-chip trust surface)', () => {
+  const ROW = {
+    artifact_id: 'pmp_7',
+    merkle_root: 'a'.repeat(64),
+    manifest_hash: 'b'.repeat(64),
+    created_at: '2026-07-03T00:00:00.000Z',
+    anchor_chain: 'solana' as string | null,
+    anchor_tx_sig: 'AnchorTxSig123' as string | null,
+  };
+  const ENV = { ANCHOR_WALLET_PRIVATE_KEY: anchorB58, BOT_WALLET_PRIVATE_KEY: treasuryB58 } as NodeJS.ProcessEnv;
+
+  it('re-attests deterministically (same signature the export returned) and it verifies', () => {
+    const bundle = buildProofBundle(ROW, ENV);
+    expect(bundle.attestation).not.toBeNull();
+    // Deterministic: re-attesting the same row reproduces the export-time attestation byte-for-byte.
+    const direct = attestExport(
+      { artifactId: ROW.artifact_id, merkleRoot: ROW.merkle_root, manifestHash: ROW.manifest_hash, createdAt: ROW.created_at },
+      ENV,
+    );
+    expect(bundle.attestation).toEqual(direct);
+    expect(verifyExportAttestation(bundle.attestation!)).toBe(true);
+  });
+
+  it('derives a Solscan explorer link for a Solana anchor', () => {
+    const bundle = buildProofBundle(ROW, ENV);
+    expect(bundle.anchor).toEqual({
+      chain: 'solana',
+      tx_sig: 'AnchorTxSig123',
+      explorer_url: 'https://solscan.io/tx/AnchorTxSig123',
+    });
+  });
+
+  it('gives no explorer link for a non-Solana anchor (Base has no Solscan)', () => {
+    const bundle = buildProofBundle({ ...ROW, anchor_chain: 'base', anchor_tx_sig: '0xbaseTx' }, ENV);
+    expect(bundle.anchor).toEqual({ chain: 'base', tx_sig: '0xbaseTx', explorer_url: null });
+  });
+
+  it('anchor is null before the async on-chain write lands', () => {
+    const bundle = buildProofBundle({ ...ROW, anchor_tx_sig: null, anchor_chain: null }, ENV);
+    expect(bundle.anchor).toBeNull();
+    expect(bundle.attestation).not.toBeNull(); // attestation is available immediately; anchoring is async
+  });
+
+  it('attestation is null pre-rollout (no anchor key), and never throws', () => {
+    const bundle = buildProofBundle(ROW, {} as NodeJS.ProcessEnv);
+    expect(bundle.attestation).toBeNull();
+    expect(bundle.anchor).not.toBeNull(); // the on-chain record is independent of the attestation key
   });
 });

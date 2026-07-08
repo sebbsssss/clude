@@ -46,7 +46,7 @@ import {
 } from '@clude/memorypack';
 import { memoryContentHash, buildPackTree, type MemoryType } from '@clude/tokenization';
 import { getDb } from '@clude/shared/core/database';
-import { anchorExportBestEffort, attestExport } from '../lib/export-anchor';
+import { anchorExportBestEffort, attestExport, buildProofBundle } from '../lib/export-anchor';
 import { requirePrivyAuth, optionalPrivyAuth } from '@clude/brain/auth/privy-auth';
 import { requireOwnership } from '@clude/brain/auth/require-ownership';
 import { createChildLogger } from '@clude/shared/core/logger';
@@ -705,6 +705,8 @@ async function writeRegisterRespond(args: WriteRegisterArgs): Promise<{ handled:
         res.status(200).json({
           artifact: existing,
           deduped: true,
+          // B2.5: same trust bundle the export card renders (ArtifactProofBadge).
+          proof: buildProofBundle(existing as never),
           pmp_base64: pmpBase64,
           filename: pmpFilename,
         });
@@ -740,7 +742,9 @@ async function writeRegisterRespond(args: WriteRegisterArgs): Promise<{ handled:
   // directly. No storage_url / no /download handler: the bytes are served once here, on export.
   res.status(201).json({
     artifact: artifactRow,
-    attestation,
+    // B2.5: the trust bundle the export card renders (ArtifactProofBadge). Reuse the attestation
+    // just signed (same createdAt=nowIso); anchor is null here — on-chain confirmation is async.
+    proof: { attestation, anchor: null },
     pmp_base64: pmpBase64,
     filename: pmpFilename,
   });
@@ -1221,13 +1225,69 @@ export function pmpArtifactsRoutes(): Router {
           res.status(404).json({ error: 'artifact_not_found' } satisfies ErrorBody);
           return;
         }
-        res.json({ artifact: data });
+        // B2.2: surface the trust bundle on the owner's export card — attestation
+        // + the Solscan link once the async anchor confirms.
+        res.json({ artifact: data, proof: buildProofBundle(data as never) });
       } catch (err) {
         log.error({ err, id }, 'GET /v1/pmp/artifacts/:id failed');
         res.status(500).json({ error: 'retrieve_failed' } satisfies ErrorBody);
       }
     },
   );
+
+  /**
+   * GET /v1/pmp/artifacts/:id/proof — PUBLIC verification oracle (Memory 3.0 B2.2).
+   *
+   * The endpoint a citation chip calls to confirm a shared pack's commitment is
+   * genuinely Clude-attested and, if anchored, on-chain. Public for the same
+   * reason POST /v1/pmp/verify is: proof-of-commitment is meant to be checkable
+   * by anyone holding the pack, not just its owner. Returns ONLY the
+   * proof-relevant identity fields — no owner_wallet, no private metadata.
+   * The membership half (is memory X in this pack) is proven browser-side via
+   * the merkle inclusion proof; this oracle attests the ROOT.
+   */
+  router.get('/v1/pmp/artifacts/:id/proof', pmpVerifyLimiter, async (req: Request, res: Response) => {
+    const id = String(req.params.id ?? '');
+    if (!id || id.length > 64) {
+      res.status(422).json({ error: 'invalid_id' } satisfies ErrorBody);
+      return;
+    }
+    try {
+      const db = getDb();
+      const { data, error } = await db
+        .from('pmp_artifacts')
+        .select(
+          'artifact_id, merkle_root, manifest_hash, record_count, license_type, creator_pubkey, created_at, anchor_chain, anchor_tx_sig',
+        )
+        .eq('artifact_id', id)
+        .limit(1)
+        .maybeSingle();
+      if (error) {
+        log.warn({ err: error, id }, 'GET /v1/pmp/artifacts/:id/proof failed');
+        res.status(500).json({ error: 'proof_failed' } satisfies ErrorBody);
+        return;
+      }
+      if (!data) {
+        res.status(404).json({ error: 'artifact_not_found' } satisfies ErrorBody);
+        return;
+      }
+      const { attestation, anchor } = buildProofBundle(data as never);
+      res.json({
+        artifact_id: data.artifact_id,
+        merkle_root: data.merkle_root,
+        manifest_hash: data.manifest_hash,
+        record_count: data.record_count,
+        license_type: data.license_type,
+        creator_pubkey: data.creator_pubkey,
+        created_at: data.created_at,
+        attestation,
+        anchor,
+      });
+    } catch (err) {
+      log.error({ err, id }, 'GET /v1/pmp/artifacts/:id/proof failed');
+      res.status(500).json({ error: 'proof_failed' } satisfies ErrorBody);
+    }
+  });
 
   /**
    * POST /v1/pmp/verify — hosted twin of `npx @clude/memorypack verify`. NO auth.

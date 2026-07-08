@@ -26,8 +26,8 @@ export async function bootstrap(): Promise<void> {
   await startServer();
   log.info({ port: config.server.port }, 'Server listening');
 
-  // In-process singleton timers (recall canary, marketplace delivery poller, title-mint
-  // reconciliation). These assume exactly ONE long-lived owner: on Cloud Run the server
+  // In-process singleton timers (recall canary, C2 memory outbox drain, marketplace delivery
+  // poller, title-mint reconciliation). These assume exactly ONE long-lived owner: on Cloud Run the server
   // sets RUN_INPROCESS_TIMERS=false and the single worker owns them, so autoscaling can
   // never duplicate (or scale-to-zero drop) them. Default true = current Railway behavior.
   if (shouldRunInProcessTimers()) {
@@ -38,6 +38,17 @@ export async function bootstrap(): Promise<void> {
     if (process.env.SUPABASE_URL && process.env.RECALL_CANARY !== 'false') {
       const { startRecallCanary } = require('./workers/recall-canary');
       startRecallCanary();
+    }
+
+    // Memory 3.0 C2 durable enrichment outbox. Drains the single 'enrich' job storeMemory enqueues
+    // when MEMORY_OUTBOX is on (embed → link → extract, owner-scoped, crash-safe via stale-'running'
+    // reclaim; degrades silently to a no-op if migrations 044/045 are unapplied). Gated on the flag
+    // AND Supabase creds — flag off means nothing enqueues, so the drain would be a pointless empty
+    // RPC every tick.
+    if (process.env.SUPABASE_URL && config.memory.outboxEnabled) {
+      const { startOutboxWorkerPoller } = require('./workers/outbox-worker-poller');
+      startOutboxWorkerPoller();
+      log.info('Memory outbox worker started');
     }
 
     // Durable marketplace delivery poller (§00 M6) — the backstop that drives paid copy orders to

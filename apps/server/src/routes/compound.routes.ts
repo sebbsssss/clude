@@ -4,8 +4,20 @@ import { getAccuracyStats, isCompoundRunning } from '@clude/brain/features/compo
 import { createAdapters, fetchAllMarkets } from '@clude/brain/features/compound/market-adapters';
 import { hydrateMemories, recallMemories } from '@clude/brain/memory';
 import { getDb } from '@clude/shared/core/database';
+import { config } from '@clude/shared/config';
+import { withOwnerWallet } from '@clude/shared/core/owner-context';
 
 const log = createChildLogger('compound-routes');
+
+// Compound predictions/resolutions are WRITTEN by the WORKERS process under the bot's OWNER_WALLET
+// (non-null owner_wallet). These server-process reads must run in that SAME owner scope — otherwise
+// they depend on the recall fail-open (unscoped owner scope = all tenants), which
+// OWNER_SCOPE_FAILCLOSED=true removes, silently emptying these endpoints. Scope explicitly so the
+// data survives the fail-closed flip. (Memory 3.0 C0 owner fence.)
+async function recallCompound(opts: Parameters<typeof recallMemories>[0]) {
+  const owner = config.owner.wallet;
+  return owner ? withOwnerWallet(owner, () => recallMemories(opts)) : recallMemories(opts);
+}
 
 /** Get a time bucket key for grouping timeline stats */
 function getBucketKey(date: Date, interval: string): string {
@@ -170,7 +182,7 @@ export function compoundRoutes(): Router {
       }
 
       // Find resolution if one exists (linked via metadata.prediction_memory_id)
-      const resolutions = await recallMemories({
+      const resolutions = await recallCompound({
         tags: ['compound', 'resolution'],
         limit: 50,
         trackAccess: false,
@@ -239,7 +251,7 @@ export function compoundRoutes(): Router {
       const tags = ['compound', 'prediction'];
       if (category) tags.push(category);
 
-      const predictions = await recallMemories({
+      const predictions = await recallCompound({
         query: `compound prediction ${category || ''}`.trim(),
         tags,
         limit: 50, // Fetch more to allow offset/filtering
@@ -248,7 +260,7 @@ export function compoundRoutes(): Router {
       });
 
       // Fetch all resolutions to match with predictions
-      const resolutions = await recallMemories({
+      const resolutions = await recallCompound({
         tags: ['compound', 'resolution'],
         limit: 50,
         trackAccess: false,
@@ -336,7 +348,7 @@ export function compoundRoutes(): Router {
       }
 
       // Fetch all resolutions
-      const resolutions = await recallMemories({
+      const resolutions = await recallCompound({
         tags: ['compound', 'resolution'],
         limit: 50,
         trackAccess: false,
@@ -344,7 +356,7 @@ export function compoundRoutes(): Router {
       });
 
       // Fetch all predictions for counts
-      const predictions = await recallMemories({
+      const predictions = await recallCompound({
         tags: ['compound', 'prediction'],
         limit: 50,
         trackAccess: false,

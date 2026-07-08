@@ -9,6 +9,7 @@ import { ExploreScreen } from './pages/ExploreScreen';
 import { WikiScreen } from './pages/WikiScreen';
 import { ExportScreen } from './pages/ExportScreen';
 import { SettingsScreen } from './pages/SettingsScreen';
+import { Constellation } from './pages/Constellation';
 // Kept for the public /showcase routes (separate from the signed-in app).
 import { WikiPacks } from './pages/WikiPacks';
 import { Wiki } from './pages/Wiki/Wiki';
@@ -25,6 +26,8 @@ function AuthenticatedApp() {
           <Route path="/wiki" element={<WikiScreen />} />
           <Route path="/export" element={<ExportScreen />} />
           <Route path="/settings" element={<SettingsScreen />} />
+          {/* Private per-account view: gated inside the component (ansem@clude.io only). */}
+          <Route path="/constellation" element={<Constellation />} />
           {/* Legacy paths → their new home, so nothing 404s. */}
           <Route path="/timeline" element={<Navigate to="/explore" replace />} />
           <Route path="/entities" element={<Navigate to="/explore" replace />} />

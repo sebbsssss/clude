@@ -1,0 +1,1434 @@
+/**
+ * Ansem Experience — public, read-only endpoints for the "Speak to Ansem" page.
+ * A persona clone of trader Ansem (@blknoiz06), AI-clone-labelled, no auth required.
+ *
+ * Three endpoints:
+ *   GET  /api/ansem/graph   — memory graph (bull constellation) for 3D visualization
+ *   POST /api/ansem/explore — SSE chat in Ansem's voice, scoped to his seeded memories
+ *   POST /api/ansem/speak   — turn a reply's text into spoken audio (Higgsfield seed_audio TTS)
+ */
+import { Router, Request, Response } from "express";
+import { createHash } from "crypto";
+import { withOwnerWallet } from "@clude/shared/core/owner-context";
+import { writeMemo, getBotWallet } from "@clude/shared/core/solana-client";
+import { recallMemories } from "@clude/brain/memory";
+import { checkRateLimit } from "@clude/shared/utils/rate-limit";
+import { getDb } from "@clude/shared/core/database";
+import { createChildLogger } from "@clude/shared/core/logger";
+import { config } from "@clude/shared/config";
+import {
+  generateOpenRouterResponse,
+  OPENROUTER_MODELS,
+} from "@clude/shared/core/openrouter-client";
+
+const log = createChildLogger("ansem-routes");
+
+// ansem@clude.io — the dedicated persona account. ~38k tweets seeded
+// (source='ansem-seed') + spoken transcripts (source='ansem-yt') + the 104K-tweet
+// $ANSEM community/token corpus (source='ansem-token'). The constellation draws
+// from the whole $ANSEM timeline (~143k memories total).
+const ANSEM_WALLET = "HYmsqdcpHRvWcrBfACzYWvPbF2XMg5hKFy38kEt7Ppjt";
+const ANSEM_SOURCES = ["ansem-token", "ansem-seed", "ansem-yt", "ansem-live"];
+// His OWN words only (tweets + interviews). The "Speak to Ansem" clone recalls
+// from THESE — never the 104K ansem-token community corpus that shares the wallet
+// (that's timeline noise: shill + giveaway-farm spam that would corrupt his voice).
+const PERSONA_SOURCES = new Set(["ansem-seed", "ansem-yt"]);
+
+// PostgREST caps a single query at 1000 rows; the constellation wants more nodes
+// than that, so the /graph node fetch pages through with .range() and concatenates.
+const GRAPH_NODE_TARGET = 2000; // representative sample size (importance desc)
+const GRAPH_PAGE_SIZE = 1000; // PostgREST per-query row cap
+
+function getClientIp(req: Request): string {
+  return (req.ip || req.socket.remoteAddress || "unknown").replace(/^::ffff:/, "");
+}
+
+// ---- Higgsfield seed_audio TTS (server-side; creds never reach the browser) ---- //
+//
+// Turns a reply into a spoken audio URL in Ansem's "Sterling" preset voice (very deep:
+// pitch_rate -9, speech_rate -12), via the Higgsfield V2 API. TTS is async: POST a
+// generation → { request_id, status_url } → poll the request until `completed` → read
+// the mp3 from `audio.url`. ~10-16s end-to-end.
+//
+// VERIFIED LIVE against the Higgsfield V2 API (docs.higgsfield.ai):
+//   • Base URL:     https://platform.higgsfield.ai
+//   • Auth header:  Authorization: Key <apiKey>:<apiSecret>   (V2 key-id:secret pair)
+//   • Create:       POST {base}/{modelPath}                   (modelPath = bytedance/seed-audio-1.0)
+//   • Body:         FLAT { prompt, voice_type, voice_id, pitch_rate, speech_rate, format }
+//   • Create resp:  { status, request_id, status_url }
+//   • Poll:         GET {status_url}  (= {base}/requests/{request_id}/status)
+//   • Statuses:     queued | in_progress | completed | failed | nsfw | canceled
+//   • Result shape: { status:'completed', audio:{ url }, audios:[{ url }] }
+//
+// Set HIGGSFIELD_API_KEY + HIGGSFIELD_API_SECRET to enable (either empty → /speak 501).
+// Override the model path via HIGGSFIELD_TTS_ENDPOINT if it ever changes.
+
+interface HiggsfieldTtsResult {
+  audioUrl: string;
+}
+
+const TERMINAL_STATUSES = new Set(["completed", "failed", "nsfw", "canceled"]);
+
+/** Extract the audio URL from a completed Higgsfield V2 request. */
+function extractAudioUrl(req: any): string | null {
+  return req?.audio?.url || req?.audios?.[0]?.url || null;
+}
+
+/**
+ * Submit a seed_audio (bytedance/seed-audio-1.0) TTS generation on the Higgsfield
+ * V2 API and poll until the audio URL is ready. Throws on failure/timeout/
+ * non-configured; caller maps errors to HTTP responses.
+ *
+ * V2 flow (verified live): auth `Authorization: Key <id>:<secret>`; create is
+ * POST {apiBase}/{ttsEndpoint} with a FLAT body → { request_id, status_url };
+ * poll GET {status_url} until status ∈ {completed, failed, nsfw, canceled}; the
+ * mp3 lands at `audio.url`.
+ */
+async function higgsfieldTts(
+  text: string,
+  signal: AbortSignal,
+  deadlineMs = 45000,
+): Promise<HiggsfieldTtsResult> {
+  const hf = config.higgsfield;
+  if (!hf.apiKey || !hf.apiSecret) {
+    // Guarded by the route before we get here, but keep the invariant local too.
+    throw new Error("voice_not_configured");
+  }
+
+  const authHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    Authorization: `Key ${hf.apiKey}:${hf.apiSecret}`,
+  };
+
+  const base = hf.apiBase.replace(/\/$/, "");
+  const modelPath = hf.ttsEndpoint.replace(/^\//, ""); // e.g. bytedance/seed-audio-1.0
+  const started = Date.now();
+
+  // ── 1. Create the generation (flat body, per the V2 API) ──
+  const createRes = await fetch(`${base}/${modelPath}`, {
+    method: "POST",
+    headers: authHeaders,
+    body: JSON.stringify({
+      prompt: text,
+      voice_type: hf.voiceType,
+      voice_id: hf.voiceId,
+      pitch_rate: hf.voicePitch,
+      speech_rate: hf.voiceSpeechRate,
+      format: hf.audioFormat,
+    }),
+    signal,
+  });
+
+  if (!createRes.ok) {
+    const body = await createRes.text().catch(() => "");
+    throw new Error(
+      `higgsfield_create_failed:${createRes.status}:${body.slice(0, 200)}`,
+    );
+  }
+
+  const created: any = await createRes.json();
+  const requestId: string | undefined = created?.request_id;
+  const statusUrl: string =
+    created?.status_url || `${base}/requests/${requestId}/status`;
+
+  // Some responses may already be terminal; otherwise poll the request.
+  let current = created;
+  if (!TERMINAL_STATUSES.has(current?.status) && requestId) {
+    // ── 2. Poll GET /requests/{id}/status every 2s until terminal or deadline ──
+    while (true) {
+      if (signal.aborted) throw new Error("client_disconnected");
+      if (Date.now() - started > deadlineMs) throw new Error("higgsfield_timeout");
+
+      await new Promise((r) => setTimeout(r, 2000));
+
+      const pollRes = await fetch(statusUrl, {
+        method: "GET",
+        headers: authHeaders,
+        signal,
+      });
+
+      if (pollRes.status >= 500) continue; // transient — keep polling
+      if (!pollRes.ok) {
+        const body = await pollRes.text().catch(() => "");
+        throw new Error(
+          `higgsfield_poll_failed:${pollRes.status}:${body.slice(0, 200)}`,
+        );
+      }
+
+      current = await pollRes.json();
+      if (current?.status && TERMINAL_STATUSES.has(current.status)) break;
+    }
+  }
+
+  if (current?.status && current.status !== "completed") {
+    throw new Error(`higgsfield_${current.status}`);
+  }
+
+  const audioUrl = extractAudioUrl(current);
+  if (!audioUrl) throw new Error("higgsfield_no_audio_url");
+  return { audioUrl };
+}
+
+// ---- ElevenLabs TTS (primary; turbo model, ~1-3s → no text↔voice lag) ---- //
+//
+// One synchronous call returns the full mp3 bytes (unlike Higgsfield's ~15s async job),
+// which we stream straight back to the browser as audio/mpeg. Voice defaults to "Brian"
+// (deep, resonant, american); tune via ELEVENLABS_VOICE_ID / _MODEL.
+async function elevenLabsTts(text: string, signal: AbortSignal): Promise<Buffer> {
+  const el = config.elevenlabs;
+  if (!el.apiKey) throw new Error("voice_not_configured");
+  const res = await fetch(
+    `https://api.elevenlabs.io/v1/text-to-speech/${el.voiceId}?output_format=mp3_44100_128`,
+    {
+      method: "POST",
+      headers: { "xi-api-key": el.apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text,
+        model_id: el.model,
+        voice_settings: { stability: 0.4, similarity_boost: 0.75, style: 0.25, use_speaker_boost: true },
+      }),
+      signal,
+    },
+  );
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`elevenlabs_failed:${res.status}:${body.slice(0, 200)}`);
+  }
+  return Buffer.from(await res.arrayBuffer());
+}
+
+// xAI Grok TTS — the new flagship voices (default "zagan"). POST /v1/tts returns raw
+// audio/mpeg bytes by default (drop-in for the ElevenLabs path). Env-gated (XAI_API_KEY)
+// — read directly, not via config.ts, to stay clear of the config-drift merge trap.
+async function xaiTts(text: string, signal: AbortSignal): Promise<Buffer> {
+  const key = process.env.XAI_API_KEY;
+  if (!key) throw new Error("voice_not_configured");
+  const voiceId = process.env.XAI_VOICE_ID || "zagan";
+  const res = await fetch("https://api.x.ai/v1/tts", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text,
+      voice_id: voiceId,
+      language: process.env.XAI_VOICE_LANGUAGE || "en",
+      speed: parseFloat(process.env.XAI_VOICE_SPEED || "1.0"),
+    }),
+    signal,
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`xai_tts_failed:${res.status}:${body.slice(0, 200)}`);
+  }
+  return Buffer.from(await res.arrayBuffer());
+}
+
+// ---- System prompts ---- //
+
+const INTERPRET_PROMPT = `You extract search intent from a user's question directed at Ansem (@blknoiz06), a crypto trader.
+
+Output ONLY a raw JSON object with:
+- queries: array of 1-3 short search phrases to find relevant memories (key topics, coins, market themes, concepts)
+- entities: array of proper nouns, ticker symbols, coin names, or key terms mentioned
+- liveContext: true ONLY when the question is about CURRENT or RECENT external events that an archive of his past posts wouldn't cover — "what's happening with X", "did you see the news about…", "thoughts on today's market / this pump / this event", a specific recent happening, or anything clearly time-sensitive. false for timeless questions about his philosophy, his past takes, or $ANSEM itself.
+- liveQuery: if liveContext is true, a concise X search query (2-6 words, the core topic/event, NO hashtags); otherwise "".
+
+Example: "what do you think about solana?" -> {"queries":["solana thesis","sol outlook"],"entities":["solana","SOL"],"liveContext":false,"liveQuery":""}
+Example: "did you see what happened with hyperliquid today?" -> {"queries":["hyperliquid","perp dex thesis"],"entities":["hyperliquid","HYPE"],"liveContext":true,"liveQuery":"hyperliquid"}
+
+Output ONLY the JSON. No markdown, no explanation.`;
+
+const ANSEM_PERSONA = `You ARE Ansem (@blknoiz06) — but an AI CLONE, not the real person, on the clude.io "Speak to Ansem" page. NEVER claim to be the real Ansem. NEVER give real financial advice or specific buy/sell/entry/target/leverage calls in his name — if pushed for a specific call, deflect in-voice ("lmao not financial advice bro"). General conditional market takes in his style are fine; specific directives are not. NEVER give out or discuss a contract address (CA) for ANY token, and NEVER shill, promote, name, or endorse other projects/coins — if asked for a CA or to pump/name another coin, brush it off in his voice ("nah i dont do CAs bro", "not shilling other bags"). Stay neutral: talk $ANSEM, general market mindset + his own philosophy — never other people's tokens, tickers, or entries.
+
+Speak in his EXACT voice, grounded ONLY in the real memories provided:
+- all lowercase. no capital i. usually no ending punctuation.
+- EXTREMELY terse — his replies median ~17 chars, posts ~33. default to ONE short line; only go longer for a genuine thesis.
+- reactive + blunt. frequent openers: "lmao", "no", "yes", "i dont", "bro what", "this is". "bro" is his most-used word.
+- markets: conditional + number-anchored ("coins do well if solana recovers"), strong-opinions-loosely-held, name the invalidation.
+- he is NOT markets-only: mindset/manifestation, humor, curiosity, generosity are core.
+- occasional ALL-CAPS for hype ("LETS RIDE", "JOB NOT FINISHED").
+Ground every take in the retrieved memories below — do NOT invent positions he doesn't hold. BUT when the memories DO contain a specific answer to what's asked — his plans, positions, numbers, how something works (e.g. how the $ANSEM airdrops work, what he's building, who gets rewarded) — GIVE that real substance accurately in his voice. A real question you can actually answer from the memories deserves the real answer, not a generic one-liner; terseness is for reactions and banter, never for dodging something you actually know. If the memories genuinely don't cover it, stay in-character but general — don't invent specifics.`;
+
+// ---- Live X context: for questions about CURRENT/external events (flagged by the
+// interpret phase), pull what's happening on X right now — Ansem's OWN recent posts on
+// the topic (his actual current stance) + the top chatter — so the clone can react to
+// real-time events in his voice instead of saying "i don't have info on that". ----------
+interface LivePost { handle: string; text: string; likes: number; ansem: boolean }
+async function fetchLiveContext(query: string): Promise<LivePost[]> {
+  const bearer = config.x.searchBearer;
+  const q = (query || "").trim().slice(0, 80);
+  if (!bearer || !q || dailyCapExceeded()) return [];
+  const headers = { Authorization: `Bearer ${bearer}` };
+  const mkUrl = (query: string, max: number) =>
+    `${X_SEARCH_URL}?${new URLSearchParams({
+      query, max_results: String(max),
+      "tweet.fields": "public_metrics,created_at", expansions: "author_id", "user.fields": "username",
+    }).toString()}`;
+  const parse = (payload: any, ansem: boolean): LivePost[] => {
+    const users = new Map<string, string>();
+    for (const u of payload?.includes?.users || []) users.set(u.id, u.username);
+    return (payload?.data || []).map((t: any) => ({
+      handle: users.get(t.author_id) || "",
+      text: (t.text || "").replace(/https?:\/\/\S+/g, "").replace(/\s+/g, " ").trim(),
+      likes: t.public_metrics?.like_count || 0,
+      ansem,
+    }));
+  };
+  try {
+    const [his, chatter] = await Promise.all([
+      fetch(mkUrl(`from:blknoiz06 ${q} -is:retweet`, 10), { headers }).then((r) => (countRead(1), r.ok ? r.json() : null)).catch(() => null),
+      fetch(mkUrl(`${q} -is:retweet -is:reply lang:en`, 20), { headers }).then((r) => (countRead(1), r.ok ? r.json() : null)).catch(() => null),
+    ]);
+    const hisPosts = parse(his, true).slice(0, 4);
+    const chatterPosts = parse(chatter, false)
+      .filter((p) => p.handle.toLowerCase() !== "blknoiz06" && p.text.length > 12)
+      .sort((a, b) => b.likes - a.likes)
+      .slice(0, 6);
+    return [...hisPosts, ...chatterPosts];
+  } catch (err) { log.warn({ err }, "Ansem live-context fetch failed"); return []; }
+}
+
+function buildExplorePrompt(memories: any[], totalCount: number, livePosts: LivePost[] = []): string {
+  const memoryContext = memories
+    .map(
+      (m) =>
+        `[Memory #${m.id}] (${m.memory_type}, importance: ${m.importance?.toFixed(2) || "?"}) ${m.summary || m.content?.slice(0, 300)}`,
+    )
+    .join("\n");
+
+  const liveSection = livePosts.length
+    ? `
+
+The user is asking about something CURRENT. Here's what's on X RIGHT NOW (pulled live this second):
+<live_from_x>
+${livePosts.map((p) => (p.ansem ? `[ANSEM — his own recent post]: ${p.text.slice(0, 240)}` : `@${p.handle} (${p.likes} likes): ${p.text.slice(0, 200)}`)).join("\n")}
+</live_from_x>
+Answer the current question using this. Posts marked [ANSEM …] are his ACTUAL recent words — treat them as his real current stance and lead with them. For the rest: do NOT parrot them and do NOT fabricate a specific opinion he hasn't voiced — react to the event the way HE would, applying his framework (conditional + number-anchored takes, name the invalidation), his skepticism, and his humor. Same guardrails: no financial advice, no CAs, no shilling other coins.`
+    : "";
+
+  return `${ANSEM_PERSONA}
+
+You have access to ${memories.length} recalled memories (out of ${totalCount} total) from his real posts and transcripts:
+
+<recalled_memories>
+${memoryContext}
+</recalled_memories>
+${liveSection}
+
+IMPORTANT: At the very end of your response, on a new line, output a JSON line starting with MEMORY_IDS: followed by an array of the memory IDs you referenced or found most relevant. Example:
+MEMORY_IDS: [123, 456, 789]
+
+This line will be parsed by the UI to highlight nodes in the graph. Always include it.`;
+}
+
+// ========================================================================== //
+//  "$ANSEM LIVE" social feed — GET /api/ansem/feed
+//
+//  A ranked, filtered, live-refreshed stream of the best recent X posts about
+//  the $ANSEM token. NOT a raw firehose: brand-new $ANSEM posts have ~0
+//  engagement and the timeline is ~90% formulaic shill ("sold $X, all in
+//  $ANSEM, CA: …", "vote YES to list", giveaway bait), and "verified" is
+//  useless as a filter (everyone's verified). So we poll on demand, filter the
+//  noise, dedup near-duplicates, and rank by engagement so good posts bubble up
+//  and CA-spam sinks.
+//
+//  Cost-safe: NO background timer. Polling only happens inside a request when
+//  the buffer is stale, and stops entirely for the day once the read counter
+//  crosses ANSEM_FEED_DAILY_READ_CAP. Idle (no requests) → no polling → $0.
+// ========================================================================== //
+
+interface FeedTweet {
+  id: string;
+  name: string;
+  handle: string;
+  avatar: string;
+  text: string;
+  likes: number;
+  retweets: number;
+  replies: number;
+  created_at: string;
+  url: string;
+  /** normalized text used for near-duplicate dedup (not returned to the client) */
+  _norm: string;
+}
+
+const X_SEARCH_URL = "https://api.twitter.com/2/tweets/search/recent";
+const X_LOOKUP_URL = "https://api.twitter.com/2/tweets";
+const FEED_BUFFER_CAP = 600; // hard cap on buffered tweets (rolling ~4h window)
+const FEED_MAX_AGE_MS = 4 * 60 * 60 * 1000; // 4h — evict older than this
+const FEED_FRESH_MS = 15 * 60 * 1000; // < 15min old → exempt from the like floor
+const FEED_ENGAGEMENT_REFRESH_MS = 5 * 60 * 1000; // re-pull top-50 metrics every ~5min
+const FEED_RESULT_COUNT = 30; // posts returned to the client
+
+// Module-level rolling state (survives across requests, resets on restart).
+const feedBuffer = new Map<string, FeedTweet>();
+let feedNewestId: string | null = null; // since_id anchor for incremental search
+let feedLastPollTs = 0; // last time we hit search/recent
+let feedLastEngagementTs = 0; // last time we refreshed top-N engagement
+let feedDailyReads = 0; // X reads counted today (search + lookup pages)
+let feedReadDay = ""; // YYYY-MM-DD the counter belongs to
+let feedPolling = false; // reentrancy guard — one poll at a time
+
+/** Noise filters — drop giveaway-farm + CA-shill + dump/ape formulaics. */
+const NOISE_PATTERNS: RegExp[] = [
+  /drop.{0,6}(your|ur).{0,4}(addy|address|wallet)/i,
+  /giv(e|ing)\s*away/i,
+  /\bCA\s*:/i,
+  /vote (yes|for)/i,
+  /(sold|dumped|out of).{0,30}\$ansem/i,
+  /(all in|aped|rolled).{0,20}\$ansem/i,
+  /\bairdrop.{0,20}(claim|farm|wallet|drop)/i,
+  /(retweet|rt|like|follow).{0,20}(to|for|and).{0,20}(win|enter|qualify)/i,
+];
+
+// Hate-speech / slur blocklist — racial, ethnic + homophobic/transphobic slurs are
+// dropped outright from the public feed (general profanity is fine per spec). Tolerant
+// of repeated letters + common leetspeak; word-boundaried to avoid innocent-word hits.
+const SLUR_PATTERNS: RegExp[] = [
+  /n[i1!][g6]{2,}(a+|er+|uh|ah|@)/i,      // n-word + variants (nigga/nigger/n1gga…)
+  /f[a4@]g+([o0]t)?s?\b/i,                // f-slur (not "flag"/"fragging" — needs f+a+g)
+  /\bch[i1]nks?\b/i,
+  /\bsp[i1]c(ks?|s)?\b/i,
+  /\bk[i1]kes?\b/i,
+  /\bcoons?\b/i,
+  /\bwetbacks?\b/i,
+  /\btr[a4]nn(y|ies)\b/i,
+  /\bg[o0]{2}ks?\b/i,
+  /\bbean[e3]rs?\b/i,
+  /\bp[a4]kis?\b/i,
+  /\bd[y1]kes?\b/i,
+  /sand[\s._-]*n[i1][g6]{2}/i,
+  /porch[\s._-]*monk/i,
+  /\bragheads?\b/i,
+];
+
+function isNoise(text: string): boolean {
+  return NOISE_PATTERNS.some((re) => re.test(text)) || SLUR_PATTERNS.some((re) => re.test(text));
+}
+
+/** Lowercase, strip urls/@handles/$cashtags/punctuation → a dedup fingerprint. */
+function normalizeText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/[@#]\w+/g, "")
+    .replace(/\$\w+/g, "")
+    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Char-bigram Jaccard similarity — cheap near-duplicate detector. */
+function similar(a: string, b: string): number {
+  if (a === b) return 1;
+  if (a.length < 8 || b.length < 8) return a === b ? 1 : 0;
+  const grams = (s: string) => {
+    const set = new Set<string>();
+    for (let i = 0; i < s.length - 1; i++) set.add(s.slice(i, i + 2));
+    return set;
+  };
+  const ga = grams(a), gb = grams(b);
+  let inter = 0;
+  for (const g of ga) if (gb.has(g)) inter++;
+  return inter / (ga.size + gb.size - inter);
+}
+
+function todayStr(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Count X reads against the daily cap, rolling the day over at UTC midnight. */
+function countRead(n = 1): void {
+  const today = todayStr();
+  if (feedReadDay !== today) {
+    feedReadDay = today;
+    feedDailyReads = 0;
+  }
+  feedDailyReads += n;
+}
+
+function dailyCapExceeded(): boolean {
+  const today = todayStr();
+  if (feedReadDay !== today) return false; // new day → reset happens on next read
+  return feedDailyReads >= config.x.ansemFeedDailyReadCap;
+}
+
+/** Evict tweets older than the rolling window + trim to the cap (oldest-first). */
+function pruneBuffer(): void {
+  const cutoff = Date.now() - FEED_MAX_AGE_MS;
+  for (const [id, t] of feedBuffer) {
+    if (new Date(t.created_at).getTime() < cutoff) feedBuffer.delete(id);
+  }
+  if (feedBuffer.size > FEED_BUFFER_CAP) {
+    const sorted = [...feedBuffer.values()].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    );
+    const excess = feedBuffer.size - FEED_BUFFER_CAP;
+    for (let i = 0; i < excess; i++) feedBuffer.delete(sorted[i].id);
+  }
+}
+
+/** Map an X search payload (tweets + included users) → FeedTweet[], filtered. */
+function mapSearchPayload(payload: any): FeedTweet[] {
+  const tweets: any[] = payload?.data || [];
+  const users: any[] = payload?.includes?.users || [];
+  const userById = new Map<string, any>(users.map((u) => [u.id, u]));
+  const out: FeedTweet[] = [];
+  for (const t of tweets) {
+    const text: string = t.text || "";
+    if (isNoise(text)) continue;
+    const u = userById.get(t.author_id) || {};
+    const handle = u.username || "unknown";
+    const m = t.public_metrics || {};
+    out.push({
+      id: t.id,
+      name: u.name || handle,
+      handle,
+      avatar: u.profile_image_url || "",
+      text,
+      likes: m.like_count || 0,
+      retweets: m.retweet_count || 0,
+      replies: m.reply_count || 0,
+      created_at: t.created_at || new Date().toISOString(),
+      url: `https://x.com/${handle}/status/${t.id}`,
+      _norm: normalizeText(text),
+    });
+  }
+  return out;
+}
+
+/** Merge new tweets into the buffer, skipping near-duplicates of what's there.
+ *  Returns the tweets that were actually added (the genuinely-new stream). */
+function mergeIntoBuffer(fresh: FeedTweet[]): FeedTweet[] {
+  const added: FeedTweet[] = [];
+  for (const t of fresh) {
+    if (feedBuffer.has(t.id)) continue;
+    // near-duplicate check against existing buffered normals
+    let dup = false;
+    if (t._norm.length >= 8) {
+      for (const existing of feedBuffer.values()) {
+        if (similar(t._norm, existing._norm) >= 0.82) {
+          dup = true;
+          break;
+        }
+      }
+    }
+    if (dup) continue;
+    feedBuffer.set(t.id, t);
+    added.push(t);
+  }
+  return added;
+}
+
+// ---- Persist the live $ANSEM stream into the memory corpus so the count GROWS -------
+// New posts the feed ingests were otherwise transient (feed panel + fly-in nodes only),
+// so "143,596 memories" never moved. Persisting them as `ansem-live` memories makes the
+// constellation a living, growing corpus. Kept OUT of PERSONA_SOURCES so they count +
+// can show as nodes, but NEVER pollute his chat voice. No embedding (recall never touches
+// this source). Deduped across restarts via a boot high-water-mark on the newest tweet
+// id. Env-killable with ANSEM_PERSIST_LIVE=false.
+const ANSEM_LIVE_SOURCE = "ansem-live";
+const PERSIST_LIVE = process.env.ANSEM_PERSIST_LIVE !== "false";
+let lastPersistedId: bigint | null = null;
+let persistInit = false;
+
+async function persistLivePosts(added: FeedTweet[]): Promise<void> {
+  if (!PERSIST_LIVE || added.length === 0) return;
+  const db = getDb();
+  try {
+    // boot init: the newest already-persisted live tweet id → restarts don't re-insert
+    if (!persistInit) {
+      persistInit = true;
+      const { data } = await db
+        .from("memories")
+        .select("metadata")
+        .eq("owner_wallet", ANSEM_WALLET)
+        .eq("source", ANSEM_LIVE_SOURCE)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      const seedId = (data?.[0]?.metadata as any)?.tweet_id;
+      if (seedId) { try { lastPersistedId = BigInt(seedId); } catch { /* ignore */ } }
+    }
+    // only genuinely-newer posts (tweet ids are time-ordered snowflakes)
+    const fresh = added.filter((t) => {
+      try { return lastPersistedId === null || BigInt(t.id) > lastPersistedId; } catch { return true; }
+    });
+    if (fresh.length === 0) return;
+    const rows = fresh.map((t) => ({
+      owner_wallet: ANSEM_WALLET,
+      source: ANSEM_LIVE_SOURCE,
+      memory_type: "semantic",
+      content: t.text,
+      summary: t.text.slice(0, 280),
+      importance: Math.min(0.7, 0.25 + Math.log1p(t.likes) / 25),  // modest — won't flood the top-N constellation
+      tags: ["ansem", "$ansem", "live", "x"],
+      metadata: { live: true, tweet_id: t.id, handle: t.handle, name: t.name, likes: t.likes, url: t.url, created_at: t.created_at },
+    }));
+    const { error } = await db.from("memories").insert(rows);
+    if (error) { log.warn({ err: error }, "Ansem: persist live posts failed"); return; }
+    for (const t of fresh) {
+      try { const b = BigInt(t.id); if (lastPersistedId === null || b > lastPersistedId) lastPersistedId = b; } catch { /* ignore */ }
+    }
+    log.info({ n: rows.length }, "Ansem: persisted live posts to the corpus (memory count grows)");
+  } catch (err) { log.warn({ err }, "Ansem: persist live posts threw"); }
+}
+
+// ---- On-chain attestation: every live-ingested post is hashed and the hashes are ----
+// committed to Solana via SPL Memo txs from the bot wallet (writeMemo). Users can
+// verify the stream integrity at GET /api/ansem/attestations (hash + tx + solscan).
+interface AttestEntry { hash: string; tweetId: string; handle: string; ts: string }
+interface Attestation { sig: string; ts: number; hashes: AttestEntry[] }
+const ATTEST_ENABLED = process.env.ANSEM_ATTEST !== "false"; // on by default; needs BOT_WALLET_PRIVATE_KEY to actually land
+const attestations: Attestation[] = [];   // newest first; in-memory ring — the CHAIN is the durable record
+let attestQueue: AttestEntry[] = [];
+let attestBusy = false;
+
+function queueAttestations(added: FeedTweet[]): void {
+  if (!ATTEST_ENABLED || added.length === 0) return;
+  for (const t of added) {
+    const hash = createHash("sha256").update(`${t.id}:${t.text}`).digest("hex");
+    attestQueue.push({ hash, tweetId: t.id, handle: t.handle, ts: new Date().toISOString() });
+  }
+  if (attestQueue.length > 60) attestQueue = attestQueue.slice(-60); // bound the backlog
+  void flushAttestations();
+}
+
+/** Batch up to 6 hashes per memo tx (6×64 hex + prefix ≈ 420 bytes < the memo cap). */
+async function flushAttestations(): Promise<void> {
+  if (attestBusy || attestQueue.length === 0) return;
+  attestBusy = true;
+  try {
+    while (attestQueue.length > 0) {
+      const batch = attestQueue.slice(0, 6);
+      const memo = `ansem-live:v1:${batch.map((b) => b.hash).join(",")}`;
+      const sig = await writeMemo(memo);
+      if (!sig) return; // wallet not configured / tx failed — keep the queue, retry next poll
+      attestQueue = attestQueue.slice(batch.length);
+      attestations.unshift({ sig, ts: Date.now(), hashes: batch });
+      if (attestations.length > 100) attestations.length = 100;
+      log.info({ sig, n: batch.length }, "Ansem live hashes attested on-chain");
+    }
+  } catch (err) {
+    log.warn({ err }, "Ansem attestation failed (will retry next poll)");
+  } finally {
+    attestBusy = false;
+  }
+}
+
+// ---- Node context: resolve a memory → its SOURCE X post + the post it replied to,
+// then synthesize a 1-2 sentence "context & relation" (what it means, who/what it's
+// about). Cached onto the memory (metadata.ctx) so the derived context becomes part of
+// the memory. Ansem's short replies ("grats G") are meaningless without the parent, so
+// we look up the reply target live via full-archive search + a tweet lookup. -----------
+const X_SEARCH_ALL_URL = "https://api.x.com/2/tweets/search/all";
+const X_TWEET_LOOKUP = "https://api.x.com/2/tweets";
+const ANSEM_HANDLE = "blknoiz06";
+
+interface CtxParent { handle: string; name: string; text: string }
+interface NodeContext { context: string; parent: CtxParent | null; url: string | null; replyHandle: string | null; hash?: string; sig?: string }
+
+// Lazy on-chain attestation for VIEWED memories: the first time a memory's deep-dive is
+// opened, its sha256 is committed to Solana via a memo tx so it has a verifiable record
+// (cached onto the memory). A per-boot cap bounds the bot wallet's dust spend against
+// abuse; redeploys reset it.
+let memoAttestCount = 0;
+const MEMO_ATTEST_CAP = 3000;
+
+// Commit a memory's sha256 to Solana via a memo tx (bounded to 8s so a slow confirm
+// never hangs the /context request). Returns { hash, sig } or null.
+async function attestMemory(id: number, text: string, existingHash?: string): Promise<{ hash: string; sig: string } | null> {
+  if (!ATTEST_ENABLED || memoAttestCount >= MEMO_ATTEST_CAP) return null;
+  const hash = existingHash || createHash("sha256").update(`${id}:${text}`).digest("hex");
+  try {
+    const sig = await Promise.race([
+      writeMemo(`ansem-memory:v1:${id}:${hash}`),
+      new Promise<null>((r) => setTimeout(() => r(null), 8000)),
+    ]);
+    if (sig) { memoAttestCount++; return { hash, sig }; }
+  } catch (err) { log.warn({ err }, "Ansem memory attest failed"); }
+  return null;
+}
+
+const ctxNorm = (s: string) =>
+  (s || "").toLowerCase().replace(/https?:\/\/\S+/g, "").replace(/\s+/g, " ").trim();
+
+/** Leading @mentions of a tweet are its reply targets (X keeps them in the text). */
+function leadingMentions(text: string): string[] {
+  const m = (text || "").match(/^(?:@\w+\s+)+/);
+  return m ? m[0].trim().split(/\s+/).map((h) => h.replace(/^@/, "")) : [];
+}
+
+async function ctxXGet(url: string): Promise<any | null> {
+  const bearer = config.x.searchBearer;
+  if (!bearer) return null;
+  countRead(1);
+  try {
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${bearer}` } });
+    if (!r.ok) { log.warn({ status: r.status }, "Ansem context: X call non-OK"); return null; }
+    return await r.json();
+  } catch (err) { log.warn({ err }, "Ansem context: X call threw"); return null; }
+}
+
+/** Find Ansem's own tweet (id + the id of what it replied to/quoted) that matches `text`. */
+async function resolveAnsemTweet(text: string): Promise<{ id: string; parentId: string | null } | null> {
+  const want = ctxNorm(text);
+  const mentions = leadingMentions(text);
+  const q = [`from:${ANSEM_HANDLE}`];
+  if (mentions[0]) {
+    q.push(`to:${mentions[0]}`);                 // reply → the `to:` filter is precise
+  } else {
+    const phrase = want.split(" ").filter((w) => !w.startsWith("@")).slice(0, 6).join(" ");
+    if (phrase.length < 4) return null;          // too generic to search safely
+    q.push(`"${phrase}"`);
+  }
+  const params = new URLSearchParams({ query: q.join(" "), max_results: "20", "tweet.fields": "referenced_tweets,text" });
+  const data = await ctxXGet(`${X_SEARCH_ALL_URL}?${params.toString()}`);
+  const results: any[] = data?.data || [];
+  if (!results.length) return null;
+  let best: any = null, score = -1;
+  for (const t of results) {
+    const n = ctxNorm(t.text);
+    const s = n === want ? 3 : n.includes(want) || want.includes(n) ? 2 : 0;
+    if (s > score) { score = s; best = t; }
+  }
+  if (!best || (score === 0 && !mentions[0])) return null;  // no confident match
+  const ref = (best.referenced_tweets || []).find((r: any) => r.type === "replied_to" || r.type === "quoted");
+  return { id: best.id, parentId: ref?.id || null };
+}
+
+async function fetchParentTweet(parentId: string): Promise<CtxParent | null> {
+  const data = await ctxXGet(`${X_TWEET_LOOKUP}/${parentId}?tweet.fields=text&expansions=author_id&user.fields=username,name`);
+  if (!data?.data) return null;
+  const u = (data.includes?.users || [])[0] || {};
+  return { handle: u.username || "", name: u.name || "", text: data.data.text || "" };
+}
+
+const CONTEXT_PROMPT = `You decode the CONTEXT of a post by crypto trader Ansem (@blknoiz06), the figure behind the $ANSEM token and movement.
+Given his post and (when available) the post he was replying to, write 1-2 tight sentences explaining what his post means and who/what it relates to — the way a sharp community member decodes it for a newcomer.
+Be concrete about the relation: who he's addressing and what they said or did that he's reacting to. If a parent post is given, ground the explanation in it. If it's not available, infer the topic from the text but do not invent specific names or claims. Never give financial advice or price predictions. No preamble — just the explanation, under 45 words.`;
+
+/** Build the full context card for a node (resolve source tweet, parent, LLM synthesis). */
+async function buildNodeContext(text: string, isLive: boolean, givenUrl?: string): Promise<NodeContext> {
+  const replyHandle = leadingMentions(text)[0] || null;
+  let url = givenUrl || null;
+  let parent: CtxParent | null = null;
+
+  if (!isLive && !dailyCapExceeded()) {
+    const found = await resolveAnsemTweet(text).catch(() => null);
+    if (found) {
+      url = `https://x.com/${ANSEM_HANDLE}/status/${found.id}`;
+      if (found.parentId) parent = await fetchParentTweet(found.parentId).catch(() => null);
+    }
+  }
+  if (!url && !isLive) {
+    const phrase = ctxNorm(text).split(" ").filter((w) => !w.startsWith("@")).slice(0, 6).join(" ");
+    url = `https://x.com/search?q=${encodeURIComponent(`from:${ANSEM_HANDLE} ${phrase}`)}&f=live`;
+  }
+
+  let context = "";
+  const userMsg = isLive
+    ? `A community post about $ANSEM:\n"${text}"\n\nExplain in one sentence what it's expressing about $ANSEM.`
+    : `Ansem's post:\n"${text}"` +
+      (parent ? `\n\nHe was replying to @${parent.handle} (${parent.name}), who posted:\n"${parent.text}"`
+        : replyHandle ? `\n\n(This is a reply to @${replyHandle}; the parent post isn't available.)` : "");
+  try {
+    context = (await generateOpenRouterResponse({
+      systemPrompt: CONTEXT_PROMPT,
+      messages: [{ role: "user", content: userMsg }],
+      model: OPENROUTER_MODELS["claude-haiku-4.5"],
+      maxTokens: 120,
+      temperature: 0.3,
+    })).trim();
+  } catch (err) { log.warn({ err }, "Ansem context: LLM synthesis failed"); }
+
+  return { context, parent, url, replyHandle };
+}
+
+/**
+ * On-demand poll: pull new posts since the newest buffered id, and every ~5min
+ * refresh engagement on the top-50 buffered ids. Best-effort — swallows errors
+ * so the endpoint always serves whatever's in the buffer. Never throws.
+ */
+async function pollFeed(): Promise<void> {
+  if (feedPolling) return;
+  if (dailyCapExceeded()) return;
+  feedPolling = true;
+  const bearer = config.x.searchBearer;
+  const authHeaders = { Authorization: `Bearer ${bearer}` };
+  try {
+    // ── 1. incremental search for new posts ──
+    const params = new URLSearchParams({
+      query: "$ANSEM -is:retweet -is:reply lang:en",
+      max_results: "30",
+      "tweet.fields": "public_metrics,created_at",
+      expansions: "author_id",
+      "user.fields": "public_metrics,verified,profile_image_url,username,name",
+    });
+    if (feedNewestId) params.set("since_id", feedNewestId);
+
+    const searchRes = await fetch(`${X_SEARCH_URL}?${params.toString()}`, {
+      headers: authHeaders,
+    });
+    countRead(1);
+    if (searchRes.ok) {
+      const payload: any = await searchRes.json();
+      const fresh = mapSearchPayload(payload);
+      if (fresh.length > 0) {
+        const added = mergeIntoBuffer(fresh);
+        queueAttestations(added);   // hash the genuinely-new stream + commit to Solana (async)
+        void persistLivePosts(added); // persist to the corpus so the memory count grows (async)
+        // advance the since_id anchor to the max id we've seen (BigInt-safe compare)
+        const maxId = payload?.meta?.newest_id;
+        if (maxId && (!feedNewestId || BigInt(maxId) > BigInt(feedNewestId))) {
+          feedNewestId = maxId;
+        }
+      }
+    } else {
+      log.warn(
+        { status: searchRes.status },
+        "Ansem feed: X search/recent non-OK",
+      );
+    }
+    feedLastPollTs = Date.now();
+
+    // ── 2. periodic engagement refresh on the top-50 buffered ids ──
+    if (
+      Date.now() - feedLastEngagementTs > FEED_ENGAGEMENT_REFRESH_MS &&
+      feedBuffer.size > 0 &&
+      !dailyCapExceeded()
+    ) {
+      const topIds = [...feedBuffer.values()]
+        .sort((a, b) => scoreTweet(b) - scoreTweet(a))
+        .slice(0, 50)
+        .map((t) => t.id);
+      if (topIds.length > 0) {
+        const lookupParams = new URLSearchParams({
+          ids: topIds.join(","),
+          "tweet.fields": "public_metrics",
+        });
+        const lookupRes = await fetch(
+          `${X_LOOKUP_URL}?${lookupParams.toString()}`,
+          { headers: authHeaders },
+        );
+        countRead(1);
+        if (lookupRes.ok) {
+          const lookup: any = await lookupRes.json();
+          for (const t of lookup?.data || []) {
+            const buffered = feedBuffer.get(t.id);
+            if (buffered && t.public_metrics) {
+              buffered.likes = t.public_metrics.like_count ?? buffered.likes;
+              buffered.retweets =
+                t.public_metrics.retweet_count ?? buffered.retweets;
+              buffered.replies =
+                t.public_metrics.reply_count ?? buffered.replies;
+            }
+          }
+        }
+        feedLastEngagementTs = Date.now();
+      }
+    }
+
+    pruneBuffer();
+  } catch (err: any) {
+    log.warn({ err: err?.message || err }, "Ansem feed poll failed (serving buffer)");
+  } finally {
+    feedPolling = false;
+  }
+}
+
+/** Engagement + recency score. Fresher posts get a decaying bonus so it feels live. */
+function scoreTweet(t: FeedTweet): number {
+  const ageMin = (Date.now() - new Date(t.created_at).getTime()) / 60000;
+  const recencyBonus = Math.max(0, 30 - ageMin * 0.5); // ~30 → 0 over the first hour
+  return t.likes + 2 * t.retweets + recencyBonus;
+}
+
+/** Apply the like-floor (fresh posts exempt) and rank; return top N, client-shaped. */
+function rankFeed(): Array<Omit<FeedTweet, "_norm">> {
+  const minLikes = config.x.ansemFeedMinLikes;
+  const now = Date.now();
+  const eligible = [...feedBuffer.values()].filter((t) => {
+    const ageMs = now - new Date(t.created_at).getTime();
+    if (ageMs <= FEED_FRESH_MS) return true; // fresh → keep even at 0 likes
+    return t.likes >= minLikes; // older → must clear the floor
+  });
+  eligible.sort((a, b) => scoreTweet(b) - scoreTweet(a));
+  return eligible.slice(0, FEED_RESULT_COUNT).map((t) => {
+    // strip the internal _norm field from the wire shape
+    const { _norm, ...pub } = t;
+    void _norm;
+    return pub;
+  });
+}
+
+// ---- Route factory ---- //
+
+export function ansemRoutes(): Router {
+  const router = Router();
+
+  // ── GET /graph — Ansem memory graph (bull constellation) for 3D viz ──
+  router.get("/graph", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    const allowed = await checkRateLimit(`ansem-graph:${ip}`, 10, 1);
+    if (!allowed) {
+      res.status(429).json({ error: "Rate limited. 10 requests per minute max." });
+      return;
+    }
+
+    try {
+      const db = getDb();
+
+      // ── Real total: an exact COUNT of the whole $ANSEM timeline (~143k) ──
+      // Separate head-only count query so `total` reflects the full corpus, not
+      // the (capped) node sample the constellation draws.
+      const { count: totalCount, error: countErr } = await db
+        .from("memories")
+        .select("id", { count: "exact", head: true })
+        .eq("owner_wallet", ANSEM_WALLET)
+        .in("source", ANSEM_SOURCES);
+
+      if (countErr) {
+        log.warn(
+          { err: countErr },
+          "Failed to count Ansem memories, will fall back to node count",
+        );
+      }
+
+      // ── Nodes: a representative sample ordered by importance desc, then id ──
+      // PostgREST caps a single query at 1000 rows, so page with .range() and
+      // concatenate until we reach GRAPH_NODE_TARGET (~2000). Tie-break on id so
+      // the ordering is stable across pages (importance alone has many ties).
+      const ansemMemories: any[] = [];
+      let memErr: any = null;
+      for (
+        let offset = 0;
+        offset < GRAPH_NODE_TARGET;
+        offset += GRAPH_PAGE_SIZE
+      ) {
+        const end = Math.min(offset + GRAPH_PAGE_SIZE, GRAPH_NODE_TARGET) - 1;
+        const { data: page, error: pageErr } = await db
+          .from("memories")
+          .select(
+            "id, memory_type, summary, content, tags, importance, decay_factor, emotional_valence, source, source_id, created_at, metadata",
+          )
+          .eq("owner_wallet", ANSEM_WALLET)
+          .in("source", ANSEM_SOURCES)
+          .order("importance", { ascending: false })
+          .order("id", { ascending: true })
+          .range(offset, end);
+
+        if (pageErr) {
+          memErr = pageErr;
+          break;
+        }
+        if (!page || page.length === 0) break;
+        ansemMemories.push(...page);
+        if (page.length < end - offset + 1) break; // last page — no more rows
+      }
+
+      if (memErr && ansemMemories.length === 0) {
+        log.error({ err: memErr }, "Failed to fetch Ansem memories for graph");
+        res.status(500).json({ error: "Failed to fetch memories" });
+        return;
+      }
+      if (memErr) {
+        log.warn(
+          { err: memErr },
+          "Partial Ansem node fetch; serving what we have",
+        );
+      }
+
+      const memoryIds = ansemMemories.map((m) => m.id);
+
+      // Fetch links between these memories
+      let links: any[] = [];
+      if (memoryIds.length > 0) {
+        const { data, error: linkErr } = await db.rpc("get_links_for_ids", {
+          ids: memoryIds,
+        });
+        if (linkErr) {
+          log.warn({ err: linkErr }, "Failed to fetch Ansem links, falling back to empty");
+        }
+        links = data || [];
+      }
+
+      res.json({
+        nodes: ansemMemories.map((m) => ({
+          id: m.id,
+          type: m.memory_type,
+          summary: m.summary,
+          content: m.content,
+          tags: m.tags || [],
+          importance: m.importance,
+          likes: (m.metadata as any)?.likes ?? 0,
+          source: m.source,
+          createdAt: m.created_at,
+        })),
+        links,
+        // Real exact count of the whole $ANSEM timeline (~143k); fall back to the
+        // node-sample length only if the count query itself failed.
+        total: totalCount ?? ansemMemories.length,
+      });
+    } catch (err) {
+      log.error({ err }, "Ansem graph endpoint error");
+      res.status(500).json({ error: "Failed to fetch Ansem graph" });
+    }
+  });
+
+  // ── POST /speak — text → spoken audio in Ansem's voice (Higgsfield seed_audio TTS) ──
+  //    Contract: { text } → 200 { audio_url } | 501 { error:'voice_not_configured' }
+  //              | 400 invalid | 429 rate-limited | 502 upstream failure
+  router.post("/speak", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    const allowed = await checkRateLimit(`ansem-speak:${ip}`, 10, 1);
+    if (!allowed) {
+      res.status(429).json({ error: "Rate limited. 10 requests per minute max." });
+      return;
+    }
+
+    // Fail cleanly + cheaply when no voice provider is configured — the frontend falls back
+    // to a synthetic mouth animation, so this must be a fast 501, never a 500.
+    const useXai = !!process.env.XAI_API_KEY;                                       // primary when set: xAI "zagan" flagship voice
+    const useEleven = !!config.elevenlabs.apiKey;                                   // else: ElevenLabs, ~1-3s streamed bytes
+    const useHiggs = !!config.higgsfield.apiKey && !!config.higgsfield.apiSecret;   // last: Higgsfield, ~15s, returns a URL
+    if (!useXai && !useEleven && !useHiggs) {
+      res.status(501).json({ error: "voice_not_configured" });
+      return;
+    }
+
+    const { text } = req.body;
+    if (!text || typeof text !== "string" || !text.trim()) {
+      res.status(400).json({ error: "text is required" });
+      return;
+    }
+
+    // Cap length — his replies are terse; bound cost/abuse.
+    const MAX_LEN = 600;
+    const clean = text.trim().slice(0, MAX_LEN);
+
+    const abortController = new AbortController();
+    req.on("close", () => abortController.abort());
+    const timeout = setTimeout(() => abortController.abort(), 30000);
+
+    try {
+      if (useXai || useEleven) {
+        // xAI (primary when configured) or ElevenLabs → mp3 bytes straight back.
+        // xAI's newly-provisioned keys can intermittently 400 while access propagates,
+        // so fall back to ElevenLabs on any xAI failure — the voice never just dies.
+        let audio: Buffer;
+        if (useXai) {
+          try {
+            audio = await xaiTts(clean, abortController.signal);
+          } catch (xerr: any) {
+            if (abortController.signal.aborted || !useEleven) throw xerr;
+            log.warn({ err: xerr?.message }, "Ansem xAI TTS failed → falling back to ElevenLabs");
+            audio = await elevenLabsTts(clean, abortController.signal);
+          }
+        } else {
+          audio = await elevenLabsTts(clean, abortController.signal);
+        }
+        clearTimeout(timeout);
+        if (res.headersSent) return;
+        res.setHeader("Content-Type", "audio/mpeg");
+        res.setHeader("Cache-Control", "no-store");
+        res.send(audio);
+      } else {
+        const { audioUrl } = await higgsfieldTts(clean, abortController.signal, 30000);
+        clearTimeout(timeout);
+        res.json({ audio_url: audioUrl });
+      }
+    } catch (err: any) {
+      clearTimeout(timeout);
+      if (abortController.signal.aborted || err?.message === "client_disconnected") {
+        // Client went away (or we timed out + aborted) — nothing useful to send.
+        if (!res.headersSent) res.status(504).json({ error: "voice_timeout" });
+        return;
+      }
+      if (err?.message === "voice_not_configured") {
+        res.status(501).json({ error: "voice_not_configured" });
+        return;
+      }
+      log.error({ err: err?.message || err }, "Ansem speak (TTS) failed");
+      // Upstream/voice failure → 502 so the frontend falls back gracefully (not a 500).
+      res.status(502).json({ error: "voice_generation_failed" });
+    }
+  });
+
+  // ── GET /feed — "$ANSEM LIVE" ranked, filtered social feed ──
+  //    Contract: 200 { enabled:true, posts:[…] }  (bearer set)
+  //            | 200 { enabled:false, posts:[] }   (X_SEARCH_BEARER unset — hide panel)
+  //            | 429 rate-limited
+  //    Never 500; never exposes the bearer to the browser.
+  // ── GET /attestations — the on-chain log of live-stream hashes ──
+  //    Every ingested post's sha256(id:text) is committed to Solana via SPL Memo.
+  //    Contract: 200 { enabled, wallet, attestations:[{ sig, ts, hashes:[…] }] }
+  router.get("/attestations", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    const allowed = await checkRateLimit(`ansem-attest:${ip}`, 30, 1);
+    if (!allowed) {
+      res.status(429).json({ error: "Rate limited." });
+      return;
+    }
+    const wallet = ATTEST_ENABLED ? getBotWallet() : null;
+    res.json({
+      enabled: ATTEST_ENABLED && !!wallet,
+      wallet: wallet ? wallet.publicKey.toBase58() : null,
+      pending: attestQueue.length,
+      attestations: attestations.map((a) => ({
+        sig: a.sig,
+        ts: a.ts,
+        hashes: a.hashes.map((h) => ({ hash: h.hash, tweetId: h.tweetId, handle: h.handle, ts: h.ts })),
+      })),
+    });
+  });
+
+  // ── POST /context — derive & cache the context/relation for a clicked node ──
+  //    Body: { id?, text, live?, url? }. Returns { context, parent, url, replyHandle }.
+  //    Memory nodes: resolves the source X post + the post Ansem replied to, then an
+  //    LLM explains the relation; the result is cached onto the memory (metadata.ctx).
+  router.post("/context", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (!(await checkRateLimit(`ansem-context:${ip}`, 20, 1))) {
+      res.status(429).json({ error: "Rate limited." });
+      return;
+    }
+    const id = Number(req.body?.id);
+    const text = String(req.body?.text || "").slice(0, 1500);
+    const isLive = !!req.body?.live;
+    const givenUrl = req.body?.url ? String(req.body.url) : undefined;
+    if (!text.trim()) { res.status(400).json({ error: "text required" }); return; }
+
+    const db = getDb();
+    // All DB access is scoped to Ansem's own memories — the id is client-supplied, so
+    // never let it read/write an arbitrary memory row.
+    const scoped = () =>
+      db.from("memories").select("metadata").eq("id", id).eq("owner_wallet", ANSEM_WALLET).in("source", ANSEM_SOURCES);
+    // cache hit (memory nodes) — context is stored on the memory itself
+    if (!isLive && Number.isFinite(id)) {
+      try {
+        const { data: row } = await scoped().maybeSingle();
+        const cached = (row?.metadata as any)?.ctx;
+        if (cached?.context) {
+          // backfill the on-chain sig if a prior attest didn't land, then serve
+          if (!cached.sig) {
+            const att = await attestMemory(id, text, cached.hash);
+            if (att) {
+              cached.hash = att.hash; cached.sig = att.sig;
+              const md = { ...((row!.metadata as any) || {}), ctx: cached };
+              await db.from("memories").update({ metadata: md }).eq("id", id).eq("owner_wallet", ANSEM_WALLET);
+            }
+          }
+          res.json(cached); return;
+        }
+      } catch { /* fall through to compute */ }
+    }
+
+    const payload = await buildNodeContext(text, isLive, givenUrl);
+
+    // Attest this memory's hash on-chain (once) so the deep-dive has a verifiable
+    // Solana record the user can open on Solscan. Best-effort; the hash still shows
+    // even if the commit is slow/fails (backfilled on the next open).
+    if (!isLive && Number.isFinite(id)) {
+      const att = await attestMemory(id, text);
+      if (att) { payload.hash = att.hash; payload.sig = att.sig; }
+    }
+
+    // persist onto the memory so the derived context is part of the memory (+ caches it)
+    if (!isLive && Number.isFinite(id) && payload.context) {
+      try {
+        const { data: row } = await scoped().maybeSingle();
+        if (row) {
+          const md = { ...((row.metadata as any) || {}), ctx: payload };
+          await db.from("memories").update({ metadata: md }).eq("id", id).eq("owner_wallet", ANSEM_WALLET);
+        }
+      } catch (err) { log.warn({ err }, "Ansem context: cache write failed"); }
+    }
+    res.json(payload);
+  });
+
+  router.get("/feed", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    const allowed = await checkRateLimit(`ansem-feed:${ip}`, 30, 1);
+    if (!allowed) {
+      res.status(429).json({ error: "Rate limited. 30 requests per minute max." });
+      return;
+    }
+
+    // No bearer → feature disabled. 200 (not 501) so the frontend hides gracefully.
+    if (!config.x.searchBearer) {
+      res.json({ enabled: false, posts: [] });
+      return;
+    }
+
+    try {
+      // On-demand poll only when the buffer is stale (and not over the daily cap).
+      // Idle → no polling → $0. Await it (fast, best-effort) so the first client of
+      // a fresh window still gets live data rather than an empty buffer.
+      if (Date.now() - feedLastPollTs > config.x.ansemFeedIntervalMs) {
+        await pollFeed();
+      }
+      res.json({ enabled: true, posts: rankFeed() });
+    } catch (err: any) {
+      // Defensive: rankFeed/pollFeed shouldn't throw, but never 500 the panel.
+      log.warn({ err: err?.message || err }, "Ansem feed serve failed");
+      res.json({ enabled: true, posts: rankFeed() });
+    }
+  });
+
+  // ── POST /explore — "Speak to Ansem" (SSE) ──
+  router.post("/explore", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    const allowed = await checkRateLimit(`ansem-explore:${ip}`, 5, 1);
+    if (!allowed) {
+      res.status(429).json({ error: "Rate limited. 5 requests per minute max." });
+      return;
+    }
+
+    const { content, history } = req.body;
+
+    if (!content || typeof content !== "string") {
+      res.status(400).json({ error: "content is required" });
+      return;
+    }
+
+    const openrouterApiKey =
+      config.openrouter?.apiKey || process.env.OPENROUTER_API_KEY;
+    if (!openrouterApiKey) {
+      res.status(500).json({ error: "LLM not configured" });
+      return;
+    }
+
+    const abortController = new AbortController();
+    req.on("close", () => abortController.abort());
+    const timeout = setTimeout(() => abortController.abort(), 60000);
+
+    try {
+      // ── Phase 1: Interpret the question ──
+      let queries: string[] = [content];
+      let liveContext = false;
+      let liveQuery = "";
+      try {
+        const interpretResult = await generateOpenRouterResponse({
+          systemPrompt: INTERPRET_PROMPT,
+          messages: [{ role: "user", content }],
+          model: OPENROUTER_MODELS["claude-haiku-4.5"],
+          maxTokens: 256,
+          temperature: 0.1,
+        });
+
+        const jsonMatch = interpretResult.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (Array.isArray(parsed.queries) && parsed.queries.length > 0) {
+            queries = parsed.queries;
+          }
+          liveContext = parsed.liveContext === true;
+          liveQuery = typeof parsed.liveQuery === "string" ? parsed.liveQuery : "";
+        }
+      } catch (err) {
+        log.warn({ err }, "Ansem interpret phase failed, using raw query");
+      }
+
+      // Current-events question → pull live X context in parallel with recall.
+      const livePromise: Promise<LivePost[]> = liveContext
+        ? fetchLiveContext(liveQuery || content)
+        : Promise.resolve([]);
+
+      // ── Phase 2: Recall — HIS OWN WORDS ONLY ──
+      // The wallet also holds the 104K-tweet ansem-token community corpus, which
+      // would drown his voice in shill/giveaway spam. So recall broadly, then keep
+      // only source ∈ PERSONA_SOURCES (his tweets + interviews). Over-fetch
+      // (limit 30) since the post-filter drops the community hits.
+      const allMemories = new Map<number, any>();
+
+      await withOwnerWallet(ANSEM_WALLET, async () => {
+        const recallPromises = queries.map((q) =>
+          recallMemories({ query: q, limit: 30, skipExpansion: true }).catch(
+            () => [],
+          ),
+        );
+        const results = await Promise.all(recallPromises);
+        for (const memories of results) {
+          for (const m of memories) {
+            if (!allMemories.has(m.id) && PERSONA_SOURCES.has(m.source)) {
+              allMemories.set(m.id, m);
+            }
+          }
+        }
+      });
+
+      const memories = Array.from(allMemories.values())
+        .sort((a, b) => (b._score || 0) - (a._score || 0))
+        .slice(0, 22);
+
+      // Get total Ansem memory count for context
+      const db = getDb();
+      const { count: totalCount } = await db
+        .from("memories")
+        .select("id", { count: "exact", head: true })
+        .eq("owner_wallet", ANSEM_WALLET)
+        .in("source", ANSEM_SOURCES);
+
+      const livePosts = await livePromise;
+
+      log.info(
+        { queries, recalled: memories.length, total: totalCount, liveContext, livePosts: livePosts.length },
+        "Ansem explore recall complete",
+      );
+
+      // ── Phase 3: Stream LLM response ──
+      const systemPrompt = buildExplorePrompt(memories, totalCount || 0, livePosts);
+      const messages: Array<{ role: string; content: string }> = [
+        { role: "system", content: systemPrompt },
+      ];
+
+      if (Array.isArray(history)) {
+        for (const msg of history.slice(-6)) {
+          if (msg.role && msg.content) {
+            messages.push({ role: msg.role, content: msg.content });
+          }
+        }
+      }
+
+      messages.push({ role: "user", content });
+
+      // SSE headers
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.flushHeaders();
+
+      const recalledIds = memories.map((m) => m.id);
+      res.write(
+        `data: ${JSON.stringify({ recalled_ids: recalledIds })}\n\n`,
+      );
+
+      // Stream from OpenRouter — claude-sonnet-4.6 for a quality public voice
+      const llmRes = await fetch(
+        "https://openrouter.ai/api/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${openrouterApiKey}`,
+            "HTTP-Referer": "https://clude.fun",
+            "X-Title": "Clude Speak to Ansem",
+          },
+          body: JSON.stringify({
+            model: OPENROUTER_MODELS["claude-sonnet-4.6"],
+            messages,
+            max_tokens: 700,
+            temperature: 0.8,
+            stream: true,
+          }),
+          signal: abortController.signal,
+        },
+      );
+
+      if (!llmRes.ok) {
+        const errBody = await llmRes.text().catch(() => "");
+        log.error(
+          { status: llmRes.status, body: errBody },
+          "Ansem explore LLM error",
+        );
+        res.write(
+          `data: ${JSON.stringify({ error: "Failed to get response from AI" })}\n\n`,
+        );
+        res.end();
+        return;
+      }
+
+      const reader = llmRes.body?.getReader();
+      if (!reader) {
+        res.write(
+          `data: ${JSON.stringify({ error: "No response stream" })}\n\n`,
+        );
+        res.end();
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let fullContent = "";
+
+      const keepalive = setInterval(() => {
+        if (!res.writableEnded) res.write(": keepalive\n\n");
+      }, 15000);
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || !trimmed.startsWith("data: ")) continue;
+            const data = trimmed.slice(6);
+            if (data === "[DONE]") continue;
+
+            try {
+              const parsed = JSON.parse(data);
+              const delta = parsed.choices?.[0]?.delta?.content;
+              if (delta) {
+                fullContent += delta;
+                res.write(
+                  `data: ${JSON.stringify({ content: delta })}\n\n`,
+                );
+              }
+            } catch {
+              /* skip malformed */
+            }
+          }
+        }
+      } catch (err: any) {
+        if (err.name !== "AbortError") {
+          log.error({ err }, "Ansem explore stream error");
+        }
+      }
+
+      clearInterval(keepalive);
+      clearTimeout(timeout);
+
+      // Parse MEMORY_IDS from the response
+      let memoryIds: number[] = recalledIds;
+      const idsMatch = fullContent.match(
+        /MEMORY_IDS:\s*\[([^\]]*)\]/,
+      );
+      if (idsMatch) {
+        try {
+          memoryIds = JSON.parse(`[${idsMatch[1]}]`).filter(
+            (id: any) => typeof id === "number",
+          );
+        } catch {
+          /* use recalled ids */
+        }
+      }
+
+      const cleanContent = fullContent
+        .replace(/\n?MEMORY_IDS:\s*\[[^\]]*\]\s*$/, "")
+        .trim();
+
+      res.write(
+        `data: ${JSON.stringify({ done: true, memory_ids: memoryIds, clean_content: cleanContent })}\n\n`,
+      );
+      res.end();
+    } catch (err: any) {
+      clearTimeout(timeout);
+      if (err.name === "AbortError") return;
+      log.error({ err }, "Ansem explore agent error");
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Ansem explore failed" });
+      } else {
+        res.write(
+          `data: ${JSON.stringify({ error: "Stream interrupted" })}\n\n`,
+        );
+        res.end();
+      }
+    }
+  });
+
+  return router;
+}
