@@ -145,6 +145,10 @@ describe('scoreImportanceOnWrite', () => {
     const external = scoreImportanceOnWrite(makeOpts({ type: 'semantic', source: 'mcp', content: 'same body here' }));
     const internal = scoreImportanceOnWrite(makeOpts({ type: 'semantic', source: 'reflection', content: 'same body here' }));
     expect(internal).toBeLessThan(external);
+    // 'reflection'/'emergence' get concepts from the source alone in inferConcepts();
+    // that bonus must not cancel the internal nudge.
+    const emergence = scoreImportanceOnWrite(makeOpts({ type: 'semantic', source: 'emergence', content: 'same body here' }));
+    expect(emergence).toBeLessThan(external);
   });
 });
 

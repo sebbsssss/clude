@@ -384,7 +384,11 @@ export function scoreImportanceOnWrite(opts: StoreMemoryOptions): number {
   const len = (opts.content ?? '').trim().length;
   score += Math.min(len / 1000, 0.15);            // longer = a bit more important (cap +0.15)
   if (opts.tags && opts.tags.length) score += 0.05;
-  const concepts = opts.concepts ?? inferConcepts(opts.summary, opts.source, opts.tags || []);
+  // Score the concept bonus source-blind for internal sources: inferConcepts()
+  // grants 'self_insight'/'identity_evolution' from the source alone, which would
+  // cancel the internal-source nudge below. (Stored concepts keep the real source.)
+  const conceptSource = INTERNAL_MEMORY_SOURCES.has(opts.source) ? '' : opts.source;
+  const concepts = opts.concepts ?? inferConcepts(opts.summary, conceptSource, opts.tags || []);
   if (concepts.length) score += 0.05;
   if (INTERNAL_MEMORY_SOURCES.has(opts.source)) score -= 0.05;  // dream/reflection slightly lower
   return Math.max(0, Math.min(1, score));
