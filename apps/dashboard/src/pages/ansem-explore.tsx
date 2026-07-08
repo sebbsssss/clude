@@ -945,16 +945,16 @@ function AnsemChat({
               onClick={onChainClick}
               aria-label="On-chain live-stream log"
               style={{
-                display: 'flex', alignItems: 'center', gap: 6, borderRadius: 999, cursor: 'pointer',
-                padding: 'clamp(10px,2.6vw,12px) clamp(12px,3vw,15px)',
+                display: 'flex', alignItems: 'center', gap: 5, borderRadius: 999, cursor: 'pointer',
+                padding: 'clamp(6px,1.7vw,10px) clamp(9px,2.4vw,13px)',
                 background: 'linear-gradient(180deg, rgba(6,26,16,.94), rgba(2,14,8,.94))',
                 border: '1px solid rgba(72,224,122,.4)', backdropFilter: 'blur(8px)',
                 boxShadow: '0 6px 22px rgba(0,0,0,.45)',
                 fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
               }}
             >
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#5cf08a', boxShadow: '0 0 8px #3ddc73', animation: 'ansemHudPulse 2s ease-in-out infinite', flexShrink: 0 }} />
-              <span style={{ fontSize: 'clamp(9.5px,2.5vw,11px)', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#bfead0', whiteSpace: 'nowrap' }}>⛓ on-chain</span>
+              <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#5cf08a', boxShadow: '0 0 7px #3ddc73', animation: 'ansemHudPulse 2s ease-in-out infinite', flexShrink: 0 }} />
+              <span style={{ fontSize: 'clamp(8.5px,2.2vw,10.5px)', fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: '#bfead0', whiteSpace: 'nowrap' }}>⛓ on-chain</span>
             </button>
           )}
           <button
@@ -962,16 +962,16 @@ function AnsemChat({
             onClick={() => setOpen(true)}
             aria-label="Speak to Ansem"
             style={{
-              display: 'flex', alignItems: 'center', gap: 9, borderRadius: 999, cursor: 'pointer',
-              padding: 'clamp(11px,2.8vw,13px) clamp(14px,3.4vw,18px) clamp(11px,2.8vw,13px) clamp(12px,3vw,15px)',
+              display: 'flex', alignItems: 'center', gap: 8, borderRadius: 999, cursor: 'pointer',
+              padding: 'clamp(7px,1.9vw,12px) clamp(12px,3vw,18px) clamp(7px,1.9vw,12px) clamp(10px,2.6vw,15px)',
               background: 'linear-gradient(180deg, rgba(6,26,16,.96), rgba(2,14,8,.96))',
               border: '1px solid rgba(72,224,122,.5)', backdropFilter: 'blur(8px)',
               animation: 'ansemOrbPulse 2.6s ease-in-out infinite',
               fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
             }}
           >
-            <span style={{ width: 10, height: 10, borderRadius: '50%', flexShrink: 0, background: '#5cf08a', boxShadow: '0 0 14px #3ddc73' }} />
-            <span style={{ fontSize: 'clamp(10.5px,2.7vw,12px)', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#eafff0', whiteSpace: 'nowrap' }}>Speak to Ansem</span>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: '#5cf08a', boxShadow: '0 0 12px #3ddc73' }} />
+            <span style={{ fontSize: 'clamp(9.5px,2.4vw,12px)', fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: '#eafff0', whiteSpace: 'nowrap' }}>Speak to Ansem</span>
           </button>
         </div>
       )}
@@ -1196,6 +1196,12 @@ export function AnsemExplore() {
     });
   }, []);
   const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  const [isNarrow, setIsNarrow] = useState(typeof window !== 'undefined' && window.innerWidth < 640);
+  useEffect(() => {
+    const onR = () => setIsNarrow(window.innerWidth < 640);
+    window.addEventListener('resize', onR);
+    return () => window.removeEventListener('resize', onR);
+  }, []);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setHighlightIds(new Set()); setNodePopup(null); } };
@@ -1449,10 +1455,12 @@ export function AnsemExplore() {
         </div>
       </div>
 
-      {/* Hover / usage hint (bottom-left) */}
+      {/* Hover / usage hint (bottom-left) — on mobile it sits ABOVE the pill row so
+          the pills never cover it */}
       <div style={{
-        position: 'absolute', left: 'clamp(16px,3vw,34px)', bottom: 'clamp(14px,3vh,22px)', zIndex: 3,
-        fontSize: 'clamp(10px,1.1vw,11.5px)', letterSpacing: '.05em', color: '#5aa877', pointerEvents: 'none', maxWidth: '80vw',
+        position: 'absolute', left: 'clamp(16px,3vw,34px)', right: isNarrow ? 'clamp(16px,3vw,34px)' : undefined,
+        bottom: isNarrow ? 76 : 'clamp(14px,3vh,22px)', zIndex: 3,
+        fontSize: isNarrow ? 10 : 'clamp(10px,1.1vw,11.5px)', letterSpacing: '.05em', color: '#5aa877', pointerEvents: 'none', maxWidth: isNarrow ? undefined : '80vw',
       }}>
         {isTouch ? 'tap any star to read the tweet' : 'hover any star to read the tweet'} · brightest = most-liked · tap “Speak to Ansem” to talk
         <div style={{ marginTop: 4, color: '#3c6b52', fontSize: 'clamp(9.5px,1vw,11px)' }}>
