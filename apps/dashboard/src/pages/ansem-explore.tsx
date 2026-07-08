@@ -1162,6 +1162,38 @@ export function AnsemExplore() {
       .catch(() => { if (!stop) setNodeCtx((c) => (c ? { ...c, loading: false } : null)); });
     return () => { stop = true; };
   }, [nodePopup]);
+
+  // ── Ambient "memory surfacing" — a random punchy memory pops up over the
+  // constellation every ~3s, one at a time, with a bouncy pop; tap it to deep-dive.
+  const [funPop, setFunPop] = useState<{ node: BullNode; x: number; y: number; id: number; leaving: boolean } | null>(null);
+  useEffect(() => {
+    if (loading || error || nodes.length === 0) return;
+    // his short punchy lines are the memorable/funny ones — bias to those, skip bare
+    // links and anything too long to read in a couple seconds.
+    const pool = nodes.filter((n) => {
+      const c = (n.content || '').trim();
+      return c.length > 14 && c.length < 150 && !/^(?:@\w+\s+)*https?:\/\/\S+$/.test(c);
+    });
+    if (pool.length === 0) return;
+    let alive = true;
+    const timers: number[] = [];
+    let seq = 0;
+    const loop = () => {
+      if (!alive) return;
+      const node = pool[Math.floor(Math.random() * pool.length)];
+      const vw = window.innerWidth, vh = window.innerHeight;
+      // safe band over the constellation — clear of the top-left HUD + bottom controls
+      const x = Math.round(vw * (0.4 + Math.random() * 0.4));
+      const y = Math.round(vh * (0.24 + Math.random() * 0.44));
+      const id = ++seq;
+      setFunPop({ node, x, y, id, leaving: false });
+      timers.push(window.setTimeout(() => { if (alive) setFunPop((p) => (p && p.id === id ? { ...p, leaving: true } : p)); }, 2600));
+      timers.push(window.setTimeout(() => { if (alive) { setFunPop((p) => (p && p.id === id ? null : p)); loop(); } }, 3300));
+    };
+    const start = window.setTimeout(loop, 4600);  // let the cinematic intro land first
+    timers.push(start);
+    return () => { alive = false; timers.forEach(clearTimeout); };
+  }, [loading, error, nodes]);
   // live-stream affordances: joined-count + transient toasts + the on-chain log modal
   const [liveJoined, setLiveJoined] = useState(0);
   const [toasts, setToasts] = useState<Array<{ id: number; text: string }>>([]);
@@ -1430,6 +1462,48 @@ export function AnsemExplore() {
         </div>
       )}
 
+      {/* ── Ambient memory surfacing — a random memory pops up, tap to deep-dive ── */}
+      <style>{`
+        @keyframes ansemFunIn {
+          0%   { opacity:0; transform: translate(-50%,-50%) scale(.5) rotate(-4deg); }
+          55%  { opacity:1; transform: translate(-50%,-50%) scale(1.09) rotate(2deg); }
+          72%  { transform: translate(-50%,-50%) scale(.96) rotate(0deg); }
+          100% { opacity:1; transform: translate(-50%,-50%) scale(1) rotate(0deg); }
+        }
+        @keyframes ansemFunOut {
+          0%   { opacity:1; transform: translate(-50%,-50%) scale(1); }
+          100% { opacity:0; transform: translate(-50%,-58%) scale(.82); }
+        }
+        .ansem-funpop:hover { border-color: rgba(92,240,138,.75) !important; }
+      `}</style>
+      {funPop && !nodePopup && !loading && !error && (
+        <button
+          key={funPop.id}
+          className="ansem-funpop"
+          onClick={() => { setBullTip(null); setNodePopup(funPop.node); }}
+          aria-label="Explore this memory"
+          style={{
+            position: 'fixed', left: funPop.x, top: funPop.y, zIndex: 8, textAlign: 'left',
+            maxWidth: 'min(264px, 74vw)', padding: '10px 13px 9px', borderRadius: 14, cursor: 'pointer',
+            background: 'linear-gradient(180deg, rgba(5,22,13,.9), rgba(2,12,7,.92))',
+            border: '1px solid rgba(72,224,122,.42)', backdropFilter: 'blur(7px)',
+            boxShadow: '0 14px 44px rgba(0,0,0,.6), 0 0 26px rgba(60,224,120,.14)',
+            fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
+            animation: funPop.leaving ? 'ansemFunOut .42s ease forwards' : 'ansemFunIn .6s cubic-bezier(.16,.9,.28,1.35) both',
+            transition: 'border-color .18s ease',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, fontSize: 8.5, letterSpacing: '.16em', textTransform: 'uppercase', color: '#5aa877' }}>
+            <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#5cf08a', boxShadow: '0 0 6px #3ddc73' }} />
+            surfacing from the brain
+          </div>
+          <div style={{ fontSize: 12.5, lineHeight: 1.5, color: '#eafff0', wordBreak: 'break-word' }}>
+            {(funPop.node.content || '').slice(0, 132)}{(funPop.node.content || '').length > 132 ? '…' : ''}
+          </div>
+          <div style={{ fontSize: 9, letterSpacing: '.04em', color: 'rgba(147,232,178,.5)', marginTop: 7 }}>tap to explore ↗</div>
+        </button>
+      )}
+
       {/* HUD — title, subtitle, count, disclaimer */}
       <div id="ansem-hud" style={{
         position: 'absolute', left: 'clamp(16px,3vw,34px)', top: 'clamp(14px,3vh,26px)',
@@ -1438,27 +1512,25 @@ export function AnsemExplore() {
         <div style={{ fontWeight: 800, fontSize: 'clamp(28px,4.6vw,44px)', letterSpacing: '.16em', color: '#eafff0', lineHeight: 1 }}>
           $ANSEM
         </div>
-        <div style={{ fontSize: 'clamp(10px,1.3vw,12.5px)', letterSpacing: '.2em', color: '#3ddc73', marginTop: 7, textTransform: 'uppercase' }}>
-          the black bull community clone
+        <div style={{ fontSize: 'clamp(11px,1.45vw,13.5px)', color: '#9fe0b8', marginTop: 11, letterSpacing: '.01em', lineHeight: 1.45 }}>
+          <span style={{ color: '#5cf08a', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{countLabel}</span> memories and growing. One community mind.
         </div>
-        <div style={{ fontSize: 'clamp(9.5px,1.1vw,11px)', letterSpacing: '.22em', color: '#7fd8a0', marginTop: 5, textTransform: 'uppercase' }}>
-          the movement · made tangible
+        <div style={{ fontSize: 'clamp(10.5px,1.3vw,13px)', color: '#d3f2df', marginTop: 13, lineHeight: 1.55, letterSpacing: '.01em', maxWidth: 384 }}>
+          The <span style={{ color: '#eafff0', fontWeight: 700 }}>$ANSEM</span> Black Bull movement made tangible.
         </div>
-        <div style={{ fontSize: 'clamp(10.5px,1.2vw,12px)', color: '#7fd8a0', marginTop: 13, letterSpacing: '.02em' }}>
-          <span style={{ color: '#5cf08a', fontVariantNumeric: 'tabular-nums' }}>{countLabel}</span> memories, one mind
+        <div style={{ fontSize: 'clamp(10px,1.2vw,12px)', color: '#8fd9ab', marginTop: 3, lineHeight: 1.55, letterSpacing: '.01em', maxWidth: 384 }}>
+          A living entity shaped by the posts, the believers, and the live timeline.
         </div>
-        <div style={{ fontSize: 'clamp(10px,1.15vw,12px)', color: '#8fd9ab', marginTop: 9, lineHeight: 1.5, letterSpacing: '.01em', maxWidth: 360 }}>
-          his posts, the believers, the live timeline — the $ANSEM movement distilled into one living entity you can speak to.
-        </div>
-        <div style={{ fontSize: 'clamp(9.5px,1.05vw,11px)', color: '#5aa877', marginTop: 8, letterSpacing: '.02em', maxWidth: 360 }}>
-          community-built AI clone · not the real Ansem · <span style={{ color: '#3c6b52' }}>not financial advice</span>
+        <div style={{ fontSize: 'clamp(9.5px,1.05vw,11.5px)', color: '#5aa877', marginTop: 12, lineHeight: 1.55, letterSpacing: '.02em', maxWidth: 384 }}>
+          Community built AI clone.<br />
+          Not the real Ansem. <span style={{ color: '#3c6b52' }}>Not financial advice.</span>
         </div>
         {/* live-stream status — how content flows in + the on-chain proof */}
         <style>{`@keyframes ansemHudPulse { 0%,100% { opacity:1; } 50% { opacity:.45; } }`}</style>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 10 }}>
           <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#5cf08a', boxShadow: '0 0 8px #3ddc73', animation: 'ansemHudPulse 2s ease-in-out infinite', flexShrink: 0 }} />
           <span style={{ fontSize: 'clamp(9.5px,1vw,11px)', letterSpacing: '.06em', color: '#5aa877' }}>
-            streaming the $ANSEM timeline live{liveJoined > 0 ? ` · ${liveJoined} joined` : ''}
+            Streaming the $ANSEM timeline live{liveJoined > 0 ? ` · ${liveJoined} joined` : ''}
           </span>
         </div>
       </div>
