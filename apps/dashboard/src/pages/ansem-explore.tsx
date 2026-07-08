@@ -1113,6 +1113,18 @@ export function AnsemExplore() {
     ansemApi.getAttestations().then((d) => { if (!stop) setChain(d); }).catch(() => { if (!stop) setChain(null); });
     return () => { stop = true; };
   }, [chainOpen]);
+  // lightweight live count for the standalone on-chain badge (independent of the modal)
+  const [chainStat, setChainStat] = useState<{ enabled: boolean; hashes: number; txs: number } | null>(null);
+  useEffect(() => {
+    let stop = false;
+    const load = () => ansemApi.getAttestations()
+      .then((d) => { if (!stop) setChainStat({ enabled: d.enabled, hashes: d.attestations.reduce((s, a) => s + a.hashes.length, 0), txs: d.attestations.length }); })
+      .catch(() => {});
+    load();
+    const iv = window.setInterval(load, 60000);
+    return () => { stop = true; window.clearInterval(iv); };
+  }, []);
+  useEffect(() => { document.title = '$ANSEM — the movement, made tangible'; }, []);
   const handleLiveJoin = useCallback((posts: BullNode[]) => {
     setLiveJoined((c) => c + posts.length);
     posts.slice(0, 3).forEach((p, i) => {
@@ -1321,34 +1333,28 @@ export function AnsemExplore() {
         <div style={{ fontWeight: 800, fontSize: 'clamp(28px,4.6vw,44px)', letterSpacing: '.16em', color: '#eafff0', lineHeight: 1 }}>
           $ANSEM
         </div>
-        <div style={{ fontSize: 'clamp(10px,1.3vw,12.5px)', letterSpacing: '.36em', color: '#3ddc73', marginTop: 7, textTransform: 'uppercase' }}>
-          the memory constellation
+        <div style={{ fontSize: 'clamp(10px,1.3vw,12.5px)', letterSpacing: '.32em', color: '#3ddc73', marginTop: 7, textTransform: 'uppercase' }}>
+          an ansem community clone
         </div>
-        <div style={{ fontSize: 'clamp(9.5px,1.1vw,11px)', letterSpacing: '.16em', color: '#7fd8a0', marginTop: 5, textTransform: 'uppercase' }}>
-          what the timeline is saying
+        <div style={{ fontSize: 'clamp(9.5px,1.1vw,11px)', letterSpacing: '.22em', color: '#7fd8a0', marginTop: 5, textTransform: 'uppercase' }}>
+          the movement · made tangible
         </div>
         <div style={{ fontSize: 'clamp(10.5px,1.2vw,12px)', color: '#7fd8a0', marginTop: 13, letterSpacing: '.02em' }}>
-          <span style={{ color: '#5cf08a', fontVariantNumeric: 'tabular-nums' }}>{countLabel}</span> memories
+          <span style={{ color: '#5cf08a', fontVariantNumeric: 'tabular-nums' }}>{countLabel}</span> memories, one mind
         </div>
-        <div style={{ fontSize: 'clamp(10px,1.1vw,11.5px)', color: '#5aa877', marginTop: 6, letterSpacing: '.02em', maxWidth: 340 }}>
-          AI clone — not the real person · <span style={{ color: '#3c6b52' }}>not financial advice</span>
+        <div style={{ fontSize: 'clamp(10px,1.15vw,12px)', color: '#8fd9ab', marginTop: 9, lineHeight: 1.5, letterSpacing: '.01em', maxWidth: 360 }}>
+          his posts, the believers, the live timeline — the $ANSEM movement distilled into one living entity you can speak to.
+        </div>
+        <div style={{ fontSize: 'clamp(9.5px,1.05vw,11px)', color: '#5aa877', marginTop: 8, letterSpacing: '.02em', maxWidth: 360 }}>
+          community-built AI clone · not the real Ansem · <span style={{ color: '#3c6b52' }}>not financial advice</span>
         </div>
         {/* live-stream status — how content flows in + the on-chain proof */}
         <style>{`@keyframes ansemHudPulse { 0%,100% { opacity:1; } 50% { opacity:.45; } }`}</style>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 10, pointerEvents: 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 10 }}>
           <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#5cf08a', boxShadow: '0 0 8px #3ddc73', animation: 'ansemHudPulse 2s ease-in-out infinite', flexShrink: 0 }} />
           <span style={{ fontSize: 'clamp(9.5px,1vw,11px)', letterSpacing: '.06em', color: '#5aa877' }}>
-            streaming the $ANSEM timeline{liveJoined > 0 ? ` · ${liveJoined} joined` : ''} ·
+            streaming the $ANSEM timeline live{liveJoined > 0 ? ` · ${liveJoined} joined` : ''}
           </span>
-          <button
-            onClick={() => setChainOpen(true)}
-            style={{
-              padding: '3px 9px', borderRadius: 999, cursor: 'pointer',
-              background: 'rgba(60,224,120,.08)', border: '1px solid rgba(72,224,122,.35)',
-              color: '#93e8b2', fontSize: 'clamp(9px,.95vw,10.5px)', letterSpacing: '.08em',
-              fontFamily: 'inherit', whiteSpace: 'nowrap',
-            }}
-          >⛓ hashes on solana</button>
         </div>
       </div>
 
@@ -1379,6 +1385,37 @@ export function AnsemExplore() {
           when the server has no X_SEARCH_BEARER. Docked away from the bottom-right
           "Speak to Ansem" orb + the center constellation. */}
       {!loading && !error && <AnsemFeed />}
+
+      {/* Standalone on-chain badge — bottom-right, above "Speak to Ansem". Opens the log.
+          Renders below the chat dialog's z-index so it tucks away when the chat opens. */}
+      {!loading && !error && (chainStat?.enabled ?? true) && (
+        <button
+          className="ansem-orb"
+          onClick={() => setChainOpen(true)}
+          aria-label="View the on-chain live-stream log"
+          style={{
+            position: 'fixed', right: 'clamp(16px,3vw,28px)',
+            bottom: 'calc(clamp(16px,3vh,28px) + 58px)', zIndex: 39,
+            display: 'flex', alignItems: 'center', gap: 10, padding: '9px 15px 9px 13px',
+            borderRadius: 999, cursor: 'pointer',
+            background: 'linear-gradient(180deg, rgba(6,26,16,.96), rgba(2,14,8,.96))',
+            border: '1px solid rgba(72,224,122,.5)', backdropFilter: 'blur(8px)',
+            boxShadow: '0 8px 30px rgba(0,0,0,.5), 0 0 22px rgba(60,224,120,.14)',
+            fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
+          }}
+        >
+          <span style={{ fontSize: 15, lineHeight: 1 }}>⛓</span>
+          <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.3 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#eafff0' }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#5cf08a', boxShadow: '0 0 8px #3ddc73', animation: 'ansemHudPulse 2s ease-in-out infinite' }} />
+              Live on-chain
+            </span>
+            <span style={{ fontSize: 9.5, letterSpacing: '.3px', color: '#7fd8a0' }}>
+              {chainStat?.hashes ? `${chainStat.hashes.toLocaleString()} hashes on Solana ↗` : 'hashes on Solana ↗'}
+            </span>
+          </span>
+        </button>
+      )}
 
       {!loading && !error && <AnsemChat onHighlight={setHighlightIds} />}
     </div>
