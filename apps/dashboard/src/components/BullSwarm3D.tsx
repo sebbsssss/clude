@@ -106,8 +106,10 @@ export function BullSwarm3D({ nodes, highlightIds, onHover, onSelect, onLiveJoin
 
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
+    // Higher threshold → only the BRIGHT (high-like) particles bloom; dim/low-like
+    // tweets read as faint dots instead of everything glowing the same.
     const bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 1.6, 0.5, 0.2);
-    bloom.strength = 1.55; bloom.radius = 0.55; bloom.threshold = 0.06;
+    bloom.strength = 1.25; bloom.radius = 0.5; bloom.threshold = 0.32;
     composer.addPass(bloom);
 
     // Extra instance slots for LIVE nodes — new $ANSEM posts that fly in from
@@ -145,6 +147,21 @@ export function BullSwarm3D({ nodes, highlightIds, onHover, onSelect, onLiveJoin
     let rndS = 20240707;
     const rnd = () => ((rndS = (rndS * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
 
+    // ── Brightness scales with LIKES (log scale) ──────────────────────────────
+    // Likes are wildly skewed (1 → ~24k), so a linear map would saturate everything
+    // past ~100 likes. Log-normalizing against the field's top post spreads the whole
+    // range 0→1: a 1-like tweet lands near the floor (barely glows), the median sits
+    // mid, only the most-liked posts hit full brightness. Filler particles (no tweet)
+    // stay faint texture so the actual tweets are what pop.
+    const nlen = Math.min(nodesRef.current.length, count);
+    let maxLikes = 100;
+    for (let i = 0; i < nlen; i++) maxLikes = Math.max(maxLikes, nodesRef.current[i]?.likes || 0);
+    const likeRef = Math.log1p(maxLikes);
+    // log-normalize, then a power curve so a 1-like tweet lands ~1%, the median ~30%,
+    // and only the genuinely-popular posts approach 100% — most of the field stays dim.
+    const likeBright = (likes: number) =>
+      Math.pow(Math.min(1, Math.log1p(Math.max(0, likes)) / likeRef), 1.8);
+
     for (let i = 0; i < count; i++) {
       let wx: number, wy: number;
       if (i < 2) {                            // eyes — the two brightest anchors
@@ -162,7 +179,10 @@ export function BullSwarm3D({ nodes, highlightIds, onHover, onSelect, onLiveJoin
       driftAmp[i] = 0.7 + rnd() * 2.2;
       driftPhase[i] = rnd() * Math.PI * 2;
       driftSpeed[i] = 0.25 + rnd() * 0.7;
-      baseBright[i] = i < 2 ? 1 : (edge ? 0.55 + rnd() * 0.4 : 0.28 + rnd() * 0.4);
+      baseBright[i] =
+        i < 2 ? 1                                        // eyes — the brightest anchors
+        : i < nlen ? likeBright(nodesRef.current[i]?.likes || 0)  // real tweets → by likes
+        : 0.06 + rnd() * 0.1;                            // filler → faint texture
     }
 
     const positions = home.map((v) => v.clone());
@@ -392,20 +412,24 @@ export function BullSwarm3D({ nodes, highlightIds, onHover, onSelect, onLiveJoin
         const node = i < nlen ? nodesRef.current[i] : null;
         const isHl = node ? (hasHl && hl.has(node.id)) : false;
         const isHover = node ? node.id === hoverId : false;
-        // data nodes render bigger than filler so what you aim at IS a readable tweet
-        const s = (i < 2 ? 2.4 : node ? 1.35 : 0.85) * (isHl ? 2.6 : isHover ? 2.2 : 1);
+        // size also tracks likes — a 1-like tweet is a small dim dot, a top post is a
+        // big bright star (filler stays small). Picking uses a fixed radius, so small
+        // dots are still tappable.
+        const s = (i < 2 ? 2.4 : node ? 0.85 + baseBright[i] * 1.35 : 0.7) * (isHl ? 2.6 : isHover ? 2.2 : 1);
         dummy.scale.setScalar(s);
         dummy.updateMatrix();
         mesh.setMatrixAt(i, dummy.matrix);
 
-        // colour — green field; brighter with likes; recalled pulse cyan-white
+        // colour — green field; lightness scales with likes (wide range so the variance
+        // reads: low floor for 1-like tweets, near-white for the most-liked); recalled
+        // pulse cyan-white. Only the bright/high-like particles clear the bloom threshold.
         const tw = 0.6 + 0.4 * Math.sin(t * 1.6 + ph * 3);
-        let bright = baseBright[i] * (0.6 + 0.4 * tw);
+        let bright = baseBright[i] * (0.8 + 0.2 * tw);   // mostly likes-driven, gentle twinkle
         if (isHl) { col.setHSL(0.44, 1, Math.min(1, 0.6 + 0.4 * tw)); }
         else if (isHover) { col.setHSL(0.4, 0.8, 0.85); }
         else {
           if (hasHl) bright *= 0.25;          // dim the field when something's recalled
-          col.setHSL(0.4 - baseBright[i] * 0.06, 0.95, Math.min(0.9, 0.12 + bright * 0.7));
+          col.setHSL(0.4 - baseBright[i] * 0.06, 0.95, Math.min(0.94, 0.03 + bright * 0.9));
         }
         mesh.setColorAt(i, col);
       }
