@@ -30,7 +30,8 @@ import type { MemoryLinkType } from '@clude/shared/utils/constants';
 import { generateImportanceScore } from '@clude/shared/core/claude-client';
 import { writeMemo, isRegistryEnabled, registerMemoryOnChain } from '@clude/shared/core/solana-client';
 import { memoryContentHash } from '@clude/tokenization';
-import { generateEmbedding, generateQueryEmbedding, generateEmbeddings, isEmbeddingEnabled } from '@clude/shared/core/embeddings';
+import { generateEmbedding, generateQueryEmbedding, generateEmbeddings, isEmbeddingEnabled, generateVertexEmbeddings, generateQueryEmbeddingForSpace, isVertexConfigured } from '@clude/shared/core/embeddings';
+import { activeEmbeddingSpace, vectorRpcName } from '@clude/shared/core/migration-profile';
 import {
   autoCategorizeTags,
   DEFAULT_PACK_ID,
@@ -937,10 +938,25 @@ async function embedMemory(
     return;
   }
 
+  // Shadow-space dual-write (GCP migration Slice 3b): when Vertex is configured
+  // (VERTEX_PROJECT set), embed the SAME fragment texts into the Vertex space and
+  // store them in the embedding_vertex column alongside the Voyage vectors. Keeping
+  // both spaces current is what lets recall flip via EMBEDDING_ACTIVE and roll back
+  // instantly. Non-fatal and never blocks the Voyage write; a no-op (zero cost) when
+  // VERTEX_PROJECT is unset. Only writes the column when a vector exists, so it is
+  // safe on a DB where migration 040 has not yet added embedding_vertex.
+  const vertexEmbeddings = isVertexConfigured()
+    ? await generateVertexEmbeddings(fragments.map(f => f.text))
+    : [];
+  const vertexSummary = vertexEmbeddings[0];
+
   // Persist the summary embedding on the memory row first — primary recall depends on it.
   await db
     .from('memories')
-    .update({ embedding: JSON.stringify(summaryEmbedding) })
+    .update({
+      embedding: JSON.stringify(summaryEmbedding),
+      ...(vertexSummary ? { embedding_vertex: JSON.stringify(vertexSummary) } : {}),
+    })
     .eq('id', memoryId);
 
   // Persist all fragments with their own embeddings. Failures here are
@@ -952,6 +968,7 @@ async function embedMemory(
       fragment_type: f.type,
       content: f.text.slice(0, EMBEDDING_FRAGMENT_MAX_LENGTH),
       embedding: embeddings[i] ? JSON.stringify(embeddings[i]) : null,
+      ...(vertexEmbeddings[i] ? { embedding_vertex: JSON.stringify(vertexEmbeddings[i]) } : {}),
     }))
     .filter(r => r.embedding !== null);
 
@@ -1090,11 +1107,16 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
     const vectorSearchPromise = (queries.length > 0 && isEmbeddingEnabled() && !opts._vectorScores) 
       ? (async () => {
         // Embed all query variants (with cache)
+        // Embed the query in the ACTIVE space (Voyage by default, Vertex when flipped)
+        // so the query vector matches the column the (base or _vertex) match RPC reads.
+        // activeEmbeddingSpace() is fixed per process (env-frozen), so the text-keyed
+        // cache never mixes spaces within a deployment.
+        const space = activeEmbeddingSpace();
         const queryEmbeddings = await Promise.all(
           queries.map(async q => {
             const cached = getCachedEmbedding(q);
             if (cached) return cached;
-            const emb = await generateQueryEmbedding(q);
+            const emb = await generateQueryEmbeddingForSpace(space, q);
             if (emb) setCachedEmbedding(q, emb);
             return emb;
           })
@@ -1115,7 +1137,7 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
           // Fragments find facts buried in long memory bodies that the summary embedding misses.
           const allSearches = validEmbeddings.flatMap(emb => {
             const searches: Promise<any[]>[] = [
-              Promise.resolve(db.rpc('match_memories', {
+              Promise.resolve(db.rpc(vectorRpcName('match_memories'), {
                 query_embedding: JSON.stringify(emb),
                 match_threshold: VECTOR_MATCH_THRESHOLD,
                 match_count: limit * (opts.skipExpansion ? 12 : 4),
@@ -1128,7 +1150,7 @@ export async function recallMemories(opts: RecallOptions): Promise<Memory[]> {
             ];
             if (!opts.skipExpansion) {
               searches.push(
-                Promise.resolve(db.rpc('match_memory_fragments', buildFragmentRpcArgs({
+                Promise.resolve(db.rpc(vectorRpcName('match_memory_fragments'), buildFragmentRpcArgs({
                   embeddingJson: JSON.stringify(emb),
                   matchThreshold: VECTOR_MATCH_THRESHOLD,
                   matchCount: limit * 2,
