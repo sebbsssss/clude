@@ -38,6 +38,8 @@ interface Props {
   onHover?: (node: BullNode | null, x: number, y: number) => void;
   /** Click / tap a node → open its detail popup. */
   onSelect?: (node: BullNode) => void;
+  /** New live posts just flew into the constellation (animate batch only). */
+  onLiveJoin?: (posts: BullNode[]) => void;
 }
 
 // Bull silhouette (identical paths to the 2D constellation) — face/shield, horns, ears.
@@ -51,7 +53,7 @@ const PART_PATHS = [
 
 const PARTICLE_COUNT = 14000;
 
-export function BullSwarm3D({ nodes, highlightIds, onHover, onSelect }: Props) {
+export function BullSwarm3D({ nodes, highlightIds, onHover, onSelect, onLiveJoin }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<any>(null);
   const nodesRef = useRef<BullNode[]>(nodes);
@@ -59,10 +61,12 @@ export function BullSwarm3D({ nodes, highlightIds, onHover, onSelect }: Props) {
   // callbacks via refs — the engine effect runs once; inline-arrow props must not go stale
   const onHoverRef = useRef(onHover);
   const onSelectRef = useRef(onSelect);
+  const onLiveJoinRef = useRef(onLiveJoin);
   nodesRef.current = nodes;
   highlightRef.current = highlightIds;
   onHoverRef.current = onHover;
   onSelectRef.current = onSelect;
+  onLiveJoinRef.current = onLiveJoin;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -186,6 +190,9 @@ export function BullSwarm3D({ nodes, highlightIds, onHover, onSelect }: Props) {
           ph: Math.random() * Math.PI * 2,
         });
         while (live.length > LIVE_CAP) live.shift();
+      }
+      if (animate && posts.length) {
+        onLiveJoinRef.current?.(live.slice(-posts.length).map((L) => L.node));
       }
     };
     const pollFeed = async () => {
@@ -354,6 +361,7 @@ export function BullSwarm3D({ nodes, highlightIds, onHover, onSelect }: Props) {
 
     const lookAt = new THREE.Vector3(0, 6, 0);    // centre on the bull's real centroid
     let raf = 0;
+    let autoRot = 0, lastFrameT = 0;              // accumulated idle rotation (see animate)
     const animate = () => {
       raf = requestAnimationFrame(animate);
       const t = clock.getElapsedTime();
@@ -361,7 +369,11 @@ export function BullSwarm3D({ nodes, highlightIds, onHover, onSelect }: Props) {
       const nlen = nodesRef.current.length;
       const hl = highlightRef.current;
       const hasHl = hl.size > 0;
-      const auto = (dragging || hoverId !== null) ? 0 : 0.012;   // pause the drift while dragging or reading a node
+      // Auto-rotate is ACCUMULATED per-frame (not derived from absolute elapsed time) —
+      // deriving it from `t` made the whole frame SNAP whenever hovering paused/resumed
+      // the drift, because the pending `t × rate` term appeared/vanished all at once.
+      const dt = Math.min(0.1, Math.max(0, t - lastFrameT)); lastFrameT = t;
+      if (!dragging && hoverId === null) autoRot += dt * 0.012;
 
       for (let i = 0; i < count; i++) {
         const hm = home[i];
@@ -431,7 +443,7 @@ export function BullSwarm3D({ nodes, highlightIds, onHover, onSelect }: Props) {
         if (k >= 1) introStart = null;
       }
 
-      const rx = rotX + t * auto;
+      const rx = rotX + autoRot;
       camera.position.set(
         lookAt.x + Math.sin(rx) * Math.cos(rotY) * dist,
         lookAt.y + Math.sin(rotY) * dist,
