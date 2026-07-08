@@ -611,8 +611,12 @@ interface ChatMessage {
 
 function AnsemChat({
   onHighlight,
+  onChainClick,
+  chainEnabled,
 }: {
   onHighlight: (ids: Set<number>) => void;
+  onChainClick?: () => void;
+  chainEnabled?: boolean;
 }) {
   const STORAGE_KEY = 'ansem-chat-history';
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
@@ -630,6 +634,23 @@ function AnsemChat({
   const [muted, setMuted] = useState(false);
   const mutedRef = useRef(false);
   mutedRef.current = muted;
+
+  // Mobile keyboard handling: track the VISUAL viewport so the chat sheet shrinks to
+  // sit above the on-screen keyboard instead of being hidden behind it.
+  const [vv, setVv] = useState<{ h: number; top: number }>(() => ({
+    h: typeof window !== 'undefined' ? window.innerHeight : 800,
+    top: 0,
+  }));
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+  useEffect(() => {
+    const vvp = typeof window !== 'undefined' ? window.visualViewport : null;
+    if (!vvp) return;
+    const onVv = () => setVv({ h: vvp.height, top: vvp.offsetTop });
+    onVv();
+    vvp.addEventListener('resize', onVv);
+    vvp.addEventListener('scroll', onVv);
+    return () => { vvp.removeEventListener('resize', onVv); vvp.removeEventListener('scroll', onVv); };
+  }, []);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const contentRef = useRef('');
@@ -912,46 +933,69 @@ function AnsemChat({
         .ansem-orb:hover{transform:scale(1.06);filter:brightness(1.12)}
       `}</style>
 
-      {/* ── Collapsed: floating "Speak to Ansem" orb (bottom-right) ───────────── */}
+      {/* ── Collapsed: on-chain pill + "Speak to Ansem" orb, one bottom-right row ── */}
       {!open && (
-        <button
-          className="ansem-orb"
-          onClick={() => setOpen(true)}
-          aria-label="Speak to Ansem"
-          style={{
-            position: 'fixed', right: 'clamp(16px,3vw,28px)', bottom: 'clamp(16px,3vh,28px)', zIndex: 40,
-            display: 'flex', alignItems: 'center', gap: 10, padding: '13px 18px 13px 15px',
-            borderRadius: 999, cursor: 'pointer',
-            background: 'linear-gradient(180deg, rgba(6,26,16,.96), rgba(2,14,8,.96))',
-            border: '1px solid rgba(72,224,122,.5)', backdropFilter: 'blur(8px)',
-            animation: 'ansemOrbPulse 2.6s ease-in-out infinite',
-            fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
-          }}
-        >
-          <span style={{
-            width: 11, height: 11, borderRadius: '50%', flexShrink: 0,
-            background: '#5cf08a', boxShadow: '0 0 14px #3ddc73',
-          }} />
-          <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#eafff0' }}>
-            Speak to Ansem
-          </span>
-        </button>
+        <div style={{
+          position: 'fixed', right: 'clamp(14px,3vw,28px)', bottom: 'clamp(14px,3vh,28px)', zIndex: 40,
+          display: 'flex', alignItems: 'center', gap: 'clamp(7px,1.8vw,10px)',
+        }}>
+          {chainEnabled && onChainClick && (
+            <button
+              className="ansem-orb"
+              onClick={onChainClick}
+              aria-label="On-chain live-stream log"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, borderRadius: 999, cursor: 'pointer',
+                padding: 'clamp(10px,2.6vw,12px) clamp(12px,3vw,15px)',
+                background: 'linear-gradient(180deg, rgba(6,26,16,.94), rgba(2,14,8,.94))',
+                border: '1px solid rgba(72,224,122,.4)', backdropFilter: 'blur(8px)',
+                boxShadow: '0 6px 22px rgba(0,0,0,.45)',
+                fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
+              }}
+            >
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#5cf08a', boxShadow: '0 0 8px #3ddc73', animation: 'ansemHudPulse 2s ease-in-out infinite', flexShrink: 0 }} />
+              <span style={{ fontSize: 'clamp(9.5px,2.5vw,11px)', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#bfead0', whiteSpace: 'nowrap' }}>⛓ on-chain</span>
+            </button>
+          )}
+          <button
+            className="ansem-orb"
+            onClick={() => setOpen(true)}
+            aria-label="Speak to Ansem"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 9, borderRadius: 999, cursor: 'pointer',
+              padding: 'clamp(11px,2.8vw,13px) clamp(14px,3.4vw,18px) clamp(11px,2.8vw,13px) clamp(12px,3vw,15px)',
+              background: 'linear-gradient(180deg, rgba(6,26,16,.96), rgba(2,14,8,.96))',
+              border: '1px solid rgba(72,224,122,.5)', backdropFilter: 'blur(8px)',
+              animation: 'ansemOrbPulse 2.6s ease-in-out infinite',
+              fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
+            }}
+          >
+            <span style={{ width: 10, height: 10, borderRadius: '50%', flexShrink: 0, background: '#5cf08a', boxShadow: '0 0 14px #3ddc73' }} />
+            <span style={{ fontSize: 'clamp(10.5px,2.7vw,12px)', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#eafff0', whiteSpace: 'nowrap' }}>Speak to Ansem</span>
+          </button>
+        </div>
       )}
 
-      {/* ── Expanded: floating conversation window ────────────────────────────── */}
+      {/* ── Expanded: floating conversation window (mobile = full sheet sized to the
+             visual viewport so the keyboard never covers the input) ────────────── */}
       {open && (
         <div style={{
-          position: 'fixed', right: 'clamp(12px,3vw,28px)', bottom: 'clamp(12px,3vh,28px)', zIndex: 40,
-          width: 'min(380px, calc(100vw - 24px))', height: 'min(560px, calc(100dvh - 24px))',
+          position: 'fixed', zIndex: 40,
+          ...(isMobile
+            ? { left: 0, top: vv.top, width: '100vw', height: vv.h, borderRadius: 0, border: 'none', borderLeft: 'none' }
+            : {
+                right: 'clamp(12px,3vw,28px)', bottom: 'clamp(12px,3vh,28px)',
+                width: 'min(380px, calc(100vw - 24px))', height: 'min(560px, calc(100dvh - 24px))',
+                borderRadius: 18, border: '1px solid rgba(72,224,122,.34)',
+              }),
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
-          borderRadius: 18, border: '1px solid rgba(72,224,122,.34)',
           background: 'rgba(2,12,7,.94)', backdropFilter: 'blur(12px)',
           boxShadow: '0 20px 70px rgba(0,0,0,.72), 0 0 34px rgba(34,197,94,.12)',
           animation: 'ansemPanelIn .28s cubic-bezier(.2,.8,.2,1)',
           fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
         }}>
-          {/* (a) the neural-wave bull avatar — the "face" of the clone (~square top) */}
-          <div style={{ position: 'relative', height: 240, flexShrink: 0, background: '#000', borderBottom: '1px solid rgba(72,224,122,.18)' }}>
+          {/* (a) the neural-wave bull avatar — shrinks on mobile / when the keyboard is up */}
+          <div style={{ position: 'relative', height: isMobile ? (vv.h < 620 ? 132 : 190) : 240, flexShrink: 0, background: '#000', borderBottom: '1px solid rgba(72,224,122,.18)' }}>
             <AvatarBull ref={avatarRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
             {/* header overlaid on the avatar: title + collapse */}
             <div style={{
@@ -1433,38 +1477,13 @@ export function AnsemExplore() {
           "Speak to Ansem" orb + the center constellation. */}
       {!loading && !error && <AnsemFeed />}
 
-      {/* Standalone on-chain badge — bottom-right, above "Speak to Ansem". Opens the log.
-          Renders below the chat dialog's z-index so it tucks away when the chat opens. */}
-      {!loading && !error && (chainStat?.enabled ?? true) && (
-        <button
-          className="ansem-orb"
-          onClick={() => setChainOpen(true)}
-          aria-label="View the on-chain live-stream log"
-          style={{
-            position: 'fixed', right: 'clamp(16px,3vw,28px)',
-            bottom: 'calc(clamp(16px,3vh,28px) + 58px)', zIndex: 39,
-            display: 'flex', alignItems: 'center', gap: 10, padding: '9px 15px 9px 13px',
-            borderRadius: 999, cursor: 'pointer',
-            background: 'linear-gradient(180deg, rgba(6,26,16,.96), rgba(2,14,8,.96))',
-            border: '1px solid rgba(72,224,122,.5)', backdropFilter: 'blur(8px)',
-            boxShadow: '0 8px 30px rgba(0,0,0,.5), 0 0 22px rgba(60,224,120,.14)',
-            fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
-          }}
-        >
-          <span style={{ fontSize: 15, lineHeight: 1 }}>⛓</span>
-          <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.3 }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#eafff0' }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#5cf08a', boxShadow: '0 0 8px #3ddc73', animation: 'ansemHudPulse 2s ease-in-out infinite' }} />
-              Live on-chain
-            </span>
-            <span style={{ fontSize: 9.5, letterSpacing: '.3px', color: '#7fd8a0' }}>
-              {chainStat?.hashes ? `${chainStat.hashes.toLocaleString()} hashes on Solana ↗` : 'hashes on Solana ↗'}
-            </span>
-          </span>
-        </button>
+      {!loading && !error && (
+        <AnsemChat
+          onHighlight={setHighlightIds}
+          onChainClick={() => setChainOpen(true)}
+          chainEnabled={chainStat?.enabled ?? true}
+        />
       )}
-
-      {!loading && !error && <AnsemChat onHighlight={setHighlightIds} />}
     </div>
   );
 }
