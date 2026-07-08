@@ -28,7 +28,7 @@ const log = createChildLogger("ansem-routes");
 // $ANSEM community/token corpus (source='ansem-token'). The constellation draws
 // from the whole $ANSEM timeline (~143k memories total).
 const ANSEM_WALLET = "HYmsqdcpHRvWcrBfACzYWvPbF2XMg5hKFy38kEt7Ppjt";
-const ANSEM_SOURCES = ["ansem-token", "ansem-seed", "ansem-yt"];
+const ANSEM_SOURCES = ["ansem-token", "ansem-seed", "ansem-yt", "ansem-live"];
 // His OWN words only (tweets + interviews). The "Speak to Ansem" clone recalls
 // from THESE — never the 104K ansem-token community corpus that shares the wallet
 // (that's timeline noise: shill + giveaway-farm spam that would corrupt his voice).
@@ -519,6 +519,59 @@ function mergeIntoBuffer(fresh: FeedTweet[]): FeedTweet[] {
   return added;
 }
 
+// ---- Persist the live $ANSEM stream into the memory corpus so the count GROWS -------
+// New posts the feed ingests were otherwise transient (feed panel + fly-in nodes only),
+// so "143,596 memories" never moved. Persisting them as `ansem-live` memories makes the
+// constellation a living, growing corpus. Kept OUT of PERSONA_SOURCES so they count +
+// can show as nodes, but NEVER pollute his chat voice. No embedding (recall never touches
+// this source). Deduped across restarts via a boot high-water-mark on the newest tweet
+// id. Env-killable with ANSEM_PERSIST_LIVE=false.
+const ANSEM_LIVE_SOURCE = "ansem-live";
+const PERSIST_LIVE = process.env.ANSEM_PERSIST_LIVE !== "false";
+let lastPersistedId: bigint | null = null;
+let persistInit = false;
+
+async function persistLivePosts(added: FeedTweet[]): Promise<void> {
+  if (!PERSIST_LIVE || added.length === 0) return;
+  const db = getDb();
+  try {
+    // boot init: the newest already-persisted live tweet id → restarts don't re-insert
+    if (!persistInit) {
+      persistInit = true;
+      const { data } = await db
+        .from("memories")
+        .select("metadata")
+        .eq("owner_wallet", ANSEM_WALLET)
+        .eq("source", ANSEM_LIVE_SOURCE)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      const seedId = (data?.[0]?.metadata as any)?.tweet_id;
+      if (seedId) { try { lastPersistedId = BigInt(seedId); } catch { /* ignore */ } }
+    }
+    // only genuinely-newer posts (tweet ids are time-ordered snowflakes)
+    const fresh = added.filter((t) => {
+      try { return lastPersistedId === null || BigInt(t.id) > lastPersistedId; } catch { return true; }
+    });
+    if (fresh.length === 0) return;
+    const rows = fresh.map((t) => ({
+      owner_wallet: ANSEM_WALLET,
+      source: ANSEM_LIVE_SOURCE,
+      memory_type: "semantic",
+      content: t.text,
+      summary: t.text.slice(0, 280),
+      importance: Math.min(0.7, 0.25 + Math.log1p(t.likes) / 25),  // modest — won't flood the top-N constellation
+      tags: ["ansem", "$ansem", "live", "x"],
+      metadata: { live: true, tweet_id: t.id, handle: t.handle, name: t.name, likes: t.likes, url: t.url, created_at: t.created_at },
+    }));
+    const { error } = await db.from("memories").insert(rows);
+    if (error) { log.warn({ err: error }, "Ansem: persist live posts failed"); return; }
+    for (const t of fresh) {
+      try { const b = BigInt(t.id); if (lastPersistedId === null || b > lastPersistedId) lastPersistedId = b; } catch { /* ignore */ }
+    }
+    log.info({ n: rows.length }, "Ansem: persisted live posts to the corpus (memory count grows)");
+  } catch (err) { log.warn({ err }, "Ansem: persist live posts threw"); }
+}
+
 // ---- On-chain attestation: every live-ingested post is hashed and the hashes are ----
 // committed to Solana via SPL Memo txs from the bot wallet (writeMemo). Users can
 // verify the stream integrity at GET /api/ansem/attestations (hash + tx + solscan).
@@ -722,6 +775,7 @@ async function pollFeed(): Promise<void> {
       if (fresh.length > 0) {
         const added = mergeIntoBuffer(fresh);
         queueAttestations(added);   // hash the genuinely-new stream + commit to Solana (async)
+        void persistLivePosts(added); // persist to the corpus so the memory count grows (async)
         // advance the since_id anchor to the max id we've seen (BigInt-safe compare)
         const maxId = payload?.meta?.newest_id;
         if (maxId && (!feedNewestId || BigInt(maxId) > BigInt(feedNewestId))) {
