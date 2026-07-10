@@ -5,14 +5,38 @@ import { BOT_X_HANDLE, TWEET_MAX_LENGTH } from '../utils/constants';
 
 const log = createChildLogger('x-client');
 
-const client = new TwitterApi({
-  appKey: config.x.apiKey,
-  appSecret: config.x.apiSecret,
-  accessToken: config.x.accessToken,
-  accessSecret: config.x.accessSecret,
-});
+// Lazily constructed: TwitterApi throws 'Invalid consumer tokens' at
+// construction when keys are empty, so keyless processes (site-only, SDK,
+// GCP validation instances) must never build it at module load.
+// undefined = not yet attempted, null = credentials missing.
+let client: TwitterApi | null | undefined;
 
-const rwClient = client.readWrite;
+export function getXClient(): TwitterApi | null {
+  if (client !== undefined) return client;
+  const { apiKey, apiSecret, accessToken, accessSecret } = config.x;
+  if (!apiKey || !apiSecret || !accessToken || !accessSecret) {
+    log.warn('X credentials not configured (X_API_KEY/X_API_SECRET/X_ACCESS_TOKEN/X_ACCESS_SECRET) — X features disabled');
+    client = null;
+    return client;
+  }
+  client = new TwitterApi({
+    appKey: apiKey,
+    appSecret: apiSecret,
+    accessToken,
+    accessSecret,
+  });
+  return client;
+}
+
+function getRwClient(): TwitterApi['readWrite'] {
+  const c = getXClient();
+  if (!c) {
+    throw new Error(
+      'X client unavailable: set X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN and X_ACCESS_SECRET to enable X features'
+    );
+  }
+  return c.readWrite;
+}
 
 // ── Post throttle ────────────────────────────────────────────────────
 // Enforces a minimum gap between ANY write to X (reply, tweet, thread tweet).
@@ -84,7 +108,7 @@ export async function postReply(tweetId: string, text: string): Promise<string> 
   const truncated = smartTruncate(stripEmDashes(text));
   log.info({ tweetId, originalLength: text.length, length: truncated.length }, 'Posting reply');
   await throttlePost();
-  const result = await withRetry(() => rwClient.v2.reply(truncated, tweetId));
+  const result = await withRetry(() => getRwClient().v2.reply(truncated, tweetId));
   return result.data.id;
 }
 
@@ -92,7 +116,7 @@ export async function postTweet(text: string): Promise<string> {
   const truncated = smartTruncate(stripEmDashes(text));
   log.info({ originalLength: text.length, length: truncated.length }, 'Posting tweet');
   await throttlePost();
-  const result = await withRetry(() => rwClient.v2.tweet(truncated));
+  const result = await withRetry(() => getRwClient().v2.tweet(truncated));
   return result.data.id;
 }
 
@@ -105,11 +129,11 @@ export async function postThread(texts: string[]): Promise<string[]> {
     const truncated = smartTruncate(stripEmDashes(text));
     await throttlePost();
     if (!previousId) {
-      const result = await withRetry(() => rwClient.v2.tweet(truncated));
+      const result = await withRetry(() => getRwClient().v2.tweet(truncated));
       previousId = result.data.id;
     } else {
       const pid = previousId;
-      const result = await withRetry(() => rwClient.v2.reply(truncated, pid));
+      const result = await withRetry(() => getRwClient().v2.reply(truncated, pid));
       previousId = result.data.id;
     }
     tweetIds.push(previousId);
@@ -185,7 +209,7 @@ export async function getMentions(sinceId?: string): Promise<TweetV2[]> {
   };
   if (sinceId) params.since_id = sinceId;
 
-  const result = await rwClient.v2.userMentionTimeline(config.x.botUserId, params);
+  const result = await getRwClient().v2.userMentionTimeline(config.x.botUserId, params);
 
   // Cache author usernames
   if (result.includes?.users) {
@@ -208,7 +232,7 @@ export async function getTweetWithContext(
   const parents: TweetV2[] = [];
 
   try {
-    const result = await rwClient.v2.singleTweet(tweetId, {
+    const result = await getRwClient().v2.singleTweet(tweetId, {
       'tweet.fields': 'created_at,author_id,conversation_id,in_reply_to_user_id,referenced_tweets,text',
     });
 
@@ -221,7 +245,7 @@ export async function getTweetWithContext(
       if (!replyTo) break;
 
       try {
-        const parentResult = await rwClient.v2.singleTweet(replyTo.id, {
+        const parentResult = await getRwClient().v2.singleTweet(replyTo.id, {
           'tweet.fields': 'created_at,author_id,conversation_id,referenced_tweets,text',
         });
         parents.unshift(parentResult.data); // oldest first
@@ -275,7 +299,7 @@ export async function searchHashtagTweets(
     };
     if (sinceId) params.since_id = sinceId;
 
-    const result = await rwClient.v2.search(query, params);
+    const result = await getRwClient().v2.search(query, params);
 
     // Build author lookup from includes
     const authorMap = new Map<string, string>();
@@ -330,7 +354,7 @@ export async function searchTokenMentions(
     };
     if (sinceId) params.since_id = sinceId;
 
-    const result = await rwClient.v2.search(query, params);
+    const result = await getRwClient().v2.search(query, params);
 
     const authorMap = new Map<string, string>();
     if (result.includes?.users) {
@@ -382,7 +406,7 @@ export async function getUserTweets(
     };
     if (sinceId) params.since_id = sinceId;
 
-    const result = await rwClient.v2.userTimeline(userId, params);
+    const result = await getRwClient().v2.userTimeline(userId, params);
 
     const tweets: CampaignTweet[] = [];
     for (const tweet of result.data?.data || []) {
@@ -425,7 +449,7 @@ export async function refreshTweetMetrics(
 
   for (const batch of batches) {
     try {
-      const result = await rwClient.v2.tweets(batch, {
+      const result = await getRwClient().v2.tweets(batch, {
         'tweet.fields': 'public_metrics',
       });
       for (const tweet of result.data || []) {
@@ -456,7 +480,7 @@ export async function getTweetMetrics(tweetId: string): Promise<{ likes: number;
 
 export async function getUserById(userId: string): Promise<UserV2 | null> {
   try {
-    const result = await rwClient.v2.user(userId, {
+    const result = await getRwClient().v2.user(userId, {
       'user.fields': 'description,username,name,public_metrics',
     });
     return result.data;
