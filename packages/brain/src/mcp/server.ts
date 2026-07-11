@@ -108,7 +108,6 @@ let _evaluateConfidence: any;
 let _deleteMemory: any;
 let _updateMemory: any;
 let _listMemories: any;
-let _extractSkill: any;
 
 function loadSelfHosted() {
   if (!_recallMemories) {
@@ -120,10 +119,6 @@ function loadSelfHosted() {
       _deleteMemory = memory.deleteMemory;
       _updateMemory = memory.updateMemory;
       _listMemories = memory.listMemories;
-      try {
-        const skillExtraction = require('@clude/shared/core/skill-extraction');
-        _extractSkill = skillExtraction.extractSkill;
-      } catch {}
       try {
         const confidenceGate = require('../experimental/confidence-gate');
         _evaluateConfidence = confidenceGate.evaluateConfidence;
@@ -835,84 +830,6 @@ server.prompt(
       },
     }],
   })
-);
-
-// --- Tool: extract_skill ---
-server.tool(
-  'extract_skill',
-  'Extract domain-specific knowledge from memory into a shareable skills document. Performs multi-pass extraction across the memory bank and entity graph, then synthesizes results into a structured markdown document.',
-  {
-    domain: z.string().describe('Domain or topic to extract (e.g., "DeFi", "React", "Solana development")'),
-    depth: z.enum(['shallow', 'deep']).optional()
-      .describe('shallow = seed memories only, deep = graph expansion via entity relations (default: deep)'),
-    include_provenance: z.boolean().optional()
-      .describe('Include source memory IDs for traceability (default: false)'),
-    max_memories: z.number().min(10).max(500).optional()
-      .describe('Max memories to include in extraction (default: 200)'),
-  },
-  async (args) => {
-    try {
-      if (isSqliteMode || isLocalMode) {
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify({ error: 'extract_skill is not available in local/SQLite mode — requires Supabase for entity graph and embeddings.' }) }],
-          isError: true,
-        };
-      }
-
-      if (isHostedMode) {
-        // Hosted mode: call Cortex API
-        const result = await cortexFetch<{ markdown: string; stats: any; warning?: string }>('POST', '/api/cortex/extract-skill', {
-          domain: args.domain,
-          depth: args.depth,
-          include_provenance: args.include_provenance,
-          max_memories: args.max_memories,
-        });
-        return {
-          content: [{
-            type: 'text' as const,
-            text: JSON.stringify({
-              markdown: result.markdown,
-              stats: result.stats,
-              warning: result.warning,
-            }, null, 2),
-          }],
-        };
-      }
-
-      // Self-hosted mode: direct extraction
-      loadSelfHosted();
-      if (!_extractSkill) {
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify({ error: 'Skill extraction module not available. Check that src/core/skill-extraction.ts is built.' }) }],
-          isError: true,
-        };
-      }
-
-      const result = await _extractSkill({
-        domain: args.domain,
-        depth: args.depth || 'deep',
-        includeProvenance: args.include_provenance || false,
-        maxMemories: args.max_memories || 200,
-      });
-
-      return {
-        content: [{
-          type: 'text' as const,
-          text: JSON.stringify({
-            markdown: result.markdown,
-            stats: result.stats,
-            warning: result.warning,
-          }, null, 2),
-        }],
-      };
-    } catch (err: any) {
-      console.error('[clude-mcp] extract_skill error:', err.message);
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify({ error: err.message }) }],
-        isError: true,
-      };
-    }
-  }
 );
 
 // --- Start ---

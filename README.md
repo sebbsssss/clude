@@ -141,12 +141,16 @@ npx @clude/sdk init           # Advanced setup (self-hosted options)
 npx @clude/sdk status         # Check if Clude is active + memory stats
 npx @clude/sdk mcp-install    # Install MCP server for your IDE
 npx @clude/sdk mcp-serve      # Run as MCP server (used by agent runtimes)
+npx @clude/sdk connect        # Connect Claude Desktop / claude.ai as a remote MCP connector
 npx @clude/sdk export         # Export memories (json/md/chatgpt/gemini)
 npx @clude/sdk import         # Import from ChatGPT, markdown, or JSON
 npx @clude/sdk sync           # Auto-update system prompt file
+npx @clude/sdk doctor         # Run diagnostics
 npx @clude/sdk start          # Start the full Clude bot
 npx @clude/sdk --version      # Show version
 ```
+
+`setup` works headless: with no TTY it never prompts and completes in local-only mode. Set `CLUDE_SETUP_EMAIL=you@example.com` to register non-interactively (CI, Dockerfiles, scripts).
 
 ---
 
@@ -175,24 +179,31 @@ Add Clude to any MCP-compatible agent. Run `npx @clude/sdk setup` for automatic 
 
 ### MCP Tools
 
-Your agent gets 4 tools:
+Your agent gets 8 tools:
 
 | Tool | Description |
 |------|-------------|
 | `recall_memories` | Search memories with hybrid scoring (vector + keyword + tags + importance) |
 | `store_memory` | Store a new memory with type, content, summary, tags, importance |
+| `batch_store_memories` | Store up to 50 memories in a single call |
+| `list_memories` | Browse without a query — paginated, sorted by recency, importance, or last access |
+| `update_memory` | Update fields of an existing memory by ID |
+| `delete_memory` | Permanently delete a memory by ID |
 | `get_memory_stats` | Memory statistics — counts by type, avg importance/decay, top tags |
 | `find_clinamen` | Anomaly retrieval — find high-importance memories with low relevance to current context |
 
 ### MCP Modes
 
-The MCP server runs in three modes, auto-detected from environment:
+The MCP server runs in four modes, auto-detected from environment:
 
 | Mode | Config | Storage |
 |------|--------|---------|
 | **Hosted** | `CORTEX_API_KEY` | clude.io (zero setup) |
 | **Self-hosted** | `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` | Your Supabase |
-| **Local** | `--local` flag or `CLUDE_LOCAL=true` | `~/.clude/memories.json` |
+| **Local SQLite (default)** | none — what `setup` creates | `~/.clude/brain.db` (local embeddings, fully offline) |
+| **Local JSON** | `--local` flag or `CLUDE_LOCAL=true` | `~/.clude/memories.json` (portable single file) |
+
+The two local stores are separate — memories in one aren't visible from the other. Use the SQLite default unless you need the portable JSON file.
 
 ---
 
@@ -207,7 +218,7 @@ Go to [supabase.com](https://supabase.com) and create a free project.
 Open the SQL Editor in your Supabase dashboard and paste the contents of `supabase-schema.sql`:
 
 ```bash
-cat node_modules/clude/supabase-schema.sql
+cat node_modules/@clude/sdk/supabase-schema.sql
 ```
 
 Or let `brain.init()` attempt auto-creation.
@@ -228,6 +239,8 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 ---
 
 ## API Reference
+
+TypeScript declarations ship with the package (v3.3.0+) — `Cortex` and every option/result type below import with full IntelliSense under strict mode.
 
 ### Constructor
 
@@ -484,14 +497,9 @@ npm run dev
 
 TypeScript, Supabase (PostgreSQL + pgvector), Anthropic Claude, Voyage AI / OpenAI embeddings, Solana, Node.js.
 
-## Examples
+## Docs for AI agents
 
-See [`examples/`](./examples) for runnable scripts:
-
-- **[hosted-mode.ts](./examples/hosted-mode.ts)** — Zero-setup with API key
-- **[basic-memory.ts](./examples/basic-memory.ts)** — Store and recall with Supabase
-- **[chat-agent.ts](./examples/chat-agent.ts)** — Interactive chat agent with memory
-- **[progressive-disclosure.ts](./examples/progressive-disclosure.ts)** — Token-efficient retrieval
+Integrating Clude with an AI coding assistant? Point it at [clude.io/llms-full.txt](https://clude.io/llms-full.txt) — the complete SDK, REST, CLI, and MCP reference in a single fetch.
 
 ---
 
