@@ -279,21 +279,26 @@ async function runZeroConfigSetup(): Promise<void> {
   printBanner();
   console.log(`\n  ${c.bold}Setting up Clude memory...${c.reset}\n`);
 
-  // Step 1: Detect email
+  // Step 1: Detect email — only cloud registration needs it. Local-only
+  // setup must work without one (CI and piped runs have no TTY to prompt).
   const email = await getEmail();
-  if (!email) {
-    console.error(`  ${c.red}✗${c.reset} Email is required. Aborting.\n`);
-    process.exit(1);
-  }
-  console.log(`  ${c.green}✓${c.reset} Detected email       ${email}`);
-
-  // Step 2: Register via backend
-  const reg = await registerWithBackend(email);
-  if (reg.ok) {
-    console.log(`  ${c.green}✓${c.reset} Registered            ${reg.apiKey!.slice(0, 12)}...`);
+  if (email) {
+    console.log(`  ${c.green}✓${c.reset} Detected email       ${email}`);
   } else {
-    console.log(`  ${c.yellow}⚠${c.reset} Cloud registration failed: ${reg.error}`);
-    console.log(`    Continuing in local-only mode.`);
+    console.log(`  ${c.yellow}-${c.reset} No email detected     continuing in local-only mode`);
+    console.log(`    ${c.dim}Set CLUDE_SETUP_EMAIL or run interactively to register for cloud sync.${c.reset}`);
+  }
+
+  // Step 2: Register via backend (needs an email)
+  let reg: Awaited<ReturnType<typeof registerWithBackend>> = { ok: false };
+  if (email) {
+    reg = await registerWithBackend(email);
+    if (reg.ok) {
+      console.log(`  ${c.green}✓${c.reset} Registered            ${reg.apiKey!.slice(0, 12)}...`);
+    } else {
+      console.log(`  ${c.yellow}⚠${c.reset} Cloud registration failed: ${reg.error}`);
+      console.log(`    Continuing in local-only mode.`);
+    }
   }
 
   // Step 3: Write config
@@ -303,7 +308,7 @@ async function runZeroConfigSetup(): Promise<void> {
     path.join(configDir, 'config.json'),
     JSON.stringify({
       apiKey: reg.apiKey ?? '',
-      email,
+      email: email ?? '',
       wallet: reg.wallet ?? '',
       agentId: reg.agentId ?? '',
       did: reg.did ?? '',
@@ -968,8 +973,9 @@ export async function getEmail(opts: { skipPrompt?: boolean } = {}): Promise<str
     // git not installed or no config — fall through
   }
 
-  // 3. Prompt (unless skipped)
-  if (opts.skipPrompt) return null;
+  // 3. Prompt (unless skipped or stdin is not interactive — a piped/CI stdin
+  // would leave the readline question hanging forever)
+  if (opts.skipPrompt || !process.stdin.isTTY) return null;
 
   const rl = createPrompt();
   return new Promise((resolve) => {
@@ -1032,7 +1038,7 @@ export function installMcpConfig(
       throw new Error(`${ide.configPath} exists but is not valid JSON — fix or remove it, then re-run setup`);
     }
   }
-  if (!existing.mcpServers || typeof existing.mcpServers !== 'object') {
+  if (!existing.mcpServers || typeof existing.mcpServers !== 'object' || Array.isArray(existing.mcpServers)) {
     existing.mcpServers = {};
   }
   if (existing.mcpServers['clude-memory']) merged = true;

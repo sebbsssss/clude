@@ -35,6 +35,15 @@ function readDeps(pkgRelPath) {
   };
 }
 
+// The CLI and MCP server report the version from packages/brain/package.json
+// (inlined at bundle time). If it drifts from the published version, users see
+// conflicting numbers — fail the build instead.
+const rootVersion = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8')).version;
+const brainVersion = JSON.parse(fs.readFileSync(path.join(repoRoot, 'packages/brain/package.json'), 'utf8')).version;
+if (rootVersion !== brainVersion) {
+  throw new Error(`version mismatch: root package.json is ${rootVersion} but packages/brain is ${brainVersion} — align them before publishing`);
+}
+
 // Everything the bundled code might require at runtime. Treat any @clude/*
 // as internal (will be inlined); everything else external so users resolve it.
 const allDeps = {
@@ -87,5 +96,37 @@ if (fs.existsSync(schemaSrc)) {
   fs.copyFileSync(schemaSrc, schemaDst);
   console.log('✓ copied supabase-schema.sql to root');
 }
+
+// ── Type declarations ────────────────────────────────────────────────
+// tsc already emits .d.ts under packages/brain/dist; ship the SDK and MCP
+// surfaces so TypeScript consumers get types instead of TS7016. The only
+// cross-package type import is @clude/shared/utils/constants, which isn't
+// published — vendor it next to the SDK types and rewrite the import.
+const brainDist = path.join(repoRoot, 'packages/brain/dist');
+const sharedConstants = path.join(repoRoot, 'packages/shared/dist/utils/constants.d.ts');
+
+function copyDts(srcRel, dstRel) {
+  const src = path.join(brainDist, srcRel);
+  if (!fs.existsSync(src)) throw new Error(`missing declaration file: ${src} — run the brain build first`);
+  let text = fs.readFileSync(src, 'utf8');
+  text = text
+    .replace(/from '@clude\/shared\/utils\/constants'/g, "from './shared-constants'")
+    .replace(/from '\.\.\/memory'/g, "from './memory-types'")
+    .replace(/\/\/# sourceMappingURL=.*\n?/g, '');
+  fs.writeFileSync(path.join(repoRoot, dstRel), text);
+}
+
+for (const f of ['index', 'cortex', 'cortex-v2', 'types', 'http-transport', 'sdk-mode']) {
+  copyDts(`sdk/${f}.d.ts`, `dist/sdk/${f}.d.ts`);
+}
+// sdk/types.d.ts imports its memory types from ../memory — vendor that module
+copyDts('memory/memory.d.ts', 'dist/sdk/memory-types.d.ts');
+copyDts('mcp/server.d.ts', 'dist/mcp/server.d.ts');
+copyDts('mcp/local-store.d.ts', 'dist/mcp/local-store.d.ts');
+fs.writeFileSync(
+  path.join(repoRoot, 'dist/sdk/shared-constants.d.ts'),
+  fs.readFileSync(sharedConstants, 'utf8').replace(/\/\/# sourceMappingURL=.*\n?/g, ''),
+);
+console.log('✓ copied type declarations (sdk + mcp)');
 
 console.log('\nbuild-publish complete.');

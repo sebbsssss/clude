@@ -122,7 +122,9 @@ function writeDesktopConfig(configPath: string, host: string, apiKey: string): {
       existing = JSON.parse(fs.readFileSync(configPath, 'utf8'));
       merged = true;
     } catch {
-      existing = {};
+      // Never replace a config we couldn't parse — it holds the user's other
+      // MCP servers, and overwriting would silently remove them all.
+      throw new Error(`${configPath} exists but is not valid JSON — fix or remove it, then re-run connect`);
     }
   }
   const { name, entry } = buildDesktopEntry(host, apiKey);

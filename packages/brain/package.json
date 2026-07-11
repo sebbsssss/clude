@@ -1,8 +1,8 @@
 {
   "name": "@clude/brain",
-  "version": "3.0.1",
+  "version": "3.3.0",
   "private": true,
-  "description": "Clude brain \u2014 memory, dreams, agents, personality, SDK",
+  "description": "Clude brain — memory, dreams, agents, personality, SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
