@@ -5,6 +5,8 @@ import { printBanner, printSuccess, printWarn, printInfo, printDivider, c } from
 
 const CLUDE_DIR = join(process.env.HOME || process.env.USERPROFILE || '.', '.clude');
 const MEMORIES_FILE = join(CLUDE_DIR, 'memories.json');
+const BRAIN_DB = join(CLUDE_DIR, 'brain.db');
+const CONFIG_FILE = join(CLUDE_DIR, 'config.json');
 
 interface LocalMemory {
   id: number;
@@ -39,8 +41,10 @@ function timeAgo(dateStr: string): string {
 }
 
 function detectMode(): { mode: string; details: string } {
-  // Check for local store
+  // Check for local stores — setup creates brain.db (SQLite); the MCP
+  // server's CLUDE_LOCAL mode uses memories.json. Either means "configured".
   const hasLocal = existsSync(MEMORIES_FILE);
+  const hasSqlite = existsSync(BRAIN_DB);
 
   // Check for .env in current directory
   const envPath = join(process.cwd(), '.env');
@@ -62,8 +66,16 @@ function detectMode(): { mode: string; details: string } {
   if (process.env.CORTEX_API_KEY) hasApiKey = true;
   if (process.env.SUPABASE_URL) hasSupabase = true;
 
-  if (hasLocal && !hasApiKey && !hasSupabase) {
-    return { mode: 'local', details: MEMORIES_FILE };
+  // Setup saves the hosted key to ~/.clude/config.json, not .env
+  if (!hasApiKey && existsSync(CONFIG_FILE)) {
+    try {
+      const cfg = JSON.parse(readFileSync(CONFIG_FILE, 'utf-8'));
+      if (cfg.apiKey) hasApiKey = true;
+    } catch {}
+  }
+
+  if ((hasLocal || hasSqlite) && !hasApiKey && !hasSupabase) {
+    return { mode: 'local', details: hasSqlite ? BRAIN_DB : MEMORIES_FILE };
   }
   if (hasApiKey) {
     return { mode: 'hosted', details: hostUrl || 'https://clude.io' };
@@ -71,13 +83,32 @@ function detectMode(): { mode: string; details: string } {
   if (hasSupabase) {
     return { mode: 'self-hosted', details: 'Supabase' };
   }
-  if (hasLocal) {
-    return { mode: 'local', details: MEMORIES_FILE };
+  if (hasLocal || hasSqlite) {
+    return { mode: 'local', details: hasSqlite ? BRAIN_DB : MEMORIES_FILE };
   }
   return { mode: 'not configured', details: 'Run: npx @clude/sdk setup' };
 }
 
+function printSqliteStatus(): void {
+  const fileStats = statSync(BRAIN_DB);
+  const fileSizeKb = (fileStats.size / 1024).toFixed(1);
+  try {
+    const Database = require('better-sqlite3');
+    const db = new Database(BRAIN_DB, { readonly: true });
+    const row = db.prepare('SELECT COUNT(*) AS n FROM memories').get() as { n: number };
+    db.close();
+    printSuccess(`${row.n} memories in local SQLite store`);
+  } catch {
+    printSuccess('Local SQLite store ready');
+  }
+  printInfo(`${BRAIN_DB} (${fileSizeKb} KB, updated ${timeAgo(fileStats.mtime.toISOString())})\n`);
+}
+
 function printLocalStatus(): void {
+  if (existsSync(BRAIN_DB)) {
+    printSqliteStatus();
+    return;
+  }
   if (!existsSync(MEMORIES_FILE)) {
     printWarn('No memories file found.');
     printInfo(`Expected: ${MEMORIES_FILE}`);

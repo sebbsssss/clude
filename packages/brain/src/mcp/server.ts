@@ -139,7 +139,9 @@ function loadSelfHosted() {
 
 const server = new McpServer({
   name: 'clude-memory',
-  version: '2.7.0',
+  // Single-sourced from the package manifest (inlined at bundle time) so the
+  // MCP handshake, `clude --version`, and npm always agree.
+  version: require('../../package.json').version,
 });
 
 // ── Shared schemas ───────────────────────────────────────────────────

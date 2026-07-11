@@ -41,6 +41,18 @@ describe('getEmail', () => {
     const email = await getEmail({ skipPrompt: true });
     expect(email).toBeNull();
   });
+
+  it('never prompts when stdin is not a TTY (CI / piped stdin would hang)', async () => {
+    vi.mocked(execSync).mockImplementation(() => { throw new Error('no git'); });
+    const original = process.stdin.isTTY;
+    Object.defineProperty(process.stdin, 'isTTY', { value: false, configurable: true });
+    try {
+      const email = await getEmail({ skipPrompt: false });
+      expect(email).toBeNull();
+    } finally {
+      Object.defineProperty(process.stdin, 'isTTY', { value: original, configurable: true });
+    }
+  });
 });
 
 describe('detectInstalledIDEs', () => {
