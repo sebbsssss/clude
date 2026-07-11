@@ -21,7 +21,10 @@ All three integration paths support the same modes, auto-detected from configura
 |---|---|---|---|
 | **Hosted** | `CORTEX_API_KEY` (a `clk_...` key) | clude.io infrastructure, isolated per API key | Zero setup, production CLIs |
 | **Self-hosted** | `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` | Your Supabase (PostgreSQL + pgvector) | Full control, dream cycles, entity graph |
-| **Local** | `CLUDE_LOCAL=true` or `--local` flag | `~/.clude/memories.json` | Offline, no keys, no network |
+| **Local (SQLite)** | none — default when no keys are set (what `setup` creates) | `~/.clude/brain.db`, local embeddings | Offline semantic search, no keys, no network |
+| **Local (JSON)** | `CLUDE_LOCAL=true` or `--local` flag | `~/.clude/memories.json` | Portable single-file store |
+
+Note: the two local stores are separate — memories written to one are not visible from the other. Unless you need the portable JSON file, use the SQLite default.
 
 Getting a hosted API key (no account, no email required):
 
@@ -36,6 +39,8 @@ curl -X POST https://clude.io/api/cortex/register \
 
 Optional registration fields: `wallet` (Solana address, links the key to a wallet for dashboard login) and `email` (Privy-based dashboard login). Registration is rate-limited per IP.
 
+Headless/CI setup: `npx @clude/sdk setup` never blocks on a prompt when stdin is not a TTY — without an email it completes in local-only mode. Set `CLUDE_SETUP_EMAIL=you@example.com` to register for hosted mode non-interactively.
+
 ---
 
 # SDK Reference (`@clude/sdk`)
@@ -43,6 +48,8 @@ Optional registration fields: `wallet` (Solana address, links the key to a walle
 ```bash
 npm install @clude/sdk
 ```
+
+TypeScript declarations are included (v3.3.0+) — `Cortex`, all option and result types (`Memory`, `RecallOptions`, `StoreMemoryOptions`, `MemoryStats`, ...) import with full IntelliSense under strict mode.
 
 ## Constructor
 
@@ -241,6 +248,8 @@ npx @clude/sdk init           # Advanced setup (self-hosted options)
 npx @clude/sdk status         # Check if Clude is active + memory stats
 npx @clude/sdk mcp-install    # Install MCP server config for your IDE/runtime
 npx @clude/sdk mcp-serve      # Run as a stdio MCP server (used by agent runtimes)
+npx @clude/sdk connect        # Connect to Claude Desktop / claude.ai as a remote MCP connector
+npx @clude/sdk doctor         # Run diagnostics
 npx @clude/sdk export         # Export memories (json/md/chatgpt/gemini)
 npx @clude/sdk import         # Import from ChatGPT, markdown, or JSON
 npx @clude/sdk sync           # Auto-update a system prompt file with memory context
@@ -269,7 +278,7 @@ If you are building your own CLI on top of Clude, the typical wiring is: run `re
 
 Config file locations: Claude Code `.mcp.json` (project root); Claude Desktop `~/Library/Application Support/Claude/claude_desktop_config.json`; Cursor `~/.cursor/mcp.json`. Or run `npx @clude/sdk mcp-install`.
 
-For self-hosted mode set `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` in `env` instead; for offline local mode add `"--local"` to `args` or set `CLUDE_LOCAL=true`.
+For self-hosted mode set `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` in `env` instead. With no keys at all the server runs fully offline against the local SQLite store (`~/.clude/brain.db`); add `"--local"` to `args` or set `CLUDE_LOCAL=true` only if you want the portable JSON store instead.
 
 Tools exposed:
 
@@ -277,6 +286,10 @@ Tools exposed:
 |---|---|
 | `recall_memories` | Search memories. Params: `query`, `tags`, `memory_types`, `limit` (1-50), `min_importance`, `min_decay`, `related_user`, `related_wallet`, `track_access`, `skip_expansion` |
 | `store_memory` | Store a memory. Params: `type`, `content` (max 5000 chars), `summary` (max 500 chars), `tags`, `concepts`, `importance`, `emotional_valence`, `source`, `source_id`, `related_user`, `related_wallet`, `metadata` |
+| `batch_store_memories` | Store up to 50 memories in one call; returns an array of results with memory IDs |
+| `list_memories` | Browse without a search query — paginated, sorted by recency, importance, or last access |
+| `update_memory` | Update fields of an existing memory by ID; only provided fields change |
+| `delete_memory` | Permanently delete a memory by ID (irreversible) |
 | `get_memory_stats` | Counts by type, avg importance/decay, dream history, top tags |
 | `find_clinamen` | Anomaly retrieval. Params: `context` (required), `limit` (1-10), `memory_types`, `min_importance`, `max_relevance` |
 

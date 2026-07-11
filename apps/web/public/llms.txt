@@ -4,7 +4,7 @@
 
 Three ways to integrate, pick one:
 
-1. **npm SDK** (Node/TypeScript): `npm install @clude/sdk`, then `new Cortex(...)` → `brain.store()` / `brain.recall()`.
+1. **npm SDK** (Node/TypeScript): `npm install @clude/sdk`, then `new Cortex(...)` → `brain.store()` / `brain.recall()`. TypeScript declarations ship with the package (v3.3.0+).
 2. **REST API** (any language): `POST https://clude.io/api/cortex/register` to get an API key, then call `/api/cortex/*` with `Authorization: Bearer <api_key>`.
 3. **MCP** (agent runtimes — Claude Code, Claude Desktop, Cursor, etc.): local stdio server via `npx @clude/sdk mcp-serve`, or remote Streamable HTTP connector at `https://clude.io/api/mcp`.
 
@@ -14,7 +14,7 @@ Fastest path for a CLI or agent program:
 npx @clude/sdk setup     # register + config + MCP install, zero infrastructure
 ```
 
-Storage modes: **hosted** (`CORTEX_API_KEY`, zero setup), **self-hosted** (your Supabase + pgvector), **local** (`CLUDE_LOCAL=true`, offline JSON store in `~/.clude/`, no keys, no network).
+Storage modes: **hosted** (`CORTEX_API_KEY`, zero setup), **self-hosted** (your Supabase + pgvector), **local** (default fallback — offline SQLite store at `~/.clude/brain.db` with local embeddings, no keys, no network; `CLUDE_LOCAL=true` switches to a portable JSON store at `~/.clude/memories.json`).
 
 Memory types and daily decay: `episodic` 7% (events), `semantic` 2% (facts/knowledge), `procedural` 3% (how-to/behaviors), `self_model` 1% (identity), `introspective` 2% (reflections). Recalled memories are reinforced; unaccessed ones fade.
 
