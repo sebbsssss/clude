@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, statSync } from 'fs';
+import { homedir } from 'os';
 import { join } from 'path';
 import { printBanner, printSuccess, printWarn, printInfo, printDivider, c } from './banner';
 
@@ -214,9 +215,9 @@ function printHostedStatus(): void {
 
 function checkMcpInstalled(): void {
   const configs = [
-    { name: 'Claude Desktop', path: join(process.env.HOME || '', 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json') },
-    { name: 'Cursor', path: join(process.env.HOME || '', '.cursor', 'mcp.json') },
-    { name: 'Claude Code (user)', path: join(process.env.HOME || '', '.claude.json') },
+    { name: 'Claude Desktop', path: join(homedir(), 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json') },
+    { name: 'Cursor', path: join(homedir(), '.cursor', 'mcp.json') },
+    { name: 'Claude Code (user)', path: join(homedir(), '.claude.json') },
     { name: 'Claude Code (project)', path: join(process.cwd(), '.mcp.json') },
   ];
 

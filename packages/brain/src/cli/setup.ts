@@ -1032,7 +1032,7 @@ export function installMcpConfig(
       throw new Error(`${ide.configPath} exists but is not valid JSON — fix or remove it, then re-run setup`);
     }
   }
-  if (!existing.mcpServers || typeof existing.mcpServers !== 'object') {
+  if (!existing.mcpServers || typeof existing.mcpServers !== 'object' || Array.isArray(existing.mcpServers)) {
     existing.mcpServers = {};
   }
   if (existing.mcpServers['clude-memory']) merged = true;
