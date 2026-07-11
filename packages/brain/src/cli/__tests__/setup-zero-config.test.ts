@@ -54,9 +54,22 @@ describe('detectInstalledIDEs', () => {
     expect(ides).toEqual([]);
   });
 
-  it('detects Claude Code when ~/.claude exists', () => {
+  it('detects Claude Code when ~/.claude exists and targets user-scope ~/.claude.json', () => {
     vi.mocked(fs.existsSync).mockImplementation((p: any) => {
       return String(p).endsWith('.claude');
+    });
+    const ides = detectInstalledIDEs();
+    const claudeCode = ides.find(i => i.name === 'Claude Code');
+    expect(claudeCode).toBeDefined();
+    // Claude Code only reads user-scope servers from ~/.claude.json —
+    // ~/.claude/.mcp.json is silently ignored by the CLI.
+    expect(claudeCode!.configPath.endsWith('.claude.json')).toBe(true);
+    expect(claudeCode!.configPath.includes('/.claude/')).toBe(false);
+  });
+
+  it('detects Claude Code when only ~/.claude.json exists', () => {
+    vi.mocked(fs.existsSync).mockImplementation((p: any) => {
+      return String(p).endsWith('.claude.json');
     });
     const ides = detectInstalledIDEs();
     expect(ides.find(i => i.name === 'Claude Code')).toBeDefined();
@@ -93,9 +106,39 @@ describe('installMcpConfig', () => {
     const written = JSON.parse(call[1] as string);
     expect(written.mcpServers['clude-memory']).toMatchObject({
       command: 'npx',
-      args: ['clude', 'mcp-serve'],
+      args: ['@clude/sdk', 'mcp-serve'],
       env: { CORTEX_API_KEY: 'clk_test', CLUDE_WALLET: 'wallet123' },
     });
+  });
+
+  it('preserves unrelated keys when merging into ~/.claude.json', () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify({
+      oauthAccount: { id: 'abc' },
+      projects: { '/home/user/proj': { allowedTools: [] } },
+    }));
+
+    installMcpConfig(
+      { name: 'Claude Code', configPath: '/home/user/.claude.json' },
+      { apiKey: 'clk_test', wallet: '' },
+    );
+
+    const call = vi.mocked(fs.writeFileSync).mock.calls[0];
+    const written = JSON.parse(call[1] as string);
+    expect(written.oauthAccount).toEqual({ id: 'abc' });
+    expect(written.projects).toEqual({ '/home/user/proj': { allowedTools: [] } });
+    expect(written.mcpServers['clude-memory']).toBeDefined();
+  });
+
+  it('throws instead of clobbering a config it cannot parse', () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync).mockReturnValue('{ not valid json');
+
+    expect(() => installMcpConfig(
+      { name: 'Claude Code', configPath: '/home/user/.claude.json' },
+      { apiKey: 'clk_test', wallet: '' },
+    )).toThrow(/not valid JSON/);
+    expect(fs.writeFileSync).not.toHaveBeenCalled();
   });
 
   it('merges with existing config and preserves other servers', () => {
