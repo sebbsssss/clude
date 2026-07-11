@@ -334,7 +334,14 @@ async function runZeroConfigSetup(): Promise<void> {
     for (const ide of ides) {
       try {
         const merged = installMcpConfig(ide, { apiKey: reg.apiKey, wallet: reg.wallet });
-        console.log(`  ${c.green}✓${c.reset} MCP installed         ${ide.name}${merged ? ' (merged)' : ''}`);
+        // Re-read the config so ✓ means "the entry is really there", not
+        // "the write didn't throw" — a false success here leaves the user's
+        // agent without memory and nothing to debug.
+        const check = JSON.parse(fs.readFileSync(ide.configPath, 'utf-8'));
+        if (!check?.mcpServers?.['clude-memory']) {
+          throw new Error('entry missing after write');
+        }
+        console.log(`  ${c.green}✓${c.reset} MCP installed         ${ide.name}${merged ? ' (merged)' : ''} ${c.dim}${ide.configPath}${c.reset}`);
       } catch (err: any) {
         console.log(`  ${c.yellow}⚠${c.reset} MCP install failed for ${ide.name}: ${err.message}`);
       }
@@ -978,10 +985,13 @@ export function detectInstalledIDEs(): IDEInfo[] {
   const ides: IDEInfo[] = [];
   const home = os.homedir();
 
-  if (fs.existsSync(path.join(home, '.claude'))) {
+  // Claude Code reads user-scope MCP servers from the top-level `mcpServers`
+  // key in ~/.claude.json — NOT from a file inside ~/.claude/. Writing
+  // anywhere else "succeeds" but the server never shows up in `claude mcp list`.
+  if (fs.existsSync(path.join(home, '.claude')) || fs.existsSync(path.join(home, '.claude.json'))) {
     ides.push({
       name: 'Claude Code',
-      configPath: path.join(home, '.claude', '.mcp.json'),
+      configPath: path.join(home, '.claude.json'),
     });
   }
 
@@ -1009,18 +1019,23 @@ export function installMcpConfig(
   ide: IDEInfo,
   reg: RegistrationResult,
 ): boolean {
-  let existing: any = { mcpServers: {} };
+  let existing: any = {};
   let merged = false;
 
   if (fs.existsSync(ide.configPath)) {
     try {
       existing = JSON.parse(fs.readFileSync(ide.configPath, 'utf-8'));
-      if (!existing.mcpServers) existing.mcpServers = {};
-      if (existing.mcpServers['clude-memory']) merged = true;
     } catch {
-      existing = { mcpServers: {} };
+      // ~/.claude.json holds all of Claude Code's state — resetting it on a
+      // parse failure would destroy the user's setup. Same for other IDEs:
+      // never replace a config we couldn't read.
+      throw new Error(`${ide.configPath} exists but is not valid JSON — fix or remove it, then re-run setup`);
     }
   }
+  if (!existing.mcpServers || typeof existing.mcpServers !== 'object') {
+    existing.mcpServers = {};
+  }
+  if (existing.mcpServers['clude-memory']) merged = true;
 
   const env: Record<string, string> = {};
   if (reg.apiKey) env.CORTEX_API_KEY = reg.apiKey;

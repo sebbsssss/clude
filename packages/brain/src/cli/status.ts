@@ -216,15 +216,20 @@ function checkMcpInstalled(): void {
   const configs = [
     { name: 'Claude Desktop', path: join(process.env.HOME || '', 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json') },
     { name: 'Cursor', path: join(process.env.HOME || '', '.cursor', 'mcp.json') },
-    { name: 'Claude Code', path: join(process.cwd(), '.mcp.json') },
+    { name: 'Claude Code (user)', path: join(process.env.HOME || '', '.claude.json') },
+    { name: 'Claude Code (project)', path: join(process.cwd(), '.mcp.json') },
   ];
 
   let found = false;
   for (const cfg of configs) {
     if (existsSync(cfg.path)) {
       try {
-        const content = readFileSync(cfg.path, 'utf-8');
-        if (content.includes('clude')) {
+        // Check registered server names, not a raw substring — ~/.claude.json
+        // contains project paths, and any path with "clude" in it would
+        // otherwise read as installed.
+        const parsed = JSON.parse(readFileSync(cfg.path, 'utf-8'));
+        const servers = parsed?.mcpServers && typeof parsed.mcpServers === 'object' ? parsed.mcpServers : {};
+        if (Object.keys(servers).some((name) => name.includes('clude'))) {
           printSuccess(`MCP installed: ${cfg.name}`);
           found = true;
         }
