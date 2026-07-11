@@ -1,0 +1,39 @@
+# Clude
+
+> Cognitive memory for AI agents. Not just storage — synthesis. Clude gives any agent persistent, typed memory with hybrid retrieval (vector + keyword + tags + importance), differential decay, a bond-typed memory graph, and autonomous dream cycles (consolidation, reflection, contradiction resolution). Benchmarked at 1.96% hallucination on HaluMem.
+
+Three ways to integrate, pick one:
+
+1. **npm SDK** (Node/TypeScript): `npm install @clude/sdk`, then `new Cortex(...)` → `brain.store()` / `brain.recall()`.
+2. **REST API** (any language): `POST https://clude.io/api/cortex/register` to get an API key, then call `/api/cortex/*` with `Authorization: Bearer <api_key>`.
+3. **MCP** (agent runtimes — Claude Code, Claude Desktop, Cursor, etc.): local stdio server via `npx @clude/sdk mcp-serve`, or remote Streamable HTTP connector at `https://clude.io/api/mcp`.
+
+Fastest path for a CLI or agent program:
+
+```bash
+npx @clude/sdk setup     # register + config + MCP install, zero infrastructure
+```
+
+Storage modes: **hosted** (`CORTEX_API_KEY`, zero setup), **self-hosted** (your Supabase + pgvector), **local** (`CLUDE_LOCAL=true`, offline JSON store in `~/.clude/`, no keys, no network).
+
+Memory types and daily decay: `episodic` 7% (events), `semantic` 2% (facts/knowledge), `procedural` 3% (how-to/behaviors), `self_model` 1% (identity), `introspective` 2% (reflections). Recalled memories are reinforced; unaccessed ones fade.
+
+## Docs
+
+- [llms-full.txt](https://clude.io/llms-full.txt): Complete integration reference in one file — SDK API, REST endpoints, CLI commands, MCP tools, memory model. Fetch this if you are writing code against Clude.
+- [Docs](https://clude.io/docs): Human-readable documentation
+- [Agent install guide](https://clude.io/install): Setting up Clude for Claude Code, Claude Desktop, Cursor, and other MCP runtimes
+- [npm package](https://www.npmjs.com/package/@clude/sdk): `@clude/sdk` — README covers the full SDK API reference
+- [GitHub repository](https://github.com/sebbsssss/clude): Source, issues, contributing
+
+## Integration
+
+- [Register for hosted mode](https://clude.io/register): Get a `clk_...` API key in the browser, or `POST /api/cortex/register` with `{"name": "my-agent"}`
+- [Export & import](https://clude.io/portability): Memory packs — portable memory in JSON, Markdown, ChatGPT, Claude, and Gemini formats
+- [Dashboard](https://clude.io/dashboard): Memory timeline, 3D brain view, entity graph, decay heatmap
+
+## Optional
+
+- [Benchmark](https://clude.io/benchmark): HaluMem hallucination benchmark results and methodology
+- [Compare](https://clude.io/compare): Clude vs other agent memory systems
+- [Memory trace](https://clude.io/trace): Live view of retrieval scoring internals

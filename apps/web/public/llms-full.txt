@@ -1,0 +1,329 @@
+# Clude — Complete Integration Reference
+
+> Cognitive memory for AI agents. This file is the single-fetch reference for integrating Clude into a program, CLI, or agent runtime. It covers the npm SDK, the hosted REST API, the CLI, the MCP servers, and the memory model. Everything here is current as of SDK v3.x.
+
+Clude stores typed memories that decay over time, retrieves them with hybrid scoring (vector similarity + keyword + tags + importance + recency + graph bonds), and processes them autonomously through dream cycles. It is a memory engine, not a framework — you call `store` and `recall`, Clude handles the cognitive architecture.
+
+## Choosing an integration path
+
+| Your situation | Use | Section |
+|---|---|---|
+| Node/TypeScript program or CLI | npm SDK (`@clude/sdk`) | SDK Reference |
+| Any other language (Python, Go, Rust, ...) | REST API | REST API Reference |
+| MCP-compatible agent runtime (Claude Code, Claude Desktop, Cursor) | MCP server | MCP Reference |
+| Shell scripts / quick setup | CLI | CLI Reference |
+
+## Storage modes
+
+All three integration paths support the same modes, auto-detected from configuration:
+
+| Mode | Config | Storage | Best for |
+|---|---|---|---|
+| **Hosted** | `CORTEX_API_KEY` (a `clk_...` key) | clude.io infrastructure, isolated per API key | Zero setup, production CLIs |
+| **Self-hosted** | `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` | Your Supabase (PostgreSQL + pgvector) | Full control, dream cycles, entity graph |
+| **Local** | `CLUDE_LOCAL=true` or `--local` flag | `~/.clude/memories.json` | Offline, no keys, no network |
+
+Getting a hosted API key (no account, no email required):
+
+```bash
+npx @clude/sdk register
+# or via HTTP:
+curl -X POST https://clude.io/api/cortex/register \
+  -H "Content-Type: application/json" \
+  -d '{"name": "my-agent"}'
+# → { "apiKey": "clk_...", "agentId": "...", "message": "Save this API key — it will not be shown again." }
+```
+
+Optional registration fields: `wallet` (Solana address, links the key to a wallet for dashboard login) and `email` (Privy-based dashboard login). Registration is rate-limited per IP.
+
+---
+
+# SDK Reference (`@clude/sdk`)
+
+```bash
+npm install @clude/sdk
+```
+
+## Constructor
+
+Hosted mode:
+
+```typescript
+import { Cortex } from '@clude/sdk';
+
+const brain = new Cortex({
+  hosted: {
+    apiKey: process.env.CORTEX_API_KEY!,  // from `npx @clude/sdk register`
+    baseUrl: 'https://clude.io',          // optional, this is the default
+  },
+});
+```
+
+Self-hosted mode:
+
+```typescript
+const brain = new Cortex({
+  supabase: { url: string, serviceKey: string },
+  // Optional — required for dream cycles and LLM importance scoring:
+  anthropic: { apiKey: string, model?: string },
+  // Optional — enables vector similarity search:
+  embedding: { provider: 'voyage' | 'openai', apiKey: string, model?: string, dimensions?: number },
+  // Optional — commits memory hashes to Solana:
+  solana: { rpcUrl?: string, botWalletPrivateKey?: string },
+  // Optional — owner wallet for memory isolation:
+  ownerWallet?: string,
+});
+```
+
+## Methods
+
+### `await brain.init()`
+Initialize the database schema. Call once before any other operation.
+
+### `await brain.store(opts)` → `number | null`
+Store a memory. Returns the memory ID.
+
+```typescript
+const id = await brain.store({
+  type: 'episodic',            // see Memory Types below
+  content: 'Full content of the memory...',   // required
+  summary: 'Brief summary',                    // required, used for recall matching
+  source: 'my-agent',
+  tags: ['user', 'question'],
+  importance: 0.7,             // 0-1; omit for automatic scoring
+  relatedUser: 'user-123',     // optional user scoping
+  emotionalValence: 0.3,       // -1 (negative) to 1 (positive)
+});
+```
+
+### `await brain.recall(opts)` → `Memory[]`
+Hybrid-scored retrieval.
+
+```typescript
+const memories = await brain.recall({
+  query: 'what happened with user-123',
+  tags: ['pricing'],
+  relatedUser: 'user-123',
+  memoryTypes: ['episodic', 'semantic'],
+  limit: 10,
+  minImportance: 0.3,
+});
+```
+
+Retrieval pipeline: (1) vector search at memory + fragment level, (2) metadata filtering, (3) candidate merge, (4) composite scoring `(recency + relevance + importance + vector similarity) × decay`, (5) entity-aware expansion, (6) bond-typed graph traversal. Recalled memories are reinforced (access count increments, decay resets, co-retrieved memories strengthen bonds).
+
+### `await brain.recallSummaries(opts)` / `await brain.hydrate(ids)`
+Token-efficient two-stage retrieval — fetch lightweight summaries first, hydrate only the ones you need:
+
+```typescript
+const summaries = await brain.recallSummaries({ query: 'recent events' });
+const full = await brain.hydrate(summaries.slice(0, 3).map(s => s.id));
+```
+
+### `brain.formatContext(memories)` → `string`
+Format recalled memories as markdown for LLM prompt injection. The standard agent loop is: recall → formatContext → inject into system prompt → converse → store what was learned.
+
+### `await brain.dream(opts?)`
+Run one dream cycle (self-hosted with `anthropic` config only). Five phases: consolidation, compaction, reflection, contradiction resolution, emergence. `opts.onEmergence: (thought) => void` receives introspective output.
+
+### `brain.startDreamSchedule()` / `brain.stopDreamSchedule()`
+Automated dream cycles every 6 hours + daily decay at 3am UTC.
+
+### `await brain.link(sourceId, targetId, type, strength?)`
+Create a typed bond between memories. Types: `supports`, `contradicts`, `elaborates`, `causes`, `follows`, `relates`, `resolves`, `happens_before`, `happens_after`, `concurrent_with`.
+
+### Others
+- `await brain.decay()` — trigger decay manually
+- `await brain.stats()` — counts by type, avg importance/decay, top tags
+- `await brain.recent(hours)` — recent memories
+- `await brain.selfModel()` — identity/self-model memories
+- `brain.destroy()` — stop schedules, clean up listeners
+
+## Hosted vs self-hosted feature matrix
+
+| | Hosted | Self-hosted |
+|---|---|---|
+| store / recall / stats | Yes | Yes |
+| Dream cycles | No | Yes (requires Anthropic key) |
+| Entity graph | No | Yes |
+| Memory packs | No | Yes |
+| Embeddings | Managed | Configurable (Voyage/OpenAI) |
+| On-chain commits | No | Yes (Solana) |
+
+Graceful degradation (self-hosted): without `anthropic`, importance scoring falls back to rules and `dream()` throws; without `embedding`, recall uses keyword + tag scoring only; without `solana`, on-chain commits are skipped silently.
+
+---
+
+# REST API Reference (hosted mode)
+
+Base URL: `https://clude.io/api/cortex`
+Auth: `Authorization: Bearer <api_key>` on every endpoint except `/register`.
+Rate limit: 120 requests/minute per API key (429 with `{"error": "Rate limit exceeded"}` beyond that).
+Errors: `4xx/5xx` with body `{"error": "message"}`.
+All memories are isolated per API key — you can only ever see your own.
+
+### POST /register — no auth
+Body: `{"name": string (required, 2+ chars), "wallet"?: string (Solana address), "email"?: string}`
+Returns: `{"apiKey": "clk_...", "agentId": string, "wallet": string | null, "message": string}`
+The key is shown once. Store it securely (env var, OS keychain).
+
+### POST /store
+Body:
+```json
+{
+  "content": "Full memory text (required)",
+  "summary": "Short summary for recall matching (required)",
+  "type": "episodic | semantic | procedural | self_model | introspective (default episodic)",
+  "tags": ["optional", "tags"],
+  "concepts": ["optional structured labels"],
+  "importance": 0.7,
+  "emotional_valence": 0.3,
+  "source": "my-cli",
+  "source_id": "external-id",
+  "related_user": "user-123",
+  "related_wallet": "solana-address",
+  "metadata": {}
+}
+```
+Returns: `{"stored": true, "memory_id": 123}`
+HTML is stripped from `content` and `summary` server-side.
+
+### POST /recall
+Body: `{"query"?: string, "tags"?: string[], "memory_types"?: string[], "limit"?: number (max 50, default 10), "min_importance"?: number, "min_decay"?: number, "related_user"?: string, "related_wallet"?: string, "track_access"?: boolean, "skip_expansion"?: boolean}`
+At least one of `query`, `tags`, or `memory_types` is required. Set `skip_expansion: true` to skip LLM query expansion and reduce latency.
+Returns: `{"memories": [{"id", "type", "summary", "content", "tags", "concepts", "importance", "decay_factor", "access_count", "emotional_valence", "source", "created_at", "last_accessed", "_score"}], "count": number}`
+
+### POST /recall/summaries
+Same filters as `/recall`; `limit` max 100, default 20. Returns lightweight `{"summaries": [...], "count"}` — no full content. Pair with `/hydrate` for token-efficient retrieval.
+
+### POST /hydrate
+Body: `{"ids": number[]}` (max 100). Returns `{"memories": [...]}` with full content.
+
+### GET /stats
+Returns memory statistics: counts by type, average importance/decay, top tags.
+
+### GET /recent?hours=6&types=episodic,semantic&limit=20
+`hours` max 168 (7 days), `limit` max 100. Returns `{"memories": [...], "count"}`.
+
+### POST /link
+Body: `{"source_id": number, "target_id": number, "link_type": string, "strength"?: number}`
+`link_type` is one of: `supports`, `contradicts`, `elaborates`, `causes`, `follows`, `relates`, `resolves`, `happens_before`, `happens_after`, `concurrent_with`. Both memories must belong to your key. Returns `{"ok": true}`.
+
+### POST /clinamen
+Anomaly retrieval — high-importance memories with *low* relevance to the current context, for lateral connections.
+Body: `{"context": string (required), "limit"?: number (max 10, default 3), "memory_types"?: string[], "min_importance"?: number, "max_relevance"?: number}`
+
+### Other endpoints
+`GET /brain` and `GET /brain/graph` (visualization data), `GET /self-model`, `POST /packs/export`, `POST /packs/import`, `POST /packs/smart-export` (portable memory packs), `GET /agents`, `GET /entities`, `GET /entities/search`, `GET /entities/:id` (entity knowledge graph).
+
+### Minimal integration from any language
+
+```bash
+# store
+curl -X POST https://clude.io/api/cortex/store \
+  -H "Authorization: Bearer $CORTEX_API_KEY" -H "Content-Type: application/json" \
+  -d '{"type":"episodic","content":"User ran `deploy --prod` and it failed on auth.","summary":"Prod deploy failed on auth","tags":["deploy","error"],"source":"my-cli"}'
+
+# recall
+curl -X POST https://clude.io/api/cortex/recall \
+  -H "Authorization: Bearer $CORTEX_API_KEY" -H "Content-Type: application/json" \
+  -d '{"query":"previous deploy failures","limit":5}'
+```
+
+---
+
+# CLI Reference
+
+```bash
+npx @clude/sdk setup          # Guided setup: register + config + MCP install
+npx @clude/sdk register       # Get an API key for hosted mode
+npx @clude/sdk init           # Advanced setup (self-hosted options)
+npx @clude/sdk status         # Check if Clude is active + memory stats
+npx @clude/sdk mcp-install    # Install MCP server config for your IDE/runtime
+npx @clude/sdk mcp-serve      # Run as a stdio MCP server (used by agent runtimes)
+npx @clude/sdk export         # Export memories (json/md/chatgpt/gemini)
+npx @clude/sdk import         # Import from ChatGPT, markdown, or JSON
+npx @clude/sdk sync           # Auto-update a system prompt file with memory context
+npx @clude/sdk --version      # Show version
+```
+
+If you are building your own CLI on top of Clude, the typical wiring is: run `register` once (or call `POST /api/cortex/register`), persist the key, then use the SDK or REST API inside your commands.
+
+---
+
+# MCP Reference
+
+## Local stdio server (recommended for coding agents)
+
+```json
+{
+  "mcpServers": {
+    "clude-memory": {
+      "command": "npx",
+      "args": ["@clude/sdk", "mcp-serve"],
+      "env": { "CORTEX_API_KEY": "clk_..." }
+    }
+  }
+}
+```
+
+Config file locations: Claude Code `.mcp.json` (project root); Claude Desktop `~/Library/Application Support/Claude/claude_desktop_config.json`; Cursor `~/.cursor/mcp.json`. Or run `npx @clude/sdk mcp-install`.
+
+For self-hosted mode set `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` in `env` instead; for offline local mode add `"--local"` to `args` or set `CLUDE_LOCAL=true`.
+
+Tools exposed:
+
+| Tool | Description |
+|---|---|
+| `recall_memories` | Search memories. Params: `query`, `tags`, `memory_types`, `limit` (1-50), `min_importance`, `min_decay`, `related_user`, `related_wallet`, `track_access`, `skip_expansion` |
+| `store_memory` | Store a memory. Params: `type`, `content` (max 5000 chars), `summary` (max 500 chars), `tags`, `concepts`, `importance`, `emotional_valence`, `source`, `source_id`, `related_user`, `related_wallet`, `metadata` |
+| `get_memory_stats` | Counts by type, avg importance/decay, dream history, top tags |
+| `find_clinamen` | Anomaly retrieval. Params: `context` (required), `limit` (1-10), `memory_types`, `min_importance`, `max_relevance` |
+
+## Remote MCP connector (Streamable HTTP)
+
+Endpoint: `https://clude.io/api/mcp`
+Auth: `Authorization: Bearer <api_key>` (same key as the REST API).
+Transport: MCP Streamable HTTP, stateless. Exposes `recall_memories`, `store_memory`, and `get_memory_stats`. Use this for runtimes that take remote connectors (e.g. Claude Desktop custom connectors, claude.ai) where you can't run a local process.
+
+---
+
+# Memory Model
+
+## Memory types and decay
+
+| Type | Decay/day | Use for |
+|---|---|---|
+| `episodic` | 7% | Raw interactions, conversations, events |
+| `semantic` | 2% | Learned knowledge, facts, patterns, insights |
+| `procedural` | 3% | Behavioral rules, workflows, what works/doesn't |
+| `self_model` | 1% | Identity, self-understanding |
+| `introspective` | 2% | Journal entries, dream cycle outputs |
+
+Accessed memories are reinforced: access count increments, decay resets, and co-retrieved memories strengthen their bonds (Hebbian learning). Unaccessed memories fade and are eventually compacted into semantic summaries.
+
+## Memory graph
+
+Memories are nodes; bonds are typed weighted edges: `causes` (1.0), `supports` (0.9), `concurrent_with` (0.8), `resolves` (0.8), `happens_before`/`happens_after` (0.7), `elaborates` (0.7), `contradicts` (0.6), `relates` (0.4), `follows` (0.3). Entities (people, projects, concepts, wallets) are auto-extracted and linked via co-occurrence (self-hosted mode).
+
+## Recommended agent integration pattern
+
+1. **On session/task start:** `recall` with the user's request as `query` → `formatContext` → inject into the system prompt.
+2. **During work:** `recall` again when a new topic surfaces that may have history.
+3. **On completion or learning something durable:** `store` one memory per meaningful outcome — decisions, findings, preferences, failures. Include `summary`, `tags`, `importance`, and a stable `source` (e.g. `mcp:my-cli`).
+4. **Type selection:** events → `episodic`; facts → `semantic`; "how to do X" → `procedural`; user traits/preferences → `self_model`.
+5. For token-constrained contexts use `recallSummaries` + `hydrate` instead of full `recall`.
+
+---
+
+# Links
+
+- Website: https://clude.io
+- This file: https://clude.io/llms-full.txt (index: https://clude.io/llms.txt)
+- Docs: https://clude.io/docs
+- Agent install guide: https://clude.io/install
+- npm: https://www.npmjs.com/package/@clude/sdk
+- GitHub: https://github.com/sebbsssss/clude
+- Benchmark: https://clude.io/benchmark
+- Dashboard: https://clude.io/dashboard
+- License: MIT
