@@ -31,7 +31,7 @@
   ],
   "scripts": {
     "build:publish": "node scripts/build-publish.mjs",
-    "prepublishOnly": "pnpm --filter @clude/shared build && pnpm --filter @clude/brain build && node scripts/build-publish.mjs",
+    "prepublishOnly": "pnpm --filter @clude/brain... build && node scripts/build-publish.mjs",
     "typecheck": "tsc --noEmit",
     "dashboard": "cd apps/dashboard && pnpm run dev",
     "dashboard:build": "cd apps/dashboard && pnpm run build"
