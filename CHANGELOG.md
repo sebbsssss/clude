@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.3.1] — 2026-07-11
+
+### Removed
+- **`extract_skill` MCP tool** — it was nonfunctional in every mode (the hosted endpoint was never implemented and the self-hosted module doesn't exist). Removed rather than advertise a tool that can't work; it can return with a real implementation.
+
+### Changed
+- **npm gets its own README** — `npm pack`/`publish` now swaps in a dev-focused `README.npm.md` (architecture, benchmarks, quick starts, API) via `prepack`/`postpack`; the repository README is unchanged.
+- **Docs synced with the product** — README and SKILL.md now document all 8 MCP tools, the SQLite-default local mode (`~/.clude/brain.db`) vs the `CLUDE_LOCAL` JSON store, headless setup with `CLUDE_SETUP_EMAIL`, `clude connect`/`doctor`, and TypeScript declarations; removed a dead `examples/` link. The `/install` page sample output matches the real setup flow, and its SDK example includes the required `summary` field.
+
 ## [3.3.0] — 2026-07-11
 
 First-run experience overhaul, driven by a clean-room installation audit.
