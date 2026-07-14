@@ -95,9 +95,40 @@ function printSqliteStatus(): void {
   try {
     const Database = require('better-sqlite3');
     const db = new Database(BRAIN_DB, { readonly: true });
-    const row = db.prepare('SELECT COUNT(*) AS n FROM memories').get() as { n: number };
+    const total = (db.prepare('SELECT COUNT(*) AS n FROM memories').get() as { n: number }).n;
+    printSuccess(`${total} memories in local SQLite store`);
+
+    if (total > 0) {
+      // The cognitive layer (decay, reinforcement, bonds) runs silently —
+      // status is where users get to see that their memory is alive.
+      const byType = db.prepare(
+        'SELECT memory_type, COUNT(*) AS n FROM memories GROUP BY memory_type ORDER BY n DESC'
+      ).all() as Array<{ memory_type: string; n: number }>;
+      printInfo(byType.map((r) => `${r.memory_type} ${r.n}`).join(' · '));
+
+      const agg = db.prepare(
+        'SELECT AVG(decay_factor) AS decay, AVG(importance) AS imp, SUM(access_count > 1) AS reinforced FROM memories'
+      ).get() as { decay: number | null; imp: number | null; reinforced: number | null };
+      printInfo(`health: avg decay ${(agg.decay ?? 1).toFixed(2)} · avg importance ${(agg.imp ?? 0).toFixed(2)} · ${agg.reinforced ?? 0} reinforced by recall`);
+
+      // Bonds and queued dream work may not exist in older databases
+      try {
+        const bonds = (db.prepare('SELECT COUNT(*) AS n FROM links').get() as { n: number }).n;
+        const queued = (db.prepare('SELECT COUNT(*) AS n FROM dream_queue').get() as { n: number }).n;
+        if (bonds > 0 || queued > 0) {
+          printInfo(`graph: ${bonds} bonds between memories · ${queued} dream ops queued`);
+        }
+      } catch {}
+
+      const top = db.prepare(
+        'SELECT summary, access_count FROM memories WHERE access_count > 1 ORDER BY access_count DESC LIMIT 1'
+      ).get() as { summary: string; access_count: number } | undefined;
+      if (top) {
+        const label = top.summary.length > 60 ? top.summary.slice(0, 57) + '...' : top.summary;
+        printInfo(`most reinforced: "${label}" (recalled ${top.access_count}×)`);
+      }
+    }
     db.close();
-    printSuccess(`${row.n} memories in local SQLite store`);
   } catch {
     printSuccess('Local SQLite store ready');
   }
