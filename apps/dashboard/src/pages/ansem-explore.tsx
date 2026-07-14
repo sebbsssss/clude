@@ -20,11 +20,14 @@ import type { BullNode } from '../components/BullSwarm3D';
 
 // ── Data fetching ───────────────────────────────────────────────────────────
 
+type Growth = { total: number; added24h: number; added7d: number; perDay: number; pct7d: number; series: { t: string; v: number }[] };
+
 function useAnsemData() {
   const [nodes, setNodes] = useState<AnsemNode[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [growth, setGrowth] = useState<Growth | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -34,6 +37,7 @@ function useAnsemData() {
         if (!cancelled) {
           setNodes(result.nodes);
           setTotal(result.total || result.nodes.length);
+          ansemApi.getGrowth().then((g) => { if (!cancelled) setGrowth(g); });
         }
       } catch (err: unknown) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load graph');
@@ -44,7 +48,7 @@ function useAnsemData() {
     return () => { cancelled = true; };
   }, []);
 
-  return { nodes, total, loading, error };
+  return { nodes, total, loading, error, growth };
 }
 
 // ── Bull constellation (verbatim render engine from bull.html) ──────────────
@@ -1142,7 +1146,7 @@ export function AnsemExplore() {
     };
   }, []);
 
-  const { nodes, total, loading, error } = useAnsemData();
+  const { nodes, total, loading, error, growth } = useAnsemData();
   const [highlightIds, setHighlightIds] = useState<Set<number>>(new Set());
   const [bullTip, setBullTip] = useState<{ text: string; x: number; y: number } | null>(null);
   const [nodePopup, setNodePopup] = useState<BullNode | null>(null);
@@ -1243,9 +1247,31 @@ export function AnsemExplore() {
   }, []);
 
   const countLabel = useMemo(() => (total || 38303).toLocaleString(), [total]);
+  const fmtK = (n: number) => (n >= 10000 ? `${(n / 1000).toFixed(1)}K` : n.toLocaleString());
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#000', overflow: 'hidden', fontFamily: "ui-monospace,'SF Mono',Menlo,monospace" }}>
+      {/* ambient memory-growth line — subtle, behind the constellation */}
+      {growth && growth.series.length > 1 && (() => {
+        const s = growth.series;
+        const max = Math.max(...s.map((p) => p.v), 1);
+        const W = 1000, H = 300;
+        const line = s.map((p, i) => (i ? 'L' : 'M') + ((i / (s.length - 1)) * W).toFixed(1) + ' ' + (H - (p.v / max) * H).toFixed(1)).join(' ');
+        const area = `${line} L${W} ${H} L0 ${H} Z`;
+        return (
+          <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden
+            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, width: '100%', height: '38vh', zIndex: 0, pointerEvents: 'none', opacity: 0.16 }}>
+            <defs>
+              <linearGradient id="ansemGrowthFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#48e07a" stopOpacity="0.4" />
+                <stop offset="100%" stopColor="#48e07a" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path d={area} fill="url(#ansemGrowthFill)" />
+            <path d={line} fill="none" stroke="#5cf08a" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+          </svg>
+        );
+      })()}
       {!loading && !error && (
         <BullSwarm3D
           nodes={nodes}
@@ -1517,6 +1543,17 @@ export function AnsemExplore() {
         <div style={{ fontSize: 'clamp(20px,2.8vw,27px)', color: '#c9efd8', marginTop: 14, letterSpacing: '.005em', lineHeight: 1.28, maxWidth: 540 }}>
           <span style={{ color: '#5cf08a', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{countLabel}</span> memories and growing.<br /><span style={{ color: '#9fe0b8' }}>One community mind.</span>
         </div>
+        {growth && (
+          <div style={{ fontSize: 'clamp(10.5px,1.35vw,13px)', color: '#7fd7a6', marginTop: 9, letterSpacing: '.015em', fontVariantNumeric: 'tabular-nums', maxWidth: 540 }}>
+            <span style={{ color: '#5cf08a', fontWeight: 700 }}>+{fmtK(growth.added24h)}</span> today
+            <span style={{ color: '#4c7d63' }}>{'  ·  '}</span>
+            <span style={{ color: '#5cf08a', fontWeight: 700 }}>+{fmtK(growth.added7d)}</span> this week
+            <span style={{ color: '#4c7d63' }}>{'  ·  '}</span>
+            <span style={{ color: '#5cf08a', fontWeight: 700 }}>+{growth.pct7d}%</span>
+            <span style={{ color: '#4c7d63' }}>{'  ·  '}</span>
+            <span style={{ color: '#5cf08a', fontWeight: 700 }}>~{fmtK(growth.perDay)}</span>/day
+          </div>
+        )}
         <div style={{ fontSize: 'clamp(10.5px,1.3vw,13px)', color: '#d3f2df', marginTop: 13, lineHeight: 1.55, letterSpacing: '.01em', maxWidth: 384 }}>
           The <span style={{ color: '#eafff0', fontWeight: 700 }}>$ANSEM</span> Black Bull movement made tangible.
         </div>

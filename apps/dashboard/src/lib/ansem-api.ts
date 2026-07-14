@@ -38,6 +38,15 @@ export interface AnsemFeedPost {
 }
 
 export const ansemApi = {
+  async getGrowth(): Promise<any> {
+    try {
+      const res = await fetch(`${API_BASE}/api/ansem/growth`);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
   async getMemoryGraph(): Promise<{
     nodes: AnsemNode[];
     links: AnsemLink[];
