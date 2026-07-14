@@ -1252,8 +1252,9 @@ export function AnsemExplore() {
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#000', overflow: 'hidden', fontFamily: "ui-monospace,'SF Mono',Menlo,monospace" }}>
       {/* ambient memory-growth line — a faint glowing curve hugging the bottom edge, behind
-          everything (z-1). No fill (it washed the bottom). Fades in AFTER the constellation
-          settles (0.9s delay) so it never flashes over the nodes/hints on load. */}
+          the constellation canvas but BELOW the HUD text (z3) — at z-1 it sat under the
+          canvas layer and was invisible. No fill (it washed the bottom). Fades in AFTER the
+          constellation settles (0.9s delay) so it never flashes over the nodes/hints on load. */}
       {growth && growth.series.length > 1 && (() => {
         const s = growth.series;
         const max = Math.max(...s.map((p) => p.v), 1);
@@ -1261,9 +1262,9 @@ export function AnsemExplore() {
         const line = s.map((p, i) => (i ? 'L' : 'M') + ((i / (s.length - 1)) * W).toFixed(1) + ' ' + (H - 6 - (p.v / max) * (H - 14)).toFixed(1)).join(' ');
         return (
           <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden
-            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, width: '100%', height: '18vh', zIndex: -1, pointerEvents: 'none', opacity: 0, animation: 'ansemGrowthFade 2s ease 0.9s forwards' }}>
-            <style>{`@keyframes ansemGrowthFade { to { opacity: 0.5; } }`}</style>
-            <path d={line} fill="none" stroke="#5cf08a" strokeWidth="1.4" vectorEffect="non-scaling-stroke" style={{ filter: 'drop-shadow(0 0 5px rgba(92,240,138,.6))' }} />
+            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, width: '100%', height: '20vh', zIndex: 2, pointerEvents: 'none', opacity: 0, animation: 'ansemGrowthFade 2s ease 0.9s forwards' }}>
+            <style>{`@keyframes ansemGrowthFade { to { opacity: 0.62; } }`}</style>
+            <path d={line} fill="none" stroke="#5cf08a" strokeWidth="1.7" vectorEffect="non-scaling-stroke" style={{ filter: 'drop-shadow(0 0 7px rgba(92,240,138,.7))' }} />
           </svg>
         );
       })()}
