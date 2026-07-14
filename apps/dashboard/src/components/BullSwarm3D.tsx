@@ -93,15 +93,16 @@ export function BullSwarm3D({ nodes, highlightIds, onHover, onSelect, onLiveJoin
     // (half-height ~64) and taking whichever needs more room.
     // On desktop (wide aspect) the vertical extent is the binding constraint — the old
     // width-only fit clipped the jaw + horn tips off-frame, which read as "too zoomed";
-    // height-fitting pulls the camera back to ~117 so the full bull is in frame. Portrait
-    // phones stay width-bound (~300+). The 1.08 margin keeps the bull off the frame edge.
+    // height-fitting pulls the camera back so the full bull is in frame. Portrait
+    // phones stay width-bound. The 1.4 margin keeps the camera pulled back with clear
+    // breathing room around the bull so the swarm doesn't crowd the HUD text on the left.
     const VFOV_RAD = (60 * Math.PI) / 180;
     const fitDist = (aspect: number) => {
       const tanV = Math.tan(VFOV_RAD / 2);
       const tanH = tanV * Math.max(0.2, aspect);
       const widthFit = 82 / tanH;
       const heightFit = 64 / tanV;
-      return Math.max(widthFit, heightFit) * 1.08;
+      return Math.max(widthFit, heightFit) * 1.4;
     };
 
     const composer = new EffectComposer(renderer);
