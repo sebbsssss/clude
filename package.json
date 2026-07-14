@@ -1,6 +1,6 @@
 {
   "name": "@clude/sdk",
-  "version": "3.3.1",
+  "version": "3.4.0",
   "mcpName": "io.github.sebbsssss/clude",
   "description": "Persistent memory SDK for AI agents — Stanford Generative Agents architecture on Supabase + pgvector",
   "main": "dist/sdk/index.js",
@@ -79,7 +79,6 @@
   "packageManager": "pnpm@10.18.1",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
-    "@huggingface/transformers": "^4.1.0",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@solana/web3.js": "^1.98.4",
     "@supabase/supabase-js": "^2.95.3",
@@ -102,6 +101,7 @@
     "typescript": "^5.6.0"
   },
   "optionalDependencies": {
+    "@huggingface/transformers": "^4.1.0",
     "utf-8-validate": "^5.0.10"
   },
   "types": "./dist/sdk/index.d.ts"
