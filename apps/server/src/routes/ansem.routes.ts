@@ -29,6 +29,11 @@ const log = createChildLogger("ansem-routes");
 // from the whole $ANSEM timeline (~143k memories total).
 const ANSEM_WALLET = "HYmsqdcpHRvWcrBfACzYWvPbF2XMg5hKFy38kEt7Ppjt";
 const ANSEM_SOURCES = ["ansem-token", "ansem-seed", "ansem-yt", "ansem-live"];
+
+// In-memory cache for the /growth stats (created_at-derived COUNTs, ~10 queries per
+// refresh). Refresh at most every 15 minutes.
+let growthCache: { at: number; data: unknown } | null = null;
+const GROWTH_TTL_MS = 15 * 60_000;
 // His OWN words only (tweets + interviews). The "Speak to Ansem" clone recalls
 // from THESE — never the 104K ansem-token community corpus that shares the wallet
 // (that's timeline noise: shill + giveaway-farm spam that would corrupt his voice).
@@ -1042,6 +1047,56 @@ export function ansemRoutes(): Router {
     } catch (err) {
       log.error({ err }, "Ansem graph endpoint error");
       res.status(500).json({ error: "Failed to fetch Ansem graph" });
+    }
+  });
+
+  // ── GET /growth — memory-count growth stats + a 14-day series for the ambient bg ──
+  //    Contract: 200 { total, added24h, added7d, perDay, pct7d, series:[{t,v}] }
+  //    All derived from memories.created_at; cached 15 min; fail-safe (never 500).
+  router.get("/growth", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (!(await checkRateLimit(`ansem-growth:${ip}`, 30, 1))) {
+      res.status(429).json({ error: "Rate limited. 30 requests per minute max." });
+      return;
+    }
+    if (growthCache && Date.now() - growthCache.at < GROWTH_TTL_MS) {
+      res.json(growthCache.data);
+      return;
+    }
+    try {
+      const db = getDb();
+      const now = Date.now();
+      const DAY = 86_400_000;
+      const countBefore = async (ms?: number): Promise<number> => {
+        let q = db
+          .from("memories")
+          .select("id", { count: "exact", head: true })
+          .eq("owner_wallet", ANSEM_WALLET)
+          .in("source", ANSEM_SOURCES);
+        if (ms) q = q.lt("created_at", new Date(ms).toISOString());
+        const { count } = await q;
+        return count ?? 0;
+      };
+      const total = await countBefore();
+      const series: { t: string; v: number }[] = [];
+      for (let d = 14; d >= 0; d -= 2) {
+        const v = d === 0 ? total : await countBefore(now - d * DAY);
+        series.push({ t: new Date(now - d * DAY).toISOString().slice(0, 10), v });
+      }
+      const total1d = await countBefore(now - DAY);
+      const total7d = await countBefore(now - 7 * DAY);
+      const added24h = Math.max(0, total - total1d);
+      const added7d = Math.max(0, total - total7d);
+      const perDay = Math.round(added7d / 7);
+      const pct7d = total7d > 0 ? Math.round((added7d / total7d) * 1000) / 10 : 0;
+      const data = { total, added24h, added7d, perDay, pct7d, series };
+      growthCache = { at: Date.now(), data };
+      res.json(data);
+    } catch (err) {
+      log.error({ err }, "Ansem growth endpoint error");
+      res
+        .status(200)
+        .json({ total: 0, added24h: 0, added7d: 0, perDay: 0, pct7d: 0, series: [] });
     }
   });
 
