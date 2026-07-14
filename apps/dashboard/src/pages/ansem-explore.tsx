@@ -1234,6 +1234,8 @@ export function AnsemExplore() {
   }, []);
   const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
   const [isNarrow, setIsNarrow] = useState(typeof window !== 'undefined' && window.innerWidth < 640);
+  // growth chart is a toggle under the stats — shown as a clean contained card, not a bg overlay
+  const [chartOpen, setChartOpen] = useState(true);
   useEffect(() => {
     const onR = () => setIsNarrow(window.innerWidth < 640);
     window.addEventListener('resize', onR);
@@ -1251,22 +1253,6 @@ export function AnsemExplore() {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#000', overflow: 'hidden', fontFamily: "ui-monospace,'SF Mono',Menlo,monospace" }}>
-      {/* ambient memory-growth line — a faint glowing curve hugging the bottom edge, behind
-          everything (z-1). No fill (it washed the bottom). Fades in AFTER the constellation
-          settles (0.9s delay) so it never flashes over the nodes/hints on load. */}
-      {growth && growth.series.length > 1 && (() => {
-        const s = growth.series;
-        const max = Math.max(...s.map((p) => p.v), 1);
-        const W = 1000, H = 200;
-        const line = s.map((p, i) => (i ? 'L' : 'M') + ((i / (s.length - 1)) * W).toFixed(1) + ' ' + (H - 6 - (p.v / max) * (H - 14)).toFixed(1)).join(' ');
-        return (
-          <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden
-            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, width: '100%', height: '18vh', zIndex: -1, pointerEvents: 'none', opacity: 0, animation: 'ansemGrowthFade 2s ease 0.9s forwards' }}>
-            <style>{`@keyframes ansemGrowthFade { to { opacity: 0.5; } }`}</style>
-            <path d={line} fill="none" stroke="#5cf08a" strokeWidth="1.4" vectorEffect="non-scaling-stroke" style={{ filter: 'drop-shadow(0 0 5px rgba(92,240,138,.6))' }} />
-          </svg>
-        );
-      })()}
       {!loading && !error && (
         <BullSwarm3D
           nodes={nodes}
@@ -1547,6 +1533,64 @@ export function AnsemExplore() {
             <span style={{ color: '#5cf08a', fontWeight: 700 }}>+{growth.pct7d}%</span>
             <span style={{ color: '#4c7d63' }}>{'  ·  '}</span>
             <span style={{ color: '#5cf08a', fontWeight: 700 }}>~{fmtK(growth.perDay)}</span>/day
+          </div>
+        )}
+        {/* growth chart — a clean contained card on a toggle, right under the stats. Lives in the
+            HUD (z-3, above the constellation) so it's fully legible instead of fighting the swarm. */}
+        {growth && growth.series.length > 1 && (
+          <div style={{ marginTop: 11, pointerEvents: 'auto', maxWidth: 540 }}>
+            <button
+              onClick={() => setChartOpen((o) => !o)}
+              aria-expanded={chartOpen}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 7, cursor: 'pointer',
+                background: 'rgba(6,20,12,.55)', border: '1px solid rgba(72,224,122,.28)', borderRadius: 8,
+                padding: '5px 11px', color: '#8fd9ab', fontFamily: 'inherit', fontWeight: 600,
+                fontSize: 'clamp(9px,1vw,10.5px)', letterSpacing: '.09em', textTransform: 'uppercase',
+              }}>
+              <span style={{ display: 'inline-block', transform: chartOpen ? 'rotate(90deg)' : 'none', transition: 'transform .2s ease', fontSize: 8 }}>▶</span>
+              14-day growth
+            </button>
+            {chartOpen && (() => {
+              const s = growth.series;
+              const vals = s.map((p) => p.v);
+              const max = Math.max(...vals), min = Math.min(...vals);
+              const W = 300, H = 92, padX = 4, padT = 8, padB = 12, iw = W - padX * 2, ih = H - padT - padB;
+              const X = (i: number) => padX + (i / (s.length - 1)) * iw;
+              const Y = (v: number) => padT + (1 - (v - min) / ((max - min) || 1)) * ih;
+              const line = s.map((p, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(p.v).toFixed(1)).join(' ');
+              const area = `${line} L ${X(s.length - 1).toFixed(1)} ${H - padB} L ${X(0).toFixed(1)} ${H - padB} Z`;
+              return (
+                <div style={{
+                  marginTop: 9, width: 'min(340px, 76vw)', background: 'rgba(2,13,7,.9)',
+                  border: '1px solid rgba(72,224,122,.3)', borderRadius: 12, padding: '11px 13px 9px',
+                  boxShadow: '0 12px 40px rgba(0,0,0,.6), 0 0 26px rgba(34,197,94,.1)',
+                  backdropFilter: 'blur(6px)', animation: 'ansemChartIn .3s ease',
+                }}>
+                  <style>{`@keyframes ansemChartIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } } @keyframes ansemChartDraw { to { stroke-dashoffset: 0; } }`}</style>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 7 }}>
+                    <span style={{ fontSize: 9.5, letterSpacing: '.1em', color: '#7fd7a6' }}>MEMORIES · LAST 14 DAYS</span>
+                    <span style={{ fontSize: 10, color: '#5cf08a', fontWeight: 700 }}>+{growth.pct7d}%</span>
+                  </div>
+                  <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: 'block', overflow: 'visible' }} aria-hidden>
+                    <defs>
+                      <linearGradient id="ansemChartFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#5cf08a" stopOpacity="0.26" />
+                        <stop offset="100%" stopColor="#5cf08a" stopOpacity="0" />
+                      </linearGradient>
+                    </defs>
+                    <path d={area} fill="url(#ansemChartFill)" />
+                    <path d={line} fill="none" stroke="#5cf08a" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"
+                      style={{ filter: 'drop-shadow(0 0 4px rgba(92,240,138,.55))', strokeDasharray: '1000', strokeDashoffset: '1000', animation: 'ansemChartDraw 1s ease .08s forwards' }} />
+                    <circle cx={X(s.length - 1)} cy={Y(vals[vals.length - 1])} r="3.4" fill="#5cf08a" style={{ filter: 'drop-shadow(0 0 6px rgba(92,240,138,.95))' }} />
+                  </svg>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 9, color: '#4c7d63', fontVariantNumeric: 'tabular-nums' }}>
+                    <span>{fmtK(vals[0])}</span>
+                    <span style={{ color: '#7fd7a6' }}>{fmtK(vals[vals.length - 1])} now</span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
         <div style={{ fontSize: 'clamp(10.5px,1.3vw,13px)', color: '#d3f2df', marginTop: 13, lineHeight: 1.55, letterSpacing: '.01em', maxWidth: 384 }}>
