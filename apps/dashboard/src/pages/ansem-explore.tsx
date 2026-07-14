@@ -1251,24 +1251,19 @@ export function AnsemExplore() {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#000', overflow: 'hidden', fontFamily: "ui-monospace,'SF Mono',Menlo,monospace" }}>
-      {/* ambient memory-growth line — subtle, behind the constellation */}
+      {/* ambient memory-growth line — a faint glowing curve hugging the bottom edge, behind
+          everything (z-1). No fill (it washed the bottom). Fades in AFTER the constellation
+          settles (0.9s delay) so it never flashes over the nodes/hints on load. */}
       {growth && growth.series.length > 1 && (() => {
         const s = growth.series;
         const max = Math.max(...s.map((p) => p.v), 1);
-        const W = 1000, H = 300;
-        const line = s.map((p, i) => (i ? 'L' : 'M') + ((i / (s.length - 1)) * W).toFixed(1) + ' ' + (H - (p.v / max) * H).toFixed(1)).join(' ');
-        const area = `${line} L${W} ${H} L0 ${H} Z`;
+        const W = 1000, H = 200;
+        const line = s.map((p, i) => (i ? 'L' : 'M') + ((i / (s.length - 1)) * W).toFixed(1) + ' ' + (H - 6 - (p.v / max) * (H - 14)).toFixed(1)).join(' ');
         return (
           <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden
-            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, width: '100%', height: '38vh', zIndex: 0, pointerEvents: 'none', opacity: 0.16 }}>
-            <defs>
-              <linearGradient id="ansemGrowthFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#48e07a" stopOpacity="0.4" />
-                <stop offset="100%" stopColor="#48e07a" stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            <path d={area} fill="url(#ansemGrowthFill)" />
-            <path d={line} fill="none" stroke="#5cf08a" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, width: '100%', height: '18vh', zIndex: -1, pointerEvents: 'none', opacity: 0, animation: 'ansemGrowthFade 2s ease 0.9s forwards' }}>
+            <style>{`@keyframes ansemGrowthFade { to { opacity: 0.5; } }`}</style>
+            <path d={line} fill="none" stroke="#5cf08a" strokeWidth="1.4" vectorEffect="non-scaling-stroke" style={{ filter: 'drop-shadow(0 0 5px rgba(92,240,138,.6))' }} />
           </svg>
         );
       })()}
