@@ -111,6 +111,16 @@ function printSqliteStatus(): void {
       ).get() as { decay: number | null; imp: number | null; reinforced: number | null };
       printInfo(`health: avg decay ${(agg.decay ?? 1).toFixed(2)} · avg importance ${(agg.imp ?? 0).toFixed(2)} · ${agg.reinforced ?? 0} reinforced by recall`);
 
+      // Embeddings are an optional dependency — degradation to keyword-only
+      // search is graceful but should never be silent.
+      let semantic = false;
+      try { require.resolve('@huggingface/transformers'); semantic = true; } catch {}
+      if (semantic) {
+        printInfo('search: semantic (local embeddings) + keyword');
+      } else {
+        printWarn('search: keyword-only — install @huggingface/transformers for offline semantic search');
+      }
+
       // Bonds and queued dream work may not exist in older databases
       try {
         const bonds = (db.prepare('SELECT COUNT(*) AS n FROM links').get() as { n: number }).n;

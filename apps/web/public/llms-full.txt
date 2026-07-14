@@ -47,6 +47,8 @@ Headless/CI setup: `npx @clude/sdk setup` never blocks on a prompt when stdin is
 
 ```bash
 npm install @clude/sdk
+# or ~85% smaller, keyword-only local search (no embedding runtime):
+npm install @clude/sdk --omit=optional
 ```
 
 TypeScript declarations are included (v3.3.0+) — `Cortex`, all option and result types (`Memory`, `RecallOptions`, `StoreMemoryOptions`, `MemoryStats`, ...) import with full IntelliSense under strict mode.

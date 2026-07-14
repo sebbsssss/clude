@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.4.0] — 2026-07-12
+
+### Added
+- **Light install** — `@huggingface/transformers` (the local embedding runtime, ~700MB of the dependency tree via onnxruntime) is now an `optionalDependency`. Default installs are unchanged (273 packages, full offline semantic search). `npm install @clude/sdk --omit=optional` gives a ~107MB install where local mode uses keyword search; store/recall verified working. Also means platforms where onnxruntime fails to build no longer fail the whole install.
+- **`clude status` shows the cognitive layer** — type breakdown, memory health (avg decay/importance), how many memories recall has reinforced, bond/queued-dream counts, the most-reinforced memory, and whether search is semantic or keyword-only (degradation is graceful but no longer silent).
+
 ## [3.3.1] — 2026-07-11
 
 ### Removed

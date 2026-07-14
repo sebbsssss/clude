@@ -14,6 +14,8 @@ Clude gives any agent persistent, typed memory with hybrid retrieval (vector + k
 
 Works with Claude Code, Claude Desktop, Cursor, and any MCP-compatible runtime.
 
+Need a small footprint? `npm install @clude/sdk --omit=optional` skips the local embedding runtime (~85% smaller install); local mode then uses keyword search and `clude status` tells you so.
+
 ## Quick start
 
 ```bash
