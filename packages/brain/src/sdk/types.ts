@@ -30,6 +30,19 @@ export interface CortexConfig {
     dimensions?: number;
   };
 
+  /**
+   * Local memory model (CludeMem via Ollama). Routes memory operations
+   * (classify/importance/extract/summarize/query/...) to a local model instead
+   * of a frontier API. Self-hosted only. Pair with an Ollama embedding provider
+   * (EMBEDDING_PROVIDER=ollama) for a fully local, zero-API-key setup.
+   */
+  localModel?: {
+    /** Ollama model tag, e.g. 'cludemem-e4b' or 'gemma3:4b'. */
+    model: string;
+    /** Ollama server base URL. Defaults to http://localhost:11434. */
+    ollamaUrl?: string;
+  };
+
   /** Owner wallet address (Solana public key). Tags all memories with ownership. */
   ownerWallet?: string;
 

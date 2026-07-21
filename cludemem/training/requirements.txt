@@ -1,0 +1,10 @@
+# CludeMem training deps — pinned to carry the Gemma 4 fixes (design Section 7):
+# grad-accumulation loss-explosion fix + E2B/E4B use_cache gibberish fix.
+# Install on the GPU box (RunPod H100), not in CI.
+unsloth>=0.1.36
+transformers>=5.5.2
+trl>=1.1.0
+datasets>=3.0.0
+accelerate>=1.0.0
+# llama.cpp is pulled in by Unsloth's GGUF export; for a manual conversion path
+# use packaging/build_and_push.sh instead.
