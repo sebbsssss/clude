@@ -30,10 +30,50 @@ const log = createChildLogger("ansem-routes");
 const ANSEM_WALLET = "HYmsqdcpHRvWcrBfACzYWvPbF2XMg5hKFy38kEt7Ppjt";
 const ANSEM_SOURCES = ["ansem-token", "ansem-seed", "ansem-yt", "ansem-live"];
 
-// In-memory cache for the /growth stats (created_at-derived COUNTs, ~10 queries per
-// refresh). Refresh at most every 15 minutes.
-let growthCache: { at: number; data: unknown } | null = null;
-const GROWTH_TTL_MS = 15 * 60_000;
+// ── DB resilience for the two routes that read `memories` ───────────────────
+// The table grows ~12-20k rows/day via the 24/7 live ingest. Once it outgrew its
+// indexes both /graph and /growth started hitting Postgres `statement timeout`
+// (57014): /graph 500'd, the constellation rendered empty, and the page read as
+// dead. Neither route may block on, or amplify load against, a slow database.
+//
+// /graph: keep the last GOOD payload and serve it stale on any failure/timeout —
+// a stale constellation beats a blank page.
+let graphCache: { at: number; data: unknown } | null = null;
+const GRAPH_COUNT_DEADLINE_MS = 6_000;
+const GRAPH_PAGE_DEADLINE_MS = 9_000;
+
+// /growth: cached stats + a SINGLE-FLIGHT guard. Previously each cache miss fired
+// ~10 sequential exact COUNTs with no coordination, so N concurrent visitors meant
+// N stampeding count storms — the amplifier most likely to saturate the pool and
+// starve /graph alongside it.
+interface GrowthData {
+  total: number;
+  added24h: number;
+  added7d: number;
+  perDay: number;
+  pct7d: number;
+  series: { t: string; v: number }[];
+}
+const GROWTH_EMPTY: GrowthData = {
+  total: 0, added24h: 0, added7d: 0, perDay: 0, pct7d: 0, series: [],
+};
+let growthCache: { at: number; data: GrowthData } | null = null;
+let growthInFlight: Promise<GrowthData> | null = null;
+const GROWTH_TTL_MS = 30 * 60_000; // was 15 — halves the refresh rate
+const GROWTH_DEADLINE_MS = 8_000; // hard cap; never hold a request open on the DB
+
+/** Reject after `ms` so a stalled query can't hold an HTTP request open for the
+ *  full Postgres statement timeout. The underlying work is left running — with
+ *  single-flight that means it still warms the cache for the next caller. */
+function withDeadline<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label}_deadline`)), ms);
+  });
+  return Promise.race([p, deadline]).finally(() => {
+    if (timer) clearTimeout(timer);
+  }) as Promise<T>;
+}
 // His OWN words only (tweets + interviews). The "Speak to Ansem" clone recalls
 // from THESE — never the 104K ansem-token community corpus that shares the wallet
 // (that's timeline noise: shill + giveaway-farm spam that would corrupt his voice).
@@ -956,17 +996,32 @@ export function ansemRoutes(): Router {
       // ── Real total: an exact COUNT of the whole $ANSEM timeline (~143k) ──
       // Separate head-only count query so `total` reflects the full corpus, not
       // the (capped) node sample the constellation draws.
-      const { count: totalCount, error: countErr } = await db
-        .from("memories")
-        .select("id", { count: "exact", head: true })
-        .eq("owner_wallet", ANSEM_WALLET)
-        .in("source", ANSEM_SOURCES);
-
-      if (countErr) {
-        log.warn(
-          { err: countErr },
-          "Failed to count Ansem memories, will fall back to node count",
+      // Deadlined: this is a full COUNT over the whole filtered set. Without a cap it
+      // holds the request for the entire Postgres statement timeout before we ever
+      // reach the node query. Degrade to the node-sample fallback instead.
+      let totalCount: number | null = null;
+      try {
+        const counted = await withDeadline(
+          Promise.resolve(
+            db
+              .from("memories")
+              .select("id", { count: "exact", head: true })
+              .eq("owner_wallet", ANSEM_WALLET)
+              .in("source", ANSEM_SOURCES),
+          ),
+          GRAPH_COUNT_DEADLINE_MS,
+          "ansem_graph_count",
         );
+        if (counted.error) {
+          log.warn(
+            { err: counted.error },
+            "Failed to count Ansem memories, will fall back to node count",
+          );
+        } else {
+          totalCount = counted.count ?? null;
+        }
+      } catch (err) {
+        log.warn({ err }, "Ansem graph count deadline exceeded, falling back to node count");
       }
 
       // ── Nodes: a representative sample ordered by importance desc, then id ──
@@ -981,19 +1036,34 @@ export function ansemRoutes(): Router {
         offset += GRAPH_PAGE_SIZE
       ) {
         const end = Math.min(offset + GRAPH_PAGE_SIZE, GRAPH_NODE_TARGET) - 1;
-        const { data: page, error: pageErr } = await db
-          .from("memories")
-          .select(
-            "id, memory_type, summary, content, tags, importance, decay_factor, emotional_valence, source, source_id, created_at, metadata",
-          )
-          .eq("owner_wallet", ANSEM_WALLET)
-          .in("source", ANSEM_SOURCES)
-          .order("importance", { ascending: false })
-          .order("id", { ascending: true })
-          .range(offset, end);
-
-        if (pageErr) {
-          memErr = pageErr;
+        // Deadlined per page: this ORDER BY importance over the whole filtered set is
+        // the query that trips 57014 once the table outgrows its indexes. Bail out to
+        // the stale-cache path fast rather than hanging the request.
+        let page: any[] | null = null;
+        try {
+          const pageRes = await withDeadline(
+            Promise.resolve(
+              db
+                .from("memories")
+                .select(
+                  "id, memory_type, summary, content, tags, importance, decay_factor, emotional_valence, source, source_id, created_at, metadata",
+                )
+                .eq("owner_wallet", ANSEM_WALLET)
+                .in("source", ANSEM_SOURCES)
+                .order("importance", { ascending: false })
+                .order("id", { ascending: true })
+                .range(offset, end),
+            ),
+            GRAPH_PAGE_DEADLINE_MS,
+            "ansem_graph_page",
+          );
+          if (pageRes.error) {
+            memErr = pageRes.error;
+            break;
+          }
+          page = pageRes.data;
+        } catch (err) {
+          memErr = err;
           break;
         }
         if (!page || page.length === 0) break;
@@ -1003,6 +1073,16 @@ export function ansemRoutes(): Router {
 
       if (memErr && ansemMemories.length === 0) {
         log.error({ err: memErr }, "Failed to fetch Ansem memories for graph");
+        // Postgres statement timeout (57014) lands here. A stale constellation is
+        // vastly better than an empty page, so serve the last good payload.
+        if (graphCache) {
+          log.warn(
+            { ageMs: Date.now() - graphCache.at },
+            "Serving STALE Ansem graph (DB unavailable)",
+          );
+          res.json(graphCache.data);
+          return;
+        }
         res.status(500).json({ error: "Failed to fetch memories" });
         return;
       }
@@ -1027,7 +1107,7 @@ export function ansemRoutes(): Router {
         links = data || [];
       }
 
-      res.json({
+      const payload = {
         nodes: ansemMemories.map((m) => ({
           id: m.id,
           type: m.memory_type,
@@ -1040,30 +1120,46 @@ export function ansemRoutes(): Router {
           createdAt: m.created_at,
         })),
         links,
-        // Real exact count of the whole $ANSEM timeline (~143k); fall back to the
-        // node-sample length only if the count query itself failed.
+        // Real exact count of the whole $ANSEM timeline; fall back to the node-sample
+        // length only if the count query failed or blew its deadline.
         total: totalCount ?? ansemMemories.length,
-      });
+      };
+      // Keep the last GOOD payload so a later DB stall degrades to stale, not blank.
+      graphCache = { at: Date.now(), data: payload };
+      res.json(payload);
     } catch (err) {
       log.error({ err }, "Ansem graph endpoint error");
+      if (graphCache) {
+        log.warn(
+          { ageMs: Date.now() - graphCache.at },
+          "Serving STALE Ansem graph after error",
+        );
+        res.json(graphCache.data);
+        return;
+      }
       res.status(500).json({ error: "Failed to fetch Ansem graph" });
     }
   });
 
   // ── GET /growth — memory-count growth stats + a 14-day series for the ambient bg ──
   //    Contract: 200 { total, added24h, added7d, perDay, pct7d, series:[{t,v}] }
-  //    All derived from memories.created_at; cached 15 min; fail-safe (never 500).
-  router.get("/growth", async (req: Request, res: Response) => {
-    const ip = getClientIp(req);
-    if (!(await checkRateLimit(`ansem-growth:${ip}`, 30, 1))) {
-      res.status(429).json({ error: "Rate limited. 30 requests per minute max." });
-      return;
-    }
-    if (growthCache && Date.now() - growthCache.at < GROWTH_TTL_MS) {
-      res.json(growthCache.data);
-      return;
-    }
-    try {
+  //    All derived from memories.created_at; cached 30 min; fail-safe (never 500).
+  //
+  /**
+   * Recompute the growth stats.
+   *
+   * SINGLE-FLIGHT: concurrent callers share one run, so a burst of visitors can never
+   * multiply COUNT load against the database. This is the important property — the
+   * previous version had no coordination, so every request past the TTL kicked off its
+   * own storm of exact counts.
+   *
+   * The counts also run in PARALLEL now. Sequentially, a cold refresh against a slow
+   * table took as long as ~10 statement timeouts stacked end to end (minutes), with
+   * the HTTP request held open the whole time.
+   */
+  function refreshGrowth(): Promise<GrowthData> {
+    if (growthInFlight) return growthInFlight;
+    growthInFlight = (async () => {
       const db = getDb();
       const now = Date.now();
       const DAY = 86_400_000;
@@ -1077,26 +1173,77 @@ export function ansemRoutes(): Router {
         const { count } = await q;
         return count ?? 0;
       };
-      const total = await countBefore();
-      const series: { t: string; v: number }[] = [];
-      for (let d = 14; d >= 0; d -= 2) {
-        const v = d === 0 ? total : await countBefore(now - d * DAY);
-        series.push({ t: new Date(now - d * DAY).toISOString().slice(0, 10), v });
-      }
-      const total1d = await countBefore(now - DAY);
-      const total7d = await countBefore(now - 7 * DAY);
+      const offsets = [14, 12, 10, 8, 6, 4, 2];
+      const [total, total1d, total7d, ...cumulative] = await Promise.all([
+        countBefore(),
+        countBefore(now - DAY),
+        countBefore(now - 7 * DAY),
+        ...offsets.map((d) => countBefore(now - d * DAY)),
+      ]);
+      const series = offsets.map((d, i) => ({
+        t: new Date(now - d * DAY).toISOString().slice(0, 10),
+        v: cumulative[i],
+      }));
+      series.push({ t: new Date(now).toISOString().slice(0, 10), v: total });
       const added24h = Math.max(0, total - total1d);
       const added7d = Math.max(0, total - total7d);
-      const perDay = Math.round(added7d / 7);
-      const pct7d = total7d > 0 ? Math.round((added7d / total7d) * 1000) / 10 : 0;
-      const data = { total, added24h, added7d, perDay, pct7d, series };
+      const data: GrowthData = {
+        total,
+        added24h,
+        added7d,
+        perDay: Math.round(added7d / 7),
+        pct7d: total7d > 0 ? Math.round((added7d / total7d) * 1000) / 10 : 0,
+        series,
+      };
       growthCache = { at: Date.now(), data };
+      return data;
+    })().finally(() => {
+      growthInFlight = null;
+    });
+    return growthInFlight;
+  }
+
+  router.get("/growth", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (!(await checkRateLimit(`ansem-growth:${ip}`, 30, 1))) {
+      res.status(429).json({ error: "Rate limited. 30 requests per minute max." });
+      return;
+    }
+
+    // Kill switch — set ANSEM_GROWTH=false to shed all growth DB work instantly.
+    // Read straight off the env (no config.ts) so it needs no shared-package deploy.
+    if (String(process.env.ANSEM_GROWTH ?? "true").toLowerCase() === "false") {
+      res.json(growthCache?.data ?? GROWTH_EMPTY);
+      return;
+    }
+
+    if (growthCache && Date.now() - growthCache.at < GROWTH_TTL_MS) {
+      res.json(growthCache.data);
+      return;
+    }
+
+    // Stale-while-revalidate: with ANY previous data, answer instantly and refresh in
+    // the background. A visitor never waits on the database once the cache is warm.
+    if (growthCache) {
+      void refreshGrowth().catch((err) =>
+        log.warn({ err }, "Ansem growth background refresh failed"),
+      );
+      res.json(growthCache.data);
+      return;
+    }
+
+    // Cold cache: wait, but only to the deadline, then fall back to zeros. The refresh
+    // keeps running behind us and warms the cache for the next caller.
+    try {
+      const data = await withDeadline(refreshGrowth(), GROWTH_DEADLINE_MS, "ansem_growth");
       res.json(data);
     } catch (err) {
       log.error({ err }, "Ansem growth endpoint error");
-      res
-        .status(200)
-        .json({ total: 0, added24h: 0, added7d: 0, perDay: 0, pct7d: 0, series: [] });
+      // Re-read through an un-narrowed alias: control-flow analysis proved growthCache
+      // null at the guard above, but the in-flight refresh can populate it before the
+      // deadline fires, and that fresher data is exactly what we want to serve.
+      const cached = growthCache as { at: number; data: GrowthData } | null;
+      res.json(cached?.data ?? GROWTH_EMPTY);
     }
   });
 
