@@ -38,9 +38,18 @@ const ANSEM_SOURCES = ["ansem-token", "ansem-seed", "ansem-yt", "ansem-live"];
 //
 // /graph: keep the last GOOD payload and serve it stale on any failure/timeout —
 // a stale constellation beats a blank page.
+// The node set is a 2000-row sample of a ~390k-row corpus — it does not need
+// per-request freshness, so serve it from cache for a short TTL. That takes the
+// common page load from ~3s (warm) / ~19s (cold) to instant, and collapses the
+// per-visitor DB cost to one refresh per TTL.
 let graphCache: { at: number; data: unknown } | null = null;
-const GRAPH_COUNT_DEADLINE_MS = 6_000;
-const GRAPH_PAGE_DEADLINE_MS = 9_000;
+const GRAPH_TTL_MS = 120_000;
+// Deadlines are a guard against the ~60s Postgres statement timeout, NOT a latency
+// target — sized off measured behaviour: warm ~3s for count+2 pages, ~19s cold
+// (freshly built index, cold page cache). Too tight and a healthy-but-cold request
+// trips them and serves stale on every load.
+const GRAPH_COUNT_DEADLINE_MS = 12_000;
+const GRAPH_PAGE_DEADLINE_MS = 15_000;
 
 // /growth: cached stats + a SINGLE-FLIGHT guard. Previously each cache miss fired
 // ~10 sequential exact COUNTs with no coordination, so N concurrent visitors meant
@@ -60,7 +69,9 @@ const GROWTH_EMPTY: GrowthData = {
 let growthCache: { at: number; data: GrowthData } | null = null;
 let growthInFlight: Promise<GrowthData> | null = null;
 const GROWTH_TTL_MS = 30 * 60_000; // was 15 — halves the refresh rate
-const GROWTH_DEADLINE_MS = 8_000; // hard cap; never hold a request open on the DB
+// Measured ~4.6s for the full parallel count set post-index; 12s leaves cold-cache
+// headroom while still capping far below the Postgres statement timeout.
+const GROWTH_DEADLINE_MS = 12_000;
 
 /** Reject after `ms` so a stalled query can't hold an HTTP request open for the
  *  full Postgres statement timeout. The underlying work is left running — with
@@ -987,6 +998,13 @@ export function ansemRoutes(): Router {
     const allowed = await checkRateLimit(`ansem-graph:${ip}`, 10, 1);
     if (!allowed) {
       res.status(429).json({ error: "Rate limited. 10 requests per minute max." });
+      return;
+    }
+
+    // Fresh cache — the overwhelming majority of page loads land here and never
+    // touch the database at all.
+    if (graphCache && Date.now() - graphCache.at < GRAPH_TTL_MS) {
+      res.json(graphCache.data);
       return;
     }
 
