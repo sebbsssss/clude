@@ -390,7 +390,10 @@ export function scoreImportanceOnWrite(opts: StoreMemoryOptions): number {
   const conceptSource = INTERNAL_MEMORY_SOURCES.has(opts.source) ? '' : opts.source;
   const concepts = opts.concepts ?? inferConcepts(opts.summary, conceptSource, opts.tags || []);
   if (concepts.length) score += 0.05;
-  if (INTERNAL_MEMORY_SOURCES.has(opts.source)) score -= 0.05;  // dream/reflection slightly lower
+  // Internal writes score strictly below the same external write, so the penalty
+  // must exceed the +0.05 concepts bonus internal sources self-trigger via
+  // inferConcepts (reflection/emergence → self_insight).
+  if (INTERNAL_MEMORY_SOURCES.has(opts.source)) score -= 0.08;
   return Math.max(0, Math.min(1, score));
 }
 
