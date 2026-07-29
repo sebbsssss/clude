@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS memories (
   evidence_ids BIGINT[] DEFAULT '{}',    -- IDs of memories that support this one (Park et al. 2023)
   solana_signature TEXT,                  -- Solana tx signature if committed on-chain
   embedding vector(1024),                 -- vector embedding for semantic similarity search
+  embedding_vertex vector(1024),          -- shadow Vertex (gemini-embedding-001, MRL-1024) space for the GCP cutover (migration 040; dormant until EMBEDDING_ACTIVE=vertex)
   hash_id TEXT,                           -- collision-resistant hash ID (Beads-inspired)
   compacted BOOLEAN DEFAULT FALSE,        -- whether this memory has been compacted
   compacted_into TEXT,                    -- hash_id of the memory this was compacted into
@@ -140,6 +141,7 @@ CREATE TABLE IF NOT EXISTS memory_fragments (
   fragment_type TEXT NOT NULL,            -- 'summary', 'content_chunk', 'tag_context'
   content TEXT NOT NULL,
   embedding vector(1024),
+  embedding_vertex vector(1024),          -- shadow Vertex space for the GCP cutover (migration 040)
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -204,6 +206,14 @@ CREATE INDEX IF NOT EXISTS idx_memories_delegated ON memories(provider_delegated
 CREATE INDEX IF NOT EXISTS idx_memories_embedding ON memories USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX IF NOT EXISTS idx_fragments_embedding ON memory_fragments USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX IF NOT EXISTS idx_fragments_memory_id ON memory_fragments(memory_id);
+
+-- Shadow Vertex-space HNSW indexes (GCP migration 040) — same params as the Voyage indexes
+-- (006_hnsw_index.sql: m=16, ef_construction=128, ef_search=100). On a large existing table,
+-- build these CONCURRENTLY out-of-band after the backfill instead (see migration 040 header).
+CREATE INDEX IF NOT EXISTS memories_embedding_vertex_hnsw_idx ON memories USING hnsw (embedding_vertex vector_cosine_ops) WITH (m = 16, ef_construction = 128);
+CREATE INDEX IF NOT EXISTS memory_fragments_embedding_vertex_hnsw_idx ON memory_fragments USING hnsw (embedding_vertex vector_cosine_ops) WITH (m = 16, ef_construction = 128);
+ALTER INDEX memories_embedding_vertex_hnsw_idx SET (ef_search = 100);
+ALTER INDEX memory_fragments_embedding_vertex_hnsw_idx SET (ef_search = 100);
 
 CREATE INDEX IF NOT EXISTS idx_dream_logs_type ON dream_logs(session_type);
 CREATE INDEX IF NOT EXISTS idx_dream_logs_created ON dream_logs(created_at DESC);
@@ -573,6 +583,111 @@ BEGIN
   JOIN memories m ON m.id = f.memory_id
   WHERE f.embedding IS NOT NULL
     AND (1 - (f.embedding <=> query_embedding)) > match_threshold
+    AND m.decay_factor >= min_decay
+    AND (filter_types IS NULL OR m.memory_type = ANY(filter_types))
+    AND (
+      filter_owner IS NULL
+      OR (filter_owner = '__BOT_OWN__' AND m.owner_wallet IS NULL)
+      OR m.owner_wallet = filter_owner
+    )
+  GROUP BY f.memory_id
+  ORDER BY max_similarity DESC
+  LIMIT match_count;
+END;
+$$;
+
+-- ============================================================
+-- SHADOW VERTEX RECALL FUNCTIONS (GCP migration 040)
+-- BYTE-IDENTICAL to match_memories / match_memories_temporal / match_memory_fragments
+-- above (keep the pairs in sync), except each reads the shadow embedding_vertex column.
+-- Dormant until EMBEDDING_ACTIVE=vertex routes recall here via vectorRpcName().
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION match_memories_vertex(
+  query_embedding vector(1024),
+  match_threshold float DEFAULT 0.3,
+  match_count int DEFAULT 10,
+  filter_types text[] DEFAULT NULL,
+  filter_user text DEFAULT NULL,
+  min_decay float DEFAULT 0.1,
+  filter_owner text DEFAULT NULL,
+  filter_tags text[] DEFAULT NULL
+)
+RETURNS TABLE (id bigint, similarity float)
+LANGUAGE plpgsql AS $$
+BEGIN
+  RETURN QUERY
+  SELECT m.id, (1 - (m.embedding_vertex <=> query_embedding))::float AS similarity
+  FROM memories m
+  WHERE m.embedding_vertex IS NOT NULL
+    AND m.decay_factor >= min_decay
+    AND (filter_types IS NULL OR m.memory_type = ANY(filter_types))
+    AND (filter_user IS NULL OR m.related_user = filter_user)
+    AND (
+      filter_owner IS NULL
+      OR (filter_owner = '__BOT_OWN__' AND m.owner_wallet IS NULL)
+      OR m.owner_wallet = filter_owner
+    )
+    AND (filter_tags IS NULL OR m.tags && filter_tags)
+    AND (1 - (m.embedding_vertex <=> query_embedding)) > match_threshold
+  ORDER BY m.embedding_vertex <=> query_embedding
+  LIMIT match_count;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION match_memories_temporal_vertex(
+  query_embedding vector(1024),
+  match_threshold float DEFAULT 0.3,
+  match_count int DEFAULT 20,
+  start_date timestamptz DEFAULT NULL,
+  end_date timestamptz DEFAULT NULL,
+  filter_types text[] DEFAULT NULL,
+  filter_user text DEFAULT NULL,
+  min_decay float DEFAULT 0.1,
+  filter_owner text DEFAULT NULL,
+  filter_tags text[] DEFAULT NULL
+)
+RETURNS TABLE (id bigint, similarity float)
+LANGUAGE plpgsql AS $$
+BEGIN
+  RETURN QUERY
+  SELECT m.id, (1 - (m.embedding_vertex <=> query_embedding))::float AS similarity
+  FROM memories m
+  WHERE m.embedding_vertex IS NOT NULL
+    AND m.decay_factor >= min_decay
+    AND (filter_types IS NULL OR m.memory_type = ANY(filter_types))
+    AND (filter_user IS NULL OR m.related_user = filter_user)
+    AND (
+      filter_owner IS NULL
+      OR (filter_owner = '__BOT_OWN__' AND m.owner_wallet IS NULL)
+      OR m.owner_wallet = filter_owner
+    )
+    AND (filter_tags IS NULL OR m.tags && filter_tags)
+    AND (1 - (m.embedding_vertex <=> query_embedding)) > match_threshold
+    AND (start_date IS NULL OR COALESCE(m.event_date, m.created_at) >= start_date)
+    AND (end_date IS NULL OR COALESCE(m.event_date, m.created_at) <= end_date)
+  ORDER BY m.embedding_vertex <=> query_embedding
+  LIMIT match_count;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION match_memory_fragments_vertex(
+  query_embedding vector(1024),
+  match_threshold float DEFAULT 0.3,
+  match_count int DEFAULT 10,
+  filter_owner text DEFAULT NULL,
+  min_decay float DEFAULT 0.0,
+  filter_types text[] DEFAULT NULL
+)
+RETURNS TABLE (memory_id bigint, max_similarity float)
+LANGUAGE plpgsql AS $$
+BEGIN
+  RETURN QUERY
+  SELECT f.memory_id, MAX((1 - (f.embedding_vertex <=> query_embedding))::float) AS max_similarity
+  FROM memory_fragments f
+  JOIN memories m ON m.id = f.memory_id
+  WHERE f.embedding_vertex IS NOT NULL
+    AND (1 - (f.embedding_vertex <=> query_embedding)) > match_threshold
     AND m.decay_factor >= min_decay
     AND (filter_types IS NULL OR m.memory_type = ANY(filter_types))
     AND (

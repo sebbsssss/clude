@@ -60,7 +60,11 @@ BEGIN
     AND m.decay_factor >= min_decay
     AND (filter_types IS NULL OR m.memory_type = ANY(filter_types))
     AND (filter_user IS NULL OR m.related_user = filter_user)
-    AND (filter_owner IS NULL OR m.owner_wallet = filter_owner)
+    AND (
+      filter_owner IS NULL
+      OR (filter_owner = '__BOT_OWN__' AND m.owner_wallet IS NULL)
+      OR m.owner_wallet = filter_owner
+    )
     AND (filter_tags IS NULL OR m.tags && filter_tags)
     AND (1 - (m.embedding_vertex <=> query_embedding)) > match_threshold
   ORDER BY m.embedding_vertex <=> query_embedding
@@ -90,7 +94,11 @@ BEGIN
     AND m.decay_factor >= min_decay
     AND (filter_types IS NULL OR m.memory_type = ANY(filter_types))
     AND (filter_user IS NULL OR m.related_user = filter_user)
-    AND (filter_owner IS NULL OR m.owner_wallet = filter_owner)
+    AND (
+      filter_owner IS NULL
+      OR (filter_owner = '__BOT_OWN__' AND m.owner_wallet IS NULL)
+      OR m.owner_wallet = filter_owner
+    )
     AND (filter_tags IS NULL OR m.tags && filter_tags)
     AND (1 - (m.embedding_vertex <=> query_embedding)) > match_threshold
     AND (start_date IS NULL OR COALESCE(m.event_date, m.created_at) >= start_date)
@@ -104,7 +112,9 @@ CREATE OR REPLACE FUNCTION match_memory_fragments_vertex(
   query_embedding vector(1024),
   match_threshold float DEFAULT 0.3,
   match_count int DEFAULT 10,
-  filter_owner text DEFAULT NULL
+  filter_owner text DEFAULT NULL,
+  min_decay float DEFAULT 0.0,
+  filter_types text[] DEFAULT NULL
 )
 RETURNS TABLE (memory_id bigint, max_similarity float)
 LANGUAGE plpgsql AS $$
@@ -115,7 +125,13 @@ BEGIN
   JOIN memories m ON m.id = f.memory_id
   WHERE f.embedding_vertex IS NOT NULL
     AND (1 - (f.embedding_vertex <=> query_embedding)) > match_threshold
-    AND (filter_owner IS NULL OR m.owner_wallet = filter_owner)
+    AND m.decay_factor >= min_decay
+    AND (filter_types IS NULL OR m.memory_type = ANY(filter_types))
+    AND (
+      filter_owner IS NULL
+      OR (filter_owner = '__BOT_OWN__' AND m.owner_wallet IS NULL)
+      OR m.owner_wallet = filter_owner
+    )
   GROUP BY f.memory_id
   ORDER BY max_similarity DESC
   LIMIT match_count;

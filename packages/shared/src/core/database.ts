@@ -480,6 +480,15 @@ async function runBootDdl(db: SupabaseClient): Promise<void> {
         CREATE INDEX IF NOT EXISTS idx_memories_fact_key ON memories(fact_key) WHERE fact_key IS NOT NULL;
         CREATE INDEX IF NOT EXISTS idx_memories_hash_id_v2 ON memories(hash_id_v2) WHERE hash_id_v2 IS NOT NULL;
 
+        -- GCP migration 040: shadow Vertex embedding space for the Voyage -> Vertex cutover.
+        -- Additive/nullable and DORMANT until EMBEDDING_ACTIVE=vertex; the live Voyage embedding
+        -- column + its RPCs are untouched. HNSW indexes are intentionally NOT built here — the blob
+        -- builds none of the vector indexes; the shadow HNSW ships via supabase-schema.sql /
+        -- migration 040 so an all-NULL column is not indexed on every boot. Hand-applied to prod via
+        -- docs/gcp-migration/040_vertex_shadow_embeddings.sql. The _vertex recall RPCs are below.
+        ALTER TABLE memories         ADD COLUMN IF NOT EXISTS embedding_vertex vector(1024);
+        ALTER TABLE memory_fragments ADD COLUMN IF NOT EXISTS embedding_vertex vector(1024);
+
         -- Memory 3.0 Phase 1 (migration 044): the C2 durable write outbox.
         CREATE TABLE IF NOT EXISTS memory_write_jobs (
           id BIGSERIAL PRIMARY KEY,
@@ -681,6 +690,108 @@ async function runBootDdl(db: SupabaseClient): Promise<void> {
           JOIN memories m ON m.id = f.memory_id
           WHERE f.embedding IS NOT NULL
             AND (1 - (f.embedding <=> query_embedding)) > match_threshold
+            AND m.decay_factor >= min_decay
+            AND (filter_types IS NULL OR m.memory_type = ANY(filter_types))
+            AND (
+      filter_owner IS NULL
+      OR (filter_owner = '__BOT_OWN__' AND m.owner_wallet IS NULL)
+      OR m.owner_wallet = filter_owner
+    )
+          GROUP BY f.memory_id
+          ORDER BY max_similarity DESC
+          LIMIT match_count;
+        END;
+        $$;
+
+        -- GCP migration 040: _vertex recall RPCs. BYTE-IDENTICAL to match_memories /
+        -- match_memories_temporal / match_memory_fragments above (keep the pairs in sync), except
+        -- each reads the shadow embedding_vertex column. Dormant until EMBEDDING_ACTIVE=vertex flips
+        -- recall onto them via vectorRpcName() (packages/shared/src/core/migration-profile.ts).
+        CREATE OR REPLACE FUNCTION match_memories_vertex(
+          query_embedding vector(1024),
+          match_threshold float DEFAULT 0.3,
+          match_count int DEFAULT 10,
+          filter_types text[] DEFAULT NULL,
+          filter_user text DEFAULT NULL,
+          min_decay float DEFAULT 0.1,
+          filter_owner text DEFAULT NULL,
+          filter_tags text[] DEFAULT NULL
+        )
+        RETURNS TABLE (id bigint, similarity float)
+        LANGUAGE plpgsql AS $$
+        BEGIN
+          RETURN QUERY
+          SELECT m.id, (1 - (m.embedding_vertex <=> query_embedding))::float AS similarity
+          FROM memories m
+          WHERE m.embedding_vertex IS NOT NULL
+            AND m.decay_factor >= min_decay
+            AND (filter_types IS NULL OR m.memory_type = ANY(filter_types))
+            AND (filter_user IS NULL OR m.related_user = filter_user)
+            AND (
+      filter_owner IS NULL
+      OR (filter_owner = '__BOT_OWN__' AND m.owner_wallet IS NULL)
+      OR m.owner_wallet = filter_owner
+    )
+            AND (filter_tags IS NULL OR m.tags && filter_tags)
+            AND (1 - (m.embedding_vertex <=> query_embedding)) > match_threshold
+          ORDER BY m.embedding_vertex <=> query_embedding
+          LIMIT match_count;
+        END;
+        $$;
+
+        CREATE OR REPLACE FUNCTION match_memories_temporal_vertex(
+          query_embedding vector(1024),
+          match_threshold float DEFAULT 0.3,
+          match_count int DEFAULT 20,
+          start_date timestamptz DEFAULT NULL,
+          end_date timestamptz DEFAULT NULL,
+          filter_types text[] DEFAULT NULL,
+          filter_user text DEFAULT NULL,
+          min_decay float DEFAULT 0.1,
+          filter_owner text DEFAULT NULL,
+          filter_tags text[] DEFAULT NULL
+        )
+        RETURNS TABLE (id bigint, similarity float)
+        LANGUAGE plpgsql AS $$
+        BEGIN
+          RETURN QUERY
+          SELECT m.id, (1 - (m.embedding_vertex <=> query_embedding))::float AS similarity
+          FROM memories m
+          WHERE m.embedding_vertex IS NOT NULL
+            AND m.decay_factor >= min_decay
+            AND (filter_types IS NULL OR m.memory_type = ANY(filter_types))
+            AND (filter_user IS NULL OR m.related_user = filter_user)
+            AND (
+      filter_owner IS NULL
+      OR (filter_owner = '__BOT_OWN__' AND m.owner_wallet IS NULL)
+      OR m.owner_wallet = filter_owner
+    )
+            AND (filter_tags IS NULL OR m.tags && filter_tags)
+            AND (1 - (m.embedding_vertex <=> query_embedding)) > match_threshold
+            AND (start_date IS NULL OR COALESCE(m.event_date, m.created_at) >= start_date)
+            AND (end_date IS NULL OR COALESCE(m.event_date, m.created_at) <= end_date)
+          ORDER BY m.embedding_vertex <=> query_embedding
+          LIMIT match_count;
+        END;
+        $$;
+
+        CREATE OR REPLACE FUNCTION match_memory_fragments_vertex(
+          query_embedding vector(1024),
+          match_threshold float DEFAULT 0.3,
+          match_count int DEFAULT 10,
+          filter_owner text DEFAULT NULL,
+          min_decay float DEFAULT 0.0,
+          filter_types text[] DEFAULT NULL
+        )
+        RETURNS TABLE (memory_id bigint, max_similarity float)
+        LANGUAGE plpgsql AS $$
+        BEGIN
+          RETURN QUERY
+          SELECT f.memory_id, MAX((1 - (f.embedding_vertex <=> query_embedding))::float) AS max_similarity
+          FROM memory_fragments f
+          JOIN memories m ON m.id = f.memory_id
+          WHERE f.embedding_vertex IS NOT NULL
+            AND (1 - (f.embedding_vertex <=> query_embedding)) > match_threshold
             AND m.decay_factor >= min_decay
             AND (filter_types IS NULL OR m.memory_type = ANY(filter_types))
             AND (
