@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Fixed
+- **`update_memory` / `delete_memory` work in hosted mode** - the MCP tools call `PATCH` / `DELETE /api/cortex/memories/:id`, but the server never had those routes, so every call failed with an HTML "Cannot PATCH" page. Both routes now exist, are owner-scoped (a memory outside your wallet is a 404), and validate the patch body (`content`, `summary`, `importance` 0-1, `tags`, `memory_type`).
+- **Editing `content` on an encrypted memory** - `updateMemory` now re-encrypts through the same path as `storeMemory` and refreshes the keyword index, instead of writing plaintext over ciphertext and leaving the row undecryptable.
+
 ## [3.2.0] — 2026-05-18
 
 Remote MCP connector for Claude Desktop / claude.ai, plus a one-command

@@ -42,7 +42,7 @@ import { getExperimentalConfig } from '../experimental/config';
 import { bm25SearchMemories } from '../experimental/bm25-search';
 import { setContentTokens } from './content-tokens';
 import { runReconcileShadow } from './reconcile-shadow';
-import { encryptForStorage, delegationStateForWrite } from './memory-encryption';
+import { encryptForStorage, delegationStateForWrite, type EncryptedMemory } from './memory-encryption';
 import { generateOpenRouterResponse, isOpenRouterEnabled } from '@clude/shared/core/openrouter-client';
 import { isEncryptionEnabled, getEncryptionPubkey, encryptContent } from '@clude/shared/core/encryption';
 import { decryptMemories } from './memory-decryption';
@@ -2160,19 +2160,68 @@ export async function updateMemory(
 ): Promise<boolean> {
   const db = getDb();
   const updates: Record<string, unknown> = {};
-  if (patches.summary !== undefined) updates['summary'] = patches.summary.slice(0, 500);
-  if (patches.content !== undefined) updates['content'] = patches.content.slice(0, 5000);
+  if (patches.summary !== undefined) updates['summary'] = patches.summary.slice(0, MEMORY_MAX_SUMMARY_LENGTH);
   if (patches.tags !== undefined) updates['tags'] = patches.tags;
-  if (patches.importance !== undefined) updates['importance'] = Math.max(0, Math.min(1, patches.importance));
+  if (patches.importance !== undefined) updates['importance'] = clamp(patches.importance, 0, 1);
   if (patches.memory_type !== undefined) updates['memory_type'] = patches.memory_type;
+
+  // A content edit goes through the same at-rest encryption as storeMemory. Writing
+  // plaintext over an envelope-encrypted row would leave `encrypted: true` pointing at
+  // bytes that are not ciphertext, so every recall would fail to decrypt it.
+  let plaintextContent: string | null = null;
+  let envelope: EncryptedMemory | null = null;
+  if (patches.content !== undefined) {
+    plaintextContent = patches.content.slice(0, MEMORY_MAX_CONTENT_LENGTH);
+    envelope = await encryptForStorage(plaintextContent, getOwnerWallet() || null);
+    const legacyEncrypt = !envelope && isEncryptionEnabled();
+    updates['content'] = envelope
+      ? envelope.ciphertext
+      : legacyEncrypt
+      ? encryptContent(plaintextContent)
+      : plaintextContent;
+    updates['encrypted'] = envelope !== null || legacyEncrypt;
+    updates['encryption_pubkey'] = envelope ? envelope.ownerPubkey : legacyEncrypt ? getEncryptionPubkey() : null;
+    updates['provider_delegated'] = delegationStateForWrite(envelope !== null);
+  }
   if (Object.keys(updates).length === 0) return true;
 
   let query = db.from('memories').update(updates).eq('id', id);
   query = scopeToOwner(query);
-  const { error } = await query;
+  const { data, error } = await query.select('id');
   if (error) {
     log.error({ error: error.message, id }, 'Failed to update memory');
     return false;
+  }
+  if (!data || data.length === 0) {
+    // Nothing in the caller's scope matched: either the id does not exist or it belongs
+    // to another owner. Report it — and stop here, because the side tables below are
+    // keyed by memory_id alone and must never be touched for a row we did not update.
+    log.warn({ id }, 'updateMemory matched no memory in scope');
+    return false;
+  }
+
+  if (plaintextContent !== null) {
+    // The previous DEK wraps belong to the previous ciphertext; replace them.
+    const { error: clearErr } = await db.from('memory_dek_wraps').delete().eq('memory_id', id);
+    if (clearErr) log.error({ id, error: clearErr.message }, 'Failed to clear stale DEK wraps');
+    if (envelope) {
+      const { error: wrapErr } = await db.from('memory_dek_wraps').insert(
+        envelope.wraps.map(w => ({ memory_id: id, ...w })),
+      );
+      if (wrapErr) {
+        // Without wraps the ciphertext is permanently undecryptable (the DEK is discarded).
+        // Revert to plaintext-at-rest so no data is lost — same rule as storeMemory.
+        log.error({ id, error: wrapErr.message }, 'DEK wrap write failed — reverting memory to plaintext');
+        await db.from('memories').update({
+          content: plaintextContent,
+          encrypted: false,
+          encryption_pubkey: null,
+          provider_delegated: null,
+        }).eq('id', id);
+      }
+    }
+    // Lexical index (keyword/BM25 recall) is always built from the plaintext.
+    await setContentTokens(db, id, plaintextContent);
   }
   return true;
 }
