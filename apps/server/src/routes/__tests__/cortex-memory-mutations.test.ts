@@ -346,3 +346,58 @@ describe('DELETE /api/cortex/memories/:id', () => {
     expect(mockDeleteMemory).not.toHaveBeenCalled();
   });
 });
+
+describe('cross-tenant isolation', () => {
+  // Tenant B's key aimed at tenant A's memory. Every lookup and write must use the
+  // wallet bound to the key, never a wallet the client names in the body or query.
+  const WALLET_B = 'WalletBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
+  const AGENT_B = { ...AGENT_A, id: 2, agent_id: 'agent_b', owner_wallet: WALLET_B };
+
+  /** Every owner_wallet value the route filtered on, in call order. */
+  const ownerFilters = () =>
+    dbCalls.filter(c => c.method === 'eq' && c.args[0] === 'owner_wallet').map(c => c.args[1]);
+
+  beforeEach(() => {
+    mockAuthenticateAgent.mockResolvedValue({ ...AGENT_B });
+  });
+
+  it('PATCH returns 404 for a memory in another wallet, even when the body and query name that wallet', async () => {
+    dbQueue.push({ data: null, error: null }); // no memory 123 in wallet B
+
+    const res = await request(server, 'PATCH', `/api/cortex/memories/123?wallet=${WALLET_A}&owner=${WALLET_A}`, {
+      body: { summary: 'hijack attempt', owner_wallet: WALLET_A },
+    });
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: 'Memory not found' });
+    expect(ownerFilters()).toEqual([WALLET_B]);
+    expect(mockUpdateMemory).not.toHaveBeenCalled();
+  });
+
+  it('PATCH ignores a client-supplied owner_wallet: the write runs under the key wallet with only whitelisted fields', async () => {
+    dbQueue.push({ data: { id: 55 }, error: null }); // memory 55 is wallet B's own
+
+    const res = await request(server, 'PATCH', '/api/cortex/memories/55', {
+      body: { summary: 'mine', owner_wallet: WALLET_A, id: 999, encrypted: false },
+    });
+
+    expect(res.status).toBe(200);
+    expect(ownerFilters()).toEqual([WALLET_B]);
+    expect(mockUpdateMemory).toHaveBeenCalledTimes(1);
+    const [id, patches] = mockUpdateMemory.mock.calls[0];
+    expect(id).toBe(55);
+    expect(patches).toStrictEqual({ summary: 'mine' });
+    expect(walletSeenByBrain).toBe(WALLET_B);
+  });
+
+  it('DELETE returns 404 for a memory in another wallet, even when the query names that wallet', async () => {
+    dbQueue.push({ data: null, error: null });
+
+    const res = await request(server, 'DELETE', `/api/cortex/memories/123?wallet=${WALLET_A}&owner=${WALLET_A}`);
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: 'Memory not found' });
+    expect(ownerFilters()).toEqual([WALLET_B]);
+    expect(mockDeleteMemory).not.toHaveBeenCalled();
+  });
+});
