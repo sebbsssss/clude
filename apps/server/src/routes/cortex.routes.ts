@@ -10,6 +10,7 @@
  */
 import { Router, Request, Response, NextFunction } from 'express';
 import { randomUUID, createHash } from 'crypto';
+import { z } from 'zod';
 import { authenticateAgent, registerAgent, recordAgentInteraction, findOrCreateAgentForDid, type AgentRegistration } from '@clude/brain/features/agent-tier';
 import { findOrCreatePrivyUserByEmail } from '@clude/brain/auth/privy-wallet-resolver';
 import { withOwnerWallet } from '@clude/shared/core/owner-context';
@@ -22,6 +23,8 @@ import {
   getRecentMemories,
   getSelfModel,
   createMemoryLink,
+  updateMemory,
+  deleteMemory,
   type MemoryType,
 } from '@clude/brain/memory';
 import { findClinamen } from '@clude/brain/memory/clinamen';
@@ -42,6 +45,68 @@ const log = createChildLogger('cortex-api');
 interface CortexRequest extends Request {
   agent?: AgentRegistration;
   ownerWallet?: string;
+}
+
+// ---- Memory mutation helpers (PATCH / DELETE /memories/:id) ---- //
+
+/** The 5 typed tiers. Must stay in sync with MemoryType in @clude/brain/memory. */
+const MEMORY_TYPES = ['episodic', 'semantic', 'procedural', 'self_model', 'introspective'] as const;
+
+/**
+ * Body for PATCH /memories/:id. Every field is optional but at least one must
+ * be present. Unknown keys are stripped so a client can never mass-assign
+ * owner_wallet, id, or the encryption columns.
+ */
+const memoryPatchSchema = z
+  .object({
+    content: z.string().max(5000).optional(),
+    summary: z.string().max(500).optional(),
+    importance: z.number().min(0).max(1).optional(),
+    tags: z.array(z.string().min(1).max(100)).max(100).optional(),
+    memory_type: z.enum(MEMORY_TYPES).optional(),
+  })
+  .refine(body => Object.values(body).some(v => v !== undefined), {
+    message: 'At least one of content, summary, importance, tags, memory_type is required',
+  });
+
+type MemoryPatches = Parameters<typeof updateMemory>[1];
+
+/** First Zod issue as "field: message" — enough for an API client to fix its request. */
+function formatZodError(err: z.ZodError): string {
+  const issue = err.issues[0];
+  if (!issue) return 'Invalid request body';
+  const path = issue.path.length > 0 ? `${issue.path.map(String).join('.')}: ` : '';
+  return `${path}${issue.message}`;
+}
+
+/** Sanitize HTML to prevent XSS when rendered in dashboards/explorers. */
+const stripHtml = (s: string) => s.replace(/<[^>]*>/g, '').trim();
+
+/** Memory ids are BIGSERIAL PKs; accept only a positive safe integer. */
+function parseMemoryId(raw: string): number | null {
+  if (!/^\d{1,15}$/.test(raw)) return null;
+  const id = Number(raw);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+/**
+ * Owner-scoped existence check run before any mutation. A row that belongs to
+ * another tenant is reported exactly like a missing row so the API never
+ * confirms ids outside the caller's own memories.
+ */
+async function ownsMemory(ownerWallet: string, id: number): Promise<'found' | 'not_found' | 'error'> {
+  const db = getDb();
+  const { data, error } = await db
+    .from('memories')
+    .select('id')
+    .eq('id', id)
+    .eq('owner_wallet', ownerWallet)
+    .maybeSingle();
+  if (error) {
+    log.error({ err: error, memoryId: id }, 'Memory ownership lookup failed');
+    return 'error';
+  }
+  return data ? 'found' : 'not_found';
 }
 
 // ---- Auth middleware ---- //
@@ -228,9 +293,6 @@ export function cortexRoutes(): Router {
         res.status(400).json({ error: 'summary is required (string)' });
         return;
       }
-
-      // Sanitize HTML to prevent XSS when rendered in dashboards/explorers
-      const stripHtml = (s: string) => s.replace(/<[^>]*>/g, '').trim();
 
       const memoryType = (type || 'episodic') as MemoryType;
       const validTypes: MemoryType[] = ['episodic', 'semantic', 'procedural', 'self_model', 'introspective' as any];
@@ -593,6 +655,120 @@ export function cortexRoutes(): Router {
     } catch (err) {
       log.error({ err }, 'Cortex clinamen error');
       res.status(500).json({ error: 'Failed to find clinamen memories' });
+    }
+  });
+
+  // ── Memory mutations (backend for the MCP update_memory / delete_memory tools) ──
+
+  // PATCH /memories/:id — update fields on a memory the caller owns
+  router.patch('/memories/:id', async (req: Request, res: Response) => {
+    try {
+      const cortexReq = req as CortexRequest;
+      const id = parseMemoryId(req.params.id);
+      if (id === null) {
+        res.status(400).json({ error: 'Invalid memory id' });
+        return;
+      }
+
+      const parsed = memoryPatchSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        res.status(400).json({ error: formatZodError(parsed.error) });
+        return;
+      }
+
+      // Only forward the fields the client sent; strip HTML like POST /store does.
+      const patches: MemoryPatches = {};
+      if (parsed.data.content !== undefined) {
+        const content = stripHtml(parsed.data.content);
+        if (!content) {
+          res.status(400).json({ error: 'content must not be empty' });
+          return;
+        }
+        patches.content = content;
+      }
+      if (parsed.data.summary !== undefined) {
+        const summary = stripHtml(parsed.data.summary);
+        if (!summary) {
+          res.status(400).json({ error: 'summary must not be empty' });
+          return;
+        }
+        patches.summary = summary;
+      }
+      if (parsed.data.tags !== undefined) patches.tags = parsed.data.tags;
+      if (parsed.data.importance !== undefined) patches.importance = parsed.data.importance;
+      if (parsed.data.memory_type !== undefined) patches.memory_type = parsed.data.memory_type;
+
+      // cortexAuth always binds a wallet; fail closed rather than run an unscoped write if that ever changes.
+      const ownerWallet = cortexReq.ownerWallet;
+      if (!ownerWallet) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
+      const owned = await ownsMemory(ownerWallet, id);
+      if (owned === 'error') {
+        res.status(500).json({ error: 'Failed to update memory' });
+        return;
+      }
+      if (owned === 'not_found') {
+        res.status(404).json({ error: 'Memory not found' });
+        return;
+      }
+
+      // withOwnerWallet → scopeToOwner() adds the owner_wallet filter to the UPDATE itself.
+      const updated = await withOwnerWallet(ownerWallet, () => updateMemory(id, patches));
+      if (!updated) {
+        res.status(500).json({ error: 'Failed to update memory' });
+        return;
+      }
+
+      await recordAgentInteraction(cortexReq.agent!.agent_id);
+      log.info({ agentId: cortexReq.agent!.agent_id, memoryId: id, fields: Object.keys(patches) }, 'Cortex memory updated');
+      res.json({ updated: true });
+    } catch (err) {
+      log.error({ err }, 'Cortex update memory error');
+      res.status(500).json({ error: 'Failed to update memory' });
+    }
+  });
+
+  // DELETE /memories/:id — permanently delete a memory the caller owns
+  router.delete('/memories/:id', async (req: Request, res: Response) => {
+    try {
+      const cortexReq = req as CortexRequest;
+      const id = parseMemoryId(req.params.id);
+      if (id === null) {
+        res.status(400).json({ error: 'Invalid memory id' });
+        return;
+      }
+
+      // cortexAuth always binds a wallet; fail closed rather than run an unscoped write if that ever changes.
+      const ownerWallet = cortexReq.ownerWallet;
+      if (!ownerWallet) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
+      const owned = await ownsMemory(ownerWallet, id);
+      if (owned === 'error') {
+        res.status(500).json({ error: 'Failed to delete memory' });
+        return;
+      }
+      if (owned === 'not_found') {
+        res.status(404).json({ error: 'Memory not found' });
+        return;
+      }
+
+      // withOwnerWallet → scopeToOwner() adds the owner_wallet filter to the DELETE itself.
+      const deleted = await withOwnerWallet(ownerWallet, () => deleteMemory(id));
+      if (!deleted) {
+        res.status(500).json({ error: 'Failed to delete memory' });
+        return;
+      }
+
+      await recordAgentInteraction(cortexReq.agent!.agent_id);
+      log.info({ agentId: cortexReq.agent!.agent_id, memoryId: id }, 'Cortex memory deleted');
+      res.json({ deleted: true });
+    } catch (err) {
+      log.error({ err }, 'Cortex delete memory error');
+      res.status(500).json({ error: 'Failed to delete memory' });
     }
   });
 
