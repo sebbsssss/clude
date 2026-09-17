@@ -141,6 +141,25 @@ step by default), `--lr 5e-4` cosine with 200 warmup steps, `--resume auto`
 them exports), `--wandb-project`, `--limit` / `--max-steps` for smokes. Loss is
 taken on the assistant span only; prompts are masked.
 
+**Run it on Google Cloud (Vertex AI, one L4).** `training/gcp/` submits the
+exact recipe above as a custom job in `clude-query-sol-data` / `us-central1`,
+with the bucket fuse-mounted at `/gcs/<bucket>` so checkpoints (complete HF
+dirs) land in GCS as they are written and `RESUME=1` continues after any
+interruption. About $1/h; the 3-epoch run is ~1-2 h.
+
+```bash
+# with gcloud + gsutil logged in (uploads data + tokenizer, then submits):
+BUCKET=<bucket> ./cludemem/training/gcp/launch_vertex.sh
+
+# without gcloud (e.g. from a Claude Code container): only an access token is needed
+GCP_ACCESS_TOKEN=$(gcloud auth print-access-token)   # run on a logged-in machine, valid ~1 h
+GCP_ACCESS_TOKEN=... python cludemem/training/gcp/submit_rest.py --bucket <bucket>
+GCP_ACCESS_TOKEN=... python cludemem/training/gcp/submit_rest.py --status projects/.../customJobs/...
+
+# afterwards
+gsutil -m cp -r gs://<bucket>/cludemem/runs/cludemem-49m/final cludemem/training/runs/cludemem-49m/
+```
+
 The chat format lives in ONE place, `training/chat_format.py`
 (`<s><|system|>\n…<|end|>\n<|user|>\n…<|end|>\n<|assistant|>\n{json}<|end|></s>`);
 the HF chat template and `packaging/Modelfile.49m` mirror it, and
@@ -209,6 +228,7 @@ cludemem/
   training/      train_qlora.py requirements.txt                      (E4B QLoRA)
                  chat_format.py tokenizer_49m.py collect_text.py         (49M from scratch)
                  train_small.py eval_small.py requirements-49m.txt SMOKE-REPORT.md
+                 gcp/launch_vertex.sh gcp/submit_rest.py                 (49M on Vertex AI)
   packaging/     Modelfile build_and_push.sh   Modelfile.49m export_gguf.sh
   eval/          memopseval.ts
   data/          generated JSONL (gitignored except samples)

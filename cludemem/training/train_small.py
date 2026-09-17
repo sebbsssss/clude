@@ -210,19 +210,27 @@ def save_tokenizer(tok, tokenizer_src: str, dst: str) -> None:
         shutil.copyfile(spm, os.path.join(dst, "tokenizer.model"))
 
 
+STATE_FILE = "training_state.pt"
+
+
+def list_checkpoints(out_dir: str) -> list[str]:
+    """Complete checkpoints only: training_state.pt is written LAST, so a directory
+    without it is a save that died half-way and must never be resumed from."""
+    ckpts = [p for p in glob.glob(os.path.join(out_dir, "ckpt-*")) if os.path.exists(os.path.join(p, STATE_FILE))]
+    return sorted(ckpts, key=lambda p: int(p.rsplit("-", 1)[1]))
+
+
 def save_checkpoint(path: str, model, tok, tokenizer_src: str, optimizer, state: dict, keep: int, out_dir: str) -> None:
-    tmp = path + ".tmp"
-    if os.path.exists(tmp):
-        shutil.rmtree(tmp)
-    model.save_pretrained(tmp, safe_serialization=True)
-    save_tokenizer(tok, tokenizer_src, tmp)
-    torch.save({**state, "optimizer": optimizer.state_dict(), "torch_rng": torch.get_rng_state()},
-               os.path.join(tmp, "training_state.pt"))
+    # Written in place (no temp-dir rename): --out may be a gcsfuse mount
+    # (/gcs/<bucket>/... on Vertex AI), where directory renames are not
+    # supported. Completeness is signalled by training_state.pt instead.
     if os.path.exists(path):
         shutil.rmtree(path)
-    os.replace(tmp, path)
-    ckpts = sorted(glob.glob(os.path.join(out_dir, "ckpt-*")), key=lambda p: int(p.rsplit("-", 1)[1]))
-    for old in ckpts[:-keep]:
+    model.save_pretrained(path, safe_serialization=True)
+    save_tokenizer(tok, tokenizer_src, path)
+    torch.save({**state, "optimizer": optimizer.state_dict(), "torch_rng": torch.get_rng_state()},
+               os.path.join(path, STATE_FILE))
+    for old in list_checkpoints(out_dir)[:-keep]:
         shutil.rmtree(old)
 
 
@@ -231,7 +239,7 @@ def find_resume(out_dir: str, resume: str | None) -> str | None:
         return None
     if resume != "auto":
         return resume
-    ckpts = sorted(glob.glob(os.path.join(out_dir, "ckpt-*")), key=lambda p: int(p.rsplit("-", 1)[1]))
+    ckpts = list_checkpoints(out_dir)
     return ckpts[-1] if ckpts else None
 
 
@@ -319,7 +327,7 @@ def main() -> None:
     if resume_dir:
         model = LlamaForCausalLM.from_pretrained(resume_dir, dtype=torch.float32)
         model.config.use_cache = False
-        state = torch.load(os.path.join(resume_dir, "training_state.pt"), map_location="cpu", weights_only=False)
+        state = torch.load(os.path.join(resume_dir, STATE_FILE), map_location="cpu", weights_only=False)
         print(f"[resume] {resume_dir} @ step {state['step']} (epoch {state['epoch']}, batch {state['batch_pos']})")
     else:
         model = build_model(tok, args.preset, args.max_seq, dict(
