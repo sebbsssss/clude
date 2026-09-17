@@ -8,3 +8,7 @@
 checkpoints/
 runs/
 __pycache__/
+
+# CludeMem-49M artefacts (reproducible from the corpus; never committed)
+tokenizer-*/
+*.model

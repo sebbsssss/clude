@@ -1,0 +1,9 @@
+# CludeMem-49M (from-scratch small model) deps. Any recent CUDA or CPU torch works;
+# no Unsloth/PEFT needed — this path trains a plain Llama-architecture model.
+torch>=2.3
+transformers>=4.56
+sentencepiece>=0.2.0
+protobuf>=4.21
+safetensors>=0.4
+numpy
+# optional: wandb (pass --wandb-project), gguf + a llama.cpp checkout for packaging/export_gguf.sh

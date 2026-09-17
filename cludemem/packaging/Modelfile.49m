@@ -1,0 +1,24 @@
+# CludeMem-49M Ollama Modelfile.
+# Build:  ../packaging/export_gguf.sh <hf-dir> cludemem-49m   (runs `ollama create` for you)
+#   or:   ollama create cludemem-49m -f Modelfile.49m         (with the GGUF path below)
+# Then:   ollama run cludemem-49m
+FROM ./cludemem-49m.Q8_0.gguf
+
+# Mirrors cludemem/training/chat_format.py EXACTLY (the trainer's wire format).
+# Ollama prepends BOS (<s>) itself via tokenizer.ggml.add_bos_token, so the
+# template starts at the first turn. Roles map 1:1 onto the control tokens.
+TEMPLATE """{{- range .Messages }}<|{{ .Role }}|>
+{{ .Content }}<|end|>
+{{ end }}<|assistant|>
+"""
+PARAMETER stop <|end|>
+PARAMETER stop </s>
+
+# Deterministic structured output for memory ops. Callers pass a JSON schema via
+# `format` (core/memory-ops.ts), which llama.cpp enforces as a grammar.
+PARAMETER temperature 0
+PARAMETER top_k 1
+PARAMETER num_ctx 4096
+PARAMETER num_predict 1024
+
+SYSTEM """You are CludeMem, a memory operations model. Given a memory task and input, respond with ONLY the strict JSON the task specifies. No prose, no markdown."""

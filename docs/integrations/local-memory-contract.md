@@ -33,7 +33,7 @@ In local mode, memory operations route to a local Ollama model; if the local cal
 
 | Role | Selector | v1 value(s) | Notes |
 |------|----------|-------------|-------|
-| Memory-ops chat | `MEMORY_MODEL` | any Ollama tag, e.g. `gemma3:4b` today; `cludemem-e4b` once published | The fine-tuned CludeMem model is a drop-in: set this tag. |
+| Memory-ops chat | `MEMORY_MODEL` | any Ollama tag, e.g. `gemma3:4b` today; `cludemem-e4b` / `cludemem-49m` once published | Either CludeMem build is a drop-in: set this tag. `cludemem-49m` (49M params, ~55 MB) is the laptop-class option; `cludemem-e4b` the Gemma-based one. |
 | Embeddings | `EMBEDDING_MODEL` | `nomic-embed-text` (or `mxbai-embed-large`) | Only when `EMBEDDING_PROVIDER=ollama`. |
 
 ---
@@ -45,7 +45,7 @@ In local mode, memory operations route to a local Ollama model; if the local cal
 ```bash
 # Memory operations -> local model
 MEMORY_MODEL_PROVIDER=ollama
-MEMORY_MODEL=cludemem-e4b          # or gemma3:4b today
+MEMORY_MODEL=cludemem-e4b          # or cludemem-49m, or gemma3:4b today
 OLLAMA_URL=http://localhost:11434  # default; override if Ollama runs elsewhere
 MEMORY_MODEL_TIMEOUT_MS=20000      # optional, per-request timeout
 
