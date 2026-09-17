@@ -20,11 +20,14 @@ import type { BullNode } from '../components/BullSwarm3D';
 
 // ── Data fetching ───────────────────────────────────────────────────────────
 
+type Growth = { total: number; added24h: number; added7d: number; perDay: number; pct7d: number; series: { t: string; v: number }[] };
+
 function useAnsemData() {
   const [nodes, setNodes] = useState<AnsemNode[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [growth, setGrowth] = useState<Growth | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -34,6 +37,7 @@ function useAnsemData() {
         if (!cancelled) {
           setNodes(result.nodes);
           setTotal(result.total || result.nodes.length);
+          ansemApi.getGrowth().then((g) => { if (!cancelled) setGrowth(g); });
         }
       } catch (err: unknown) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load graph');
@@ -44,7 +48,7 @@ function useAnsemData() {
     return () => { cancelled = true; };
   }, []);
 
-  return { nodes, total, loading, error };
+  return { nodes, total, loading, error, growth };
 }
 
 // ── Bull constellation (verbatim render engine from bull.html) ──────────────
@@ -1142,7 +1146,7 @@ export function AnsemExplore() {
     };
   }, []);
 
-  const { nodes, total, loading, error } = useAnsemData();
+  const { nodes, total, loading, error, growth } = useAnsemData();
   const [highlightIds, setHighlightIds] = useState<Set<number>>(new Set());
   const [bullTip, setBullTip] = useState<{ text: string; x: number; y: number } | null>(null);
   const [nodePopup, setNodePopup] = useState<BullNode | null>(null);
@@ -1230,6 +1234,8 @@ export function AnsemExplore() {
   }, []);
   const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
   const [isNarrow, setIsNarrow] = useState(typeof window !== 'undefined' && window.innerWidth < 640);
+  // growth chart is a toggle under the stats — shown as a clean contained card, not a bg overlay
+  const [chartOpen, setChartOpen] = useState(true);
   useEffect(() => {
     const onR = () => setIsNarrow(window.innerWidth < 640);
     window.addEventListener('resize', onR);
@@ -1243,6 +1249,7 @@ export function AnsemExplore() {
   }, []);
 
   const countLabel = useMemo(() => (total || 38303).toLocaleString(), [total]);
+  const fmtK = (n: number) => (n >= 10000 ? `${(n / 1000).toFixed(1)}K` : n.toLocaleString());
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#000', overflow: 'hidden', fontFamily: "ui-monospace,'SF Mono',Menlo,monospace" }}>
@@ -1509,12 +1516,83 @@ export function AnsemExplore() {
         position: 'absolute', left: 'clamp(16px,3vw,34px)', top: 'clamp(14px,3vh,26px)',
         pointerEvents: 'none', zIndex: 3, textShadow: '0 0 20px rgba(0,0,0,.95)',
       }}>
-        <div style={{ fontWeight: 800, fontSize: 'clamp(28px,4.6vw,44px)', letterSpacing: '.16em', color: '#eafff0', lineHeight: 1 }}>
-          $ANSEM
+        {/* on mobile the bigger title stacks so its top line clears the top-right Clude logo */}
+        <div style={{ fontWeight: 800, fontSize: 'clamp(22px,3.5vw,38px)', letterSpacing: '.06em', color: '#eafff0', lineHeight: 1.12, maxWidth: isNarrow ? 'calc(100vw - 150px)' : undefined }}>
+          $ANSEM{isNarrow ? <br /> : ' '}<span style={{ color: 'rgba(226,250,235,.6)' }}>{isNarrow ? 'The Black Bull' : '— The Black Bull'}</span>
         </div>
-        <div style={{ fontSize: 'clamp(11px,1.45vw,13.5px)', color: '#9fe0b8', marginTop: 11, letterSpacing: '.01em', lineHeight: 1.45 }}>
-          <span style={{ color: '#5cf08a', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{countLabel}</span> memories and growing. One community mind.
+        {/* the memory count is the biggest flex — 2x the rest of the HUD */}
+        <div style={{ fontSize: 'clamp(20px,2.8vw,27px)', color: '#c9efd8', marginTop: 14, letterSpacing: '.005em', lineHeight: 1.28, maxWidth: 540 }}>
+          <span style={{ color: '#5cf08a', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{countLabel}</span> memories and growing.<br /><span style={{ color: '#9fe0b8' }}>One community mind.</span>
         </div>
+        {growth && (
+          <div style={{ fontSize: 'clamp(10.5px,1.35vw,13px)', color: '#7fd7a6', marginTop: 9, letterSpacing: '.015em', fontVariantNumeric: 'tabular-nums', maxWidth: 540 }}>
+            <span style={{ color: '#5cf08a', fontWeight: 700 }}>+{fmtK(growth.added24h)}</span> today
+            <span style={{ color: '#4c7d63' }}>{'  ·  '}</span>
+            <span style={{ color: '#5cf08a', fontWeight: 700 }}>+{fmtK(growth.added7d)}</span> this week
+            <span style={{ color: '#4c7d63' }}>{'  ·  '}</span>
+            <span style={{ color: '#5cf08a', fontWeight: 700 }}>+{growth.pct7d}%</span>
+            <span style={{ color: '#4c7d63' }}>{'  ·  '}</span>
+            <span style={{ color: '#5cf08a', fontWeight: 700 }}>~{fmtK(growth.perDay)}</span>/day
+          </div>
+        )}
+        {/* growth chart — a clean contained card on a toggle, right under the stats. Lives in the
+            HUD (z-3, above the constellation) so it's fully legible instead of fighting the swarm. */}
+        {growth && growth.series.length > 1 && (
+          <div style={{ marginTop: 11, pointerEvents: 'auto', maxWidth: 540 }}>
+            <button
+              onClick={() => setChartOpen((o) => !o)}
+              aria-expanded={chartOpen}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 7, cursor: 'pointer',
+                background: 'rgba(6,20,12,.55)', border: '1px solid rgba(72,224,122,.28)', borderRadius: 8,
+                padding: '5px 11px', color: '#8fd9ab', fontFamily: 'inherit', fontWeight: 600,
+                fontSize: 'clamp(9px,1vw,10.5px)', letterSpacing: '.09em', textTransform: 'uppercase',
+              }}>
+              <span style={{ display: 'inline-block', transform: chartOpen ? 'rotate(90deg)' : 'none', transition: 'transform .2s ease', fontSize: 8 }}>▶</span>
+              14-day growth
+            </button>
+            {chartOpen && (() => {
+              const s = growth.series;
+              const vals = s.map((p) => p.v);
+              const max = Math.max(...vals), min = Math.min(...vals);
+              const W = 300, H = 92, padX = 4, padT = 8, padB = 12, iw = W - padX * 2, ih = H - padT - padB;
+              const X = (i: number) => padX + (i / (s.length - 1)) * iw;
+              const Y = (v: number) => padT + (1 - (v - min) / ((max - min) || 1)) * ih;
+              const line = s.map((p, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(p.v).toFixed(1)).join(' ');
+              const area = `${line} L ${X(s.length - 1).toFixed(1)} ${H - padB} L ${X(0).toFixed(1)} ${H - padB} Z`;
+              return (
+                <div style={{
+                  marginTop: 9, width: 'min(340px, 76vw)', background: 'rgba(2,13,7,.9)',
+                  border: '1px solid rgba(72,224,122,.3)', borderRadius: 12, padding: '11px 13px 9px',
+                  boxShadow: '0 12px 40px rgba(0,0,0,.6), 0 0 26px rgba(34,197,94,.1)',
+                  backdropFilter: 'blur(6px)', animation: 'ansemChartIn .3s ease',
+                }}>
+                  <style>{`@keyframes ansemChartIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } } @keyframes ansemChartDraw { to { stroke-dashoffset: 0; } }`}</style>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 7 }}>
+                    <span style={{ fontSize: 9.5, letterSpacing: '.1em', color: '#7fd7a6' }}>MEMORIES · LAST 14 DAYS</span>
+                    <span style={{ fontSize: 10, color: '#5cf08a', fontWeight: 700 }}>+{growth.pct7d}%</span>
+                  </div>
+                  <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: 'block', overflow: 'visible' }} aria-hidden>
+                    <defs>
+                      <linearGradient id="ansemChartFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#5cf08a" stopOpacity="0.26" />
+                        <stop offset="100%" stopColor="#5cf08a" stopOpacity="0" />
+                      </linearGradient>
+                    </defs>
+                    <path d={area} fill="url(#ansemChartFill)" />
+                    <path d={line} fill="none" stroke="#5cf08a" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"
+                      style={{ filter: 'drop-shadow(0 0 4px rgba(92,240,138,.55))', strokeDasharray: '1000', strokeDashoffset: '1000', animation: 'ansemChartDraw 1s ease .08s forwards' }} />
+                    <circle cx={X(s.length - 1)} cy={Y(vals[vals.length - 1])} r="3.4" fill="#5cf08a" style={{ filter: 'drop-shadow(0 0 6px rgba(92,240,138,.95))' }} />
+                  </svg>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 9, color: '#4c7d63', fontVariantNumeric: 'tabular-nums' }}>
+                    <span>{fmtK(vals[0])}</span>
+                    <span style={{ color: '#7fd7a6' }}>{fmtK(vals[vals.length - 1])} now</span>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
         <div style={{ fontSize: 'clamp(10.5px,1.3vw,13px)', color: '#d3f2df', marginTop: 13, lineHeight: 1.55, letterSpacing: '.01em', maxWidth: 384 }}>
           The <span style={{ color: '#eafff0', fontWeight: 700 }}>$ANSEM</span> Black Bull movement made tangible.
         </div>

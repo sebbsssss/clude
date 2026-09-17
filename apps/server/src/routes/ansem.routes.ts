@@ -29,6 +29,62 @@ const log = createChildLogger("ansem-routes");
 // from the whole $ANSEM timeline (~143k memories total).
 const ANSEM_WALLET = "HYmsqdcpHRvWcrBfACzYWvPbF2XMg5hKFy38kEt7Ppjt";
 const ANSEM_SOURCES = ["ansem-token", "ansem-seed", "ansem-yt", "ansem-live"];
+
+// ── DB resilience for the two routes that read `memories` ───────────────────
+// The table grows ~12-20k rows/day via the 24/7 live ingest. Once it outgrew its
+// indexes both /graph and /growth started hitting Postgres `statement timeout`
+// (57014): /graph 500'd, the constellation rendered empty, and the page read as
+// dead. Neither route may block on, or amplify load against, a slow database.
+//
+// /graph: keep the last GOOD payload and serve it stale on any failure/timeout —
+// a stale constellation beats a blank page.
+// The node set is a 2000-row sample of a ~390k-row corpus — it does not need
+// per-request freshness, so serve it from cache for a short TTL. That takes the
+// common page load from ~3s (warm) / ~19s (cold) to instant, and collapses the
+// per-visitor DB cost to one refresh per TTL.
+let graphCache: { at: number; data: unknown } | null = null;
+const GRAPH_TTL_MS = 120_000;
+// Deadlines are a guard against the ~60s Postgres statement timeout, NOT a latency
+// target — sized off measured behaviour: warm ~3s for count+2 pages, ~19s cold
+// (freshly built index, cold page cache). Too tight and a healthy-but-cold request
+// trips them and serves stale on every load.
+const GRAPH_COUNT_DEADLINE_MS = 12_000;
+const GRAPH_PAGE_DEADLINE_MS = 15_000;
+
+// /growth: cached stats + a SINGLE-FLIGHT guard. Previously each cache miss fired
+// ~10 sequential exact COUNTs with no coordination, so N concurrent visitors meant
+// N stampeding count storms — the amplifier most likely to saturate the pool and
+// starve /graph alongside it.
+interface GrowthData {
+  total: number;
+  added24h: number;
+  added7d: number;
+  perDay: number;
+  pct7d: number;
+  series: { t: string; v: number }[];
+}
+const GROWTH_EMPTY: GrowthData = {
+  total: 0, added24h: 0, added7d: 0, perDay: 0, pct7d: 0, series: [],
+};
+let growthCache: { at: number; data: GrowthData } | null = null;
+let growthInFlight: Promise<GrowthData> | null = null;
+const GROWTH_TTL_MS = 30 * 60_000; // was 15 — halves the refresh rate
+// Measured ~4.6s for the full parallel count set post-index; 12s leaves cold-cache
+// headroom while still capping far below the Postgres statement timeout.
+const GROWTH_DEADLINE_MS = 12_000;
+
+/** Reject after `ms` so a stalled query can't hold an HTTP request open for the
+ *  full Postgres statement timeout. The underlying work is left running — with
+ *  single-flight that means it still warms the cache for the next caller. */
+function withDeadline<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label}_deadline`)), ms);
+  });
+  return Promise.race([p, deadline]).finally(() => {
+    if (timer) clearTimeout(timer);
+  }) as Promise<T>;
+}
 // His OWN words only (tweets + interviews). The "Speak to Ansem" clone recalls
 // from THESE — never the 104K ansem-token community corpus that shares the wallet
 // (that's timeline noise: shill + giveaway-farm spam that would corrupt his voice).
@@ -248,6 +304,23 @@ Speak in his EXACT voice, grounded ONLY in the real memories provided:
 - occasional ALL-CAPS for hype ("LETS RIDE", "JOB NOT FINISHED").
 Ground every take in the retrieved memories below — do NOT invent positions he doesn't hold. BUT when the memories DO contain a specific answer to what's asked — his plans, positions, numbers, how something works (e.g. how the $ANSEM airdrops work, what he's building, who gets rewarded) — GIVE that real substance accurately in his voice. A real question you can actually answer from the memories deserves the real answer, not a generic one-liner; terseness is for reactions and banter, never for dodging something you actually know. If the memories genuinely don't cover it, stay in-character but general — don't invent specifics.`;
 
+// Neutral facts about Clude — the platform that powers this page. Clude is NOT a coin
+// to shill (that's a separate rule); it's the tech this clone runs on. The clone may
+// share these facts when asked about Clude / how this works, but keeps it low-key and
+// factual — never bullposts, never a CA.
+const CLUDE_FACTS = `ABOUT CLUDE (the platform powering this "Speak to Ansem" page + the memory constellation — this is NOT one of the "other coins" you refuse to name; it's the tech you're running on):
+Share these facts NEUTRALLY and ONLY when someone asks about Clude, the tech, or how this works — never volunteer or bullpost them into unrelated answers, keep it low-key and factual, still in his terse voice:
+- Clude is an AI memory + clone platform: it turns a person's or community's posts into a living, on-chain memory graph you can talk to — every memory is hashed onto Solana for provenance. This $ANSEM "Black Bull" clone runs on it.
+- Track record: won the Pump.fun hackathon and the Colosseum agentic hackathon, and is partnering with Google Singapore.
+- Still NO contract addresses — Clude's or anyone's. If asked for a CA, stay neutral ("staying neutral bro, no CAs").`;
+
+// A few real-world facts about Ansem himself — answer casually in his own (first-person)
+// voice IF asked; don't volunteer them unprompted. Public info.
+const ANSEM_BIO = `A FEW REAL-WORLD FACTS ABOUT YOU (Ansem) — answer casually in your own voice IF someone asks; don't volunteer them unprompted:
+- your real name is Zion Thomas; on X you go by @blknoiz06.
+- you're 5'3" (160 cm).
+- in 2024 you boxed BitBoy in a crossover match in Dubai — you weighed in at 187 lbs (85 kg).`;
+
 // ---- Live X context: for questions about CURRENT/external events (flagged by the
 // interpret phase), pull what's happening on X right now — Ansem's OWN recent posts on
 // the topic (his actual current stance) + the top chatter — so the clone can react to
@@ -307,6 +380,10 @@ Answer the current question using this. Posts marked [ANSEM …] are his ACTUAL 
 
   return `${ANSEM_PERSONA}
 
+${CLUDE_FACTS}
+
+${ANSEM_BIO}
+
 You have access to ${memories.length} recalled memories (out of ${totalCount} total) from his real posts and transcripts:
 
 <recalled_memories>
@@ -362,6 +439,7 @@ const FEED_RESULT_COUNT = 30; // posts returned to the client
 // Module-level rolling state (survives across requests, resets on restart).
 const feedBuffer = new Map<string, FeedTweet>();
 let feedNewestId: string | null = null; // since_id anchor for incremental search
+let persistNewestId: string | null = null; // since_id anchor for the broad corpus ingest
 let feedLastPollTs = 0; // last time we hit search/recent
 let feedLastEngagementTs = 0; // last time we refreshed top-N engagement
 let feedDailyReads = 0; // X reads counted today (search + lookup pages)
@@ -467,15 +545,19 @@ function pruneBuffer(): void {
   }
 }
 
-/** Map an X search payload (tweets + included users) → FeedTweet[], filtered. */
-function mapSearchPayload(payload: any): FeedTweet[] {
+/** Map an X search payload (tweets + included users) → FeedTweet[], filtered.
+ *  `light` = corpus mode: keep everything except slurs + empties (skips the spam
+ *  filter) so the broad ingest grows the memory count fast. */
+function mapSearchPayload(payload: any, light = false): FeedTweet[] {
   const tweets: any[] = payload?.data || [];
   const users: any[] = payload?.includes?.users || [];
   const userById = new Map<string, any>(users.map((u) => [u.id, u]));
   const out: FeedTweet[] = [];
   for (const t of tweets) {
     const text: string = t.text || "";
-    if (isNoise(text)) continue;
+    if (light) {
+      if (text.trim().length < 8 || SLUR_PATTERNS.some((re) => re.test(text))) continue;
+    } else if (isNoise(text)) continue;
     const u = userById.get(t.author_id) || {};
     const handle = u.username || "unknown";
     const m = t.public_metrics || {};
@@ -775,7 +857,6 @@ async function pollFeed(): Promise<void> {
       if (fresh.length > 0) {
         const added = mergeIntoBuffer(fresh);
         queueAttestations(added);   // hash the genuinely-new stream + commit to Solana (async)
-        void persistLivePosts(added); // persist to the corpus so the memory count grows (async)
         // advance the since_id anchor to the max id we've seen (BigInt-safe compare)
         const maxId = payload?.meta?.newest_id;
         if (maxId && (!feedNewestId || BigInt(maxId) > BigInt(feedNewestId))) {
@@ -789,6 +870,34 @@ async function pollFeed(): Promise<void> {
       );
     }
     feedLastPollTs = Date.now();
+
+    // ── 1b. BROAD corpus ingest (grows the memory count toward 1M) ──
+    // Wider than the curated feed: includes replies + all languages (retweets still
+    // excluded — they're literal copies). Persisted straight to the corpus (NOT the
+    // feed panel, which stays curated); only slurs/empties are dropped. Deduped by the
+    // persist high-water-mark so nothing double-counts. Kill with ANSEM_PERSIST_LIVE=false.
+    if (PERSIST_LIVE && !dailyCapExceeded()) {
+      const broad = new URLSearchParams({
+        query: "$ANSEM -is:retweet",
+        max_results: "100",
+        "tweet.fields": "public_metrics,created_at",
+        expansions: "author_id",
+        "user.fields": "username,name,profile_image_url",
+      });
+      if (persistNewestId) broad.set("since_id", persistNewestId);
+      const broadRes = await fetch(`${X_SEARCH_URL}?${broad.toString()}`, { headers: authHeaders });
+      countRead(1);
+      if (broadRes.ok) {
+        const bp: any = await broadRes.json();
+        void persistLivePosts(mapSearchPayload(bp, true));   // light filter → corpus
+        const bmax = bp?.meta?.newest_id;
+        if (bmax && (!persistNewestId || BigInt(bmax) > BigInt(persistNewestId))) {
+          persistNewestId = bmax;
+        }
+      } else {
+        log.warn({ status: broadRes.status }, "Ansem broad corpus ingest non-OK");
+      }
+    }
 
     // ── 2. periodic engagement refresh on the top-50 buffered ids ──
     if (
@@ -860,10 +969,28 @@ function rankFeed(): Array<Omit<FeedTweet, "_norm">> {
   });
 }
 
+// ---- 24/7 background ingest ----
+// Keep the corpus growing (toward 1M) even with zero page traffic — poll the feed on a
+// server-side timer instead of only on-demand. pollFeed self-guards (concurrency + the
+// daily read cap), so this stays cheap (~2 X reads/poll, well under the cap). Kill with
+// ANSEM_FEED_TIMER=false; a no-op when there's no X_SEARCH_BEARER.
+let feedTimerStarted = false;
+function startFeedTimer(): void {
+  if (feedTimerStarted) return;
+  if (process.env.ANSEM_FEED_TIMER === "false") return;
+  if (!config.x.searchBearer) return;
+  feedTimerStarted = true;
+  const intervalMs = Math.max(30_000, config.x.ansemFeedIntervalMs);
+  setInterval(() => { void pollFeed(); }, intervalMs);
+  setTimeout(() => { void pollFeed(); }, 5_000); // first ingest shortly after boot
+  log.info({ intervalMs }, "Ansem feed timer started — 24/7 corpus ingest");
+}
+
 // ---- Route factory ---- //
 
 export function ansemRoutes(): Router {
   const router = Router();
+  startFeedTimer(); // begin round-the-clock ingest so the memory count climbs 24/7
 
   // ── GET /graph — Ansem memory graph (bull constellation) for 3D viz ──
   router.get("/graph", async (req: Request, res: Response) => {
@@ -874,23 +1001,45 @@ export function ansemRoutes(): Router {
       return;
     }
 
+    // Fresh cache — the overwhelming majority of page loads land here and never
+    // touch the database at all.
+    if (graphCache && Date.now() - graphCache.at < GRAPH_TTL_MS) {
+      res.json(graphCache.data);
+      return;
+    }
+
     try {
       const db = getDb();
 
       // ── Real total: an exact COUNT of the whole $ANSEM timeline (~143k) ──
       // Separate head-only count query so `total` reflects the full corpus, not
       // the (capped) node sample the constellation draws.
-      const { count: totalCount, error: countErr } = await db
-        .from("memories")
-        .select("id", { count: "exact", head: true })
-        .eq("owner_wallet", ANSEM_WALLET)
-        .in("source", ANSEM_SOURCES);
-
-      if (countErr) {
-        log.warn(
-          { err: countErr },
-          "Failed to count Ansem memories, will fall back to node count",
+      // Deadlined: this is a full COUNT over the whole filtered set. Without a cap it
+      // holds the request for the entire Postgres statement timeout before we ever
+      // reach the node query. Degrade to the node-sample fallback instead.
+      let totalCount: number | null = null;
+      try {
+        const counted = await withDeadline(
+          Promise.resolve(
+            db
+              .from("memories")
+              .select("id", { count: "exact", head: true })
+              .eq("owner_wallet", ANSEM_WALLET)
+              .in("source", ANSEM_SOURCES),
+          ),
+          GRAPH_COUNT_DEADLINE_MS,
+          "ansem_graph_count",
         );
+        if (counted.error) {
+          log.warn(
+            { err: counted.error },
+            "Failed to count Ansem memories, will fall back to node count",
+          );
+        } else {
+          totalCount = counted.count ?? null;
+        }
+      } catch (err) {
+        log.warn({ err }, "Ansem graph count deadline exceeded, falling back to node count");
       }
 
       // ── Nodes: a representative sample ordered by importance desc, then id ──
@@ -905,19 +1054,34 @@ export function ansemRoutes(): Router {
         offset += GRAPH_PAGE_SIZE
       ) {
         const end = Math.min(offset + GRAPH_PAGE_SIZE, GRAPH_NODE_TARGET) - 1;
-        const { data: page, error: pageErr } = await db
-          .from("memories")
-          .select(
-            "id, memory_type, summary, content, tags, importance, decay_factor, emotional_valence, source, source_id, created_at, metadata",
-          )
-          .eq("owner_wallet", ANSEM_WALLET)
-          .in("source", ANSEM_SOURCES)
-          .order("importance", { ascending: false })
-          .order("id", { ascending: true })
-          .range(offset, end);
-
-        if (pageErr) {
-          memErr = pageErr;
+        // Deadlined per page: this ORDER BY importance over the whole filtered set is
+        // the query that trips 57014 once the table outgrows its indexes. Bail out to
+        // the stale-cache path fast rather than hanging the request.
+        let page: any[] | null = null;
+        try {
+          const pageRes = await withDeadline(
+            Promise.resolve(
+              db
+                .from("memories")
+                .select(
+                  "id, memory_type, summary, content, tags, importance, decay_factor, emotional_valence, source, source_id, created_at, metadata",
+                )
+                .eq("owner_wallet", ANSEM_WALLET)
+                .in("source", ANSEM_SOURCES)
+                .order("importance", { ascending: false })
+                .order("id", { ascending: true })
+                .range(offset, end),
+            ),
+            GRAPH_PAGE_DEADLINE_MS,
+            "ansem_graph_page",
+          );
+          if (pageRes.error) {
+            memErr = pageRes.error;
+            break;
+          }
+          page = pageRes.data;
+        } catch (err) {
+          memErr = err;
           break;
         }
         if (!page || page.length === 0) break;
@@ -927,6 +1091,16 @@ export function ansemRoutes(): Router {
 
       if (memErr && ansemMemories.length === 0) {
         log.error({ err: memErr }, "Failed to fetch Ansem memories for graph");
+        // Postgres statement timeout (57014) lands here. A stale constellation is
+        // vastly better than an empty page, so serve the last good payload.
+        if (graphCache) {
+          log.warn(
+            { ageMs: Date.now() - graphCache.at },
+            "Serving STALE Ansem graph (DB unavailable)",
+          );
+          res.json(graphCache.data);
+          return;
+        }
         res.status(500).json({ error: "Failed to fetch memories" });
         return;
       }
@@ -951,7 +1125,7 @@ export function ansemRoutes(): Router {
         links = data || [];
       }
 
-      res.json({
+      const payload = {
         nodes: ansemMemories.map((m) => ({
           id: m.id,
           type: m.memory_type,
@@ -964,13 +1138,130 @@ export function ansemRoutes(): Router {
           createdAt: m.created_at,
         })),
         links,
-        // Real exact count of the whole $ANSEM timeline (~143k); fall back to the
-        // node-sample length only if the count query itself failed.
+        // Real exact count of the whole $ANSEM timeline; fall back to the node-sample
+        // length only if the count query failed or blew its deadline.
         total: totalCount ?? ansemMemories.length,
-      });
+      };
+      // Keep the last GOOD payload so a later DB stall degrades to stale, not blank.
+      graphCache = { at: Date.now(), data: payload };
+      res.json(payload);
     } catch (err) {
       log.error({ err }, "Ansem graph endpoint error");
+      if (graphCache) {
+        log.warn(
+          { ageMs: Date.now() - graphCache.at },
+          "Serving STALE Ansem graph after error",
+        );
+        res.json(graphCache.data);
+        return;
+      }
       res.status(500).json({ error: "Failed to fetch Ansem graph" });
+    }
+  });
+
+  // ── GET /growth — memory-count growth stats + a 14-day series for the ambient bg ──
+  //    Contract: 200 { total, added24h, added7d, perDay, pct7d, series:[{t,v}] }
+  //    All derived from memories.created_at; cached 30 min; fail-safe (never 500).
+  //
+  /**
+   * Recompute the growth stats.
+   *
+   * SINGLE-FLIGHT: concurrent callers share one run, so a burst of visitors can never
+   * multiply COUNT load against the database. This is the important property — the
+   * previous version had no coordination, so every request past the TTL kicked off its
+   * own storm of exact counts.
+   *
+   * The counts also run in PARALLEL now. Sequentially, a cold refresh against a slow
+   * table took as long as ~10 statement timeouts stacked end to end (minutes), with
+   * the HTTP request held open the whole time.
+   */
+  function refreshGrowth(): Promise<GrowthData> {
+    if (growthInFlight) return growthInFlight;
+    growthInFlight = (async () => {
+      const db = getDb();
+      const now = Date.now();
+      const DAY = 86_400_000;
+      const countBefore = async (ms?: number): Promise<number> => {
+        let q = db
+          .from("memories")
+          .select("id", { count: "exact", head: true })
+          .eq("owner_wallet", ANSEM_WALLET)
+          .in("source", ANSEM_SOURCES);
+        if (ms) q = q.lt("created_at", new Date(ms).toISOString());
+        const { count } = await q;
+        return count ?? 0;
+      };
+      const offsets = [14, 12, 10, 8, 6, 4, 2];
+      const [total, total1d, total7d, ...cumulative] = await Promise.all([
+        countBefore(),
+        countBefore(now - DAY),
+        countBefore(now - 7 * DAY),
+        ...offsets.map((d) => countBefore(now - d * DAY)),
+      ]);
+      const series = offsets.map((d, i) => ({
+        t: new Date(now - d * DAY).toISOString().slice(0, 10),
+        v: cumulative[i],
+      }));
+      series.push({ t: new Date(now).toISOString().slice(0, 10), v: total });
+      const added24h = Math.max(0, total - total1d);
+      const added7d = Math.max(0, total - total7d);
+      const data: GrowthData = {
+        total,
+        added24h,
+        added7d,
+        perDay: Math.round(added7d / 7),
+        pct7d: total7d > 0 ? Math.round((added7d / total7d) * 1000) / 10 : 0,
+        series,
+      };
+      growthCache = { at: Date.now(), data };
+      return data;
+    })().finally(() => {
+      growthInFlight = null;
+    });
+    return growthInFlight;
+  }
+
+  router.get("/growth", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (!(await checkRateLimit(`ansem-growth:${ip}`, 30, 1))) {
+      res.status(429).json({ error: "Rate limited. 30 requests per minute max." });
+      return;
+    }
+
+    // Kill switch — set ANSEM_GROWTH=false to shed all growth DB work instantly.
+    // Read straight off the env (no config.ts) so it needs no shared-package deploy.
+    if (String(process.env.ANSEM_GROWTH ?? "true").toLowerCase() === "false") {
+      res.json(growthCache?.data ?? GROWTH_EMPTY);
+      return;
+    }
+
+    if (growthCache && Date.now() - growthCache.at < GROWTH_TTL_MS) {
+      res.json(growthCache.data);
+      return;
+    }
+
+    // Stale-while-revalidate: with ANY previous data, answer instantly and refresh in
+    // the background. A visitor never waits on the database once the cache is warm.
+    if (growthCache) {
+      void refreshGrowth().catch((err) =>
+        log.warn({ err }, "Ansem growth background refresh failed"),
+      );
+      res.json(growthCache.data);
+      return;
+    }
+
+    // Cold cache: wait, but only to the deadline, then fall back to zeros. The refresh
+    // keeps running behind us and warms the cache for the next caller.
+    try {
+      const data = await withDeadline(refreshGrowth(), GROWTH_DEADLINE_MS, "ansem_growth");
+      res.json(data);
+    } catch (err) {
+      log.error({ err }, "Ansem growth endpoint error");
+      // Re-read through an un-narrowed alias: control-flow analysis proved growthCache
+      // null at the guard above, but the in-flight refresh can populate it before the
+      // deadline fires, and that fresher data is exactly what we want to serve.
+      const cached = growthCache as { at: number; data: GrowthData } | null;
+      res.json(cached?.data ?? GROWTH_EMPTY);
     }
   });
 

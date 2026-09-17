@@ -258,12 +258,13 @@
 <div><span class="ok">  ✓</span>  Registered              <span class="blue">clk_xxxxxxxx…</span></div>
 <div><span class="ok">  ✓</span>  Config saved            <span class="dim">~/.clude/config.json</span></div>
 <div><span class="ok">  ✓</span>  Database ready          <span class="dim">~/.clude/brain.db</span></div>
-<div><span class="ok">  ✓</span>  MCP installed           <span class="dim">Claude Code, Cursor</span></div>
+<div><span class="ok">  ✓</span>  MCP installed           <span class="dim">Claude Code  ~/.claude.json</span></div>
+<div><span class="ok">  ✓</span>  Validated               <span class="dim">store → recall → ✓</span></div>
 <div class="out">&nbsp;</div>
 <div class="out">  <span class="blue">Your agent now has memory.</span></div>
           </div>
         </div>
-        <p>That's it. Restart your IDE. Your agent now has <code class="inline">store_memory</code>, <code class="inline">recall_memories</code>, and <code class="inline">get_memory_stats</code> tools.</p>
+        <p>That's it. Restart your IDE. Your agent now has 8 memory tools — <code class="inline">store_memory</code>, <code class="inline">recall_memories</code>, <code class="inline">batch_store_memories</code>, <code class="inline">list_memories</code>, <code class="inline">update_memory</code>, <code class="inline">delete_memory</code>, <code class="inline">get_memory_stats</code>, and <code class="inline">find_clinamen</code>. Works headless too: no TTY means no prompts (set <code class="inline">CLUDE_SETUP_EMAIL</code> in CI).</p>
       </div>
     </section>
 
@@ -301,6 +302,7 @@
 <span class="k">await</span> brain.store({
   type: <span class="s">'episodic'</span>,
   content: <span class="s">'User prefers concise answers'</span>,
+  summary: <span class="s">'User prefers concise answers'</span>,
   source: <span class="s">'my-agent'</span>,
 });
 

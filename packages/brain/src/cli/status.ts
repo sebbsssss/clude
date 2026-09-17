@@ -1,9 +1,12 @@
 import { existsSync, readFileSync, statSync } from 'fs';
+import { homedir } from 'os';
 import { join } from 'path';
 import { printBanner, printSuccess, printWarn, printInfo, printDivider, c } from './banner';
 
 const CLUDE_DIR = join(process.env.HOME || process.env.USERPROFILE || '.', '.clude');
 const MEMORIES_FILE = join(CLUDE_DIR, 'memories.json');
+const BRAIN_DB = join(CLUDE_DIR, 'brain.db');
+const CONFIG_FILE = join(CLUDE_DIR, 'config.json');
 
 interface LocalMemory {
   id: number;
@@ -38,8 +41,10 @@ function timeAgo(dateStr: string): string {
 }
 
 function detectMode(): { mode: string; details: string } {
-  // Check for local store
+  // Check for local stores — setup creates brain.db (SQLite); the MCP
+  // server's CLUDE_LOCAL mode uses memories.json. Either means "configured".
   const hasLocal = existsSync(MEMORIES_FILE);
+  const hasSqlite = existsSync(BRAIN_DB);
 
   // Check for .env in current directory
   const envPath = join(process.cwd(), '.env');
@@ -61,8 +66,16 @@ function detectMode(): { mode: string; details: string } {
   if (process.env.CORTEX_API_KEY) hasApiKey = true;
   if (process.env.SUPABASE_URL) hasSupabase = true;
 
-  if (hasLocal && !hasApiKey && !hasSupabase) {
-    return { mode: 'local', details: MEMORIES_FILE };
+  // Setup saves the hosted key to ~/.clude/config.json, not .env
+  if (!hasApiKey && existsSync(CONFIG_FILE)) {
+    try {
+      const cfg = JSON.parse(readFileSync(CONFIG_FILE, 'utf-8'));
+      if (cfg.apiKey) hasApiKey = true;
+    } catch {}
+  }
+
+  if ((hasLocal || hasSqlite) && !hasApiKey && !hasSupabase) {
+    return { mode: 'local', details: hasSqlite ? BRAIN_DB : MEMORIES_FILE };
   }
   if (hasApiKey) {
     return { mode: 'hosted', details: hostUrl || 'https://clude.io' };
@@ -70,13 +83,73 @@ function detectMode(): { mode: string; details: string } {
   if (hasSupabase) {
     return { mode: 'self-hosted', details: 'Supabase' };
   }
-  if (hasLocal) {
-    return { mode: 'local', details: MEMORIES_FILE };
+  if (hasLocal || hasSqlite) {
+    return { mode: 'local', details: hasSqlite ? BRAIN_DB : MEMORIES_FILE };
   }
   return { mode: 'not configured', details: 'Run: npx @clude/sdk setup' };
 }
 
+function printSqliteStatus(): void {
+  const fileStats = statSync(BRAIN_DB);
+  const fileSizeKb = (fileStats.size / 1024).toFixed(1);
+  try {
+    const Database = require('better-sqlite3');
+    const db = new Database(BRAIN_DB, { readonly: true });
+    const total = (db.prepare('SELECT COUNT(*) AS n FROM memories').get() as { n: number }).n;
+    printSuccess(`${total} memories in local SQLite store`);
+
+    if (total > 0) {
+      // The cognitive layer (decay, reinforcement, bonds) runs silently —
+      // status is where users get to see that their memory is alive.
+      const byType = db.prepare(
+        'SELECT memory_type, COUNT(*) AS n FROM memories GROUP BY memory_type ORDER BY n DESC'
+      ).all() as Array<{ memory_type: string; n: number }>;
+      printInfo(byType.map((r) => `${r.memory_type} ${r.n}`).join(' · '));
+
+      const agg = db.prepare(
+        'SELECT AVG(decay_factor) AS decay, AVG(importance) AS imp, SUM(access_count > 1) AS reinforced FROM memories'
+      ).get() as { decay: number | null; imp: number | null; reinforced: number | null };
+      printInfo(`health: avg decay ${(agg.decay ?? 1).toFixed(2)} · avg importance ${(agg.imp ?? 0).toFixed(2)} · ${agg.reinforced ?? 0} reinforced by recall`);
+
+      // Embeddings are an optional dependency — degradation to keyword-only
+      // search is graceful but should never be silent.
+      let semantic = false;
+      try { require.resolve('@huggingface/transformers'); semantic = true; } catch {}
+      if (semantic) {
+        printInfo('search: semantic (local embeddings) + keyword');
+      } else {
+        printWarn('search: keyword-only — install @huggingface/transformers for offline semantic search');
+      }
+
+      // Bonds and queued dream work may not exist in older databases
+      try {
+        const bonds = (db.prepare('SELECT COUNT(*) AS n FROM links').get() as { n: number }).n;
+        const queued = (db.prepare('SELECT COUNT(*) AS n FROM dream_queue').get() as { n: number }).n;
+        if (bonds > 0 || queued > 0) {
+          printInfo(`graph: ${bonds} bonds between memories · ${queued} dream ops queued`);
+        }
+      } catch {}
+
+      const top = db.prepare(
+        'SELECT summary, access_count FROM memories WHERE access_count > 1 ORDER BY access_count DESC LIMIT 1'
+      ).get() as { summary: string; access_count: number } | undefined;
+      if (top) {
+        const label = top.summary.length > 60 ? top.summary.slice(0, 57) + '...' : top.summary;
+        printInfo(`most reinforced: "${label}" (recalled ${top.access_count}×)`);
+      }
+    }
+    db.close();
+  } catch {
+    printSuccess('Local SQLite store ready');
+  }
+  printInfo(`${BRAIN_DB} (${fileSizeKb} KB, updated ${timeAgo(fileStats.mtime.toISOString())})\n`);
+}
+
 function printLocalStatus(): void {
+  if (existsSync(BRAIN_DB)) {
+    printSqliteStatus();
+    return;
+  }
   if (!existsSync(MEMORIES_FILE)) {
     printWarn('No memories file found.');
     printInfo(`Expected: ${MEMORIES_FILE}`);
@@ -214,17 +287,22 @@ function printHostedStatus(): void {
 
 function checkMcpInstalled(): void {
   const configs = [
-    { name: 'Claude Desktop', path: join(process.env.HOME || '', 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json') },
-    { name: 'Cursor', path: join(process.env.HOME || '', '.cursor', 'mcp.json') },
-    { name: 'Claude Code', path: join(process.cwd(), '.mcp.json') },
+    { name: 'Claude Desktop', path: join(homedir(), 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json') },
+    { name: 'Cursor', path: join(homedir(), '.cursor', 'mcp.json') },
+    { name: 'Claude Code (user)', path: join(homedir(), '.claude.json') },
+    { name: 'Claude Code (project)', path: join(process.cwd(), '.mcp.json') },
   ];
 
   let found = false;
   for (const cfg of configs) {
     if (existsSync(cfg.path)) {
       try {
-        const content = readFileSync(cfg.path, 'utf-8');
-        if (content.includes('clude')) {
+        // Check registered server names, not a raw substring — ~/.claude.json
+        // contains project paths, and any path with "clude" in it would
+        // otherwise read as installed.
+        const parsed = JSON.parse(readFileSync(cfg.path, 'utf-8'));
+        const servers = parsed?.mcpServers && typeof parsed.mcpServers === 'object' ? parsed.mcpServers : {};
+        if (Object.keys(servers).some((name) => name.includes('clude'))) {
           printSuccess(`MCP installed: ${cfg.name}`);
           found = true;
         }

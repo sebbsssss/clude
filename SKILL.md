@@ -44,6 +44,18 @@ Store a new memory. Memories persist across conversations and decay over time if
 - `related_wallet` — associated Solana wallet
 - `metadata` — arbitrary JSON metadata
 
+### `batch_store_memories`
+Store up to 50 memories in a single call. Returns an array of results with memory IDs. Same fields per memory as `store_memory`.
+
+### `list_memories`
+Browse memories without a search query. Paginated; sort by recency, importance, or last access. Filter by type or tags.
+
+### `update_memory`
+Update fields of an existing memory by its ID. Only provided fields are changed.
+
+### `delete_memory`
+Permanently delete a memory by its ID. Irreversible.
+
 ### `get_memory_stats`
 Get statistics: counts by type, average importance/decay, dream session history, top tags.
 
@@ -64,7 +76,8 @@ The MCP server auto-detects its mode from environment:
 |------|--------|---------|
 | **Hosted** | `CORTEX_API_KEY` | clude.io (zero setup) |
 | **Self-hosted** | `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` | Your Supabase |
-| **Local** | `--local` flag or `CLUDE_LOCAL=true` | `~/.clude/memories.json` |
+| **Local SQLite (default)** | none | `~/.clude/brain.db` (local embeddings, fully offline) |
+| **Local JSON** | `--local` flag or `CLUDE_LOCAL=true` | `~/.clude/memories.json` (portable single file) |
 
 ## Setup
 

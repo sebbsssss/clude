@@ -88,3 +88,4 @@ apps/mobile/ios/.symlinks/
 apps/mobile/android/.gradle/
 apps/mobile/android/local.properties
 apps/mobile/*.iml
+.README.repo.md

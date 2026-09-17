@@ -279,21 +279,26 @@ async function runZeroConfigSetup(): Promise<void> {
   printBanner();
   console.log(`\n  ${c.bold}Setting up Clude memory...${c.reset}\n`);
 
-  // Step 1: Detect email
+  // Step 1: Detect email — only cloud registration needs it. Local-only
+  // setup must work without one (CI and piped runs have no TTY to prompt).
   const email = await getEmail();
-  if (!email) {
-    console.error(`  ${c.red}✗${c.reset} Email is required. Aborting.\n`);
-    process.exit(1);
-  }
-  console.log(`  ${c.green}✓${c.reset} Detected email       ${email}`);
-
-  // Step 2: Register via backend
-  const reg = await registerWithBackend(email);
-  if (reg.ok) {
-    console.log(`  ${c.green}✓${c.reset} Registered            ${reg.apiKey!.slice(0, 12)}...`);
+  if (email) {
+    console.log(`  ${c.green}✓${c.reset} Detected email       ${email}`);
   } else {
-    console.log(`  ${c.yellow}⚠${c.reset} Cloud registration failed: ${reg.error}`);
-    console.log(`    Continuing in local-only mode.`);
+    console.log(`  ${c.yellow}-${c.reset} No email detected     continuing in local-only mode`);
+    console.log(`    ${c.dim}Set CLUDE_SETUP_EMAIL or run interactively to register for cloud sync.${c.reset}`);
+  }
+
+  // Step 2: Register via backend (needs an email)
+  let reg: Awaited<ReturnType<typeof registerWithBackend>> = { ok: false };
+  if (email) {
+    reg = await registerWithBackend(email);
+    if (reg.ok) {
+      console.log(`  ${c.green}✓${c.reset} Registered            ${reg.apiKey!.slice(0, 12)}...`);
+    } else {
+      console.log(`  ${c.yellow}⚠${c.reset} Cloud registration failed: ${reg.error}`);
+      console.log(`    Continuing in local-only mode.`);
+    }
   }
 
   // Step 3: Write config
@@ -303,7 +308,7 @@ async function runZeroConfigSetup(): Promise<void> {
     path.join(configDir, 'config.json'),
     JSON.stringify({
       apiKey: reg.apiKey ?? '',
-      email,
+      email: email ?? '',
       wallet: reg.wallet ?? '',
       agentId: reg.agentId ?? '',
       did: reg.did ?? '',
@@ -334,7 +339,14 @@ async function runZeroConfigSetup(): Promise<void> {
     for (const ide of ides) {
       try {
         const merged = installMcpConfig(ide, { apiKey: reg.apiKey, wallet: reg.wallet });
-        console.log(`  ${c.green}✓${c.reset} MCP installed         ${ide.name}${merged ? ' (merged)' : ''}`);
+        // Re-read the config so ✓ means "the entry is really there", not
+        // "the write didn't throw" — a false success here leaves the user's
+        // agent without memory and nothing to debug.
+        const check = JSON.parse(fs.readFileSync(ide.configPath, 'utf-8'));
+        if (!check?.mcpServers?.['clude-memory']) {
+          throw new Error('entry missing after write');
+        }
+        console.log(`  ${c.green}✓${c.reset} MCP installed         ${ide.name}${merged ? ' (merged)' : ''} ${c.dim}${ide.configPath}${c.reset}`);
       } catch (err: any) {
         console.log(`  ${c.yellow}⚠${c.reset} MCP install failed for ${ide.name}: ${err.message}`);
       }
@@ -961,8 +973,9 @@ export async function getEmail(opts: { skipPrompt?: boolean } = {}): Promise<str
     // git not installed or no config — fall through
   }
 
-  // 3. Prompt (unless skipped)
-  if (opts.skipPrompt) return null;
+  // 3. Prompt (unless skipped or stdin is not interactive — a piped/CI stdin
+  // would leave the readline question hanging forever)
+  if (opts.skipPrompt || !process.stdin.isTTY) return null;
 
   const rl = createPrompt();
   return new Promise((resolve) => {
@@ -978,10 +991,13 @@ export function detectInstalledIDEs(): IDEInfo[] {
   const ides: IDEInfo[] = [];
   const home = os.homedir();
 
-  if (fs.existsSync(path.join(home, '.claude'))) {
+  // Claude Code reads user-scope MCP servers from the top-level `mcpServers`
+  // key in ~/.claude.json — NOT from a file inside ~/.claude/. Writing
+  // anywhere else "succeeds" but the server never shows up in `claude mcp list`.
+  if (fs.existsSync(path.join(home, '.claude')) || fs.existsSync(path.join(home, '.claude.json'))) {
     ides.push({
       name: 'Claude Code',
-      configPath: path.join(home, '.claude', '.mcp.json'),
+      configPath: path.join(home, '.claude.json'),
     });
   }
 
@@ -1009,18 +1025,23 @@ export function installMcpConfig(
   ide: IDEInfo,
   reg: RegistrationResult,
 ): boolean {
-  let existing: any = { mcpServers: {} };
+  let existing: any = {};
   let merged = false;
 
   if (fs.existsSync(ide.configPath)) {
     try {
       existing = JSON.parse(fs.readFileSync(ide.configPath, 'utf-8'));
-      if (!existing.mcpServers) existing.mcpServers = {};
-      if (existing.mcpServers['clude-memory']) merged = true;
     } catch {
-      existing = { mcpServers: {} };
+      // ~/.claude.json holds all of Claude Code's state — resetting it on a
+      // parse failure would destroy the user's setup. Same for other IDEs:
+      // never replace a config we couldn't read.
+      throw new Error(`${ide.configPath} exists but is not valid JSON — fix or remove it, then re-run setup`);
     }
   }
+  if (!existing.mcpServers || typeof existing.mcpServers !== 'object' || Array.isArray(existing.mcpServers)) {
+    existing.mcpServers = {};
+  }
+  if (existing.mcpServers['clude-memory']) merged = true;
 
   const env: Record<string, string> = {};
   if (reg.apiKey) env.CORTEX_API_KEY = reg.apiKey;

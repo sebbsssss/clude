@@ -4,6 +4,38 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.4.0] — 2026-07-12
+
+### Added
+- **Light install** — `@huggingface/transformers` (the local embedding runtime, ~700MB of the dependency tree via onnxruntime) is now an `optionalDependency`. Default installs are unchanged (273 packages, full offline semantic search). `npm install @clude/sdk --omit=optional` gives a ~107MB install where local mode uses keyword search; store/recall verified working. Also means platforms where onnxruntime fails to build no longer fail the whole install.
+- **`clude status` shows the cognitive layer** — type breakdown, memory health (avg decay/importance), how many memories recall has reinforced, bond/queued-dream counts, the most-reinforced memory, and whether search is semantic or keyword-only (degradation is graceful but no longer silent).
+
+## [3.3.1] — 2026-07-11
+
+### Removed
+- **`extract_skill` MCP tool** — it was nonfunctional in every mode (the hosted endpoint was never implemented and the self-hosted module doesn't exist). Removed rather than advertise a tool that can't work; it can return with a real implementation.
+
+### Changed
+- **npm gets its own README** — `npm pack`/`publish` now swaps in a dev-focused `README.npm.md` (architecture, benchmarks, quick starts, API) via `prepack`/`postpack`; the repository README is unchanged.
+- **Docs synced with the product** — README and SKILL.md now document all 8 MCP tools, the SQLite-default local mode (`~/.clude/brain.db`) vs the `CLUDE_LOCAL` JSON store, headless setup with `CLUDE_SETUP_EMAIL`, `clude connect`/`doctor`, and TypeScript declarations; removed a dead `examples/` link. The `/install` page sample output matches the real setup flow, and its SDK example includes the required `summary` field.
+
+## [3.3.0] — 2026-07-11
+
+First-run experience overhaul, driven by a clean-room installation audit.
+
+### Fixed
+- **`clude setup` now installs the MCP server where Claude Code actually reads it** — user-scope `~/.claude.json` instead of `~/.claude/.mcp.json` (which Claude Code ignores). The "✓ MCP installed" line is verified by re-reading the config and prints the path it wrote. `claude mcp list` shows `clude-memory` after setup.
+- **Setup no longer hangs (or aborts) without an email** — non-TTY runs (CI, piped stdin) skip the prompt, and setup completes in local-only mode; email is only needed for cloud registration. Set `CLUDE_SETUP_EMAIL` to register non-interactively.
+- **Config safety** — `setup` and `connect` refuse to overwrite an existing config file they can't parse, instead of silently resetting it (which destroyed Claude Code state / other MCP servers).
+- **`clude status` mode detection** — recognizes the SQLite store (`~/.clude/brain.db`) and the API key saved in `~/.clude/config.json`; previously reported "not configured" after a successful setup. MCP detection now checks user scope (`~/.claude.json`) and project scope (`./.mcp.json`) by parsing server names, and works on Windows.
+- **One version everywhere** — `clude --version`, the MCP handshake, and the npm package all report the same version (previously 3.0.1 / 2.7.0 / 3.2.0). The publish build fails on drift.
+
+### Added
+- **TypeScript declarations** — the package now ships `.d.ts` files for the SDK (`Cortex`, `CortexV2`, all option/result types) and MCP entry points, with a `types` field and `exports` conditions. Strict-mode consumers compile out of the box (previously TS7016 on import).
+
+### Changed
+- **14 dependencies removed from the published package** — `@ai-sdk/*` ×4, `ai`, `@openrouter/ai-sdk-provider`, `vercel-minimax-ai-provider`, `express`, `express-rate-limit`, `multer`, `@privy-io/node`, `jose`, `unpdf`, `twitter-api-v2`. None are used by the shipped SDK/CLI/MCP bundles (verified by bundle analysis). Install: 340 → 273 packages.
+
 ## [3.2.0] — 2026-05-18
 
 Remote MCP connector for Claude Desktop / claude.ai, plus a one-command
