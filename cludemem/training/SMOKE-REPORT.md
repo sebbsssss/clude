@@ -74,9 +74,53 @@ becomes ~100% by construction.
 --resume auto`: picked up `ckpt-30` at step 30 / batch 30, continued to 45
 (loss 6.74 → 6.47 on the same schedule), saved `ckpt-45` and `final/`.
 
-## Run B — `--preset 49m` (49.3M params), CPU
+## Run B — `--preset 49m` (49.3M params), 100 steps, CPU
 
-In progress at the time of this commit; the table lands in the follow-up commit.
+The real configuration, run just far enough on 4 vCPU to show it trains
+stably and to measure CPU cost: `--max-seq 1024 --tokens-per-batch 4096
+--grad-accum 2` (≈8K tokens/step), `--lr 5e-4`, 20 warmup. Steady-state
+throughput once uncontended: **≈1.0K tok/s** (7.5–8 s per 8K-token step;
+the log's running average, 728 tok/s at step 100, still carries the first
+step, which overlapped a concurrent eval). Peak RSS stayed
+well inside 15 GB. Gen-eval columns are 3 held-out examples per task with
+`--gen-eval-max-new-tokens 96`, so long outputs (EXTRACT/CONSOLIDATE/COMPACT)
+are truncated there — read them as a trend, not a score.
+
+| step | train loss | grad norm | held-out loss | gen acc | schema | per task |
+|-----:|-----------:|----------:|--------------:|--------:|-------:|---|
+| 1 | 9.87 | 15.65 | | | | |
+| 10 | 6.95 | 5.74 | | | | |
+| 20 | 3.93 | 13.01 | | | | |
+| 30 | 3.31 | 2.56 | | | | |
+| 40 | 2.53 | 6.83 | | | | |
+| 50 | 2.84 | 2.69 | 1.900 | 0.0% | 0.0% | CLAS=0.0 EXTR=0.0 ENTI=0.0 TEMP=0.0 CONS=0.0 COMP=0.0 RECO=0.0 QUER=0.0 ANSW=0.0 |
+| 60 | 1.73 | 2.05 | | | | |
+| 70 | 0.75 | 1.21 | | | | |
+| 80 | 1.11 | 2.43 | | | | |
+| 90 | 1.24 | 3.24 | | | | |
+| 100 | 1.55 | 2.50 | 0.873 | 13.0% | 13.0% | CLAS=1.0 EXTR=0.0 ENTI=0.0 TEMP=0.0 CONS=0.0 COMP=0.0 RECO=0.0 QUER=0.0 ANSW=0.0 |
+
+100 steps × 8K tokens ≈ 0.8M tokens, about
+5% of one epoch — the full recipe is 753 steps × 64K
+tokens on a GPU (≈49M tokens, 3 epochs). Extrapolating this CPU rate, one
+epoch here would take ~5 h; on a single modern GPU the whole run is ~1 h.
+
+## Handoff — what the 49M run still needs
+
+1. **A GPU box** (any 16 GB+ card): `pip install -r requirements-49m.txt`,
+   regenerate the shards (`generate.ts --count 3000 --balance`), run the
+   Section 2b commands. Checkpoints are HF dirs; `--resume auto` survives
+   pre-emption.
+2. **Your original 49M run's config/checkpoint**, if it differs from
+   `--preset 49m` (vocab, depth, tokenizer, data mix): every preset knob is a
+   CLI flag, so the recipe can be aligned without code changes.
+3. **Teacher rendering** (`generate.ts --teacher`, DeepSeek/Qwen key) before
+   any public number: the template-rendered corpus is exact but narrow, and
+   a from-scratch model has no pretraining to fall back on for phrasing it
+   never saw.
+4. **GGUF gate**: `packaging/export_gguf.sh` was written against stock
+   llama.cpp but could not be exercised here (no llama.cpp checkout in the
+   container); run it once and then `eval/memopseval.ts` against Ollama.
 
 ## Reproduce
 
