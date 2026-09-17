@@ -238,10 +238,31 @@ def evaluate(model, tok, rows: list[dict], per_task: int = 50, max_new_tokens: i
     return res
 
 
+def self_test(rows: list[dict]) -> None:
+    """Gold labels must be schema-valid and self-score 100%; garbage must not score.
+    Guards the port against drift from taxonomy.ts / memopseval.ts."""
+    from collections import Counter
+
+    n, bad_schema, bad_score = Counter(), Counter(), Counter()
+    for r in rows:
+        gold = json.loads(r["messages"][2]["content"])
+        n[r["task"]] += 1
+        bad_schema[r["task"]] += int(not schema_ok(r["task"], gold))
+        bad_score[r["task"]] += int(not score(r["task"], gold, gold))
+    ok = not sum(bad_schema.values()) and not sum(bad_score.values())
+    assert not score("CLASSIFY", {"type": "semantic"}, {"type": "episodic"})
+    assert not score("ANSWER", {"abstain": True}, None) and not schema_ok("QUERY", {"intent": 1})
+    print(f"[self-test] {sum(n.values())} gold rows over {len(n)} tasks: "
+          f"schema failures {dict(+bad_schema) or 'none'}, self-score failures {dict(+bad_score) or 'none'}")
+    if not ok:
+        raise SystemExit(1)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", required=True, help="HF checkpoint dir (final/ or ckpt-N/)")
+    ap.add_argument("--model", default=None, help="HF checkpoint dir (final/ or ckpt-N/)")
     ap.add_argument("--data", required=True, help="held-out chat JSONL")
+    ap.add_argument("--self-test", action="store_true", help="verify the scorer against the shard's gold labels (no model)")
     ap.add_argument("--per-task", type=int, default=50, help="examples per task (0 = whole shard)")
     ap.add_argument("--max-new-tokens", type=int, default=384)
     ap.add_argument("--batch-size", type=int, default=8)
@@ -249,16 +270,21 @@ def main() -> None:
     ap.add_argument("--out", default=None, help="write results JSON here")
     args = ap.parse_args()
 
-    from transformers import AutoTokenizer, LlamaForCausalLM
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    tok = AutoTokenizer.from_pretrained(args.model)
-    model = LlamaForCausalLM.from_pretrained(
-        args.model, dtype=torch.bfloat16 if device.type == "cuda" else torch.float32).to(device)
     rows = []
     with open(args.data) as f:
         for line in f:
             if line.strip():
                 rows.append(json.loads(line))
+    if args.self_test:
+        return self_test(rows)
+    if not args.model:
+        ap.error("--model is required unless --self-test")
+
+    from transformers import AutoTokenizer, LlamaForCausalLM
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    tok = AutoTokenizer.from_pretrained(args.model)
+    model = LlamaForCausalLM.from_pretrained(
+        args.model, dtype=torch.bfloat16 if device.type == "cuda" else torch.float32).to(device)
     res = evaluate(model, tok, rows, per_task=args.per_task, max_new_tokens=args.max_new_tokens,
                    batch_size=args.batch_size, device=device, show=args.show)
     if args.out:

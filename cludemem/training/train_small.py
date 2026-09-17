@@ -201,12 +201,21 @@ def eval_loss(model, rows: list[Row], tokens_per_batch: int, pad_id: int, device
 
 # ─────────────────────────────────────────────────────── checkpoints ──
 
-def save_checkpoint(path: str, model, tok, optimizer, state: dict, keep: int, out_dir: str) -> None:
+def save_tokenizer(tok, tokenizer_src: str, dst: str) -> None:
+    """save_pretrained() writes tokenizer.json; llama.cpp's converter wants the raw
+    SentencePiece tokenizer.model next to it, so carry it into every checkpoint."""
+    tok.save_pretrained(dst)
+    spm = os.path.join(tokenizer_src, "tokenizer.model")
+    if os.path.exists(spm) and not os.path.exists(os.path.join(dst, "tokenizer.model")):
+        shutil.copyfile(spm, os.path.join(dst, "tokenizer.model"))
+
+
+def save_checkpoint(path: str, model, tok, tokenizer_src: str, optimizer, state: dict, keep: int, out_dir: str) -> None:
     tmp = path + ".tmp"
     if os.path.exists(tmp):
         shutil.rmtree(tmp)
     model.save_pretrained(tmp, safe_serialization=True)
-    tok.save_pretrained(tmp)
+    save_tokenizer(tok, tokenizer_src, tmp)
     torch.save({**state, "optimizer": optimizer.state_dict(), "torch_rng": torch.get_rng_state()},
                os.path.join(tmp, "training_state.pt"))
     if os.path.exists(path):
@@ -427,7 +436,7 @@ def main() -> None:
             if args.eval_every and step % args.eval_every == 0:
                 run_eval(step)
             if args.save_every and step % args.save_every == 0:
-                save_checkpoint(os.path.join(args.out, f"ckpt-{step}"), model, tok, optimizer,
+                save_checkpoint(os.path.join(args.out, f"ckpt-{step}"), model, tok, args.tokenizer, optimizer,
                                 {"step": step, "epoch": epoch, "batch_pos": batch_pos}, args.keep, args.out)
                 print(f"[ckpt] saved ckpt-{step}")
             done = step >= total_steps
@@ -440,7 +449,7 @@ def main() -> None:
     final = os.path.join(args.out, "final")
     model.config.use_cache = True   # inference default for whoever loads final/
     model.save_pretrained(final, safe_serialization=True)
-    tok.save_pretrained(final)
+    save_tokenizer(tok, args.tokenizer, final)
     GenerationConfig(max_new_tokens=1024, do_sample=False, eos_token_id=[end_id, tok.eos_token_id],
                      pad_token_id=pad_id, bos_token_id=tok.bos_token_id).save_pretrained(final)
     with open(os.path.join(final, "cludemem_train_args.json"), "w") as f:
