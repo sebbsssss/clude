@@ -43,7 +43,9 @@ import { bm25SearchMemories } from '../experimental/bm25-search';
 import { setContentTokens } from './content-tokens';
 import { runReconcileShadow } from './reconcile-shadow';
 import { encryptForStorage, delegationStateForWrite } from './memory-encryption';
-import { generateOpenRouterResponse, isOpenRouterEnabled } from '@clude/shared/core/openrouter-client';
+import { isOpenRouterEnabled } from '@clude/shared/core/openrouter-client';
+import { generateMemoryOp } from '@clude/shared/core/memory-ops';
+import { isMemoryModelEnabled, isOllamaEnabled } from '@clude/shared/core/inference';
 import { isEncryptionEnabled, getEncryptionPubkey, encryptContent } from '@clude/shared/core/encryption';
 import { decryptMemories } from './memory-decryption';
 import { eventBus } from '../events/event-bus';
@@ -1063,17 +1065,17 @@ async function embedMemory(
  * Falls back to just the original query if LLM is unavailable or slow.
  */
 async function expandQuery(query: string): Promise<string[]> {
-  if (!isOpenRouterEnabled()) return [query];
+  // Need at least one generation backend: the local memory model or a frontier router.
+  if (!isOpenRouterEnabled() && !isMemoryModelEnabled()) return [query];
 
   try {
     const response = await Promise.race([
-      generateOpenRouterResponse({
+      generateMemoryOp({
+        cognitiveFunction: 'query', // memory op → local model when enabled, else fast frontier slot
         systemPrompt: 'You are a search query expander. Given a question, output 3 alternative phrasings that would help find relevant information in a memory database. Output ONLY the 3 alternatives, one per line. No numbering, no explanations.',
-        messages: [{ role: 'user', content: query }],
-        model: 'meta-llama/llama-3.2-3b-instruct',
+        userMessage: query,
         maxTokens: 150,
         temperature: 0.3,
-        cognitiveFunction: 'entity', // Use fast model slot
       }),
       new Promise<string>((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
     ]) as string;
@@ -2540,7 +2542,17 @@ export async function scoreImportanceWithLLM(
   fallbackOpts?: Parameters<typeof calculateImportance>[0]
 ): Promise<number> {
   try {
-    const response = await generateImportanceScore(description);
+    // Local memory model (CludeMem) when enabled, else the existing Anthropic-direct path.
+    const response = isOllamaEnabled()
+      ? await generateMemoryOp({
+          cognitiveFunction: 'importance',
+          systemPrompt:
+            'You rate the importance of events for an AI agent. Respond with ONLY a single integer from 1 to 10. 1 = purely mundane. 5 = moderately important. 10 = extremely significant.',
+          userMessage: `Rate the importance of this event:\n"${description.slice(0, 500)}"\nRating (1-10):`,
+          maxTokens: 10,
+          temperature: 0,
+        })
+      : await generateImportanceScore(description);
     const parsed = parseInt(response.trim(), 10);
     if (!isNaN(parsed) && parsed >= 1 && parsed <= 10) {
       return parsed / 10;

@@ -12,6 +12,8 @@ import {
   generateOpenRouterResponse,
   OPENROUTER_MODELS,
 } from "@clude/shared/core/openrouter-client";
+import { generateMemoryOp } from "@clude/shared/core/memory-ops";
+import { isOllamaEnabled } from "@clude/shared/core/inference";
 import { z } from "zod";
 
 const log = createChildLogger("batch-upload");
@@ -57,6 +59,21 @@ const ExtractedNodeSchema = z.object({
 
 type ExtractedNode = z.infer<typeof ExtractedNodeSchema>;
 
+// JSON schema for the local model's structured output (mirrors ExtractedNodeSchema).
+const NODE_ARRAY_SCHEMA = {
+  type: "array",
+  items: {
+    type: "object",
+    properties: {
+      title: { type: "string" },
+      content: { type: "string" },
+      entities: { type: "array", items: { type: "string" } },
+      original_text: { type: "string" },
+    },
+    required: ["title", "content", "entities", "original_text"],
+  },
+} as const;
+
 interface ChunkRow {
   batch_id: string;
   chunk_index: number;
@@ -70,18 +87,24 @@ async function extractNodes(
   chunk: string,
   chunkIndex: number,
 ): Promise<{ nodes: ExtractedNode[]; rawResponse: string }> {
-  const rawResponse = await generateOpenRouterResponse({
-    systemPrompt: EXTRACTION_PROMPT,
-    messages: [
-      {
-        role: "user",
-        content: `Extract memory nodes from this text chunk (#${chunkIndex + 1}):\n\n${chunk}`,
-      },
-    ],
-    model: OPENROUTER_MODELS["claude-haiku-4.5"],
-    maxTokens: 4096,
-    temperature: 0.2,
-  });
+  const userPrompt = `Extract memory nodes from this text chunk (#${chunkIndex + 1}):\n\n${chunk}`;
+  // Local memory model (CludeMem) when enabled, else the existing Haiku path.
+  const rawResponse = isOllamaEnabled()
+    ? await generateMemoryOp({
+        cognitiveFunction: "extract",
+        systemPrompt: EXTRACTION_PROMPT,
+        userMessage: userPrompt,
+        format: NODE_ARRAY_SCHEMA,
+        maxTokens: 4096,
+        temperature: 0.2,
+      })
+    : await generateOpenRouterResponse({
+        systemPrompt: EXTRACTION_PROMPT,
+        messages: [{ role: "user", content: userPrompt }],
+        model: OPENROUTER_MODELS["claude-haiku-4.5"],
+        maxTokens: 4096,
+        temperature: 0.2,
+      });
 
   let nodes: ExtractedNode[] = [];
   try {

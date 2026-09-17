@@ -56,6 +56,16 @@ export class Cortex {
         });
       }
 
+      // Local memory model (CludeMem) — route memory ops to a local Ollama model.
+      if (config.localModel) {
+        const { _configureMemoryModel } = require('@clude/shared/core/memory-model-config');
+        _configureMemoryModel({
+          provider: 'ollama',
+          model: config.localModel.model,
+          ...(config.localModel.ollamaUrl ? { ollamaUrl: config.localModel.ollamaUrl } : {}),
+        });
+      }
+
       // Inject Solana config if provided
       if (config.solana) {
         const { _configureSolana, _configureMemoryRegistry } = require('@clude/shared/core/solana-client');

@@ -20,7 +20,12 @@ import {
   type MemoryType,
 } from './memory';
 import { isOpenRouterEnabled, generateOpenRouterResponse } from '@clude/shared/core/openrouter-client';
+import { generateMemoryOp } from '@clude/shared/core/memory-ops';
+import { isOllamaEnabled } from '@clude/shared/core/inference';
 import { createChildLogger } from '@clude/shared/core/logger';
+
+// JSON schema for the local model's structured output: a flat array of strings.
+const STRING_ARRAY_SCHEMA = { type: 'array', items: { type: 'string' } } as const;
 
 const log = createChildLogger('hosted-dreams');
 
@@ -62,22 +67,29 @@ async function dreamForAgent(ownerWallet: string, agentName: string): Promise<{ 
       .map(m => `- [${m.created_at?.slice(0, 10)}] ${m.summary}`)
       .join('\n');
 
-    if (!isOpenRouterEnabled()) {
-      log.warn({ agentName }, 'OpenRouter not enabled — cannot run dream cycle');
+    if (!isOpenRouterEnabled() && !isOllamaEnabled()) {
+      log.warn({ agentName }, 'No memory-generation backend enabled — cannot run dream cycle');
       return;
     }
 
+    const consolidationPrompt = `Extract 5-8 key factual insights from these agent memories. Facts, patterns, learned knowledge — not events.\n\n${episodicSummaries}`;
     try {
-      const consolidationResponse = await generateOpenRouterResponse({
-        systemPrompt: 'You extract factual insights from data. Always respond with ONLY a JSON array of strings. No explanation, no markdown, no thinking process.',
-        messages: [{
-          role: 'user',
-          content: `Extract 5-8 key factual insights from these agent memories. Facts, patterns, learned knowledge — not events.\n\n${episodicSummaries}`,
-        }],
-        model: 'meta-llama/llama-3.3-70b-instruct',
-        maxTokens: 1000,
-        temperature: 0.2,
-      });
+      const consolidationResponse = isOllamaEnabled()
+        ? await generateMemoryOp({
+            cognitiveFunction: 'summarize',
+            systemPrompt: 'You extract factual insights from data. Always respond with ONLY a JSON array of strings. No explanation, no markdown, no thinking process.',
+            userMessage: consolidationPrompt,
+            format: STRING_ARRAY_SCHEMA,
+            maxTokens: 1000,
+            temperature: 0.2,
+          })
+        : await generateOpenRouterResponse({
+            systemPrompt: 'You extract factual insights from data. Always respond with ONLY a JSON array of strings. No explanation, no markdown, no thinking process.',
+            messages: [{ role: 'user', content: consolidationPrompt }],
+            model: 'meta-llama/llama-3.3-70b-instruct',
+            maxTokens: 1000,
+            temperature: 0.2,
+          });
 
       // Parse insights
       const jsonMatch = consolidationResponse.match(/\[[\s\S]*\]/);
@@ -107,17 +119,24 @@ async function dreamForAgent(ownerWallet: string, agentName: string): Promise<{ 
 
     // ── Phase 2: Procedural extraction ──
     // Extract behavioral patterns / rules from episodes
+    const proceduralPrompt = `Extract 3-4 actionable rules/behaviors from these agent memories. Things to DO or AVOID.\n\n${episodicSummaries}`;
     try {
-      const proceduralResponse = await generateOpenRouterResponse({
-        systemPrompt: 'You extract actionable rules from data. Always respond with ONLY a JSON array of strings. No explanation.',
-        messages: [{
-          role: 'user',
-          content: `Extract 3-4 actionable rules/behaviors from these agent memories. Things to DO or AVOID.\n\n${episodicSummaries}`,
-        }],
-        model: 'meta-llama/llama-3.3-70b-instruct',
-        maxTokens: 500,
-        temperature: 0.2,
-      });
+      const proceduralResponse = isOllamaEnabled()
+        ? await generateMemoryOp({
+            cognitiveFunction: 'extract',
+            systemPrompt: 'You extract actionable rules from data. Always respond with ONLY a JSON array of strings. No explanation.',
+            userMessage: proceduralPrompt,
+            format: STRING_ARRAY_SCHEMA,
+            maxTokens: 500,
+            temperature: 0.2,
+          })
+        : await generateOpenRouterResponse({
+            systemPrompt: 'You extract actionable rules from data. Always respond with ONLY a JSON array of strings. No explanation.',
+            messages: [{ role: 'user', content: proceduralPrompt }],
+            model: 'meta-llama/llama-3.3-70b-instruct',
+            maxTokens: 500,
+            temperature: 0.2,
+          });
 
       const jsonMatch = proceduralResponse.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
