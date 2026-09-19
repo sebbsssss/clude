@@ -26,10 +26,10 @@ for i in $(seq 1 90); do nvidia-smi >/dev/null 2>&1 && break; sleep 10; done
 nvidia-smi || { status "no GPU driver after 15 min"; exit 1; }
 NG=$(nvidia-smi -L | wc -l); DRV=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -1 | cut -d. -f1)
 status "$NG GPU(s), driver $DRV"
-mkdir -p /mnt/results /home/gcpuser/cludemem-train && cd /home/gcpuser/cludemem-train
+mkdir -p /mnt/results/$RUN /home/gcpuser/cludemem-train && cd /home/gcpuser/cludemem-train   # rsync needs the dest dir to exist
 status "fetching code, data (1M corpus) and run dir"
 gsutil -m -q cp -r gs://$B/code/v4-resume/cloud . || exit 1
-gsutil -q cp gs://$B/data/cludemem-data-1m.tgz /tmp/data.tgz && tar xzf /tmp/data.tgz && rm /tmp/data.tgz || exit 1
+gsutil -q cp gs://$B/data/cludemem-data-1m.tgz /tmp/data.tgz && tar --warning=no-unknown-keyword -xzf /tmp/data.tgz && rm /tmp/data.tgz || exit 1
 gsutil -m -q rsync -r gs://$B/$RUN /mnt/results/$RUN || exit 1
 ls /mnt/results/$RUN | tail -5
 status "python env: torch 2.12.1 + unsloth 2026.9.4 (the original run's pins)"
