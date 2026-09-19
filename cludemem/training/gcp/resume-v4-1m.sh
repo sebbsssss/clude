@@ -26,7 +26,6 @@ for Z in $ZONES; do
       --image-family "$IMAGE_FAMILY" --image-project deeplearning-platform-release \
       --boot-disk-size 300GB --boot-disk-type pd-balanced \
       --scopes cloud-platform --labels cludemem=v4-resume \
-      --metadata install-nvidia-driver=True \
       --metadata-from-file startup-script="$HERE/resume-v4-1m.startup.sh"; then
     echo "[resume] VM $NAME running in $Z. Follow it with:"
     echo "  gsutil cat gs://clude-query-sol-data-cludemem/v4-1m/RESUME_STATUS"

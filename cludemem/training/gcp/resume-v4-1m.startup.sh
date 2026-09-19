@@ -9,10 +9,18 @@ MD="curl -s -H Metadata-Flavor:Google http://metadata.google.internal/computeMet
 ZONE=$($MD/zone | awk -F/ '{print $NF}'); NAME=$($MD/name)
 status() { echo "[$(date -u +%FT%TZ)] $*"; echo "$(date -u +%FT%TZ) $*" | gsutil -q cp - gs://$B/$RUN/RESUME_STATUS; }
 sync_out() { gsutil -m -q rsync -r /mnt/results/$RUN gs://$B/$RUN || true; gsutil -q cp $LOG gs://$B/$RUN/resume-$NAME.log || true; }
-finish() { status "exiting (code $1); final sync"; sync_out; gcloud compute instances delete "$NAME" --zone "$ZONE" --quiet || true; }
-if gsutil -q stat gs://$B/$RUN/RESUME_LOCK; then echo "another resume holds the lock; exiting"; exit 0; fi
+TRAINED=0
+finish() {
+  status "exiting (code $1); final sync"; sync_out
+  gsutil -q rm gs://$B/$RUN/RESUME_LOCK || true
+  # Only self-delete after the trainer actually ran; any earlier exit (reboot, setup
+  # failure) leaves the VM up so the log can be inspected with gcloud compute ssh.
+  if [ "$TRAINED" = 1 ]; then gcloud compute instances delete "$NAME" --zone "$ZONE" --quiet || true; fi
+}
+LOCK_OWNER=$(gsutil -q cat gs://$B/$RUN/RESUME_LOCK 2>/dev/null | awk '{print $1}')
+if [ -n "$LOCK_OWNER" ] && [ "$LOCK_OWNER" != "$NAME" ]; then echo "another resume ($LOCK_OWNER) holds the lock; exiting"; exit 0; fi
 echo "$NAME $(date -u +%FT%TZ)" | gsutil -q cp - gs://$B/$RUN/RESUME_LOCK
-trap 'gsutil -q rm gs://'$B'/'$RUN'/RESUME_LOCK; finish $?' EXIT
+trap 'finish $?' EXIT
 status "boot on $NAME ($ZONE): waiting for GPU driver"
 for i in $(seq 1 90); do nvidia-smi >/dev/null 2>&1 && break; sleep 10; done
 nvidia-smi || { status "no GPU driver after 15 min"; exit 1; }
@@ -26,7 +34,7 @@ gsutil -m -q rsync -r gs://$B/$RUN /mnt/results/$RUN || exit 1
 ls /mnt/results/$RUN | tail -5
 status "python env: torch 2.12.1 + unsloth 2026.9.4 (the original run's pins)"
 PY=/opt/conda/bin/python; [ -x $PY ] || PY=python3
-$PY -m venv /opt/cm && . /opt/cm/bin/activate && pip install -q -U pip
+[ -d /opt/cm ] || $PY -m venv /opt/cm; . /opt/cm/bin/activate && pip install -q -U pip
 echo "torch==2.12.1" > /tmp/c.txt
 CU=cu130; [ "${DRV:-0}" -lt 580 ] && CU=cu126
 pip install -q torch==2.12.1 --index-url https://download.pytorch.org/whl/$CU || pip install -q torch==2.12.1
@@ -36,6 +44,7 @@ export HF_HUB_ENABLE_HF_TRANSFER=1 TOKENIZERS_PARALLELISM=false
 ( while true; do sleep 600; gsutil -m -q rsync -r /mnt/results/$RUN gs://$B/$RUN; gsutil -q cp $LOG gs://$B/$RUN/resume-$NAME.log; done ) &
 SYNC=$!
 COMMON="cloud/train_v3.py --data data/train.jsonl data-hard-v2/train.jsonl data-scale/1m/reconcile_v2/reconcile.jsonl data-scale/1m/extract/all.jsonl data-scale/1m/consolidate/all.jsonl data-scale/1m/answer/all.jsonl --out /mnt/results/$RUN --lr 0.00028 --rank 16 --alpha 32 --dropout 0.05 --epochs 1 --batch 4 --max-seq 2816 --save-steps 500 --warmup-steps 100 --canary-per-task 6 --resume"
+TRAINED=1
 if [ "$NG" -ge 8 ]; then
   status "training: torchrun x8, grad-accum 4 (128 seq/step, same as the original run)"
   torchrun --nproc_per_node 8 $COMMON --grad-accum 4; RC=$?
