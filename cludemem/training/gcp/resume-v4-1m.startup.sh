@@ -94,6 +94,11 @@ echo "torch==2.12.1" > /tmp/c.txt
 CU=cu130; [ "${DRV:-0}" -lt 580 ] && CU=cu126
 $PY -m pip install -q $PIPX torch==2.12.1 --index-url https://download.pytorch.org/whl/$CU \
     || $PY -m pip install -q $PIPX torch==2.12.1 || { status "torch install failed"; exit 1; }
+# Ubuntu preinstalls some of these via apt at versions pip treats as "already satisfied",
+# so an unpinned requirement never upgrades them: jinja2 3.0.3 shipped by the image failed
+# apply_chat_template, which needs >=3.1.0. Force the known-stale ones current.
+$PY -m pip install -q $PIPX -U "jinja2>=3.1.2" "packaging>=23" "filelock>=3.12" "pyyaml>=6" \
+    "requests>=2.31" "typing_extensions>=4.10" || { status "base-dependency upgrade failed"; exit 1; }
 $PY -m pip install -q $PIPX -c /tmp/c.txt "unsloth==2026.9.4" "transformers==5.5.0" "trl==0.24.0" "peft==0.20.0" \
     "datasets==4.3.0" "bitsandbytes==0.50.2" accelerate sentencepiece protobuf hf_transfer \
     || { status "pip install failed"; exit 1; }
