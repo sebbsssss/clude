@@ -41,7 +41,9 @@ heartbeat() {
   done
 }
 heartbeat & HB=$!
-trap 'kill $HB 2>/dev/null; finish $?' EXIT
+# rc must be captured BEFORE kill, which would otherwise overwrite $? with its own status
+# (that is why a failed run reported "exiting (code 0)").
+trap 'rc=$?; kill $HB 2>/dev/null; finish $rc' EXIT
 
 status "boot on $NAME ($ZONE): waiting for GPU driver"
 for i in $(seq 1 90); do nvidia-smi >/dev/null 2>&1 && break; sleep 10; done
@@ -64,16 +66,21 @@ say "run dir now: $(du -sh /mnt/results/$RUN | cut -f1); latest checkpoints:"
 ls -d /mnt/results/$RUN/checkpoint-* 2>/dev/null | sort -t- -k2 -n | tail -3
 
 STAGE=python-env; status "python env: torch 2.12.1 + unsloth 2026.9.4 (the original run's pins)"
-PY=/opt/conda/bin/python; [ -x $PY ] || PY=python3
-[ -d /opt/cm ] || $PY -m venv /opt/cm
-. /opt/cm/bin/activate && pip install -q -U pip
+# Install straight into the image's interpreter. An earlier version built a venv at /opt/cm;
+# creation failed silently and every later `pip` was "command not found", so the venv is gone.
+PY=/opt/conda/bin/python; [ -x "$PY" ] || PY=$(command -v python3)
+[ -n "$PY" ] || { status "no python interpreter found"; exit 1; }
+say "interpreter: $PY ($($PY --version 2>&1))"
+$PY -m pip --version || $PY -m ensurepip --upgrade || { status "pip unavailable in $PY"; exit 1; }
+$PY -m pip install -q -U pip
 echo "torch==2.12.1" > /tmp/c.txt
 CU=cu130; [ "${DRV:-0}" -lt 580 ] && CU=cu126
-pip install -q torch==2.12.1 --index-url https://download.pytorch.org/whl/$CU || pip install -q torch==2.12.1
-pip install -q -c /tmp/c.txt "unsloth==2026.9.4" "transformers==5.5.0" "trl==0.24.0" "peft==0.20.0" \
+$PY -m pip install -q torch==2.12.1 --index-url https://download.pytorch.org/whl/$CU \
+    || $PY -m pip install -q torch==2.12.1 || { status "torch install failed"; exit 1; }
+$PY -m pip install -q -c /tmp/c.txt "unsloth==2026.9.4" "transformers==5.5.0" "trl==0.24.0" "peft==0.20.0" \
     "datasets==4.3.0" "bitsandbytes==0.50.2" accelerate sentencepiece protobuf hf_transfer \
     || { status "pip install failed"; exit 1; }
-python -c "import torch,unsloth,transformers,trl,peft; print('torch',torch.__version__,'cuda',torch.cuda.is_available(),'n',torch.cuda.device_count(),'tf',transformers.__version__)" \
+$PY -c "import torch,unsloth,transformers,trl,peft; print('torch',torch.__version__,'cuda',torch.cuda.is_available(),'n',torch.cuda.device_count(),'tf',transformers.__version__)" \
     || { status "torch/unsloth import failed"; exit 1; }
 export HF_HUB_ENABLE_HF_TRANSFER=1 TOKENIZERS_PARALLELISM=false
 
@@ -81,12 +88,15 @@ export HF_HUB_ENABLE_HF_TRANSFER=1 TOKENIZERS_PARALLELISM=false
 COMMON="cloud/train_v3.py --data data/train.jsonl data-hard-v2/train.jsonl data-scale/1m/reconcile_v2/reconcile.jsonl data-scale/1m/extract/all.jsonl data-scale/1m/consolidate/all.jsonl data-scale/1m/answer/all.jsonl --out /mnt/results/$RUN --lr 0.00028 --rank 16 --alpha 32 --dropout 0.05 --epochs 1 --batch 4 --max-seq 2816 --save-steps 500 --warmup-steps 100 --canary-per-task 6 --resume"
 TRAINED=1
 STAGE=train
+# `$PY -m torch.distributed.run` rather than the torchrun script, so the launcher is
+# guaranteed to be the interpreter the packages were installed into.
 if [ "$NG" -ge 8 ]; then
-  status "training: torchrun x8, grad-accum 4 (128 seq/step, same as the original run)"
-  torchrun --nproc_per_node 8 $COMMON --grad-accum 4; RC=$?
+  status "training: 8 GPUs, grad-accum 4 (128 seq/step, same as the original run)"
+  $PY -m torch.distributed.run --nproc_per_node 8 $COMMON --grad-accum 4; RC=$?
 else
   ACC=$((32 / NG)); status "training: $NG GPU(s), grad-accum $ACC (128 seq/step)"
-  if [ "$NG" -gt 1 ]; then torchrun --nproc_per_node $NG $COMMON --grad-accum $ACC; else python $COMMON --grad-accum $ACC; fi; RC=$?
+  if [ "$NG" -gt 1 ]; then $PY -m torch.distributed.run --nproc_per_node $NG $COMMON --grad-accum $ACC
+  else $PY $COMMON --grad-accum $ACC; fi; RC=$?
 fi
 kill $SYNC 2>/dev/null
 status "trainer exited rc=$RC; WINNER: $(cat /mnt/results/$RUN/WINNER 2>/dev/null || echo none)"
