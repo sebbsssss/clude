@@ -86,7 +86,7 @@ if [ ! -d data-scale ]; then
 fi
 timeout 3600 $GS rsync -r --exclude '^(RESUME_|RELEASE_|resume-.*\.log|release-.*\.log|release/.*)' gs://$B/$RUN /mnt/results/$RUN \
   || { status "run-dir sync failed"; exit 1; }
-timeout 600 $GS cp gs://$B/staging/eval-dnli.tgz /tmp/eval.tgz && mkdir -p eval && tar -xzf /tmp/eval.tgz -C eval \
+timeout 600 $GS cp gs://$B/staging/eval-dnli-ba6223f52cc7.tgz /tmp/eval.tgz && mkdir -p eval && tar -xzf /tmp/eval.tgz -C eval \
   || { status "eval bundle fetch failed"; exit 1; }
 say "run dir: $(du -sh /mnt/results/$RUN | cut -f1); checkpoints: $(ls -d /mnt/results/$RUN/checkpoint-* | wc -l)"
 
