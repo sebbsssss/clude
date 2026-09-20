@@ -13,8 +13,12 @@
 #      from the artefacts above) -> gs://$B/v4-1m/release/
 #   4. if the VM carries `hf-repo` (+ `hf-token`) metadata, push_to_hf.py uploads it.
 #
-# The VM deletes itself only when every step succeeded; otherwise it stays up with
-# /var/log/cludemem-release.log (also copied to gs://$B/v4-1m/release-<vm>.log).
+# The VM stays up when it is done (its service account has no compute.instances.delete, as the
+# training VM's final log showed); delete it from the console or with gcloud once the release
+# is where it should be. Log: /var/log/cludemem-release.log, copied to gs://$B/v4-1m/release-<vm>.log.
+#
+# Re-running with `hf-repo` + `hf-token` metadata after a release already exists in
+# gs://$B/v4-1m/release/ skips straight to the upload (nothing is recomputed).
 set -uo pipefail
 B=clude-query-sol-data-cludemem; RUN=v4-1m; BASE=unsloth/gemma-4-E4B-it
 LOG=/var/log/cludemem-release.log; exec > >(tee -a $LOG) 2>&1
@@ -26,11 +30,9 @@ ALLOW_SELECT=$(attr allow-select)   # "1": permit selection when the run has no 
 GS="gcloud storage --verbosity=warning"
 say() { echo "[$(date -u +%FT%TZ)] $*"; }
 status() { say "$*"; echo "$(date -u +%FT%TZ) $*" | $GS cp - gs://$B/$RUN/RELEASE_STATUS 2>/dev/null; }
-OK=0
 finish() {
-  status "exiting (code $1); final sync"
+  status "exiting (code $1); VM $NAME stays up"
   timeout 300 $GS cp $LOG gs://$B/$RUN/release-$NAME.log || true
-  if [ "$OK" = 1 ]; then gcloud compute instances delete "$NAME" --zone "$ZONE" --quiet || true; fi
 }
 STAGEF=/run/cludemem-stage; stage() { echo "$1" > "$STAGEF"; }; stage boot
 heartbeat() {
@@ -48,18 +50,40 @@ for i in $(seq 1 90); do nvidia-smi >/dev/null 2>&1 && break; sleep 10; done
 nvidia-smi || { status "no GPU driver after 15 min"; exit 1; }
 DRV=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -1 | cut -d. -f1)
 
+# ---- upload-only re-run ---------------------------------------------------------------------
+REL=/mnt/results/release
+if [ -n "$HF_REPO" ] && $GS ls gs://$B/$RUN/release/README.md >/dev/null 2>&1 && [ ! -f "$REL/.uploaded-$HF_REPO" ]; then
+  stage hf-upload; status "release already in gs://$B/$RUN/release: uploading it to https://huggingface.co/$HF_REPO"
+  HF_TOKEN=$(attr hf-token); [ -n "$HF_TOKEN" ] || { status "hf-repo set but no hf-token metadata"; exit 7; }
+  rm -rf "$REL" hf && mkdir -p "$REL"
+  timeout 3600 $GS rsync -r gs://$B/$RUN/release "$REL" || { status "release download failed"; exit 1; }
+  timeout 600 $GS cp -r gs://$B/code/v4-release/hf . || { status "fetch hf/ failed"; exit 1; }
+  PY=$(command -v python3); "$PY" -m pip install -q --break-system-packages "huggingface_hub>=0.30" hf_transfer 2>/dev/null || "$PY" -m pip install -q "huggingface_hub>=0.30" hf_transfer
+  PUSH="hf/push_to_hf.py --release $REL --repo $HF_REPO"
+  [ -n "$HF_GGUF_REPO" ] && PUSH="$PUSH --gguf-repo $HF_GGUF_REPO"
+  [ "$HF_PRIVATE" = 1 ] && PUSH="$PUSH --private"
+  HF_HUB_ENABLE_HF_TRANSFER=1 HF_TOKEN="$HF_TOKEN" timeout 2h "$PY" $PUSH || { status "Hugging Face upload failed"; exit 7; }
+  touch "$REL/.uploaded-$HF_REPO"
+  status "published: https://huggingface.co/$HF_REPO"; exit 0
+fi
+
 # ---- inputs -------------------------------------------------------------------------------
-WINNER=$($GS cat gs://$B/$RUN/WINNER 2>/dev/null | awk '{print $1}')
+WINNER=$(basename "$($GS cat gs://$B/$RUN/WINNER 2>/dev/null | awk '{print $1}')" 2>/dev/null)
 if [ -z "$WINNER" ] && [ "$ALLOW_SELECT" != 1 ]; then
   status "no WINNER in gs://$B/$RUN: the run has not finished. Finish it (resume-v4-1m.sh) or set allow-select=1 to select among the saved checkpoints"; exit 2
 fi
 say "WINNER in bucket: ${WINNER:-none (allow-select=1)}"
 mkdir -p /mnt/results/$RUN /mnt/results/evals /home/gcpuser/cludemem-train && cd /home/gcpuser/cludemem-train
 stage fetch; status "fetching code, hf/ scripts, corpus, run dir, eval bundle"
+# `cp -r` into an existing dir nests it (cloud/cloud), so the code dirs are recreated each run;
+# the corpus and run dir are reused when the disk already carries them (the training VM's disk does).
+rm -rf cloud hf eval
 timeout 600 $GS cp -r gs://$B/code/v4-resume/cloud . || { status "fetch cloud/ failed"; exit 1; }
 timeout 600 $GS cp -r gs://$B/code/v4-release/hf . || { status "fetch hf/ failed"; exit 1; }
-timeout 1800 $GS cp gs://$B/data/cludemem-data-1m.tgz /tmp/data.tgz || { status "corpus download failed"; exit 1; }
-tar --warning=no-unknown-keyword -xzf /tmp/data.tgz && rm -f /tmp/data.tgz || { status "corpus extract failed"; exit 1; }
+if [ ! -d data-scale ]; then
+  timeout 1800 $GS cp gs://$B/data/cludemem-data-1m.tgz /tmp/data.tgz || { status "corpus download failed"; exit 1; }
+  tar --warning=no-unknown-keyword -xzf /tmp/data.tgz && rm -f /tmp/data.tgz || { status "corpus extract failed"; exit 1; }
+fi
 timeout 3600 $GS rsync -r --exclude '^(RESUME_|RELEASE_|resume-.*\.log|release-.*\.log|release/.*)' gs://$B/$RUN /mnt/results/$RUN \
   || { status "run-dir sync failed"; exit 1; }
 timeout 600 $GS cp gs://$B/staging/eval-dnli.tgz /tmp/eval.tgz && mkdir -p eval && tar -xzf /tmp/eval.tgz -C eval \
@@ -103,7 +127,7 @@ export HF_HUB_ENABLE_HF_TRANSFER=1 TOKENIZERS_PARALLELISM=false
 stage select-export; status "train_v3.py --select-only --export-gguf over $RUN"
 COMMON="cloud/train_v3.py --data data/train.jsonl data-hard-v2/train.jsonl data-scale/1m/reconcile_v2/reconcile.jsonl data-scale/1m/extract/all.jsonl data-scale/1m/consolidate/all.jsonl data-scale/1m/answer/all.jsonl --out /mnt/results/$RUN --lr 0.00028 --rank 16 --alpha 32 --dropout 0.05 --epochs 1 --batch 4 --max-seq 2816 --save-steps 500 --warmup-steps 100 --canary-per-task 6"
 timeout 4h $PY $COMMON --select-only --export-gguf; RC=$?
-WINNER=$(awk '{print $1}' /mnt/results/$RUN/WINNER 2>/dev/null)
+WINNER=$(basename "$(awk '{print $1}' /mnt/results/$RUN/WINNER 2>/dev/null)" 2>/dev/null)
 say "select-only rc=$RC; WINNER=${WINNER:-none}"
 if [ -z "$WINNER" ]; then status "selection produced no WINNER (rc=$RC)"; exit 3; fi
 GGUF_OK=1; [ "$RC" -ne 0 ] && { GGUF_OK=0; say "GGUF export failed (rc=$RC); the adapter release continues without GGUF"; }
@@ -121,7 +145,7 @@ timeout 600 $GS cp -r /mnt/results/evals gs://$B/ || true
 
 # ---- 3. release dir + model card -----------------------------------------------------------
 stage release; status "assembling release dir + model card"
-REL=/mnt/results/release; rm -rf $REL; mkdir -p $REL/adapter $REL/evals $REL/gguf
+rm -rf $REL; mkdir -p $REL/adapter $REL/evals $REL/gguf
 for f in "$WDIR"/*; do
   case "$(basename "$f")" in
     optimizer.pt|scheduler.pt|rng_state*|trainer_state.json|training_args.bin|scaler.pt|canary*.json|*.log) ;;
@@ -155,10 +179,10 @@ if [ -n "$HF_REPO" ]; then
   [ -n "$HF_GGUF_REPO" ] && PUSH="$PUSH --gguf-repo $HF_GGUF_REPO"
   [ "$HF_PRIVATE" = 1 ] && PUSH="$PUSH --private"
   HF_TOKEN="$HF_TOKEN" timeout 2h $PY $PUSH || { status "Hugging Face upload failed; release stays in GCS"; exit 7; }
+  touch "$REL/.uploaded-$HF_REPO"
   status "published: https://huggingface.co/$HF_REPO"
 else
-  say "no hf-repo metadata: skipping the Hugging Face upload (run push_to_hf.py on gs://$B/$RUN/release)"
+  say "no hf-repo metadata: skipping the Hugging Face upload (re-run with hf-repo/hf-token metadata, or push_to_hf.py on gs://$B/$RUN/release)"
 fi
-OK=1
 status "done: winner $WINNER, release gs://$B/$RUN/release${HF_REPO:+, https://huggingface.co/$HF_REPO}"
 exit 0

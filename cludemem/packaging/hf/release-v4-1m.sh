@@ -10,6 +10,7 @@
 # Follow it with:
 #   gsutil cat gs://clude-query-sol-data-cludemem/v4-1m/RELEASE_STATUS
 #
+# The VM does not delete itself (its service account cannot); delete it when the release is in place.
 # The HF token travels as instance metadata (readable by anyone with compute.instances.get on
 # the project) and dies with the VM; use a fine-grained write token scoped to the target repos.
 set -euo pipefail
