@@ -66,18 +66,35 @@ say "run dir now: $(du -sh /mnt/results/$RUN | cut -f1); latest checkpoints:"
 ls -d /mnt/results/$RUN/checkpoint-* 2>/dev/null | sort -t- -k2 -n | tail -3
 
 STAGE=python-env; status "python env: torch 2.12.1 + unsloth 2026.9.4 (the original run's pins)"
-# Install straight into the image's interpreter. An earlier version built a venv at /opt/cm;
-# creation failed silently and every later `pip` was "command not found", so the venv is gone.
-PY=/opt/conda/bin/python; [ -x "$PY" ] || PY=$(command -v python3)
-[ -n "$PY" ] || { status "no python interpreter found"; exit 1; }
-say "interpreter: $PY ($($PY --version 2>&1))"
-$PY -m pip --version || $PY -m ensurepip --upgrade || { status "pip unavailable in $PY"; exit 1; }
-$PY -m pip install -q -U pip
+# Install straight into an interpreter that HAS pip. This image (common-cu129-ubuntu-2204)
+# ships no conda, and Ubuntu's /usr/bin/python3 carries neither pip nor ensurepip, so both
+# earlier attempts died here: first a venv that could not be built, then a missing pip.
+PY=""
+for c in /opt/conda/bin/python /opt/conda/envs/*/bin/python python3.12 python3.11 python3.10 python3; do
+  p=$(command -v "$c" 2>/dev/null) || continue
+  "$p" -m pip --version >/dev/null 2>&1 || continue
+  PY="$p"; break
+done
+if [ -z "$PY" ]; then
+  say "no interpreter ships pip; installing python3-pip from apt"
+  export DEBIAN_FRONTEND=noninteractive
+  timeout 300 apt-get update -qq || true
+  timeout 600 apt-get install -y -qq python3-pip || true
+  PY=$(command -v python3)
+  if ! "$PY" -m pip --version >/dev/null 2>&1; then
+    say "apt route failed; bootstrapping pip from get-pip.py"
+    timeout 300 curl -fsSL https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py && "$PY" /tmp/get-pip.py -q
+  fi
+fi
+[ -n "$PY" ] && "$PY" -m pip --version || { status "could not obtain a python with pip"; exit 1; }
+say "interpreter: $PY ($($PY --version 2>&1)), pip $($PY -m pip --version 2>&1)"
+# PEP 668 marks some distro pythons externally managed; this VM is disposable, so override.
+PIPX=""; "$PY" -m pip install -q -U pip 2>/dev/null || { PIPX="--break-system-packages"; "$PY" -m pip install -q -U pip $PIPX; }
 echo "torch==2.12.1" > /tmp/c.txt
 CU=cu130; [ "${DRV:-0}" -lt 580 ] && CU=cu126
-$PY -m pip install -q torch==2.12.1 --index-url https://download.pytorch.org/whl/$CU \
-    || $PY -m pip install -q torch==2.12.1 || { status "torch install failed"; exit 1; }
-$PY -m pip install -q -c /tmp/c.txt "unsloth==2026.9.4" "transformers==5.5.0" "trl==0.24.0" "peft==0.20.0" \
+$PY -m pip install -q $PIPX torch==2.12.1 --index-url https://download.pytorch.org/whl/$CU \
+    || $PY -m pip install -q $PIPX torch==2.12.1 || { status "torch install failed"; exit 1; }
+$PY -m pip install -q $PIPX -c /tmp/c.txt "unsloth==2026.9.4" "transformers==5.5.0" "trl==0.24.0" "peft==0.20.0" \
     "datasets==4.3.0" "bitsandbytes==0.50.2" accelerate sentencepiece protobuf hf_transfer \
     || { status "pip install failed"; exit 1; }
 $PY -c "import torch,unsloth,transformers,trl,peft; print('torch',torch.__version__,'cuda',torch.cuda.is_available(),'n',torch.cuda.device_count(),'tf',transformers.__version__)" \
