@@ -32,12 +32,14 @@ echo "$NAME $(date -u +%FT%TZ)" | $GS cp - gs://$B/$RUN/RESUME_LOCK
 
 # Heartbeat: a silent stage is indistinguishable from a hung one, so report progress
 # (stage + bytes on disk) every 3 minutes for as long as the script lives.
-STAGE=boot
+# The stage lives in a file, not a shell variable: the heartbeat is a background subshell that
+# forked at boot and never sees later assignments (it printed "[boot]" for the whole run).
+STAGEF=/run/cludemem-stage; stage() { echo "$1" > "$STAGEF"; }; stage boot
 heartbeat() {
   while true; do
     sleep 180
     local sz; sz=$(du -sh /mnt/results/$RUN 2>/dev/null | cut -f1)
-    echo "$(date -u +%FT%TZ) [$STAGE] alive; run dir $sz" | $GS cp - gs://$B/$RUN/RESUME_STATUS 2>/dev/null
+    echo "$(date -u +%FT%TZ) [$(cat "$STAGEF" 2>/dev/null)] alive; run dir $sz" | $GS cp - gs://$B/$RUN/RESUME_STATUS 2>/dev/null
   done
 }
 heartbeat & HB=$!
@@ -52,20 +54,20 @@ NG=$(nvidia-smi -L | wc -l); DRV=$(nvidia-smi --query-gpu=driver_version --forma
 status "$NG GPU(s), driver $DRV"
 
 mkdir -p /mnt/results/$RUN /home/gcpuser/cludemem-train && cd /home/gcpuser/cludemem-train
-STAGE=fetch-code; status "fetching cloud/ scripts"
+stage fetch-code; status "fetching cloud/ scripts"
 timeout 600 $GS cp -r gs://$B/code/v4-resume/cloud . || { status "fetch cloud/ failed or timed out"; exit 1; }
-STAGE=fetch-data; status "fetching the 1M corpus (218 MB)"
+stage fetch-data; status "fetching the 1M corpus (218 MB)"
 if [ ! -d data-scale ]; then
   timeout 1800 $GS cp gs://$B/data/cludemem-data-1m.tgz /tmp/data.tgz || { status "corpus download failed or timed out"; exit 1; }
   tar --warning=no-unknown-keyword -xzf /tmp/data.tgz && rm -f /tmp/data.tgz || { status "corpus extract failed"; exit 1; }
 fi
-STAGE=fetch-run; status "fetching the run dir (~3 GB of checkpoints)"
+stage fetch-run; status "fetching the run dir (~3 GB of checkpoints)"
 timeout 3600 $GS rsync -r --exclude '^(RESUME_|resume-.*\.log)' gs://$B/$RUN /mnt/results/$RUN \
   || { status "run-dir sync failed or timed out"; exit 1; }
 say "run dir now: $(du -sh /mnt/results/$RUN | cut -f1); latest checkpoints:"
 ls -d /mnt/results/$RUN/checkpoint-* 2>/dev/null | sort -t- -k2 -n | tail -3
 
-STAGE=python-env; status "python env: torch 2.12.1 + unsloth 2026.9.4 (the original run's pins)"
+stage python-env; status "python env: torch 2.12.1 + unsloth 2026.9.4 (the original run's pins)"
 # Install straight into an interpreter that HAS pip. This image (common-cu129-ubuntu-2204)
 # ships no conda, and Ubuntu's /usr/bin/python3 carries neither pip nor ensurepip, so both
 # earlier attempts died here: first a venv that could not be built, then a missing pip.
@@ -109,7 +111,7 @@ export HF_HUB_ENABLE_HF_TRANSFER=1 TOKENIZERS_PARALLELISM=false
 ( while true; do sleep 600; sync_out; done ) & SYNC=$!
 COMMON="cloud/train_v3.py --data data/train.jsonl data-hard-v2/train.jsonl data-scale/1m/reconcile_v2/reconcile.jsonl data-scale/1m/extract/all.jsonl data-scale/1m/consolidate/all.jsonl data-scale/1m/answer/all.jsonl --out /mnt/results/$RUN --lr 0.00028 --rank 16 --alpha 32 --dropout 0.05 --epochs 1 --batch 4 --max-seq 2816 --save-steps 500 --warmup-steps 100 --canary-per-task 6 --resume"
 TRAINED=1
-STAGE=train
+stage train
 # `$PY -m torch.distributed.run` rather than the torchrun script, so the launcher is
 # guaranteed to be the interpreter the packages were installed into.
 if [ "$NG" -ge 8 ]; then
