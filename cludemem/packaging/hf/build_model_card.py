@@ -193,8 +193,18 @@ def main() -> None:
         "tags": ["lora", "unsloth", "trl", "gemma-4", "agent-memory", "structured-output", "json", "cludemem"],
         "language": ["en"],
     }
-    if args.base_license:
-        front["base_model_license"] = args.base_license
+    # LoRA weights are a derivative of the base model, so when the base carries a
+    # non-permissive license (Gemma terms), the adapter repo is published under it.
+    if args.base_license and args.base_license.lower() not in ("apache-2.0", "mit", "bsd-3-clause"):
+        front["license"] = args.base_license
+    if front["license"] == "apache-2.0":
+        license_text = (f"The adapter weights in this repository are released under **Apache-2.0**. The base model\n"
+                        f"`{base_model}` is subject to its own license"
+                        + (f" (`{args.base_license}`)" if args.base_license else "") + "; using this adapter\nrequires accepting it.")
+    else:
+        license_text = (f"The adapter weights are a derivative of `{base_model}` and are distributed under its\n"
+                        f"license (`{front['license']}`); using them requires accepting it. The CludeMem training code and\n"
+                        f"data engine are Apache-2.0 in the [Clude repo](https://github.com/sebbsssss/clude).")
     fm = "---\n" + "\n".join(
         f"{k}: {json.dumps(v) if isinstance(v, list) else v}" for k, v in front.items()) + "\n---\n"
 
@@ -331,9 +341,7 @@ generation stays on the frontier. See `docs/integrations/local-memory-contract.m
 
 ## License
 
-The adapter weights in this repository are released under **Apache-2.0**. The base model
-`{base_model}` is subject to its own license{" (" + args.base_license + ")" if args.base_license else ""}; using this adapter
-requires accepting it.
+{license_text}
 
 ## Citation
 
