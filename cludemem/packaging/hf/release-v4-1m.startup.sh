@@ -82,13 +82,17 @@ if [ -z "$PY" ]; then
 fi
 "$PY" -m pip --version || { status "could not obtain a python with pip"; exit 1; }
 PIPX=""; "$PY" -m pip install -q -U pip 2>/dev/null || { PIPX="--break-system-packages"; "$PY" -m pip install -q -U pip $PIPX; }
+# unsloth_zoo is pinned to the newest release that existed when the run started (2026-09-11):
+# unsloth 2026.9.4 only says ">=2026.9.3", and the 2026.9.6 zoo that pip picked otherwise could
+# not patch trl 0.24.0's SFTTrainer ("source anchor not found"), fell back to a double forward
+# per step and then refused it under Gemma-4 KV sharing on transformers 5.5.0.
 echo "torch==2.12.1" > /tmp/c.txt
 CU=cu130; [ "${DRV:-0}" -lt 580 ] && CU=cu126
 $PY -m pip install -q $PIPX torch==2.12.1 --index-url https://download.pytorch.org/whl/$CU \
     || $PY -m pip install -q $PIPX torch==2.12.1 || { status "torch install failed"; exit 1; }
 $PY -m pip install -q $PIPX -U "jinja2>=3.1.2" "packaging>=23" "filelock>=3.12" "pyyaml>=6" "requests>=2.31" "typing_extensions>=4.10" \
     || { status "base-dependency upgrade failed"; exit 1; }
-$PY -m pip install -q $PIPX -c /tmp/c.txt "unsloth==2026.9.4" "transformers==5.5.0" "trl==0.24.0" "peft==0.20.0" \
+$PY -m pip install -q $PIPX -c /tmp/c.txt "unsloth==2026.9.4" "unsloth_zoo==2026.9.3" "transformers==5.5.0" "trl==0.24.0" "peft==0.20.0" \
     "datasets==4.3.0" "bitsandbytes==0.50.2" accelerate sentencepiece protobuf hf_transfer "huggingface_hub>=0.30" \
     scikit-learn || { status "pip install failed"; exit 1; }
 $PY -c "import torch,unsloth,transformers,trl,peft,huggingface_hub; print('torch',torch.__version__,'cuda',torch.cuda.is_available())" \
