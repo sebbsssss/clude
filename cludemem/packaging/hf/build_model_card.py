@@ -126,8 +126,14 @@ def dnli_section(res: dict | None) -> str:
             lines.append(f"| {bname} | {pct(b.get('strict4_acc'))} | {pct(b.get('collapse3_acc'))} | {pct(b.get('binary_acc'))} | {pct(b.get('binary_f1'))} |")
         lines.append(f"Schema-complete outputs: {m.get('schema_complete', s.get('schema_complete', 'n/a'))}/{n}; unparseable: {s.get('unparseable', 'n/a')}.")
         lines.append("")
-    lines.append("Sample sizes are small where they are small; the confidence intervals say so. Treat these as "
-                 "a directional check on real dialogue data, not a leaderboard number.")
+    ns = [s.get("model", {}).get("n") or 0 for s in res.get("sets", {}).values()]
+    if ns and min(ns) < 100:
+        lines.append("Sample sizes are small where they are small; the confidence intervals say so. Treat these as "
+                     "a directional check on real dialogue data, not a leaderboard number.")
+    else:
+        lines.append("These sets were not used in training. The gap to the baselines is the signal; the strict "
+                     "4-way numbers are held down by DNLI/DECODE having no notion of temporal order, so every "
+                     "`supersedes` verdict counts as wrong there.")
     return "\n".join(lines)
 
 
@@ -153,6 +159,7 @@ def main() -> None:
     ap.add_argument("--repo", required=True, help="Hugging Face repo id the card is for, e.g. clude/cludemem-e4b")
     ap.add_argument("--base-license", default=None, help="license id of the base model as shown on its Hub page")
     ap.add_argument("--gguf-repo", default=None, help="repo id holding the GGUF exports, if separate")
+    ap.add_argument("--gguf-dir", default=None, help="local dir with the .gguf files being released (listed on the card)")
     ap.add_argument("--out", default="README.md")
     args = ap.parse_args()
 
@@ -163,6 +170,30 @@ def main() -> None:
     base = load(os.path.join(args.run_dir, "canary_base_torch.json"))
     dnli = load(args.dnli)
     memops = load(args.memopseval)
+    ggufs = []
+    if args.gguf_dir and os.path.isdir(args.gguf_dir):
+        ggufs = sorted((f, os.path.getsize(os.path.join(args.gguf_dir, f)))
+                       for f in os.listdir(args.gguf_dir) if f.endswith(".gguf"))
+    if args.gguf_repo:
+        gguf_line = f"GGUF builds for Ollama / llama.cpp are in [`{args.gguf_repo}`](https://huggingface.co/{args.gguf_repo})."
+    elif ggufs:
+        gguf_line = ("GGUF builds for Ollama / llama.cpp (adapter merged into the base) are in `gguf/`: "
+                     + ", ".join(f"`{f}` ({sz / 1e9:.1f} GB)" for f, sz in ggufs) + ".")
+    else:
+        gguf_line = "GGUF builds for Ollama / llama.cpp are published alongside when available."
+    q4 = next((f for f, _ in ggufs if "Q4_K_M" in f), ggufs[0][0] if ggufs else None)
+    ollama_block = ""
+    if q4:
+        gguf_root = f"https://huggingface.co/{args.gguf_repo}/resolve/main" if args.gguf_repo else f"https://huggingface.co/{args.repo}/resolve/main/gguf"
+        ollama_block = f"""### With Ollama / llama.cpp
+
+```bash
+curl -LO {gguf_root}/{q4}
+curl -LO {gguf_root}/Modelfile          # Unsloth's template for the Gemma 4 chat format
+ollama create cludemem-e4b -f Modelfile
+```
+
+"""
 
     log = load_canary_log(args.run_dir)
     winner, per_task_tbl, traj_tbl = canary_tables(sel, base, log)
@@ -218,7 +249,7 @@ only from provided memories (abstaining when they don't support an answer). It i
 these operations without a frontier API call.
 
 This repository holds the **LoRA adapter** (run `{run_name}`) for `{base_model}`.
-{"GGUF builds for Ollama / llama.cpp are in [`" + args.gguf_repo + "`](https://huggingface.co/" + args.gguf_repo + ")." if args.gguf_repo else "GGUF builds for Ollama / llama.cpp are published alongside when available."}
+{gguf_line}
 
 ## What it does
 
@@ -320,10 +351,10 @@ out = model.generate(ids, max_new_tokens=256, do_sample=False)
 print(tok.decode(out[0][ids.shape[-1]:], skip_special_tokens=True))
 ```
 
-### With Clude
+{ollama_block}### With Clude
 
 ```bash
-MEMORY_MODEL_PROVIDER=ollama MEMORY_MODEL=cludemem-e4b   # after `ollama pull` of the GGUF build
+MEMORY_MODEL_PROVIDER=ollama MEMORY_MODEL=cludemem-e4b   # the Ollama model created above
 ```
 
 Memory operations route to CludeMem with graceful fallback to the configured frontier model; personality

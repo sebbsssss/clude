@@ -184,6 +184,7 @@ BASE_LICENSE=$(curl -sf "https://huggingface.co/api/models/$BASE" | $PY -c "impo
 say "base model license on the Hub: ${BASE_LICENSE:-unknown}"
 CARD_ARGS="--run-dir /mnt/results/$RUN --dnli $EVAL_OUT/results_all.json --repo ${HF_REPO:-clude/cludemem-e4b} --out $REL/README.md"
 [ -n "$BASE_LICENSE" ] && CARD_ARGS="$CARD_ARGS --base-license $BASE_LICENSE"
+[ -d $REL/gguf ] && CARD_ARGS="$CARD_ARGS --gguf-dir $REL/gguf"
 [ -n "$HF_GGUF_REPO" ] && [ -d $REL/gguf ] && CARD_ARGS="$CARD_ARGS --gguf-repo $HF_GGUF_REPO"
 $PY hf/build_model_card.py $CARD_ARGS || { status "model card build failed"; exit 5; }
 say "release dir:"; du -sh $REL/*; find $REL -type f | sort
