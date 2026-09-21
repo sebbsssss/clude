@@ -171,15 +171,15 @@ mkdir -p $REL/evals/dnli && cp $EVAL_OUT/*.json $EVAL_OUT/run.log $REL/evals/dnl
 # Public release: drop the training file list / data dirs / local paths from the eval artefacts.
 $PY hf/sanitize_evals.py $REL/evals || { status "evals sanitize failed"; exit 5; }
 # Quantised text models only (the BF16 multimodal projector is the base's, unchanged; it stays
-# in GCS). Files are named after the release, contents untouched. Unsloth's Modelfile rides along.
+# in GCS). Files are named after the model, never the run (its name encodes the corpus size); contents untouched. Unsloth's Modelfile rides along.
 if [ "$GGUF_OK" = 1 ]; then
   for f in /mnt/results/$RUN/gguf*/*.gguf; do
     case "$f" in *mmproj*) continue ;; esac
     q=$(basename "$f" .gguf); q=${q##*.}
-    cp "$f" "$REL/gguf/cludemem-e4b-$RUN.$q.gguf"
+    cp "$f" "$REL/gguf/cludemem-e4b.$q.gguf"
   done
   mf=$(ls /mnt/results/$RUN/gguf*/Modelfile 2>/dev/null | head -1)
-  [ -n "$mf" ] && sed -E "s#^FROM .*#FROM ./cludemem-e4b-$RUN.Q4_K_M.gguf#" "$mf" > $REL/gguf/Modelfile
+  [ -n "$mf" ] && sed -E "s#^FROM .*#FROM ./cludemem-e4b.Q4_K_M.gguf#" "$mf" > $REL/gguf/Modelfile
 fi
 ls $REL/gguf/*.gguf >/dev/null 2>&1 || rm -rf $REL/gguf
 BASE_LICENSE=$(curl -sf "https://huggingface.co/api/models/$BASE" | $PY -c "import sys,json; d=json.load(sys.stdin); print(d.get('cardData',{}).get('license') or '')" 2>/dev/null)

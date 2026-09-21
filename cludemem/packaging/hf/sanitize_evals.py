@@ -5,7 +5,7 @@ Strip corpus and machine details from the evaluation artefacts before they are p
     python sanitize_evals.py <release>/evals
 
 What is removed, in place:
-  - config.json and canary.jsonl: they carry the training file list, per-source row counts,
+  - config.json, canary.jsonl (and the WINNER / TRAIN_STEP markers): they carry the training file list, per-source row counts,
     data directories and local paths. The card's Training table already holds what a reader
     needs (rank, alpha, steps, stack), so both are deleted from the release.
   - every remaining JSON: keys whose values are local paths (adapter_dir, winner_dir, json,
@@ -19,7 +19,7 @@ import os
 import sys
 
 DROP_KEYS = {"adapter_dir", "winner_dir", "json", "adapter", "data_dir", "canary_settings", "out", "cwd", "script", "canary_script"}
-DROP_FILES = {"config.json", "canary.jsonl"}
+DROP_FILES = {"config.json", "canary.jsonl", "WINNER", "TRAIN_STEP"}
 
 
 def scrub(obj):

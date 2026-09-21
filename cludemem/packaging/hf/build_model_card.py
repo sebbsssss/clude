@@ -213,7 +213,10 @@ ollama create cludemem-e4b -f Modelfile
     base_model = cfg.get("base_used") or cfg.get("base") or "unsloth/gemma-4-E4B-it"
     plan = cfg.get("plan", {})
     audit = cfg.get("audit", {})
-    run_name = os.path.basename(os.path.abspath(args.run_dir))
+    # The internal run name (e.g. "v4-1m") encodes the corpus size, so a public card never shows it.
+    run_name = os.path.basename(os.path.abspath(args.run_dir)) if args.corpus == "full" else None
+    run_tag = f" (run `{run_name}`)" if run_name else ""
+    cite_key = f"cludemem_{run_name.replace('-', '_')}" if run_name else "cludemem_e4b"
     trainable = cfg.get("trainable_params")
     total = cfg.get("total_params")
     macro_w = winner.get("digit_acc") if winner else None
@@ -241,6 +244,14 @@ ollama create cludemem-e4b -f Modelfile
                         f"license (`{front['license']}`); using them requires accepting it. The CludeMem training code and\n"
                         f"data engine are Apache-2.0 in the [Clude repo](https://github.com/sebbsssss/clude).")
     if args.corpus == "full":
+        schedule_rows = (f"| Training rows | {fmt_int(audit.get('rows_trained', plan.get('rows', 0)))} (max {fmt_int(cfg.get('max_seq', 0))} tokens per row) |\n"
+                         f"| Schedule | {fmt_int(plan.get('total_steps', 0))} steps × {plan.get('seq_per_step')} sequences ({plan.get('corpus_coverage')} epoch), "
+                         f"lr {cfg.get('lr')} cosine, warmup {plan.get('warmup_steps')}, {cfg.get('optim')} |")
+    else:
+        # steps alone do not give the corpus size; the sequences-per-step and epoch count would
+        schedule_rows = (f"| Schedule | one epoch, lr {cfg.get('lr')} cosine, warmup {plan.get('warmup_steps')} steps, {cfg.get('optim')}; "
+                         f"sequences up to {fmt_int(cfg.get('max_seq', 0))} tokens |")
+    if args.corpus == "full":
         data_section = (f"{fmt_int(audit.get('rows_trained', 0))} supervised examples across the nine tasks, built by a synthetic "
                         "**data engine** in which every label is derived mechanically from a planted \"life script\" (a persona "
                         "plus a timeline of facts with supersessions, contradictions, duplicates and temporal chains). Because "
@@ -252,12 +263,11 @@ ollama create cludemem-e4b -f Modelfile
                         + "\n\nNo benchmark evaluation data was used for training; persona names from public long-memory "
                         "benchmarks are on a decontamination blocklist.")
     else:
-        data_section = (f"Trained on a proprietary synthetic corpus of {audit.get('rows_trained', 0) / 1e6:.2f} million "
-                        "supervised examples spanning the nine tasks, produced by Clude's data engine: every label is derived "
-                        "mechanically from a planted ground truth and verified before it enters the corpus, so labels are exact "
-                        "by construction. The corpus, its generators and its composition are not published. No benchmark "
-                        "evaluation data was used for training; persona names from public long-memory benchmarks are on a "
-                        "decontamination blocklist.")
+        data_section = ("Trained on a proprietary synthetic corpus spanning the nine tasks, produced by Clude's data "
+                        "engine: every label is derived mechanically from a planted ground truth and verified before it "
+                        "enters the corpus, so labels are exact by construction. The corpus's size, composition and "
+                        "generators are not published. No benchmark evaluation data was used for training; persona names "
+                        "from public long-memory benchmarks are on a decontamination blocklist.")
     fm = "---\n" + "\n".join(
         f"{k}: {json.dumps(v) if isinstance(v, list) else v}" for k, v in front.items()) + "\n---\n"
 
@@ -270,7 +280,7 @@ only from provided memories (abstaining when they don't support an answer). It i
 [Clude](https://github.com/sebbsssss/clude)'s memory engine, and it drops into any agent that needs
 these operations without a frontier API call.
 
-This repository holds the **LoRA adapter** (run `{run_name}`) for `{base_model}`.
+This repository holds the **LoRA adapter**{run_tag} for `{base_model}`.
 {gguf_line}
 
 ## What it does
@@ -331,8 +341,7 @@ that failure impossible to ship.
 | Method | QLoRA (4-bit base), LoRA rank {cfg.get('rank')}, α {cfg.get('alpha')} (effective scale {cfg.get('effective_scale')}), dropout {cfg.get('dropout')} |
 | Adapted modules | {cfg.get('adapted_modules')} — `gate_proj`, `up_proj`, `down_proj` of every language-model layer; attention projections deliberately **not** adapted |
 | Trainable parameters | {fmt_int(trainable) if trainable else 'n/a'} of {fmt_int(total) if total else 'n/a'} ({(100 * trainable / total):.3f}%) |
-| Training rows | {fmt_int(audit.get('rows_trained', plan.get('rows', 0)))} (max {fmt_int(cfg.get('max_seq', 0))} tokens per row) |
-| Schedule | {fmt_int(plan.get('total_steps', 0))} steps × {plan.get('seq_per_step')} sequences ({plan.get('corpus_coverage')} epoch), lr {cfg.get('lr')} cosine, warmup {plan.get('warmup_steps')}, {cfg.get('optim')} |
+{schedule_rows}
 | Loss | assistant turn only (the JSON answer); prompt tokens masked |
 | Stack | Unsloth {cfg.get('unsloth_version')}, TRL {cfg.get('trl_version')}, PEFT {cfg.get('peft_version')}, Transformers {cfg.get('transformers_version')}, PyTorch {cfg.get('torch_version')} |
 
@@ -388,7 +397,7 @@ generation stays on the frontier. See `docs/integrations/local-memory-contract.m
 ## Citation
 
 ```
-@software{{cludemem_{run_name.replace('-', '_')},
+@software{{{cite_key},
   title  = {{CludeMem-E4B: a memory-operations model for AI agents}},
   author = {{Clude}},
   year   = {{2026}},
