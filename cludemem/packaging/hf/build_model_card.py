@@ -252,7 +252,7 @@ ollama create cludemem-e4b -f Modelfile
                         + "\n\nNo benchmark evaluation data was used for training; persona names from public long-memory "
                         "benchmarks are on a decontamination blocklist.")
     else:
-        data_section = (f"Trained on a proprietary synthetic corpus of about {round(audit.get('rows_trained', 0) / 1e5) / 10:g} million "
+        data_section = (f"Trained on a proprietary synthetic corpus of {audit.get('rows_trained', 0) / 1e6:.2f} million "
                         "supervised examples spanning the nine tasks, produced by Clude's data engine: every label is derived "
                         "mechanically from a planted ground truth and verified before it enters the corpus, so labels are exact "
                         "by construction. The corpus, its generators and its composition are not published. No benchmark "
