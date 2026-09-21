@@ -49,8 +49,9 @@ def main() -> None:
     gguf_dir = os.path.join(rel, "gguf")
     gguf_files = sorted(f for f in os.listdir(gguf_dir) if f.endswith(".gguf")) if os.path.isdir(gguf_dir) else []
 
-    # (local path, path in repo) for the adapter repo
-    plan = [(os.path.join(adapter_dir, f), f) for f in sorted(os.listdir(adapter_dir))]
+    # (local path, path in repo) for the adapter repo. The trainer drops an unfilled
+    # template README next to the adapter; the release card replaces it.
+    plan = [(os.path.join(adapter_dir, f), f) for f in sorted(os.listdir(adapter_dir)) if f != "README.md"]
     plan.append((card, "README.md"))
     if os.path.isdir(evals_dir):
         for root, _dirs, files in os.walk(evals_dir):
