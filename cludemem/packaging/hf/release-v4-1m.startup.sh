@@ -126,7 +126,13 @@ export HF_HUB_ENABLE_HF_TRANSFER=1 TOKENIZERS_PARALLELISM=false
 # ---- 1. selection + GGUF export with their trainer (same arguments as the run) --------------
 stage select-export; status "train_v3.py --select-only --export-gguf over $RUN"
 COMMON="cloud/train_v3.py --data data/train.jsonl data-hard-v2/train.jsonl data-scale/1m/reconcile_v2/reconcile.jsonl data-scale/1m/extract/all.jsonl data-scale/1m/consolidate/all.jsonl data-scale/1m/answer/all.jsonl --out /mnt/results/$RUN --lr 0.00028 --rank 16 --alpha 32 --dropout 0.05 --epochs 1 --batch 4 --max-seq 2816 --save-steps 500 --warmup-steps 100 --canary-per-task 6"
-timeout 4h $PY $COMMON --select-only --export-gguf; RC=$?
+# Unsloth writes the merged 16-bit model to gguf/ and the .gguf files next to it in gguf_gguf/.
+# A re-run with both already on disk skips this stage (nothing would change).
+if [ -f /mnt/results/$RUN/WINNER ] && ls /mnt/results/$RUN/gguf*/*.gguf >/dev/null 2>&1; then
+  say "WINNER and .gguf files already on disk: skipping --select-only --export-gguf"; RC=0
+else
+  timeout 4h $PY $COMMON --select-only --export-gguf; RC=$?
+fi
 WINNER=$(basename "$(awk '{print $1}' /mnt/results/$RUN/WINNER 2>/dev/null)" 2>/dev/null)
 say "select-only rc=$RC; WINNER=${WINNER:-none}"
 if [ -z "$WINNER" ]; then status "selection produced no WINNER (rc=$RC)"; exit 3; fi
@@ -138,8 +144,12 @@ timeout 1800 $GS rsync -r --exclude '^(RESUME_|RELEASE_|resume-.*\.log|release-.
 # ---- 2. external contradiction eval (DNLI / DECODE) ----------------------------------------
 stage dnli-eval; status "DNLI/DECODE eval with $WINNER (dnli_gp:250 decode_gp:350, ~3 h on an L4)"
 EVAL_OUT=/mnt/results/evals/dnli/${RUN}_torch; mkdir -p $EVAL_OUT
-timeout 6h $PY eval/external/dnli/run.py --backend torch --model $BASE --adapter "$WDIR" \
-    --sets dnli_gp:250 decode_gp:350 --results $EVAL_OUT 2>&1 | tee $EVAL_OUT/run.log
+if [ -f $EVAL_OUT/results_all.json ]; then
+  say "DNLI results already at $EVAL_OUT: skipping the eval"
+else
+  timeout 6h $PY eval/external/dnli/run.py --backend torch --model $BASE --adapter "$WDIR" \
+      --sets dnli_gp:250 decode_gp:350 --results $EVAL_OUT 2>&1 | tee $EVAL_OUT/run.log
+fi
 [ -f $EVAL_OUT/results_all.json ] || { status "DNLI eval produced no results_all.json"; exit 4; }
 timeout 600 $GS cp -r /mnt/results/evals gs://$B/ || true
 
@@ -158,8 +168,18 @@ done
 [ -f "$WDIR/canary.json" ] && cp "$WDIR/canary.json" $REL/evals/canary_winner.json
 [ -f "$WDIR/canary.hard.json" ] && cp "$WDIR/canary.hard.json" $REL/evals/canary_winner.hard.json
 mkdir -p $REL/evals/dnli && cp $EVAL_OUT/*.json $EVAL_OUT/run.log $REL/evals/dnli/ 2>/dev/null
-[ "$GGUF_OK" = 1 ] && find /mnt/results/$RUN/gguf -name '*.gguf' -exec cp {} $REL/gguf/ \; 2>/dev/null
-ls $REL/gguf/*.gguf >/dev/null 2>&1 || rmdir $REL/gguf
+# Quantised text models only (the BF16 multimodal projector is the base's, unchanged; it stays
+# in GCS). Files are named after the release, contents untouched. Unsloth's Modelfile rides along.
+if [ "$GGUF_OK" = 1 ]; then
+  for f in /mnt/results/$RUN/gguf*/*.gguf; do
+    case "$f" in *mmproj*) continue ;; esac
+    q=$(basename "$f" .gguf); q=${q##*.}
+    cp "$f" "$REL/gguf/cludemem-e4b-$RUN.$q.gguf"
+  done
+  mf=$(ls /mnt/results/$RUN/gguf*/Modelfile 2>/dev/null | head -1)
+  [ -n "$mf" ] && sed -E "s#^FROM .*#FROM ./cludemem-e4b-$RUN.Q4_K_M.gguf#" "$mf" > $REL/gguf/Modelfile
+fi
+ls $REL/gguf/*.gguf >/dev/null 2>&1 || rm -rf $REL/gguf
 BASE_LICENSE=$(curl -sf "https://huggingface.co/api/models/$BASE" | $PY -c "import sys,json; d=json.load(sys.stdin); print(d.get('cardData',{}).get('license') or '')" 2>/dev/null)
 say "base model license on the Hub: ${BASE_LICENSE:-unknown}"
 CARD_ARGS="--run-dir /mnt/results/$RUN --dnli $EVAL_OUT/results_all.json --repo ${HF_REPO:-clude/cludemem-e4b} --out $REL/README.md"
