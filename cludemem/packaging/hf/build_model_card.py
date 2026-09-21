@@ -160,6 +160,9 @@ def main() -> None:
     ap.add_argument("--base-license", default=None, help="license id of the base model as shown on its Hub page")
     ap.add_argument("--gguf-repo", default=None, help="repo id holding the GGUF exports, if separate")
     ap.add_argument("--gguf-dir", default=None, help="local dir with the .gguf files being released (listed on the card)")
+    ap.add_argument("--corpus", choices=["summary", "full"], default="summary",
+                    help="summary (default): describe the training data without naming its files, splits or "
+                         "composition; full: list every source file and split (internal cards only)")
     ap.add_argument("--out", default="README.md")
     args = ap.parse_args()
 
@@ -201,7 +204,8 @@ ollama create cludemem-e4b -f Modelfile
     hard_b = canary_record(log, "BASE", "hard")
     hard_line = ""
     if hard_w and hard_b:
-        hard_line = (f"On the **hard canary** (`{hard_w.get('data_dir', 'data-hard-v2')}`: adversarial items with "
+        hard_name = f"`{hard_w.get('data_dir', 'data-hard-v2')}`" if args.corpus == "full" else "a held-out adversarial split"
+        hard_line = (f"On the **hard canary** ({hard_name}: adversarial items with "
                      f"near-miss dates, colliding ids and unanswerables; {hard_w.get('digit_tokens')} retrieval / "
                      f"{hard_w.get('structure_tokens')} structure tokens) the selected checkpoint scores "
                      f"**{pct(hard_w.get('digit_acc'))} / {pct(hard_w.get('structure_acc'))}** against the base's "
@@ -236,6 +240,24 @@ ollama create cludemem-e4b -f Modelfile
         license_text = (f"The adapter weights are a derivative of `{base_model}` and are distributed under its\n"
                         f"license (`{front['license']}`); using them requires accepting it. The CludeMem training code and\n"
                         f"data engine are Apache-2.0 in the [Clude repo](https://github.com/sebbsssss/clude).")
+    if args.corpus == "full":
+        data_section = (f"{fmt_int(audit.get('rows_trained', 0))} supervised examples across the nine tasks, built by a synthetic "
+                        "**data engine** in which every label is derived mechanically from a planted \"life script\" (a persona "
+                        "plus a timeline of facts with supersessions, contradictions, duplicates and temporal chains). Because "
+                        "the script is the ground truth, labels are exact by construction; a verification gauntlet rejects any "
+                        "example whose citations, entities or temporal links are not grounded in its own prompt. Hard-negative "
+                        "unanswerables, register noise (logs, tables, code fences around the dialogue) and length stratification "
+                        "are enforced by quota. Sources for this run:\n\n"
+                        + "\n".join(f"- `{d}`" for d in data_files)
+                        + "\n\nNo benchmark evaluation data was used for training; persona names from public long-memory "
+                        "benchmarks are on a decontamination blocklist.")
+    else:
+        data_section = (f"Trained on a proprietary synthetic corpus of about {round(audit.get('rows_trained', 0) / 1e5) / 10:g} million "
+                        "supervised examples spanning the nine tasks, produced by Clude's data engine: every label is derived "
+                        "mechanically from a planted ground truth and verified before it enters the corpus, so labels are exact "
+                        "by construction. The corpus, its generators and its composition are not published. No benchmark "
+                        "evaluation data was used for training; persona names from public long-memory benchmarks are on a "
+                        "decontamination blocklist.")
     fm = "---\n" + "\n".join(
         f"{k}: {json.dumps(v) if isinstance(v, list) else v}" for k, v in front.items()) + "\n---\n"
 
@@ -309,25 +331,14 @@ that failure impossible to ship.
 | Method | QLoRA (4-bit base), LoRA rank {cfg.get('rank')}, α {cfg.get('alpha')} (effective scale {cfg.get('effective_scale')}), dropout {cfg.get('dropout')} |
 | Adapted modules | {cfg.get('adapted_modules')} — `gate_proj`, `up_proj`, `down_proj` of every language-model layer; attention projections deliberately **not** adapted |
 | Trainable parameters | {fmt_int(trainable) if trainable else 'n/a'} of {fmt_int(total) if total else 'n/a'} ({(100 * trainable / total):.3f}%) |
-| Training rows | {fmt_int(audit.get('rows_trained', plan.get('rows', 0)))} (longest {fmt_int(audit.get('max_len', 0))} tokens, p95 {fmt_int(audit.get('p95_len', 0))}; 0 rows over the {fmt_int(cfg.get('max_seq', 0))}-token limit) |
+| Training rows | {fmt_int(audit.get('rows_trained', plan.get('rows', 0)))} (max {fmt_int(cfg.get('max_seq', 0))} tokens per row) |
 | Schedule | {fmt_int(plan.get('total_steps', 0))} steps × {plan.get('seq_per_step')} sequences ({plan.get('corpus_coverage')} epoch), lr {cfg.get('lr')} cosine, warmup {plan.get('warmup_steps')}, {cfg.get('optim')} |
 | Loss | assistant turn only (the JSON answer); prompt tokens masked |
 | Stack | Unsloth {cfg.get('unsloth_version')}, TRL {cfg.get('trl_version')}, PEFT {cfg.get('peft_version')}, Transformers {cfg.get('transformers_version')}, PyTorch {cfg.get('torch_version')} |
 
 ### Data
 
-{fmt_int(audit.get('rows_trained', 0))} supervised examples across the nine tasks, built by a synthetic **data engine**
-in which every label is derived mechanically from a planted "life script" (a persona plus a timeline of
-facts with supersessions, contradictions, duplicates and temporal chains). Because the script is the
-ground truth, labels are exact by construction; a verification gauntlet rejects any example whose
-citations, entities or temporal links are not grounded in its own prompt. Hard-negative unanswerables,
-register noise (logs, tables, code fences around the dialogue) and length stratification are enforced
-by quota. Sources for this run:
-
-""" + "\n".join(f"- `{d}`" for d in data_files) + f"""
-
-No benchmark evaluation data was used for training; persona names from public long-memory benchmarks
-are on a decontamination blocklist.
+{data_section}
 
 ## How to use
 

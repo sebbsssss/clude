@@ -168,6 +168,8 @@ done
 [ -f "$WDIR/canary.json" ] && cp "$WDIR/canary.json" $REL/evals/canary_winner.json
 [ -f "$WDIR/canary.hard.json" ] && cp "$WDIR/canary.hard.json" $REL/evals/canary_winner.hard.json
 mkdir -p $REL/evals/dnli && cp $EVAL_OUT/*.json $EVAL_OUT/run.log $REL/evals/dnli/ 2>/dev/null
+# Public release: drop the training file list / data dirs / local paths from the eval artefacts.
+$PY hf/sanitize_evals.py $REL/evals || { status "evals sanitize failed"; exit 5; }
 # Quantised text models only (the BF16 multimodal projector is the base's, unchanged; it stays
 # in GCS). Files are named after the release, contents untouched. Unsloth's Modelfile rides along.
 if [ "$GGUF_OK" = 1 ]; then
@@ -182,7 +184,7 @@ fi
 ls $REL/gguf/*.gguf >/dev/null 2>&1 || rm -rf $REL/gguf
 BASE_LICENSE=$(curl -sf "https://huggingface.co/api/models/$BASE" | $PY -c "import sys,json; d=json.load(sys.stdin); print(d.get('cardData',{}).get('license') or '')" 2>/dev/null)
 say "base model license on the Hub: ${BASE_LICENSE:-unknown}"
-CARD_ARGS="--run-dir /mnt/results/$RUN --dnli $EVAL_OUT/results_all.json --repo ${HF_REPO:-clude/cludemem-e4b} --out $REL/README.md"
+CARD_ARGS="--run-dir /mnt/results/$RUN --dnli $EVAL_OUT/results_all.json --repo ${HF_REPO:-clude/cludemem-e4b} --corpus summary --out $REL/README.md"
 [ -n "$BASE_LICENSE" ] && CARD_ARGS="$CARD_ARGS --base-license $BASE_LICENSE"
 [ -d $REL/gguf ] && CARD_ARGS="$CARD_ARGS --gguf-dir $REL/gguf"
 [ -n "$HF_GGUF_REPO" ] && [ -d $REL/gguf ] && CARD_ARGS="$CARD_ARGS --gguf-repo $HF_GGUF_REPO"
